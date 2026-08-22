@@ -384,6 +384,9 @@ public sealed class NativePaletteCommands
         f.Controls.Add(Section(_english ? "Draw" : "Vẽ",
             ("L", "LINE"), ("PL", "PLINE"), ("C", "CIRCLE"), ("REC", "RECTANG"),
             ("ARC", "ARC"), ("HATCH", "HATCH")));
+        f.Controls.Add(Section(_english ? "Ceiling / Shopdrawing" : "Trần / Shopdrawing",
+            (_english ? "Ceiling options" : "Trần tùy chọn", "HNLCEILING"),
+            (_english ? "HNL Manager" : "Mở Studio", "HNL_OPEN_MANAGER")));
         f.Controls.Add(Section(_english ? "Modify" : "Hiệu chỉnh",
             ("CO", "COPY"), ("M", "MOVE"), ("RO", "ROTATE"), ("SC", "SCALE"),
             ("TR", "TRIM"), ("EX", "EXTEND"), ("O", "OFFSET"), ("MI", "MIRROR"),
@@ -410,7 +413,9 @@ public sealed class NativePaletteCommands
         var page = NewTab("Layout / In", "Layout / Publish");
         var f = Flow();
         f.Controls.Add(Section("Layout",
-            ("LAYOUT", "LAYOUT"), ("MVIEW", "MVIEW"), ("PAGESETUP", "PAGESETUP"),
+            ("LAYOUT", "LAYOUT"),
+            (_english ? "Rename" : "Đổi tên", "HNLRENLAYOUT"),
+            ("MVIEW", "MVIEW"), ("PAGESETUP", "PAGESETUP"),
             ("PLOT", "PLOT"), ("PUBLISH", "PUBLISH")));
         page.Controls.Add(f);
         return page;

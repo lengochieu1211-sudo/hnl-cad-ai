@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Sparkles,
   ShieldAlert,
@@ -40,10 +40,21 @@ import {
 } from "../../lib/shopdrawingKnowledgeBase";
 import { CadEntity } from "../../types/cad";
 
+type DrywallStudioTab =
+  | "SYSTEM_BUILDER"
+  | "FIRE_ASSEMBLIES"
+  | "CEILING_GRID_AI"
+  | "DETAIL_ENGINE"
+  | "SHOPDRAWING_AUDIT"
+  | "MULTI_PROVIDER_AI";
+
 interface DrywallCeilingStudioModalProps {
   isOpen: boolean;
   onClose: () => void;
   entities: CadEntity[];
+  initialTab?: DrywallStudioTab;
+  hasSelectedCeilingBoundary?: boolean;
+  autoCadConnected?: boolean;
   onApplyPresetToDrawing?: (presetData: any) => void;
 }
 
@@ -51,11 +62,12 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
   isOpen,
   onClose,
   entities,
+  initialTab = "SYSTEM_BUILDER",
+  hasSelectedCeilingBoundary = false,
+  autoCadConnected = false,
   onApplyPresetToDrawing,
 }) => {
-  const [activeTab, setActiveTab] = useState<
-    "SYSTEM_BUILDER" | "FIRE_ASSEMBLIES" | "CEILING_GRID_AI" | "DETAIL_ENGINE" | "SHOPDRAWING_AUDIT" | "MULTI_PROVIDER_AI"
-  >("SYSTEM_BUILDER");
+  const [activeTab, setActiveTab] = useState<DrywallStudioTab>(initialTab);
 
   // Multi-Provider AI State
   const [aiProvider, setAiProvider] = useState<"GEMINI" | "OPENAI" | "CLAUDE" | "OFFLINE_RULE">("GEMINI");
@@ -78,10 +90,44 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
 
   // Ceiling System State
   const [ceilingSystem, setCeilingSystem] = useState<string>("C-CHIM-01");
+  const [ceilingMainSpacing, setCeilingMainSpacing] = useState<number>(800);
+  const [ceilingCrossSpacing, setCeilingCrossSpacing] = useState<number>(400);
+  const [ceilingHangerSpacing, setCeilingHangerSpacing] = useState<number>(900);
+  const [ceilingRotationDeg, setCeilingRotationDeg] = useState<number>(0);
+  const [ceilingLevelElevation, setCeilingLevelElevation] = useState<number>(2800);
+  const [ceilingWallOffset, setCeilingWallOffset] = useState<number>(20);
+  const [ceilingPanelWidth, setCeilingPanelWidth] = useState<number>(600);
+  const [ceilingPanelHeight, setCeilingPanelHeight] = useState<number>(600);
+  const [ceilingOriginMode, setCeilingOriginMode] = useState<"CENTER" | "FROM_EDGE" | "CUSTOM">("CENTER");
+  const [ceilingOffsetX, setCeilingOffsetX] = useState<number>(0);
+  const [ceilingOffsetY, setCeilingOffsetY] = useState<number>(0);
+  const [drawHangers, setDrawHangers] = useState<boolean>(true);
+  const [avoidMep, setAvoidMep] = useState<boolean>(true);
 
   // Search in Assemblies
   const [searchAssemblyQuery, setSearchAssemblyQuery] = useState("");
   const [selectedEiFilter, setSelectedEiFilter] = useState<string>("ALL");
+
+  useEffect(() => {
+    if (isOpen) setActiveTab(initialTab);
+  }, [isOpen, initialTab]);
+
+  useEffect(() => {
+    const spec = CEILING_SYSTEMS_KNOWLEDGE.find((c) => c.systemId === ceilingSystem);
+    if (!spec) return;
+    setCeilingMainSpacing(spec.mainRunnerSpacingMm || 800);
+    setCeilingCrossSpacing(spec.crossRunnerSpacingMm || 400);
+    setCeilingHangerSpacing(spec.hangerSpacingMm || 900);
+    setCeilingWallOffset(spec.wallAngleOffsetMm || 20);
+    if (spec.type === "GRID_EXPOSED_600x600") {
+      setCeilingPanelWidth(600);
+      setCeilingPanelHeight(600);
+      setGridModule("600x600");
+    } else {
+      setCeilingPanelWidth(1220);
+      setCeilingPanelHeight(2440);
+    }
+  }, [ceilingSystem]);
 
   if (!isOpen) return null;
 
@@ -640,9 +686,124 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
                   <span>KÍCH THƯỚC PHÒNG & THÔNG SỐ CHIA Ô</span>
                 </div>
 
+                <div className={`p-3 rounded-lg border text-[11px] ${
+                  autoCadConnected
+                    ? "bg-emerald-950/30 border-emerald-500/30 text-emerald-300"
+                    : hasSelectedCeilingBoundary
+                      ? "bg-cyan-950/30 border-cyan-500/30 text-cyan-300"
+                      : "bg-amber-950/30 border-amber-500/30 text-amber-300"
+                }`}>
+                  {autoCadConnected
+                    ? "AutoCAD Native: chọn 1 Polyline kín trong DWG. Khi Áp dụng, HNL tạo xương trực tiếp vào Model Space."
+                    : hasSelectedCeilingBoundary
+                      ? "Standalone: đã nhận biên Polyline kín / Rectangle đang chọn."
+                      : "Chưa có biên trần. Chọn Polyline kín hoặc Rectangle trước khi tạo."}
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-neutral-400 block mb-1">Hệ trần / Ceiling System:</label>
+                  <select value={ceilingSystem} onChange={(e) => setCeilingSystem(e.target.value)}
+                    className="w-full bg-neutral-900 border border-neutral-700 text-white rounded px-2.5 py-1.5 text-xs">
+                    {CEILING_SYSTEMS_KNOWLEDGE.map((c) => (
+                      <option key={c.systemId} value={c.systemId}>{c.name}</option>
+                    ))}
+                  </select>
+                  <div className="mt-1 text-[10px] text-neutral-500">
+                    {selectedCeiling.mainRunnerProfile} • {selectedCeiling.crossRunnerProfile}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[10px] text-neutral-400 block mb-1">Xương chính @</label>
+                    <input type="number" min={100} step={50} value={ceilingMainSpacing}
+                      onChange={(e) => setCeilingMainSpacing(Math.max(100, Number(e.target.value) || 100))}
+                      className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-xs font-mono" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-neutral-400 block mb-1">Xương phụ @</label>
+                    <input type="number" min={100} step={50} value={ceilingCrossSpacing}
+                      onChange={(e) => setCeilingCrossSpacing(Math.max(100, Number(e.target.value) || 100))}
+                      className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-xs font-mono" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-neutral-400 block mb-1">Ty treo @</label>
+                    <input type="number" min={100} step={50} value={ceilingHangerSpacing}
+                      onChange={(e) => setCeilingHangerSpacing(Math.max(100, Number(e.target.value) || 100))}
+                      className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-xs font-mono" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-neutral-400 block mb-1">Góc xoay hệ xương (°)</label>
+                    <input type="number" step={1} value={ceilingRotationDeg}
+                      onChange={(e) => setCeilingRotationDeg(Number(e.target.value) || 0)}
+                      className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-xs font-mono" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-neutral-400 block mb-1">Cao độ trần (mm)</label>
+                    <input type="number" step={50} value={ceilingLevelElevation}
+                      onChange={(e) => setCeilingLevelElevation(Number(e.target.value) || 0)}
+                      className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-xs font-mono" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-neutral-400 block mb-1">Tấm / module X</label>
+                    <input type="number" min={50} step={10} value={ceilingPanelWidth}
+                      onChange={(e) => setCeilingPanelWidth(Math.max(50, Number(e.target.value) || 50))}
+                      className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-xs font-mono" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-neutral-400 block mb-1">Tấm / module Y</label>
+                    <input type="number" min={50} step={10} value={ceilingPanelHeight}
+                      onChange={(e) => setCeilingPanelHeight(Math.max(50, Number(e.target.value) || 50))}
+                      className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-xs font-mono" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-neutral-400 block mb-1">Cách lấy gốc bố trí</label>
+                  <select value={ceilingOriginMode} onChange={(e) => setCeilingOriginMode(e.target.value as any)}
+                    className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-xs">
+                    <option value="CENTER">Cân tâm vùng trần</option>
+                    <option value="FROM_EDGE">Bắt đầu từ biên Polyline</option>
+                    <option value="CUSTOM">Offset gốc tùy chỉnh</option>
+                  </select>
+                </div>
+
+                {ceilingOriginMode === "CUSTOM" && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="number" value={ceilingOffsetX} onChange={(e) => setCeilingOffsetX(Number(e.target.value) || 0)}
+                      placeholder="Offset X" className="bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-xs font-mono" />
+                    <input type="number" value={ceilingOffsetY} onChange={(e) => setCeilingOffsetY(Number(e.target.value) || 0)}
+                      placeholder="Offset Y" className="bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-xs font-mono" />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <label className="flex items-center gap-2 bg-neutral-900 rounded px-2 py-2 border border-neutral-800">
+                    <input type="checkbox" checked={drawHangers} onChange={(e) => setDrawHangers(e.target.checked)} />
+                    <span>Vẽ vị trí ty treo</span>
+                  </label>
+                  <label className="flex items-center gap-2 bg-neutral-900 rounded px-2 py-2 border border-neutral-800">
+                    <input type="checkbox" checked={avoidMep} onChange={(e) => setAvoidMep(e.target.checked)} />
+                    <span>Yêu cầu né MEP / đèn (kiểm tra sau)</span>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-neutral-400 block mb-1">Khoảng viền tường (mm)</label>
+                  <input type="number" min={0} step={1} value={ceilingWallOffset}
+                    onChange={(e) => setCeilingWallOffset(Math.max(0, Number(e.target.value) || 0))}
+                    className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-xs font-mono" />
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] text-neutral-400 block mb-1">Chiều rộng X (mm):</label>
+                    <label className="text-[11px] text-neutral-400 block mb-1">Chiều rộng X (mm) — mô phỏng:</label>
                     <input
                       type="number"
                       value={gridWidth}
@@ -1011,6 +1172,25 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
                     wallSystem: selectedAssembly,
                     ceilingSystem: selectedCeiling,
                     gridStrategy: gridAlignmentPlan,
+                    ceilingConfig: activeTab === "CEILING_GRID_AI" ? {
+                      systemId: selectedCeiling.systemId,
+                      systemType: selectedCeiling.type,
+                      mainSpacing: ceilingMainSpacing,
+                      crossSpacing: ceilingCrossSpacing,
+                      hangerSpacing: ceilingHangerSpacing,
+                      rotationDeg: ceilingRotationDeg,
+                      levelElevation: ceilingLevelElevation,
+                      wallAngleOffset: ceilingWallOffset,
+                      panelSize: { width: ceilingPanelWidth, height: ceilingPanelHeight },
+                      originMode: ceilingOriginMode,
+                      offsetX: ceilingOffsetX,
+                      offsetY: ceilingOffsetY,
+                      drawHangers,
+                      avoidMep,
+                      mainLayer: "HNL_CEILING_MAIN",
+                      crossLayer: "HNL_CEILING_CROSS",
+                      hangerLayer: "HNL_CEILING_HANGER",
+                    } : undefined,
                   });
                 }
                 onClose();
@@ -1018,7 +1198,7 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
               className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black font-bold text-xs transition shadow-lg shadow-orange-950/40"
             >
               <Check className="w-3.5 h-3.5" />
-              <span>Áp Dụng Vào Bản Vẽ CAD</span>
+              <span>{activeTab === "CEILING_GRID_AI" ? "Tạo Trần Theo Tùy Chọn" : "Áp Dụng Vào Bản Vẽ CAD"}</span>
             </button>
           </div>
         </div>

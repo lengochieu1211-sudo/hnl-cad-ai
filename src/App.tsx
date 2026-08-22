@@ -111,6 +111,7 @@ import {
   ChevronRight,
   Maximize2,
   Minimize2,
+  Pencil,
 } from "lucide-react";
 
 const AUTOCAD_NATIVE_COMMAND_BY_HNL_KEY: Record<string,string> = {
@@ -187,6 +188,9 @@ export default function App() {
   const [isAutoDetailComposerOpen, setIsAutoDetailComposerOpen] = useState(false);
   const [isStandaloneExeBuilderOpen, setIsStandaloneExeBuilderOpen] = useState(false);
   const [isDrywallStudioOpen, setIsDrywallStudioOpen] = useState(false);
+  const [drywallInitialTab, setDrywallInitialTab] = useState<
+    "SYSTEM_BUILDER" | "FIRE_ASSEMBLIES" | "CEILING_GRID_AI" | "DETAIL_ENGINE" | "SHOPDRAWING_AUDIT" | "MULTI_PROVIDER_AI"
+  >("SYSTEM_BUILDER");
   const [isWindowsCompatOpen, setIsWindowsCompatOpen] = useState(false);
   const [isSectionGenOpen, setIsSectionGenOpen] = useState(false);
   const [isMepClashOpen, setIsMepClashOpen] = useState(false);
@@ -366,6 +370,80 @@ export default function App() {
     const id = window.setInterval(probe, 5000);
     return () => { cancelled = true; window.clearInterval(id); };
   }, []);
+
+  // When AutoCAD is connected, bottom Layout tabs mirror the real DWG layouts.
+  useEffect(() => {
+    if (!autoCadBridgeStatus.connected) return;
+    let cancelled = false;
+
+    const syncNativeLayouts = async () => {
+      const response:any = await executeAutoCadAction("GET_LAYOUTS", {});
+      if (cancelled || !response?.ok) return;
+      const payload:any = response.result || {};
+      const nativeLayouts:any[] = Array.isArray(payload.layouts) ? payload.layouts : [];
+      const paperLayouts = nativeLayouts.filter((item) => !item.modelType);
+
+      setLayouts((prev) => paperLayouts.map((item, index) => {
+        const stableId = `acad_layout_${item.handle || index}`;
+        const old = prev.find((l) => l.id === stableId || l.name === item.name);
+        const media = String(item.media || "");
+        const guessed = /A4/i.test(media) ? "A4" : /A3/i.test(media) ? "A3" : /A2/i.test(media) ? "A2" : /A1/i.test(media) ? "A1" : /A0/i.test(media) ? "A0" : (old?.paperSize || "DWG");
+        return {
+          id: stableId,
+          name: String(item.name || `Layout${index + 1}`),
+          paperSize: guessed,
+          orientation: old?.orientation || "LANDSCAPE",
+          widthMm: old?.widthMm || (guessed === "A4" ? 297 : 420),
+          heightMm: old?.heightMm || 297,
+          marginMm: old?.marginMm || 10,
+          drawingName: old?.drawingName || "",
+          drawingNo: old?.drawingNo || "",
+          scale: String(item.scale || old?.scale || "NTS"),
+          status: "NATIVE_DWG",
+        } as CadLayout;
+      }));
+
+      const current = String(payload.currentLayout || "");
+      if (current && current !== "Model") {
+        setActiveLayout((prev) => {
+          const item = paperLayouts.find((x) => String(x.name) === current);
+          if (!item) return prev;
+          const stableId = `acad_layout_${item.handle || paperLayouts.indexOf(item)}`;
+          return {
+            id: stableId,
+            name: current,
+            paperSize: String(item.media || "DWG"),
+            orientation: "LANDSCAPE",
+            widthMm: 420,
+            heightMm: 297,
+            marginMm: 10,
+            drawingName: "",
+            drawingNo: "",
+            scale: String(item.scale || "NTS"),
+            status: "NATIVE_DWG",
+          } as CadLayout;
+        });
+      } else if (current === "Model") {
+        setActiveLayout(null);
+      }
+    };
+
+    void syncNativeLayouts();
+    const id = window.setInterval(syncNativeLayouts, 8000);
+    return () => { cancelled = true; window.clearInterval(id); };
+  }, [autoCadBridgeStatus.connected]);
+
+  const handleActivateLayout = useCallback(async (layout: CadLayout | null) => {
+    if (autoCadBridgeStatus.connected) {
+      const name = layout?.name || "Model";
+      const result = await executeAutoCadAction("SET_CURRENT_LAYOUT", { name });
+      if (!result?.ok) {
+        showToast(`Không chuyển được Layout ${name}: ${result?.error || result?.reason || "Bridge error"}`);
+        return;
+      }
+    }
+    setActiveLayout(layout);
+  }, [autoCadBridgeStatus.connected, showToast]);
 
   // Smart Object Selection
   const handleSelectSmartObject = useCallback((id: string | null) => {
@@ -708,7 +786,7 @@ export default function App() {
   const saveProjectJson = useCallback(async () => {
     const nativeApi=(window as any).electronNative;
     if(!nativeApi?.saveFile){showToast("Lưu Project JSON cần chạy trong HNL Desktop EXE.");return;}
-    const payload=JSON.stringify({version:"2.4.5",schemaVersion:2,savedAt:new Date().toISOString(),currentFileName,activeLayoutId:activeLayout?.id||null,entities,layers,layouts,viewports,smartObjects,spreadsheetParameters,translationMemory,blockLibrary,dependencyEdges,modules,selectedWorkbench},null,2);
+    const payload=JSON.stringify({version:"2.4.6",schemaVersion:2,savedAt:new Date().toISOString(),currentFileName,activeLayoutId:activeLayout?.id||null,entities,layers,layouts,viewports,smartObjects,spreadsheetParameters,translationMemory,blockLibrary,dependencyEdges,modules,selectedWorkbench},null,2);
     const base=currentFileName.replace(/\.[^.]+$/,"")||"BanVe_HNL";
     const result=await nativeApi.saveFile({defaultName:`${base}.hnl.json`,content:payload,extDescription:"HNL Project JSON",extension:"json"});
     if(result?.success)showToast(`Đã lưu Project HNL: ${result.filePath}`);
@@ -1030,6 +1108,51 @@ export default function App() {
     showToast("Đã áp dụng các sửa lỗi tự động có hỗ trợ; các lỗi kỹ thuật còn lại cần kiểm tra thủ công.");
   };
 
+  const validateLayoutName = useCallback((raw: string, currentId?: string) => {
+    const name = raw.trim();
+    if (!name) return { ok: false, error: "Tên Layout không được để trống." };
+    if (name.toLowerCase() === "model") return { ok: false, error: "Không thể dùng tên Model cho Paper Space Layout." };
+    if (/[<>\/\\":;?*|,=]/.test(name)) return { ok: false, error: 'Tên Layout có ký tự không hợp lệ: < > / \\ " : ; ? * | , =' };
+    if (name.length > 255) return { ok: false, error: "Tên Layout quá dài." };
+    if (layouts.some((l) => l.id !== currentId && l.name.toLowerCase() === name.toLowerCase()))
+      return { ok: false, error: "Đã có Layout trùng tên." };
+    return { ok: true, name };
+  }, [layouts]);
+
+  const handleRenameLayout = useCallback(async (layout: CadLayout) => {
+    const entered = window.prompt("Đổi tên Layout:", layout.name);
+    if (entered == null) return;
+    const checked = validateLayoutName(entered, layout.id);
+    if (!checked.ok || !checked.name) { showToast(checked.error || "Tên Layout không hợp lệ."); return; }
+    const newName = checked.name;
+    if (newName === layout.name) return;
+
+    if (autoCadBridgeStatus.connected) {
+      const result = await executeAutoCadAction("RENAME_LAYOUT", { oldName: layout.name, newName });
+      if (!result?.ok) {
+        showToast(`AutoCAD không đổi được Layout: ${result?.error || result?.reason || "Bridge error"}`);
+        return;
+      }
+    }
+
+    setLayouts((prev) => prev.map((l) => l.id === layout.id ? { ...l, name: newName } : l));
+    setViewports((prev) => prev.map((vp) => vp.layoutName === layout.name ? { ...vp, layoutName: newName } : vp));
+    setActiveLayout((prev) => prev?.id === layout.id ? { ...prev, name: newName } : prev);
+    setIsDirty(true);
+    showToast(`Đã đổi tên Layout: ${layout.name} → ${newName}${autoCadBridgeStatus.connected ? " (DWG native)" : ""}`);
+  }, [validateLayoutName, autoCadBridgeStatus.connected, showToast]);
+
+  const getStandaloneCeilingBoundary = useCallback(() => {
+    const selected = entities.find((e) => selectedEntityIds.includes(e.id));
+    if (selected?.type === "POLYLINE" && (selected as any).closed && Array.isArray((selected as any).points))
+      return (selected as any).points as {x:number;y:number}[];
+    if (selected?.type === "RECTANGLE") {
+      const r:any = selected;
+      return [{x:r.x,y:r.y},{x:r.x+r.width,y:r.y},{x:r.x+r.width,y:r.y+r.height},{x:r.x,y:r.y+r.height}];
+    }
+    return null;
+  }, [entities, selectedEntityIds]);
+
   // Ribbon Command Dispatcher
   const handleExecuteCommandCore = (cmdKey: string) => {
     switch (cmdKey) {
@@ -1044,34 +1167,11 @@ export default function App() {
         break;
 
       case "SMART_CEILING": {
-        const selected = entities.find((e) => selectedEntityIds.includes(e.id));
-        let boundary: { x: number; y: number }[] | null = null;
-        if (selected?.type === "POLYLINE" && (selected as any).closed) {
-          boundary = (selected as any).points;
-        } else if (selected?.type === "RECTANGLE") {
-          const r = selected as any;
-          boundary = [
-            { x: r.x, y: r.y },
-            { x: r.x + r.width, y: r.y },
-            { x: r.x + r.width, y: r.y + r.height },
-            { x: r.x, y: r.y + r.height },
-          ];
-        }
-        if (!boundary) {
-          showToast("Hãy chọn 1 Polyline kín hoặc Rectangle làm biên trần trước khi tạo Smart Ceiling.");
-          break;
-        }
-        let localCfg: any = {};
-        try { localCfg = JSON.parse(localStorage.getItem("hnl.settings.v1") || "{}"); } catch {}
-        const mainSpacing = Number(localCfg.ceilingMainSpacing) || 800;
-        const subSpacing = Number(localCfg.ceilingCrossSpacing) || 400;
-        const newCeiling: CadCeilingGrid = {
-          id: `ceil_${Date.now()}`, handle: Math.random().toString(16).substring(2, 6).toUpperCase(),
-          type: "CEILING_GRID", layer: "KT_TRAN_XUONGCHINH", color: "#FF9100", boundary,
-          mainSpacing, subSpacing, hangerSpacing: 1000, rotationDeg: 0, panelSize: { width: 600, height: 600 },
-        };
-        updateEntitiesWithHistory([...entities, newCeiling]);
-        showToast(`Đã tạo Smart Ceiling từ biên được chọn. Preset ${mainSpacing}/${subSpacing}/1000 mm là dữ liệu thao tác, cần đối chiếu Project Spec/Approved System.`);
+        setDrywallInitialTab("CEILING_GRID_AI");
+        setIsDrywallStudioOpen(true);
+        showToast(autoCadBridgeStatus.connected
+          ? "Smart Ceiling: chọn Polyline kín trong AutoCAD, chỉnh thông số rồi bấm Tạo Trần."
+          : "Smart Ceiling: chọn Polyline kín/Rectangle, chỉnh xương chính/phụ/ty/góc xoay rồi bấm Tạo Trần.");
         break;
       }
 
@@ -1357,6 +1457,7 @@ export default function App() {
       case "OPEN_DRYWALL_STUDIO":
       case "DRYWALL_STUDIO":
       case "HNLDRYWALL":
+        setDrywallInitialTab("SYSTEM_BUILDER");
         setIsDrywallStudioOpen(true);
         break;
 
@@ -1732,7 +1833,7 @@ export default function App() {
             <div className="px-8 py-7 border-b border-neutral-800 bg-gradient-to-r from-[#15181c] to-[#101820] flex items-center justify-between gap-6">
               <div>
                 <div className="text-[11px] tracking-[0.24em] uppercase text-cyan-400 font-semibold">Professional CAD Workspace</div>
-                <h1 className="mt-2 text-2xl font-bold text-white">HNL CAD AI <span className="text-cyan-400">v2.4.5</span></h1>
+                <h1 className="mt-2 text-2xl font-bold text-white">HNL CAD AI <span className="text-cyan-400">v2.4.6</span></h1>
                 <p className="mt-2 text-sm text-neutral-400 max-w-2xl">Không gian làm việc Standalone + AutoCAD Bridge, tối ưu shopdrawing, thống kê, layout và trợ lý AI kỹ thuật.</p>
               </div>
               <div className={`px-3 py-2 rounded-lg border text-xs ${autoCadBridgeStatus.connected ? "border-emerald-700 bg-emerald-950/30 text-emerald-300" : "border-neutral-700 bg-neutral-900 text-neutral-400"}`}>
@@ -2080,7 +2181,7 @@ export default function App() {
         <div className="flex items-center space-x-1 overflow-x-auto scrollbar-none">
           {/* Model Space Tab */}
           <button
-            onClick={() => setActiveLayout(null)}
+            onClick={() => void handleActivateLayout(null)}
             className={`px-3 py-1 text-xs font-semibold rounded-t flex items-center space-x-1.5 transition ${
               activeLayout === null
                 ? "bg-[#1A1B1E] text-cyan-400 border-t-2 border-cyan-400 font-bold"
@@ -2097,7 +2198,10 @@ export default function App() {
             return (
               <button
                 key={layout.id}
-                onClick={() => setActiveLayout(layout)}
+                onClick={() => void handleActivateLayout(layout)}
+                onDoubleClick={() => void handleRenameLayout(layout)}
+                onContextMenu={(e) => { e.preventDefault(); void handleRenameLayout(layout); }}
+                title="Click: mở Layout • Double-click / Right-click: đổi tên"
                 className={`px-3 py-1 text-xs font-semibold rounded-t flex items-center space-x-1.5 transition ${
                   isActive
                     ? "bg-[#2B2D30] text-cyan-400 border-t-2 border-cyan-400 font-bold"
@@ -2119,6 +2223,15 @@ export default function App() {
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
+          {activeLayout && (
+            <button
+              onClick={() => void handleRenameLayout(activeLayout)}
+              title="Đổi tên Layout đang mở"
+              className="p-1 text-neutral-400 hover:text-amber-300 hover:bg-neutral-800 rounded transition"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         {/* Right Status */}
@@ -2234,7 +2347,10 @@ export default function App() {
         isOpen={isDrywallStudioOpen}
         onClose={() => setIsDrywallStudioOpen(false)}
         entities={entities}
-        onApplyPresetToDrawing={(preset) => {
+        initialTab={drywallInitialTab}
+        autoCadConnected={autoCadBridgeStatus.connected}
+        hasSelectedCeilingBoundary={Boolean(getStandaloneCeilingBoundary())}
+        onApplyPresetToDrawing={async (preset) => {
           if (preset?.action === "OPEN_FIRESTOP_DETAIL") {
             setIsDrywallStudioOpen(false);
             setIsAutoDetailComposerOpen(true);
@@ -2247,7 +2363,57 @@ export default function App() {
             showToast("Đã mở workflow Control Joint. Chọn vị trí khe và xác nhận trước khi chèn.");
             return;
           }
-          showToast(`Đã chọn preset ${preset.wallSystem?.systemName || "Thạch cao"} để tham khảo. Chưa thay đổi hình học vì cần chọn vùng/Smart Object và xác nhận Project Spec.`);
+
+          const cfg = preset?.ceilingConfig;
+          if (cfg && drywallInitialTab === "CEILING_GRID_AI") {
+            if (autoCadBridgeStatus.connected) {
+              const result = await executeAutoCadAction("CREATE_CEILING_GRID", cfg);
+              if (result?.ok) {
+                const data:any = result.result || {};
+                showToast(`Đã tạo trần DWG native: ${data.mainSegments ?? 0} xương chính, ${data.crossSegments ?? 0} xương phụ, ${data.hangers ?? 0} ty.`);
+              } else {
+                showToast(`Không tạo được trần AutoCAD: ${result?.error || result?.reason || "Hãy chọn 1 Polyline kín."}`);
+              }
+              return;
+            }
+
+            const boundary = getStandaloneCeilingBoundary();
+            if (!boundary) { showToast("Chọn 1 Polyline kín hoặc Rectangle làm biên trần."); return; }
+            const newCeiling: CadCeilingGrid = {
+              id: `ceil_${Date.now()}`,
+              handle: Math.random().toString(16).substring(2, 8).toUpperCase(),
+              type: "CEILING_GRID",
+              layer: cfg.mainLayer || "HNL_CEILING_MAIN",
+              color: "#FF9100",
+              boundary,
+              gridType: preset?.ceilingSystem?.type || cfg.systemType,
+              mainSpacing: Number(cfg.mainSpacing) || 800,
+              subSpacing: Number(cfg.crossSpacing) || 400,
+              mainTeeSpacing: Number(cfg.mainSpacing) || 800,
+              crossTeeSpacing: Number(cfg.crossSpacing) || 400,
+              hangerSpacing: Number(cfg.hangerSpacing) || 900,
+              wallAngleOffset: Number(cfg.wallAngleOffset) || 0,
+              levelElevation: Number(cfg.levelElevation) || 0,
+              rotationDeg: Number(cfg.rotationDeg) || 0,
+              gridAngle: Number(cfg.rotationDeg) || 0,
+              originX: Number(cfg.offsetX) || 0,
+              originY: Number(cfg.offsetY) || 0,
+              panelSize: cfg.panelSize || { width: 600, height: 600 },
+              ceilingType: preset?.ceilingSystem?.type === "GRID_EXPOSED_600x600" ? "DROP_CEILING" : "SUSPENDED_GYPSUM",
+            };
+            updateEntitiesWithHistory([...entities, newCeiling]);
+            try {
+              const settings = JSON.parse(localStorage.getItem("hnl.settings.v1") || "{}");
+              settings.ceilingMainSpacing = newCeiling.mainSpacing;
+              settings.ceilingCrossSpacing = newCeiling.subSpacing;
+              settings.ceilingHangerSpacing = newCeiling.hangerSpacing;
+              localStorage.setItem("hnl.settings.v1", JSON.stringify(settings));
+            } catch {}
+            showToast(`Đã tạo Smart Ceiling ${newCeiling.mainSpacing}/${newCeiling.subSpacing}/${newCeiling.hangerSpacing} mm • góc ${newCeiling.rotationDeg}°.`);
+            return;
+          }
+
+          showToast(`Đã chọn preset ${preset.wallSystem?.systemName || "Thạch cao"} để tham khảo.`);
         }}
       />
 

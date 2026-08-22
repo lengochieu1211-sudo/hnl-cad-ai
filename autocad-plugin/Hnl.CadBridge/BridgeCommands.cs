@@ -1,5 +1,7 @@
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
+using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.PlottingServices;
 using Autodesk.AutoCAD.Runtime;
 using Newtonsoft.Json;
@@ -30,7 +32,7 @@ public sealed class BridgeCommands : IExtensionApplication
         Application.Idle += OnIdle;
         _pollTimer = new Timer(_ => PollServer(), null, 500, 750);
         Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
-            "\nHNL CAD AI Bridge v2.4.5 loaded. Commands: HNLBRIDGESTATUS, HNLBRIDGEPING, HNLPLOTDEVICES, HNLLAYOUTS");
+            "\nHNL CAD AI Bridge v2.4.6 loaded. Commands: HNLBRIDGESTATUS, HNLBRIDGEPING, HNLPLOTDEVICES, HNLLAYOUTS");
     }
 
     public void Terminate()
@@ -117,6 +119,59 @@ public sealed class BridgeCommands : IExtensionApplication
         doc.Editor.WriteMessage($"\nHNL Layers ({names.Count}): {string.Join(", ", names.Take(30))}{(names.Count > 30 ? " ..." : "")}");
     }
 
+
+    [CommandMethod("HNLRENLAYOUT")]
+    public void RenameCurrentLayoutCommand()
+    {
+        var doc=Application.DocumentManager.MdiActiveDocument; if(doc==null) return;
+        var current=LayoutManager.Current.CurrentLayout;
+        if(string.Equals(current,"Model",StringComparison.OrdinalIgnoreCase)) { doc.Editor.WriteMessage("\nModel cannot be renamed."); return; }
+        var opt=new PromptStringOptions($"\nTên mới cho Layout [{current}]: "){AllowSpaces=true};
+        var res=doc.Editor.GetString(opt); if(res.Status!=PromptStatus.OK) return;
+        try { RenameLayout(new JObject{{"oldName",current},{"newName",res.StringResult.Trim()}}); }
+        catch(System.Exception ex){ doc.Editor.WriteMessage($"\nHNL Rename Layout error: {ex.Message}"); }
+    }
+
+    [CommandMethod("HNLCEILING")]
+    public void CreateCeilingCommand()
+    {
+        var doc=Application.DocumentManager.MdiActiveDocument; if(doc==null) return;
+        var ed=doc.Editor;
+        var eo=new PromptEntityOptions("\nChọn Polyline kín làm biên trần: ");
+        eo.SetRejectMessage("\nChỉ chấp nhận LWPOLYLINE."); eo.AddAllowedClass(typeof(Polyline),true);
+        var er=ed.GetEntity(eo); if(er.Status!=PromptStatus.OK) return;
+        using(var tr=doc.Database.TransactionManager.StartTransaction()) {
+            var pl=tr.GetObject(er.ObjectId,OpenMode.ForRead,false) as Polyline;
+            if(pl==null || !pl.Closed) { ed.WriteMessage("\nPolyline phải kín."); return; }
+            tr.Commit();
+        }
+
+        var ko=new PromptKeywordOptions("\nLoại trần [Chim/Noi] <Chim>: ");
+        ko.Keywords.Add("Chim"); ko.Keywords.Add("Noi"); ko.Keywords.Default="Chim"; ko.AllowNone=true;
+        var kr=ed.GetKeywords(ko); if(kr.Status==PromptStatus.Cancel) return;
+        var exposed=string.Equals(kr.StringResult,"Noi",StringComparison.OrdinalIgnoreCase);
+
+        double Ask(string label,double def) {
+            var o=new PromptDoubleOptions($"\n{label} <{def:0}>: "){DefaultValue=def,UseDefaultValue=true,AllowNegative=false,AllowZero=false};
+            var r=ed.GetDouble(o); return r.Status==PromptStatus.OK?r.Value:def;
+        }
+        var main=Ask("Xương chính @ (mm)",exposed?1200:800);
+        var cross=Ask("Xương phụ @ (mm)",exposed?600:400);
+        var hanger=Ask("Ty treo @ (mm)",exposed?1200:900);
+        var ao=new PromptDoubleOptions("\nGóc xoay hệ xương (độ) <0>: "){DefaultValue=0,UseDefaultValue=true,AllowNegative=true,AllowZero=true};
+        var ar=ed.GetDouble(ao); var angle=ar.Status==PromptStatus.OK?ar.Value:0;
+
+        try {
+            var payload=new JObject{
+                ["mainSpacing"]=main,["crossSpacing"]=cross,["hangerSpacing"]=hanger,
+                ["rotationDeg"]=angle,["originMode"]="CENTER",["drawHangers"]=true,
+                ["mainLayer"]="HNL_CEILING_MAIN",["crossLayer"]="HNL_CEILING_CROSS",["hangerLayer"]="HNL_CEILING_HANGER"
+            };
+            var result=CreateCeilingGridForPolyline(doc,er.ObjectId,payload);
+            ed.WriteMessage($"\nHNL Ceiling: {JsonConvert.SerializeObject(result)}");
+        } catch(System.Exception ex) { ed.WriteMessage($"\nHNL Ceiling error: {ex.Message}"); }
+    }
+
     private static void TryLoadPairing()
     {
         try
@@ -160,8 +215,8 @@ public sealed class BridgeCommands : IExtensionApplication
                 using var req = MakeRequest(HttpMethod.Post, "/api/autocad/register", new {
                     version = Application.Version.ToString(),
                     drawingName = doc?.Name ?? "",
-                    pluginVersion = "2.4.5",
-                    capabilities = new[] { "GET_STATUS","GET_PLOT_DEVICES","GET_LAYOUTS","EXECUTE_COMMAND","CANCEL_COMMAND","OPEN_DWG","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
+                    pluginVersion = "2.4.6",
+                    capabilities = new[] { "GET_STATUS","GET_PLOT_DEVICES","GET_LAYOUTS","SET_CURRENT_LAYOUT","RENAME_LAYOUT","EXECUTE_COMMAND","CANCEL_COMMAND","OPEN_DWG","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","CREATE_CEILING_GRID","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
                 });
                 var res = await Http.SendAsync(req);
                 _registered = res.IsSuccessStatusCode;
@@ -212,6 +267,8 @@ public sealed class BridgeCommands : IExtensionApplication
                 "GET_STATUS" => GetStatusPayload(),
                 "GET_PLOT_DEVICES" => GetPlotDevicesPayload(),
                 "GET_LAYOUTS" => GetLayoutsPayload(),
+                "SET_CURRENT_LAYOUT" => SetCurrentLayout(payload),
+                "RENAME_LAYOUT" => RenameLayout(payload),
                 "EXECUTE_COMMAND" => ExecuteNativeCommand(payload),
                 "CANCEL_COMMAND" => CancelNativeCommand(),
                 "OPEN_DWG" => OpenDwg(payload),
@@ -220,6 +277,7 @@ public sealed class BridgeCommands : IExtensionApplication
                 "GET_SELECTION" => GetSelectionPayload(),
                 "SELECT_ALL" => SelectAllObjects(),
                 "GET_LAYERS" => GetLayersPayload(),
+                "CREATE_CEILING_GRID" => CreateCeilingGrid(payload),
                 "PUBLISH_LAYOUTS_PDF" => PublishLayoutsPdf(payload),
                 "PLOT_CURRENT_PDF" => PlotCurrentLayoutPdf(payload),
                 "SAVE_DXF_AS_DWG" => SaveDxfAsDwg(payload),
@@ -238,7 +296,7 @@ public sealed class BridgeCommands : IExtensionApplication
     private static object GetStatusPayload()
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
-        return new { connected = true, version = Application.Version.ToString(), drawingName = doc?.Name ?? "", pluginVersion = "2.4.5" };
+        return new { connected = true, version = Application.Version.ToString(), drawingName = doc?.Name ?? "", pluginVersion = "2.4.6" };
     }
 
     private static object GetPlotDevicesPayload()
@@ -262,7 +320,9 @@ public sealed class BridgeCommands : IExtensionApplication
             {
                 var layout = (Layout)tr.GetObject(entry.Value, OpenMode.ForRead);
                 list.Add(new {
+                    handle = layout.Handle.ToString(),
                     name = layout.LayoutName,
+                    tabOrder = layout.TabOrder,
                     modelType = layout.ModelType,
                     device = layout.PlotConfigurationName,
                     media = layout.CanonicalMediaName,
@@ -277,6 +337,174 @@ public sealed class BridgeCommands : IExtensionApplication
         return new { layouts = list };
     }
 
+
+
+    private static object RenameLayout(JObject payload)
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var oldName = ((string?)payload["oldName"] ?? "").Trim();
+        var newName = ((string?)payload["newName"] ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName))
+            throw new ArgumentException("oldName/newName required");
+        if (string.Equals(oldName, "Model", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(newName, "Model", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Model layout cannot be renamed/overwritten.");
+        using (doc.LockDocument()) LayoutManager.Current.RenameLayout(oldName, newName);
+        return new { renamed = true, oldName, newName };
+    }
+
+    private static void EnsureLayer(Transaction tr, Database db, string name)
+    {
+        var table = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+        if (table.Has(name)) return;
+        table.UpgradeOpen();
+        var rec = new LayerTableRecord { Name = name };
+        table.Add(rec);
+        tr.AddNewlyCreatedDBObject(rec, true);
+    }
+
+    private static Point2d ToLocal(Point2d p, Point2d origin, double radians)
+    {
+        var x = p.X - origin.X; var y = p.Y - origin.Y;
+        var c = Math.Cos(radians); var sn = Math.Sin(radians);
+        return new Point2d(x * c - y * sn, x * sn + y * c);
+    }
+
+    private static Point2d ToWorld(Point2d p, Point2d origin, double radians)
+    {
+        var c = Math.Cos(radians); var sn = Math.Sin(radians);
+        return new Point2d(origin.X + p.X * c - p.Y * sn, origin.Y + p.X * sn + p.Y * c);
+    }
+
+    private static List<double> VHits(IReadOnlyList<Point2d> poly, double x)
+    {
+        var values = new List<double>();
+        for (var i=0;i<poly.Count;i++) {
+            var a=poly[i]; var b=poly[(i+1)%poly.Count];
+            if (Math.Abs(a.X-b.X)<1e-9) continue;
+            if (!((a.X<=x && b.X>x)||(b.X<=x && a.X>x))) continue;
+            values.Add(a.Y+(x-a.X)*(b.Y-a.Y)/(b.X-a.X));
+        }
+        values.Sort(); return values;
+    }
+
+    private static List<double> HHits(IReadOnlyList<Point2d> poly, double y)
+    {
+        var values = new List<double>();
+        for (var i=0;i<poly.Count;i++) {
+            var a=poly[i]; var b=poly[(i+1)%poly.Count];
+            if (Math.Abs(a.Y-b.Y)<1e-9) continue;
+            if (!((a.Y<=y && b.Y>y)||(b.Y<=y && a.Y>y))) continue;
+            values.Add(a.X+(y-a.Y)*(b.X-a.X)/(b.Y-a.Y));
+        }
+        values.Sort(); return values;
+    }
+
+    private static bool Inside(IReadOnlyList<Point2d> poly, Point2d p)
+    {
+        var inside=false;
+        for(int i=0,j=poly.Count-1;i<poly.Count;j=i++) {
+            var a=poly[i]; var b=poly[j];
+            var hit=((a.Y>p.Y)!=(b.Y>p.Y)) &&
+                (p.X<(b.X-a.X)*(p.Y-a.Y)/((b.Y-a.Y)==0?1e-12:(b.Y-a.Y))+a.X);
+            if(hit) inside=!inside;
+        }
+        return inside;
+    }
+
+    private static IEnumerable<double> GridValues(double min,double max,double spacing,string mode,double offset)
+    {
+        spacing=Math.Max(1,spacing);
+        var first=string.Equals(mode,"FROM_EDGE",StringComparison.OrdinalIgnoreCase)
+            ? min+Math.Max(0,offset)
+            : Math.Ceiling((min-offset)/spacing)*spacing+offset;
+        for(var v=first;v<=max+1e-7;v+=spacing) yield return v;
+    }
+
+    private static object CreateCeilingGrid(JObject payload)
+    {
+        var doc=Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var sel=doc.Editor.SelectImplied();
+        if(sel.Status!=PromptStatus.OK || sel.Value==null)
+            throw new InvalidOperationException("Select one closed Polyline boundary first.");
+        ObjectId boundary=ObjectId.Null;
+        using(var tr=doc.Database.TransactionManager.StartTransaction()) {
+            foreach(var id in sel.Value.GetObjectIds()) {
+                if(tr.GetObject(id,OpenMode.ForRead,false) is Polyline pl && pl.Closed && pl.NumberOfVertices>=3) { boundary=id; break; }
+            }
+            tr.Commit();
+        }
+        if(boundary.IsNull) throw new InvalidOperationException("Selection does not contain a closed LWPOLYLINE.");
+        return CreateCeilingGridForPolyline(doc,boundary,payload);
+    }
+
+    private static object CreateCeilingGridForPolyline(Document doc,ObjectId boundaryId,JObject payload)
+    {
+        var mainSpacing=Math.Max(100.0,(double?)payload["mainSpacing"]??800.0);
+        var crossSpacing=Math.Max(100.0,(double?)payload["crossSpacing"]??400.0);
+        var hangerSpacing=Math.Max(100.0,(double?)payload["hangerSpacing"]??900.0);
+        var rotationDeg=(double?)payload["rotationDeg"]??0.0;
+        var mode=((string?)payload["originMode"]??"CENTER").ToUpperInvariant();
+        var offsetX=(double?)payload["offsetX"]??0.0;
+        var offsetY=(double?)payload["offsetY"]??0.0;
+        var drawHangers=(bool?)payload["drawHangers"]??true;
+        var mainLayer=((string?)payload["mainLayer"]??"HNL_CEILING_MAIN").Trim();
+        var crossLayer=((string?)payload["crossLayer"]??"HNL_CEILING_CROSS").Trim();
+        var hangerLayer=((string?)payload["hangerLayer"]??"HNL_CEILING_HANGER").Trim();
+        var mainCount=0; var crossCount=0; var hangerCount=0;
+
+        using(doc.LockDocument())
+        using(var tr=doc.Database.TransactionManager.StartTransaction()) {
+            var pl=tr.GetObject(boundaryId,OpenMode.ForRead,false) as Polyline
+                ?? throw new InvalidOperationException("Boundary is not a Polyline.");
+            if(!pl.Closed || pl.NumberOfVertices<3) throw new InvalidOperationException("Boundary must be closed.");
+
+            var world=new List<Point2d>();
+            for(var i=0;i<pl.NumberOfVertices;i++) world.Add(pl.GetPoint2dAt(i));
+            var origin=new Point2d((world.Min(q=>q.X)+world.Max(q=>q.X))/2.0,(world.Min(q=>q.Y)+world.Max(q=>q.Y))/2.0);
+            var rad=rotationDeg*Math.PI/180.0;
+            var local=world.Select(q=>ToLocal(q,origin,-rad)).ToList();
+            var minX=local.Min(q=>q.X); var maxX=local.Max(q=>q.X);
+            var minY=local.Min(q=>q.Y); var maxY=local.Max(q=>q.Y);
+
+            EnsureLayer(tr,doc.Database,mainLayer); EnsureLayer(tr,doc.Database,crossLayer);
+            if(drawHangers) EnsureLayer(tr,doc.Database,hangerLayer);
+            var bt=(BlockTable)tr.GetObject(doc.Database.BlockTableId,OpenMode.ForRead);
+            var ms=(BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace],OpenMode.ForWrite);
+
+            foreach(var x in GridValues(minX,maxX,mainSpacing,mode,offsetX)) {
+                var ys=VHits(local,x);
+                for(var i=0;i+1<ys.Count;i+=2) {
+                    if(ys[i+1]-ys[i]<1e-6) continue;
+                    var a=ToWorld(new Point2d(x,ys[i]),origin,rad);
+                    var b=ToWorld(new Point2d(x,ys[i+1]),origin,rad);
+                    var ln=new Line(new Point3d(a.X,a.Y,0),new Point3d(b.X,b.Y,0)){Layer=mainLayer};
+                    ms.AppendEntity(ln); tr.AddNewlyCreatedDBObject(ln,true); mainCount++;
+                }
+                if(drawHangers) {
+                    foreach(var y in GridValues(minY,maxY,hangerSpacing,mode,offsetY)) {
+                        var lp=new Point2d(x,y); if(!Inside(local,lp)) continue;
+                        var wp=ToWorld(lp,origin,rad);
+                        var c=new Circle(new Point3d(wp.X,wp.Y,0),Vector3d.ZAxis,20){Layer=hangerLayer};
+                        ms.AppendEntity(c); tr.AddNewlyCreatedDBObject(c,true); hangerCount++;
+                    }
+                }
+            }
+
+            foreach(var y in GridValues(minY,maxY,crossSpacing,mode,offsetY)) {
+                var xs=HHits(local,y);
+                for(var i=0;i+1<xs.Count;i+=2) {
+                    if(xs[i+1]-xs[i]<1e-6) continue;
+                    var a=ToWorld(new Point2d(xs[i],y),origin,rad);
+                    var b=ToWorld(new Point2d(xs[i+1],y),origin,rad);
+                    var ln=new Line(new Point3d(a.X,a.Y,0),new Point3d(b.X,b.Y,0)){Layer=crossLayer};
+                    ms.AppendEntity(ln); tr.AddNewlyCreatedDBObject(ln,true); crossCount++;
+                }
+            }
+            tr.Commit();
+        }
+        return new {created=true,boundaryHandle=boundaryId.Handle.ToString(),mainSegments=mainCount,crossSegments=crossCount,hangers=hangerCount,mainSpacing,crossSpacing,hangerSpacing,rotationDeg,originMode=mode};
+    }
 
     private static object ExecuteNativeCommand(JObject payload)
     {
@@ -637,7 +865,7 @@ public sealed class BridgeCommands : IExtensionApplication
     public void BridgeStatus()
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
-        doc?.Editor.WriteMessage($"\nHNL Bridge v2.4.5: {(_registered ? "Paired" : "Waiting for HNL EXE")} | AutoCAD {Application.Version} | Drawing: {doc?.Name}");
+        doc?.Editor.WriteMessage($"\nHNL Bridge v2.4.6: {(_registered ? "Paired" : "Waiting for HNL EXE")} | AutoCAD {Application.Version} | Drawing: {doc?.Name}");
     }
 
     [CommandMethod("HNLBRIDGEPING", CommandFlags.Session)]
