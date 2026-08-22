@@ -6,6 +6,11 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Windows.Forms;
 
 namespace Hnl.CadBridge;
@@ -15,6 +20,11 @@ public sealed class NativePaletteCommands
     private static PaletteSet? _palette;
     private static TabControl? _tabs;
     private static bool _english;
+    private static readonly HttpClient AiHttp = new HttpClient();
+    private static TextBox? _aiPrompt;
+    private static RichTextBox? _aiOutput;
+    private static Label? _aiStatus;
+    private static Button? _aiSend;
 
     [CommandMethod("HNL")]
     [CommandMethod("HNLPALETTE")]
@@ -70,6 +80,7 @@ public sealed class NativePaletteCommands
     {
         if (_tabs == null) return;
         _tabs.TabPages.Clear();
+        _tabs.TabPages.Add(BuildAiTab());
         _tabs.TabPages.Add(BuildHomeTab());
         _tabs.TabPages.Add(BuildDrawTab());
         _tabs.TabPages.Add(BuildDataTab());
@@ -138,6 +149,217 @@ public sealed class NativePaletteCommands
         }
         group.Controls.Add(flow);
         return group;
+    }
+
+
+    private static TabPage BuildAiTab()
+    {
+        var page = NewTab("AI", "AI");
+        var panel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 6,
+            Padding = new Padding(8),
+            BackColor = Color.FromArgb(37, 39, 44)
+        };
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+
+        panel.Controls.Add(new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = _english ? "HNL AI CAD — Describe what you want to do" : "HNL AI CAD — Nhập yêu cầu cần thực hiện",
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            TextAlign = ContentAlignment.MiddleLeft
+        }, 0, 0);
+
+        _aiPrompt = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Multiline = true,
+            AcceptsReturn = true,
+            ScrollBars = ScrollBars.Vertical,
+            BackColor = Color.FromArgb(28, 30, 34),
+            ForeColor = Color.White,
+            BorderStyle = BorderStyle.FixedSingle,
+            Font = new Font("Segoe UI", 9)
+        };
+        _aiPrompt.KeyDown += async (_, e) =>
+        {
+            if (e.KeyCode == Keys.Enter && e.Control)
+            {
+                e.SuppressKeyPress = true;
+                await SubmitAiPromptAsync();
+            }
+        };
+        panel.Controls.Add(_aiPrompt, 0, 1);
+
+        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
+        _aiSend = new Button
+        {
+            Text = _english ? "Send AI  Ctrl+Enter" : "Gửi AI  Ctrl+Enter",
+            Width = 150, Height = 30,
+            BackColor = Color.FromArgb(0, 130, 160), ForeColor = Color.White, FlatStyle = FlatStyle.Flat
+        };
+        _aiSend.Click += async (_, __) => await SubmitAiPromptAsync();
+
+        var clear = new Button
+        {
+            Text = _english ? "Clear" : "Xóa", Width = 70, Height = 30,
+            BackColor = Color.FromArgb(52, 55, 61), ForeColor = Color.White, FlatStyle = FlatStyle.Flat
+        };
+        clear.Click += (_, __) => { _aiPrompt?.Clear(); _aiOutput?.Clear(); _aiPrompt?.Focus(); };
+
+        var manager = new Button
+        {
+            Text = _english ? "Manager" : "Mở HNL", Width = 80, Height = 30,
+            BackColor = Color.FromArgb(52, 55, 61), ForeColor = Color.White, FlatStyle = FlatStyle.Flat
+        };
+        manager.Click += (_, __) => OpenManager();
+
+        actions.Controls.Add(_aiSend);
+        actions.Controls.Add(clear);
+        actions.Controls.Add(manager);
+        panel.Controls.Add(actions, 0, 2);
+
+        _aiStatus = new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = _english ? "Ready • local HNL server / offline fallback" : "Sẵn sàng • HNL server cục bộ / fallback offline",
+            ForeColor = Color.Silver, Font = new Font("Segoe UI", 8), TextAlign = ContentAlignment.MiddleLeft
+        };
+        panel.Controls.Add(_aiStatus, 0, 3);
+
+        _aiOutput = new RichTextBox
+        {
+            Dock = DockStyle.Fill, ReadOnly = true,
+            BackColor = Color.FromArgb(24, 26, 29), ForeColor = Color.Gainsboro,
+            BorderStyle = BorderStyle.FixedSingle, Font = new Font("Consolas", 8.5f), DetectUrls = false
+        };
+        panel.Controls.Add(_aiOutput, 0, 4);
+
+        panel.Controls.Add(new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = _english
+                ? "AI proposes a plan only. Review destructive changes before applying."
+                : "AI chỉ đề xuất kế hoạch. Kiểm tra kỹ trước thao tác thay đổi/xóa.",
+            ForeColor = Color.FromArgb(255, 190, 80), Font = new Font("Segoe UI", 8), TextAlign = ContentAlignment.MiddleLeft
+        }, 0, 5);
+
+        page.Controls.Add(panel);
+        page.Enter += (_, __) => _aiPrompt?.Focus();
+        return page;
+    }
+
+    private static async Task SubmitAiPromptAsync()
+    {
+        var prompt = _aiPrompt?.Text?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            if (_aiStatus != null) _aiStatus.Text = _english ? "Enter a request first." : "Hãy nhập yêu cầu trước.";
+            _aiPrompt?.Focus();
+            return;
+        }
+
+        if (_aiSend != null) _aiSend.Enabled = false;
+        if (_aiStatus != null) _aiStatus.Text = _english ? "AI is analyzing…" : "AI đang phân tích…";
+
+        try
+        {
+            var pairingFile = Path.Combine(Path.GetTempPath(), "HNL_CAD_AI", "bridge.json");
+            if (!File.Exists(pairingFile))
+                throw new InvalidOperationException(_english
+                    ? "HNL Manager/server is not running. Open HNL CAD AI first."
+                    : "HNL Manager/server chưa chạy. Hãy mở HNL CAD AI trước.");
+
+            var pairing = JObject.Parse(File.ReadAllText(pairingFile));
+            var host = (string?)pairing["host"] ?? "127.0.0.1";
+            var port = (int?)pairing["port"] ?? 32145;
+            var token = (string?)pairing["token"] ?? "";
+
+            var doc = AcApplication.DocumentManager.MdiActiveDocument;
+            var selectionCount = 0;
+            try
+            {
+                var implied = doc?.Editor.SelectImplied();
+                if (implied != null && implied.Status == Autodesk.AutoCAD.EditorInput.PromptStatus.OK)
+                    selectionCount = implied.Value?.Count ?? 0;
+            }
+            catch { }
+
+            var body = new
+            {
+                prompt,
+                cadContext = new
+                {
+                    source = "AutoCAD Native Palette",
+                    drawingName = doc?.Name ?? "",
+                    selectionCount,
+                    activeUnits = "drawing units",
+                    autoCadNative = true
+                }
+            };
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, $"http://{host}:{port}/api/gemini/plan");
+            if (!string.IsNullOrWhiteSpace(token))
+                req.Headers.TryAddWithoutValidation("x-hnl-token", token);
+            req.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+
+            using var res = await AiHttp.SendAsync(req);
+            var raw = await res.Content.ReadAsStringAsync();
+            if (!res.IsSuccessStatusCode)
+                throw new InvalidOperationException($"HTTP {(int)res.StatusCode}: {raw}");
+
+            var json = JObject.Parse(raw);
+            var plan = json["plan"] as JObject ?? throw new InvalidOperationException("AI server không trả Command Plan.");
+            var intent = (string?)plan["intent"] ?? prompt;
+            var explanation = (string?)plan["explanation"] ?? "";
+            var actionType = (string?)plan["actionType"] ?? "";
+            var destructive = (bool?)plan["isDestructive"] ?? false;
+            var offline = (bool?)json["isOfflineFallback"] ?? false;
+
+            var sb = new StringBuilder();
+            sb.AppendLine($"INTENT: {intent}");
+            if (!string.IsNullOrWhiteSpace(actionType)) sb.AppendLine($"ACTION: {actionType}");
+            sb.AppendLine($"MODE: {(offline ? "OFFLINE RULES" : "AI ONLINE")}");
+            sb.AppendLine($"RISK: {(destructive ? "DESTRUCTIVE — REVIEW REQUIRED" : "SAFE / REVIEW")}");
+            sb.AppendLine();
+            if (!string.IsNullOrWhiteSpace(explanation)) sb.AppendLine(explanation);
+
+            if (plan["steps"] is JArray steps)
+            {
+                sb.AppendLine();
+                sb.AppendLine("STEPS:");
+                foreach (var item in steps)
+                {
+                    if (item is not JObject step) continue;
+                    sb.AppendLine($"{(int?)step["stepIndex"] ?? 0}. [{(string?)step["command"] ?? ""}] {(string?)step["description"] ?? ""}");
+                }
+            }
+
+            if (_aiOutput != null) _aiOutput.Text = sb.ToString();
+            if (_aiStatus != null)
+                _aiStatus.Text = offline
+                    ? (_english ? "Completed with offline rules." : "Đã phân tích bằng rule offline.")
+                    : (_english ? "AI response received." : "Đã nhận phản hồi AI.");
+        }
+        catch (SysException ex)
+        {
+            if (_aiOutput != null) _aiOutput.Text = (_english ? "AI connection error:\r\n" : "Lỗi kết nối AI:\r\n") + ex.Message;
+            if (_aiStatus != null) _aiStatus.Text = _english ? "AI unavailable — open HNL Manager / check server." : "AI chưa sẵn sàng — mở HNL Manager / kiểm tra server.";
+        }
+        finally
+        {
+            if (_aiSend != null) _aiSend.Enabled = true;
+            _aiPrompt?.Focus();
+        }
     }
 
     private static TabPage BuildHomeTab()

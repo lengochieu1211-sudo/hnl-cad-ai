@@ -30,6 +30,7 @@ import {
   Download,
   Copy,
   ChevronDown,
+  ChevronUp,
   Laptop,
   Monitor,
   CornerDownRight,
@@ -85,6 +86,10 @@ interface HnlRibbonProps {
   lastAutosaveAt?: string | null;
   documentName?: string;
   isDirty?: boolean;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+  isFocusDrawing?: boolean;
+  onToggleFocusDrawing?: () => void;
 }
 
 export const HnlRibbon: React.FC<HnlRibbonProps> = ({
@@ -129,6 +134,10 @@ export const HnlRibbon: React.FC<HnlRibbonProps> = ({
   lastAutosaveAt,
   documentName,
   isDirty,
+  isCollapsed = false,
+  onToggleCollapse,
+  isFocusDrawing = false,
+  onToggleFocusDrawing,
 }) => {
   const ribbonGroups = [
     { id: "HOME", label: "Home", tabs: [["VE_NHANH", "Draw"], ["CHINH_SUA", "Modify"]] },
@@ -270,9 +279,35 @@ export const HnlRibbon: React.FC<HnlRibbonProps> = ({
             <Bot className="w-3.5 h-3.5" />
             <span>AI Palette</span>
           </button>
+          {onToggleFocusDrawing && (
+            <button
+              onClick={onToggleFocusDrawing}
+              className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs font-medium transition ${
+                isFocusDrawing
+                  ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
+                  : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"
+              }`}
+              title={isFocusDrawing ? "Khôi phục giao diện HNL" : "Tối đa vùng vẽ: thu gọn Ribbon, Dock, AI và Command Line"}
+            >
+              <Monitor className="w-3.5 h-3.5" />
+              <span>{isFocusDrawing ? "Khôi phục UI" : "Tập trung vẽ"}</span>
+            </button>
+          )}
+          {onToggleCollapse && (
+            <button
+              onClick={onToggleCollapse}
+              className="p-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 transition"
+              title={isCollapsed ? "Mở rộng Ribbon" : "Thu gọn Ribbon"}
+              aria-label={isCollapsed ? "Mở rộng Ribbon" : "Thu gọn Ribbon"}
+            >
+              {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+            </button>
+          )}
         </div>
       </div>
 
+      {!isCollapsed && (
+        <>
       {/* Ribbon Navigation: 6 primary groups + contextual subtabs */}
       <div className="bg-[#1E1F22] border-b border-neutral-800">
         <div className="flex items-center px-2 overflow-x-auto scrollbar-none">
@@ -959,6 +994,8 @@ export const HnlRibbon: React.FC<HnlRibbonProps> = ({
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 };

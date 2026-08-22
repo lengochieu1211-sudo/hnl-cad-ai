@@ -1,7 +1,7 @@
 {
   "name": "hnl-cad-ai",
   "private": true,
-  "version": "2.4.3",
+  "version": "2.4.5",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -39,7 +39,7 @@
     "cross-env": "10.0.0"
   },
   "productName": "HNL CAD AI",
-  "description": "HNL CAD AI v2.4.3 - npm dependency pin fix after AutoCAD 2023-2026 plugin build passed",
+  "description": "HNL CAD AI v2.4.5 - collapsible AutoCAD-style UI layout and focus drawing mode",
   "main": "electron/main.cjs",
   "build": {
     "appId": "vn.hnl.cadai",

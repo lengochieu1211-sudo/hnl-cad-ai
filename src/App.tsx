@@ -162,10 +162,20 @@ export default function App() {
   const [historyIndex, setHistoryIndex] = useState(0);
 
   // Modals & Palette State
-  const [isAiPaletteOpen, setIsAiPaletteOpen] = useState(true);
-  const [paletteDockPosition, setPaletteDockPosition] = useState<"left" | "right">("right");
+  const [isAiPaletteOpen, setIsAiPaletteOpen] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("hnl.ui.layout.v2") || "{}").aiOpen ?? true; } catch { return true; }
+  });
+  const [paletteDockPosition, setPaletteDockPosition] = useState<"left" | "right">(() => {
+    try { return JSON.parse(localStorage.getItem("hnl.ui.layout.v2") || "{}").aiDock === "left" ? "left" : "right"; } catch { return "right"; }
+  });
+  const [isRibbonCollapsed, setIsRibbonCollapsed] = useState(() => {
+    try { return Boolean(JSON.parse(localStorage.getItem("hnl.ui.layout.v2") || "{}").ribbonCollapsed); } catch { return false; }
+  });
+  const uiBeforeFocusRef = useRef<{ribbon:boolean;left:boolean;ai:boolean;command:boolean} | null>(null);
   const [isCommandCenterOpen, setIsCommandCenterOpen] = useState(false);
-  const [isCommandLineVisible, setIsCommandLineVisible] = useState(true);
+  const [isCommandLineVisible, setIsCommandLineVisible] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("hnl.ui.layout.v2") || "{}").commandLine ?? true; } catch { return true; }
+  });
   const [commandDraft, setCommandDraft] = useState("");
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [isNetPluginExporterOpen, setIsNetPluginExporterOpen] = useState(false);
@@ -215,7 +225,9 @@ export default function App() {
   const [selectedWorkbench, setSelectedWorkbench] = useState<string>("HNL_CAD");
 
   // Left Dock Navigation & FreeCAD Tools
-  const [isLeftDockOpen, setIsLeftDockOpen] = useState(true);
+  const [isLeftDockOpen, setIsLeftDockOpen] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("hnl.ui.layout.v2") || "{}").leftOpen ?? true; } catch { return true; }
+  });
   const [leftDockTab, setLeftDockTab] = useState<"TREE" | "PROPERTIES" | "DEPENDENCY" | "SPREADSHEET">("TREE");
   const [isAddonManagerOpen, setIsAddonManagerOpen] = useState(false);
   const [isShopCheckOpen, setIsShopCheckOpen] = useState(false);
@@ -235,6 +247,42 @@ export default function App() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   }, []);
+
+  const isFocusDrawing = isRibbonCollapsed && !isLeftDockOpen && !isAiPaletteOpen && !isCommandLineVisible;
+
+  const toggleFocusDrawing = useCallback(() => {
+    if (isFocusDrawing) {
+      const prev = uiBeforeFocusRef.current;
+      setIsRibbonCollapsed(prev?.ribbon ?? false);
+      setIsLeftDockOpen(prev?.left ?? true);
+      setIsAiPaletteOpen(prev?.ai ?? false);
+      setIsCommandLineVisible(prev?.command ?? true);
+      uiBeforeFocusRef.current = null;
+      return;
+    }
+    uiBeforeFocusRef.current = {
+      ribbon: isRibbonCollapsed,
+      left: isLeftDockOpen,
+      ai: isAiPaletteOpen,
+      command: isCommandLineVisible,
+    };
+    setIsRibbonCollapsed(true);
+    setIsLeftDockOpen(false);
+    setIsAiPaletteOpen(false);
+    setIsCommandLineVisible(false);
+  }, [isFocusDrawing, isRibbonCollapsed, isLeftDockOpen, isAiPaletteOpen, isCommandLineVisible]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("hnl.ui.layout.v2", JSON.stringify({
+        ribbonCollapsed: isRibbonCollapsed,
+        leftOpen: isLeftDockOpen,
+        aiOpen: isAiPaletteOpen,
+        aiDock: paletteDockPosition,
+        commandLine: isCommandLineVisible,
+      }));
+    } catch {}
+  }, [isRibbonCollapsed, isLeftDockOpen, isAiPaletteOpen, paletteDockPosition, isCommandLineVisible]);
 
   const pushDiagnostic = useCallback((event: Omit<DiagnosticEvent, "id" | "timestamp">, open = false) => {
     const item = makeDiagnostic(event);
@@ -660,7 +708,7 @@ export default function App() {
   const saveProjectJson = useCallback(async () => {
     const nativeApi=(window as any).electronNative;
     if(!nativeApi?.saveFile){showToast("Lưu Project JSON cần chạy trong HNL Desktop EXE.");return;}
-    const payload=JSON.stringify({version:"2.4.3",schemaVersion:2,savedAt:new Date().toISOString(),currentFileName,activeLayoutId:activeLayout?.id||null,entities,layers,layouts,viewports,smartObjects,spreadsheetParameters,translationMemory,blockLibrary,dependencyEdges,modules,selectedWorkbench},null,2);
+    const payload=JSON.stringify({version:"2.4.5",schemaVersion:2,savedAt:new Date().toISOString(),currentFileName,activeLayoutId:activeLayout?.id||null,entities,layers,layouts,viewports,smartObjects,spreadsheetParameters,translationMemory,blockLibrary,dependencyEdges,modules,selectedWorkbench},null,2);
     const base=currentFileName.replace(/\.[^.]+$/,"")||"BanVe_HNL";
     const result=await nativeApi.saveFile({defaultName:`${base}.hnl.json`,content:payload,extDescription:"HNL Project JSON",extension:"json"});
     if(result?.success)showToast(`Đã lưu Project HNL: ${result.filePath}`);
@@ -1684,7 +1732,7 @@ export default function App() {
             <div className="px-8 py-7 border-b border-neutral-800 bg-gradient-to-r from-[#15181c] to-[#101820] flex items-center justify-between gap-6">
               <div>
                 <div className="text-[11px] tracking-[0.24em] uppercase text-cyan-400 font-semibold">Professional CAD Workspace</div>
-                <h1 className="mt-2 text-2xl font-bold text-white">HNL CAD AI <span className="text-cyan-400">v2.4.3</span></h1>
+                <h1 className="mt-2 text-2xl font-bold text-white">HNL CAD AI <span className="text-cyan-400">v2.4.5</span></h1>
                 <p className="mt-2 text-sm text-neutral-400 max-w-2xl">Không gian làm việc Standalone + AutoCAD Bridge, tối ưu shopdrawing, thống kê, layout và trợ lý AI kỹ thuật.</p>
               </div>
               <div className={`px-3 py-2 rounded-lg border text-xs ${autoCadBridgeStatus.connected ? "border-emerald-700 bg-emerald-950/30 text-emerald-300" : "border-neutral-700 bg-neutral-900 text-neutral-400"}`}>
@@ -1764,6 +1812,10 @@ export default function App() {
         lastAutosaveAt={lastAutosaveAt}
         documentName={currentFileName}
         isDirty={isDirty}
+        isCollapsed={isRibbonCollapsed}
+        onToggleCollapse={() => setIsRibbonCollapsed((v) => !v)}
+        isFocusDrawing={isFocusDrawing}
+        onToggleFocusDrawing={toggleFocusDrawing}
       />
 
       {/* 2. Main CAD Workspace (FreeCAD Left Dock + Canvas + Right AI Palette) */}
@@ -1803,6 +1855,31 @@ export default function App() {
             onFixAuditIssue={handleFixAuditIssue}
             onTranslateDrawing={handleTranslateDrawing}
           />
+        )}
+
+        {/* Compact left tool rail when Project/Properties dock is collapsed */}
+        {!isLeftDockOpen && (
+          <div className="w-9 h-full flex-shrink-0 bg-[#111317] border-r border-neutral-800 flex flex-col items-center py-2 gap-1 z-20">
+            {[
+              { tab: "TREE" as const, label: "Tree", icon: <FolderTree className="w-4 h-4" /> },
+              { tab: "PROPERTIES" as const, label: "Property", icon: <Sliders className="w-4 h-4" /> },
+              { tab: "DEPENDENCY" as const, label: "DAG", icon: <Cpu className="w-4 h-4" /> },
+              { tab: "SPREADSHEET" as const, label: "Sheet", icon: <Table2 className="w-4 h-4" /> },
+            ].map((item) => (
+              <button
+                key={item.tab}
+                onClick={() => { setLeftDockTab(item.tab); setIsLeftDockOpen(true); }}
+                className="w-8 h-8 flex items-center justify-center rounded text-neutral-500 hover:text-cyan-300 hover:bg-neutral-800 transition"
+                title={`Mở ${item.label}`}
+                aria-label={`Mở ${item.label}`}
+              >
+                {item.icon}
+              </button>
+            ))}
+            <div className="mt-auto pb-1">
+              <ChevronRight className="w-3.5 h-3.5 text-neutral-700" />
+            </div>
+          </div>
         )}
 
         {/* FreeCAD-style Parametric Architecture Left Dock */}

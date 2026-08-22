@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Bot,
   Send,
@@ -72,6 +72,7 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<"AI_CHAT" | "PRESETS" | "BLOCKS" | "LISP" | "TRANSLATE" | "AUDIT">("AI_CHAT");
   const [chatInput, setChatInput] = useState("");
+  const aiInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [messages, setMessages] = useState<
     Array<{
@@ -93,20 +94,33 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
   const [searchBlockQuery, setSearchBlockQuery] = useState("");
   const [selectedBlockCategory, setSelectedBlockCategory] = useState<string>("All");
 
+  useEffect(() => {
+    if (!isOpen || activeTab !== "AI_CHAT") return;
+    const timer = window.setTimeout(() => aiInputRef.current?.focus(), 80);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, activeTab]);
+
   if (!isOpen) {
     return (
-      <button
-        onClick={onToggle}
-        className={`fixed top-1/2 -translate-y-1/2 ${
-          dockPosition === "right" ? "right-0 rounded-l-lg" : "left-0 rounded-r-lg"
-        } bg-[#25272C] text-cyan-400 p-2.5 shadow-2xl border border-neutral-700 hover:bg-neutral-700 transition z-40 flex items-center space-x-1.5`}
-        title="Mở HNL CAD AI Palette"
+      <div
+        className="w-9 h-full flex-shrink-0 bg-[#17191c] border-neutral-800 flex items-center justify-center z-30"
+        style={{
+          borderLeftWidth: dockPosition === "right" ? 1 : 0,
+          borderRightWidth: dockPosition === "left" ? 1 : 0,
+        }}
       >
-        <Sparkles className="w-4 h-4 animate-pulse text-cyan-400" />
-        <span className="text-xs font-bold [writing-mode:vertical-rl] tracking-wider text-cyan-400">
-          HNL AI PALETTE
-        </span>
-      </button>
+        <button
+          type="button"
+          onClick={onToggle}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="pointer-events-auto h-[150px] w-8 rounded-md bg-[#25272C] text-cyan-400 shadow-xl border border-neutral-700 hover:bg-neutral-700 transition flex flex-col items-center justify-center gap-2"
+          title="Mở HNL CAD AI Palette"
+          aria-label="Mở HNL CAD AI Palette"
+        >
+          <Sparkles className="w-4 h-4 text-cyan-400" />
+          <span className="text-[10px] font-bold [writing-mode:vertical-rl] tracking-wider text-cyan-400">HNL AI</span>
+        </button>
+      </div>
     );
   }
 
@@ -143,15 +157,17 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
         headers: { "Content-Type": "application/json", ...(((window as any).electronNative?.sessionToken) ? { "x-hnl-token": (window as any).electronNative.sessionToken } : {}) },
         body: JSON.stringify({ prompt: userText, cadContext }),
       });
-      const data = await res.json();
-      const plan: AICommandPlan = data.plan;
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || data?.reason || `HTTP ${res.status}`);
+      const plan: AICommandPlan | undefined = data?.plan;
+      if (!plan || typeof plan !== "object") throw new Error("AI server không trả về Command Plan hợp lệ.");
 
       setMessages((prev) => [
         ...prev,
         {
           id: `ai_${Date.now()}`,
           sender: "ai",
-          text: plan.explanation || `Đã phân tích yêu cầu: ${plan.intent}`,
+          text: plan.explanation || `Đã phân tích yêu cầu: ${plan.intent || userText}`,
           plan,
           timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
         },
@@ -195,7 +211,7 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
     <div
       className={`w-[clamp(280px,22vw,340px)] h-full bg-[#1E1F22] border-${
         dockPosition === "right" ? "l" : "r"
-      } border-neutral-800 flex flex-col select-none shadow-2xl z-30`}
+      } border-neutral-800 flex flex-col shadow-2xl z-30`}
     >
       {/* Palette Header */}
       <div className="h-11 px-3 bg-[#141517] border-b border-neutral-800 flex items-center justify-between text-xs">
@@ -296,7 +312,7 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
       <div className="flex-1 overflow-y-auto p-3 text-xs">
         {/* TAB 1: AI CAD ASSISTANT CHAT */}
         {activeTab === "AI_CHAT" && (
-          <div className="flex flex-col h-full space-y-3">
+          <div className="flex flex-col h-full min-h-0 space-y-3">
             {/* Live CAD Context Inspector Badge */}
             <div className="bg-[#25272C] p-2.5 rounded-lg border border-neutral-700/60 text-[11px] flex flex-col space-y-1.5">
               <div className="flex items-center justify-between text-neutral-400 font-semibold">
@@ -373,7 +389,7 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
             </div>
 
             {/* Messages Stream */}
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
               {messages.map((msg) => (
                 <div
                   key={msg.id}
@@ -441,19 +457,37 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
               )}
             </div>
 
-            {/* Chat Input Box */}
-            <form onSubmit={handleSendMessage} className="mt-auto flex items-center space-x-1.5">
-              <input
-                type="text"
+            {/* Chat Input Box — isolate it from CAD keyboard/mouse handlers */}
+            <form
+              onSubmit={handleSendMessage}
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="mt-auto shrink-0 flex items-end space-x-1.5 border-t border-neutral-800 pt-2 bg-[#1E1F22]"
+            >
+              <textarea
+                ref={aiInputRef}
+                rows={2}
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Nhập lệnh (vd: Vẽ tường 200, tạo layout A3...)"
-                className="flex-1 bg-[#25272C] text-neutral-100 placeholder-neutral-500 px-3 py-2 rounded-lg border border-neutral-700 text-xs focus:outline-none focus:border-cyan-500"
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleSendMessage();
+                  }
+                }}
+                placeholder="Nhập yêu cầu AI… Enter = gửi, Shift+Enter = xuống dòng"
+                className="min-w-0 flex-1 resize-none select-text bg-[#25272C] text-neutral-100 placeholder-neutral-500 px-3 py-2 rounded-lg border border-neutral-700 text-xs leading-4 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500"
+                aria-label="Nhập yêu cầu HNL CAD AI"
+                data-hnl-ai-input="true"
               />
               <button
                 type="submit"
                 disabled={isAiLoading || !chatInput.trim()}
-                className="p-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white rounded-lg transition"
+                className="shrink-0 p-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition"
+                title="Gửi AI"
               >
                 <Send className="w-4 h-4" />
               </button>
