@@ -1,0 +1,85 @@
+{
+  "name": "hnl-cad-ai",
+  "private": true,
+  "version": "2.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "start": "node dist/server.cjs",
+    "lint": "tsc --noEmit",
+    "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:3000 && cross-env ELECTRON_START_URL=http://127.0.0.1:3000 electron .\"",
+    "dist:win": "npm run build && electron-builder --win nsis --x64"
+  },
+  "dependencies": {
+    "@google/genai": "2.4.0",
+    "@tailwindcss/vite": "4.1.14",
+    "@vitejs/plugin-react": "5.0.4",
+    "lucide-react": "0.546.0",
+    "react": "19.0.1",
+    "react-dom": "19.0.1",
+    "vite": "6.2.3",
+    "express": "4.21.2",
+    "dotenv": "17.2.3",
+    "motion": "12.23.24"
+  },
+  "devDependencies": {
+    "@types/node": "22.14.0",
+    "autoprefixer": "10.4.21",
+    "esbuild": "0.25.0",
+    "tailwindcss": "4.1.14",
+    "tsx": "4.21.0",
+    "typescript": "5.8.2",
+    "vite": "6.2.3",
+    "@types/express": "4.17.21",
+    "electron": "38.0.0",
+    "electron-builder": "26.0.12",
+    "wait-on": "8.0.4",
+    "concurrently": "9.2.1",
+    "cross-env": "10.0.0"
+  },
+  "productName": "HNL CAD AI",
+  "description": "HNL CAD AI v2.0.1 - Deduplicated Lisp-Inspired 2D Professional workflow, 44 source Lisp mapped to 17 canonical tools",
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "vn.hnl.cadai",
+    "productName": "HNL CAD AI",
+    "asar": true,
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/icon.ico",
+      "artifactName": "HNL_CAD_AI_Setup_${version}.${ext}",
+      "publisherName": "HNL"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "HNL CAD AI",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "allowElevation": true
+    }
+  }
+}

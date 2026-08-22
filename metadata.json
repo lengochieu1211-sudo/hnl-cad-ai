@@ -1,0 +1,9 @@
+{
+  "name": "HNL CAD AI TOOL",
+  "description": "HNL CAD AI – Intelligent CAD & Shopdrawing Assistant với kiến trúc FreeCAD Smart Objects, DAG Dependency Recompute, Spreadsheet tham số và hệ thống trần vách thạch cao chuyên nghiệp cho AutoCAD 2023+",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ],
+  "version": "2.0.1"
+}

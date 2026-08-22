@@ -1,0 +1,45 @@
+name: Build HNL CAD AI Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Toolchain versions
+        run: |
+          node --version
+          npm --version
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: TypeScript audit
+        run: npm run lint
+      - name: Build installer
+        run: npm run dist:win
+      - name: Verify installer exists
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path dist_electron -Filter "HNL_CAD_AI_Setup_*.exe" -Recurse
+          if (-not $files) { throw "Không tìm thấy HNL installer EXE" }
+          $files | ForEach-Object {
+            if ($_.Length -lt 5MB) { throw "Installer quá nhỏ, nghi build lỗi: $($_.FullName)" }
+            $hash = Get-FileHash $_.FullName -Algorithm SHA256
+            Write-Host "Installer: $($_.FullName)"
+            Write-Host "Size: $($_.Length) bytes"
+            Write-Host "SHA256: $($hash.Hash)"
+          }
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: HNL-CAD-AI-v2.0.1-Windows-Installer
+          path: dist_electron/HNL_CAD_AI_Setup_*.exe
+          if-no-files-found: error
+          retention-days: 14
