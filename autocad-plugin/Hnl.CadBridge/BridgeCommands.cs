@@ -1,7 +1,6 @@
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.PlottingServices;
-using Autodesk.AutoCAD.PublishingServices;
 using Autodesk.AutoCAD.Runtime;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -31,7 +30,7 @@ public sealed class BridgeCommands : IExtensionApplication
         Application.Idle += OnIdle;
         _pollTimer = new Timer(_ => PollServer(), null, 500, 750);
         Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
-            "\nHNL CAD AI Bridge v2.4.0 loaded. Commands: HNLBRIDGESTATUS, HNLBRIDGEPING, HNLPLOTDEVICES, HNLLAYOUTS");
+            "\nHNL CAD AI Bridge v2.4.1 loaded. Commands: HNLBRIDGESTATUS, HNLBRIDGEPING, HNLPLOTDEVICES, HNLLAYOUTS");
     }
 
     public void Terminate()
@@ -161,7 +160,7 @@ public sealed class BridgeCommands : IExtensionApplication
                 using var req = MakeRequest(HttpMethod.Post, "/api/autocad/register", new {
                     version = Application.Version.ToString(),
                     drawingName = doc?.Name ?? "",
-                    pluginVersion = "2.4.0",
+                    pluginVersion = "2.4.1",
                     capabilities = new[] { "GET_STATUS","GET_PLOT_DEVICES","GET_LAYOUTS","EXECUTE_COMMAND","CANCEL_COMMAND","OPEN_DWG","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
                 });
                 var res = await Http.SendAsync(req);
@@ -239,7 +238,7 @@ public sealed class BridgeCommands : IExtensionApplication
     private static object GetStatusPayload()
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
-        return new { connected = true, version = Application.Version.ToString(), drawingName = doc?.Name ?? "", pluginVersion = "2.4.0" };
+        return new { connected = true, version = Application.Version.ToString(), drawingName = doc?.Name ?? "", pluginVersion = "2.4.1" };
     }
 
     private static object GetPlotDevicesPayload()
@@ -622,7 +621,7 @@ public sealed class BridgeCommands : IExtensionApplication
     public void BridgeStatus()
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
-        doc?.Editor.WriteMessage($"\nHNL Bridge v2.4.0: {(_registered ? "Paired" : "Waiting for HNL EXE")} | AutoCAD {Application.Version} | Drawing: {doc?.Name}");
+        doc?.Editor.WriteMessage($"\nHNL Bridge v2.4.1: {(_registered ? "Paired" : "Waiting for HNL EXE")} | AutoCAD {Application.Version} | Drawing: {doc?.Name}");
     }
 
     [CommandMethod("HNLBRIDGEPING", CommandFlags.Session)]

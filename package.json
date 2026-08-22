@@ -1,7 +1,7 @@
 {
   "name": "hnl-cad-ai",
   "private": true,
-  "version": "2.4.0",
+  "version": "2.4.1",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -12,7 +12,7 @@
     "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
-    "@google/genai": "2.4.0",
+    "@google/genai": "2.4.1",
     "@tailwindcss/vite": "4.1.14",
     "@vitejs/plugin-react": "5.0.4",
     "lucide-react": "0.546.0",
@@ -39,7 +39,7 @@
     "cross-env": "10.0.0"
   },
   "productName": "HNL CAD AI",
-  "description": "HNL CAD AI v2.4.0 - AutoCAD-first native DWG/commands, one-click AutoCAD plugin bundle, native palette, audited UI and standalone DXF fallback",
+  "description": "HNL CAD AI v2.4.1 - AutoCAD Native build fix: net48 System.Net.Http + PlottingServices publish API, one-click bundle, DWG native workflow",
   "main": "electron/main.cjs",
   "build": {
     "appId": "vn.hnl.cadai",

@@ -31,16 +31,32 @@ jobs:
             @{ Year = "2025"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2025.csproj" },
             @{ Year = "2026"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2026.csproj" }
           )
+          $failed = @()
           foreach ($item in $projects) {
             $out = "autocad-plugin/HNL.CadBridge.bundle/Contents/$($item.Year)"
             New-Item -ItemType Directory -Force -Path $out | Out-Null
+            Write-Host "===== AutoCAD $($item.Year) ====="
             dotnet restore $item.Project
+            if ($LASTEXITCODE -ne 0) {
+              $failed += "$($item.Year):restore"
+              continue
+            }
             dotnet build $item.Project -c Release --no-restore -o $out
-            if ($LASTEXITCODE -ne 0) { throw "AutoCAD plugin build failed: $($item.Year)" }
+            if ($LASTEXITCODE -ne 0) {
+              $failed += "$($item.Year):build"
+              continue
+            }
             Get-ChildItem $out -File | Where-Object {
               $_.Name -match '^(Ac|AutoCAD).*\.dll$'
             } | Remove-Item -Force -ErrorAction SilentlyContinue
-            if (-not (Test-Path "$out/Hnl.CadBridge.dll")) { throw "Missing Hnl.CadBridge.dll for $($item.Year)" }
+            if (-not (Test-Path "$out/Hnl.CadBridge.dll")) {
+              $failed += "$($item.Year):missing-dll"
+              continue
+            }
+            Write-Host "AutoCAD $($item.Year) plugin PASS: $((Get-Item "$out/Hnl.CadBridge.dll").Length) bytes"
+          }
+          if ($failed.Count -gt 0) {
+            throw "AutoCAD plugin failures: $($failed -join ', ')"
           }
           Write-Host "AutoCAD bundle contents:"
           Get-ChildItem "autocad-plugin/HNL.CadBridge.bundle" -Recurse -File | Select-Object FullName,Length
@@ -62,7 +78,7 @@ jobs:
       - name: Upload AutoCAD plugin bundle
         uses: actions/upload-artifact@v4
         with:
-          name: HNL-CAD-AI-v2.4.0-AutoCAD-Plugin-Bundle
+          name: HNL-CAD-AI-v2.4.1-AutoCAD-Plugin-Bundle
           path: autocad-plugin/HNL.CadBridge.bundle/**
           if-no-files-found: error
           retention-days: 14
@@ -84,7 +100,7 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: HNL-CAD-AI-v2.4.0-Windows-Installer
+          name: HNL-CAD-AI-v2.4.1-Windows-Installer
           path: dist_electron/HNL_CAD_AI_Setup_*.exe
           if-no-files-found: error
           retention-days: 14

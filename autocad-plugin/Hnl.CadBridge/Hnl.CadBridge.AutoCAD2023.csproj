@@ -13,4 +13,9 @@
     <PackageReference Include="AutoCAD.NET" Version="24.2.0" ExcludeAssets="runtime" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Net.Http">
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
 </Project>
