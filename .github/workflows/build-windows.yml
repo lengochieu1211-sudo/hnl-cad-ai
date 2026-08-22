@@ -61,6 +61,17 @@ jobs:
           Write-Host "AutoCAD bundle contents:"
           Get-ChildItem "autocad-plugin/HNL.CadBridge.bundle" -Recurse -File | Select-Object FullName,Length
 
+      - name: Validate npm dependency pins
+        shell: pwsh
+        run: |
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $genai = $pkg.dependencies.'@google/genai'
+          if ($genai -ne '2.4.0') {
+            throw "Unexpected @google/genai pin: $genai. HNL app version must never overwrite SDK dependency versions."
+          }
+          npm view @google/genai@2.4.0 version
+          if ($LASTEXITCODE -ne 0) { throw "@google/genai@2.4.0 is unavailable from npm registry." }
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: TypeScript audit
@@ -78,7 +89,7 @@ jobs:
       - name: Upload AutoCAD plugin bundle
         uses: actions/upload-artifact@v4
         with:
-          name: HNL-CAD-AI-v2.4.2-AutoCAD-Plugin-Bundle
+          name: HNL-CAD-AI-v2.4.3-AutoCAD-Plugin-Bundle
           path: autocad-plugin/HNL.CadBridge.bundle/**
           if-no-files-found: error
           retention-days: 14
@@ -100,7 +111,7 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: HNL-CAD-AI-v2.4.2-Windows-Installer
+          name: HNL-CAD-AI-v2.4.3-Windows-Installer
           path: dist_electron/HNL_CAD_AI_Setup_*.exe
           if-no-files-found: error
           retention-days: 14
