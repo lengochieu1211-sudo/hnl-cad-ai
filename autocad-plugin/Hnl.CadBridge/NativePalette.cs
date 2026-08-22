@@ -1,6 +1,7 @@
-using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.Runtime;
 using Autodesk.AutoCAD.Windows;
+using AcApplication = Autodesk.AutoCAD.ApplicationServices.Application;
+using SysException = System.Exception;
 using System;
 using System.Diagnostics;
 using System.Drawing;
@@ -213,7 +214,7 @@ public sealed class NativePaletteCommands
             OpenManager();
             return;
         }
-        var doc = Application.DocumentManager.MdiActiveDocument;
+        var doc = AcApplication.DocumentManager.MdiActiveDocument;
         doc?.SendStringToExecute($"_.{command} ", true, false, true);
     }
 
@@ -245,12 +246,12 @@ public sealed class NativePaletteCommands
                 Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
                 return;
             }
-            Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+            AcApplication.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
                 "\nKhông tìm thấy HNL CAD AI EXE. Hãy mở HNL CAD AI từ Desktop/Start Menu.");
         }
-        catch (Exception ex)
+        catch (SysException ex)
         {
-            Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage($"\nKhông mở được HNL Manager: {ex.Message}");
+            AcApplication.DocumentManager.MdiActiveDocument?.Editor.WriteMessage($"\nKhông mở được HNL Manager: {ex.Message}");
         }
     }
 }

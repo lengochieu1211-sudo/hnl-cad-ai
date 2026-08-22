@@ -17,5 +17,8 @@
     <Reference Include="System.Net.Http">
       <Private>false</Private>
     </Reference>
+    <Reference Include="Microsoft.CSharp">
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 </Project>

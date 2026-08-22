@@ -1,4 +1,4 @@
-# HNL CAD AI v2.4.1 — GitHub AutoCAD Plugin Build Fix
+# HNL CAD AI v2.4.2 — GitHub AutoCAD Plugin Build Fix
 
 ## Log đã phân tích
 Nguồn: `logs_88294751821.zip`, job `Build AutoCAD plugins 2023-2026`.
