@@ -1,11 +1,11 @@
-# HNL CAD AI v2.0.3
+# HNL CAD AI v2.0.4
 
 HNL CAD AI là ứng dụng CAD/Shopdrawing dạng Windows Desktop (Electron) có hai chế độ kiến trúc:
 
 - **Standalone Workspace:** chạy độc lập, không cần AutoCAD; làm việc với model HNL và DXF cơ bản.
 - **AutoCAD Connected Workspace:** chỉ bật khi plugin HNL AutoCAD Bridge thật được cài và phản hồi. DWG native/AutoLISP/Field/Table/Layout/Viewport thuộc chế độ này.
 
-## Điểm mới v2.0.3 Professional Release Candidate
+## Điểm mới v2.0.4 Professional Release Candidate
 - HNL Pile Studio: PHC/PC/cọc vuông/custom, pile plan + tag + schedule.
 - AutoSave/Recovery 30 giây và sau thay đổi.
 - AutoCAD Bridge status không giả lập.
@@ -24,12 +24,12 @@ npm install
 npm run lint
 npm run dist:win
 ```
-Output: `dist_electron/HNL_CAD_AI_Setup_2.0.3.exe`
+Output: `dist_electron/HNL_CAD_AI_Setup_2.0.4.exe`
 
 Có thể dùng `.github/workflows/build-windows.yml` trên GitHub Actions Windows runner.
 
 
-## Release hardening v2.0.3
+## Release hardening v2.0.4
 - Full Project Save/Open schema v2, backward-compatible recovery.
 - Dirty-state + cảnh báo thoát/tạo mới khi chưa lưu.
 - Start Center chuyên nghiệp, tên file và trạng thái lưu trên Ribbon.

@@ -1,4 +1,4 @@
-# GitHub Actions Build Fix v2.0.3
+# GitHub Actions Build Fix v2.0.4
 
 Sửa đúng các lỗi `npm run lint` từ workflow GitHub:
 
@@ -13,4 +13,4 @@ Sửa đúng các lỗi `npm run lint` từ workflow GitHub:
 Workflow vẫn chạy theo thứ tự:
 `npm install` → `npm run lint` → `npm run dist:win` → verify EXE → upload artifact.
 
-Artifact mới: `HNL-CAD-AI-v2.0.3-Windows-Installer`.
+Artifact mới: `HNL-CAD-AI-v2.0.4-Windows-Installer`.

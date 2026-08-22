@@ -1,7 +1,7 @@
 {
   "name": "hnl-cad-ai",
   "private": true,
-  "version": "2.0.3",
+  "version": "2.0.4",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -9,7 +9,7 @@
     "start": "node dist/server.cjs",
     "lint": "tsc --noEmit",
     "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:3000 && cross-env ELECTRON_START_URL=http://127.0.0.1:3000 electron .\"",
-    "dist:win": "npm run build && electron-builder --win nsis --x64"
+    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
     "@google/genai": "2.4.0",
@@ -39,7 +39,7 @@
     "cross-env": "10.0.0"
   },
   "productName": "HNL CAD AI",
-  "description": "HNL CAD AI v2.0.3 - Full source replace with 2D Professional, Lisp dedup, SketchUp/AutoCAD bridges, Plot/Publish and GitHub build fixes",
+  "description": "HNL CAD AI v2.0.4 - GitHub EXE build fix: disable electron-builder publishing and upload installer as Actions artifact",
   "main": "electron/main.cjs",
   "build": {
     "appId": "vn.hnl.cadai",

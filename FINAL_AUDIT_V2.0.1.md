@@ -1,4 +1,4 @@
-# FINAL AUDIT — HNL CAD AI v2.0.3
+# FINAL AUDIT — HNL CAD AI v2.0.4
 
 ## Lisp dedup / bố trí
 - 44/44 Lisp nguồn có trong catalog.
@@ -28,7 +28,7 @@ Home → 2D Professional → SketchUp → Layout & Publish → AI & Legacy → K
 - Electron main/preload: PASS.
 - SketchUp Ruby loader/main: Syntax OK.
 - RBZ integrity: PASS.
-- Package version: 2.0.3.
+- Package version: 2.0.4.
 
 ## Quy tắc
 - Một source Lisp có một owner chính.

@@ -39,7 +39,7 @@ echo.
 echo ================================================================
 echo [THANH CONG]
 echo File cai dat nam trong: dist_electron\
-echo Ten du kien: HNL_CAD_AI_Setup_2.0.3.exe
+echo Ten du kien: HNL_CAD_AI_Setup_2.0.4.exe
 echo ================================================================
 pause
 exit /b 0
