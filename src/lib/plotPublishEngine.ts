@@ -58,6 +58,6 @@ export function sheetSetFromLayouts(layouts:CadLayout[],viewports:CadViewport[],
 }
 export function preflightSheetSet(set:HnlSheetSet,availablePrinters:string[]){
  const seen=new Set<string>();let errors=0,warnings=0;
- const sheets=set.sheets.map(s=>{const messages=[...s.messages];let status:s["status"]="READY";if(seen.has(s.sheetNo)){messages.push("Trùng số sheet.");status="ERROR";errors++;}seen.add(s.sheetNo);if(s.printerName&&availablePrinters.length&&!availablePrinters.includes(s.printerName)){messages.push("Printer/plotter không tồn tại trên máy.");if(status!=="ERROR")status="CHECK";warnings++;}if(!s.paper){messages.push("Thiếu paper size.");status="ERROR";errors++;}return{...s,status,messages};});
+ const sheets=set.sheets.map(s=>{const messages=[...s.messages];let status:PlotSheet["status"]="READY";if(seen.has(s.sheetNo)){messages.push("Trùng số sheet.");status="ERROR";errors++;}seen.add(s.sheetNo);if(s.printerName&&availablePrinters.length&&!availablePrinters.includes(s.printerName)){messages.push("Printer/plotter không tồn tại trên máy.");if(status!=="ERROR")status="CHECK";warnings++;}if(!s.paper){messages.push("Thiếu paper size.");status="ERROR";errors++;}return{...s,status,messages};});
  return{sheetSet:{...set,sheets,updatedAt:new Date().toISOString()},errors,warnings,ready:sheets.filter(s=>s.enabled).every(s=>s.status==="READY")};
 }

@@ -1,7 +1,7 @@
 {
   "name": "hnl-cad-ai",
   "private": true,
-  "version": "2.0.1",
+  "version": "2.0.2",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -39,7 +39,7 @@
     "cross-env": "10.0.0"
   },
   "productName": "HNL CAD AI",
-  "description": "HNL CAD AI v2.0.1 - Deduplicated Lisp-Inspired 2D Professional workflow, 44 source Lisp mapped to 17 canonical tools",
+  "description": "HNL CAD AI v2.0.2 - GitHub TypeScript build fix for SketchUp mapping and Plot/Publish preflight",
   "main": "electron/main.cjs",
   "build": {
     "appId": "vn.hnl.cadai",

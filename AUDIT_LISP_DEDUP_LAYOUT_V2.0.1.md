@@ -1,4 +1,4 @@
-# HNL CAD AI v2.0.1 — Kiểm tra trùng và bố trí lại 44 Lisp
+# HNL CAD AI v2.0.2 — Kiểm tra trùng và bố trí lại 44 Lisp
 
 ## Kết quả
 
@@ -40,7 +40,7 @@
 4. `NATIVE` chạy trong HNL; `HYBRID` chia logic HNL + AutoCAD; `AUTOCAD` chỉ chạy native DWG qua Bridge.
 5. Field ObjectID / CHSPACE / VP Freeze / Page Setup / CTB-STB / Block Editor / DST không được tạo bản Standalone giả.
 
-## Ribbon v2.0.1
+## Ribbon v2.0.2
 
 **Home → 2D Professional → SketchUp → Layout & Publish → AI & Legacy → Kỹ thuật**
 

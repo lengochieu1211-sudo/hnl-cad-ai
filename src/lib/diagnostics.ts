@@ -46,7 +46,7 @@ export function errorToDetails(error: unknown): { cause: string; stack?: string 
   try { return { cause: JSON.stringify(error) }; } catch { return { cause: String(error) }; }
 }
 
-export function diagnosticsToText(events: DiagnosticEvent[], appVersion = "2.0.1") {
+export function diagnosticsToText(events: DiagnosticEvent[], appVersion = "2.0.2") {
   const lines = [
     "HNL CAD AI - DIAGNOSTIC REPORT",
     `App version: ${appVersion}`,

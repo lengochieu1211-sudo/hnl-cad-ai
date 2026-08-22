@@ -1264,7 +1264,7 @@ export default function App() {
           break;
         }
         case "SAVE_DRAWING": {
-          const payload = JSON.stringify({ version: "2.0.1", schemaVersion: 2, savedAt: new Date().toISOString(), currentFileName, activeLayoutId: activeLayout?.id || null, entities, layers, layouts, viewports, smartObjects, spreadsheetParameters, translationMemory, blockLibrary, dependencyEdges, modules, selectedWorkbench }, null, 2);
+          const payload = JSON.stringify({ version: "2.0.2", schemaVersion: 2, savedAt: new Date().toISOString(), currentFileName, activeLayoutId: activeLayout?.id || null, entities, layers, layouts, viewports, smartObjects, spreadsheetParameters, translationMemory, blockLibrary, dependencyEdges, modules, selectedWorkbench }, null, 2);
           const result = await nativeApi.saveFile?.({ defaultName: currentFileName || "BanVe_HNL.json", content: payload, extDescription: "HNL Drawing JSON", extension: "json" });
           if (result?.success) { setCurrentFileName(String(result.filePath).split(/[\\/]/).pop() || "BanVe_HNL.json"); setIsDirty(false); showToast(`Đã lưu đầy đủ dự án: ${result.filePath}`); }
           else if (!result?.canceled) { pushDiagnostic({ code: "HNL-FILE-SAVE-001", severity: "ERROR", title: "Lưu dự án thất bại", message: "Electron không lưu được file dự án.", cause: result?.error || "Không có thông tin lỗi từ native layer", context: { file: currentFileName }, suggestion: "Thử lưu vào Documents/Desktop, kiểm tra quyền ghi và dung lượng ổ đĩa; sau đó copy log nếu vẫn lỗi." }, true); }
@@ -1363,7 +1363,7 @@ export default function App() {
             <div className="px-8 py-7 border-b border-neutral-800 bg-gradient-to-r from-[#15181c] to-[#101820] flex items-center justify-between gap-6">
               <div>
                 <div className="text-[11px] tracking-[0.24em] uppercase text-cyan-400 font-semibold">Professional CAD Workspace</div>
-                <h1 className="mt-2 text-2xl font-bold text-white">HNL CAD AI <span className="text-cyan-400">v2.0.1</span></h1>
+                <h1 className="mt-2 text-2xl font-bold text-white">HNL CAD AI <span className="text-cyan-400">v2.0.2</span></h1>
                 <p className="mt-2 text-sm text-neutral-400 max-w-2xl">Không gian làm việc Standalone + AutoCAD Bridge, tối ưu shopdrawing, thống kê, layout và trợ lý AI kỹ thuật.</p>
               </div>
               <div className={`px-3 py-2 rounded-lg border text-xs ${autoCadBridgeStatus.connected ? "border-emerald-700 bg-emerald-950/30 text-emerald-300" : "border-neutral-700 bg-neutral-900 text-neutral-400"}`}>
