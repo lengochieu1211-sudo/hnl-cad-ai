@@ -1,4 +1,4 @@
-# HNL CAD AI v2.0.5 — Windows Packaged Startup Fix
+# HNL CAD AI v2.3.0 — Windows Packaged Startup Fix
 
 Lỗi v2.0.4:
 `ENOENT: no such file or directory, chdir '...\\resources\\app.asar'`

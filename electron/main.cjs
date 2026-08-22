@@ -22,6 +22,50 @@ if (!gotSingleInstanceLock) {
   });
 }
 
+function getAutoCadBundlePaths() {
+  const source = path.join(process.resourcesPath || '', 'autocad', 'HNL.CadBridge.bundle');
+  const target = path.join(app.getPath('appData'), 'Autodesk', 'ApplicationPlugins', 'HNL.CadBridge.bundle');
+  return { source, target };
+}
+
+function bundleHasDll(bundlePath) {
+  try {
+    for (const year of ['2023','2024','2025','2026']) {
+      if (fs.existsSync(path.join(bundlePath, 'Contents', year, 'Hnl.CadBridge.dll'))) return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+function installOrRepairAutoCadBundle() {
+  try {
+    const { source, target } = getAutoCadBundlePaths();
+    if (!fs.existsSync(path.join(source, 'PackageContents.xml')) || !bundleHasDll(source)) {
+      return { success: false, reason: 'PLUGIN_BUNDLE_NOT_PACKAGED', source, target };
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    if (fs.existsSync(target)) fs.rmSync(target, { recursive: true, force: true });
+    fs.cpSync(source, target, { recursive: true });
+    return { success: true, source, target, installedDll: bundleHasDll(target) };
+  } catch (error) {
+    return { success: false, error: String(error?.message || error) };
+  }
+}
+
+function getAutoCadBundleStatus() {
+  try {
+    const { source, target } = getAutoCadBundlePaths();
+    return {
+      source,
+      target,
+      packaged: fs.existsSync(path.join(source, 'PackageContents.xml')) && bundleHasDll(source),
+      installed: fs.existsSync(path.join(target, 'PackageContents.xml')) && bundleHasDll(target),
+    };
+  } catch (error) {
+    return { packaged: false, installed: false, error: String(error?.message || error) };
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -121,7 +165,8 @@ async function openProjectFileDialog() {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Mở tệp HNL CAD AI',
     filters: [
-      { name: 'HNL CAD / DXF', extensions: ['dxf', 'json'] },
+      { name: 'CAD Drawings', extensions: ['dwg', 'dxf'] },
+      { name: 'HNL Project', extensions: ['json'] },
       { name: 'AutoLISP Scripts', extensions: ['lsp'] },
       { name: 'All Files', extensions: ['*'] },
     ],
@@ -130,12 +175,16 @@ async function openProjectFileDialog() {
   if (result.canceled || !result.filePaths.length) return { success: false };
   const filePath = result.filePaths[0];
   const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.dwg') {
+    mainWindow.webContents.send('file-opened', { filePath, fileName: path.basename(filePath), extension: 'dwg', requiresAutoCad: true });
+    return { success: true, filePath, requiresAutoCad: true };
+  }
   if (!['.dxf', '.json', '.lsp'].includes(ext)) {
-    await dialog.showMessageBox(mainWindow, { type: 'warning', title: 'Định dạng chưa hỗ trợ trực tiếp', message: 'HNL CAD AI Standalone hiện mở trực tiếp DXF/JSON/LSP.', detail: 'DWG native cần AutoCAD Bridge/SDK tương ứng.' });
+    await dialog.showMessageBox(mainWindow, { type: 'warning', title: 'Định dạng chưa hỗ trợ', message: 'Chọn DWG/DXF/JSON/LSP.', detail: 'DWG được chuyển cho AutoCAD Bridge; DXF/JSON/LSP có thể xử lý trong HNL.' });
     return { success: false };
   }
   const content = fs.readFileSync(filePath, 'utf-8');
-  mainWindow.webContents.send('file-opened', { filePath, content, fileName: path.basename(filePath) });
+  mainWindow.webContents.send('file-opened', { filePath, content, fileName: path.basename(filePath), extension: ext.slice(1), requiresAutoCad: false });
   return { success: true, filePath };
 }
 
@@ -152,38 +201,28 @@ function buildAppMenu() {
           },
         },
         {
-          label: 'Mở DXF / dữ liệu HNL...',
+          label: 'Mở DWG / DXF / Project...',
           accelerator: 'CmdOrCtrl+O',
           click: () => { openProjectFileDialog(); },
         },
         {
-          label: 'Mở DWG bằng AutoCAD / ứng dụng mặc định...',
-          click: async () => {
-            if (!mainWindow) return;
-            const result = await dialog.showOpenDialog(mainWindow, {
-              title: 'Chọn bản vẽ DWG',
-              filters: [{ name: 'AutoCAD Drawing', extensions: ['dwg'] }],
-              properties: ['openFile'],
-            });
-            if (!result.canceled && result.filePaths.length > 0) {
-              const error = await shell.openPath(result.filePaths[0]);
-              if (error) dialog.showErrorBox('Không mở được DWG', error);
-            }
-          },
+          label: 'Lưu bản vẽ hiện tại (Save)',
+          accelerator: 'CmdOrCtrl+S',
+          click: () => mainWindow?.webContents.send('menu-command', 'SAVE_DRAWING'),
         },
         {
-          label: 'Lưu bản vẽ (Save)...',
-          accelerator: 'CmdOrCtrl+S',
-          click: () => {
-            mainWindow?.webContents.send('menu-command', 'SAVE_DRAWING');
-          },
+          label: 'Lưu thành... (Save As)',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          click: () => mainWindow?.webContents.send('menu-command', 'SAVE_AS_DRAWING'),
+        },
+        {
+          label: 'Backup Project HNL JSON...',
+          click: () => mainWindow?.webContents.send('menu-command', 'SAVE_PROJECT_JSON'),
         },
         { type: 'separator' },
         {
           label: 'Xuất tệp DXF (Export DXF)...',
-          click: () => {
-            mainWindow?.webContents.send('menu-command', 'EXPORT_DXF');
-          },
+          click: () => mainWindow?.webContents.send('menu-command', 'EXPORT_DXF'),
         },
         {
           label: 'In / Xuất PDF (Print/Plot)...',
@@ -205,6 +244,10 @@ function buildAppMenu() {
       submenu: [
         { label: 'Hoàn tác (Undo)', accelerator: 'CmdOrCtrl+Z', click: () => mainWindow?.webContents.send('menu-command', 'UNDO') },
         { label: 'Làm lại (Redo)', accelerator: 'CmdOrCtrl+Y', click: () => mainWindow?.webContents.send('menu-command', 'REDO') },
+        { type: 'separator' },
+        { label: 'Cắt (Cut)', accelerator: 'CmdOrCtrl+X', click: () => mainWindow?.webContents.send('menu-command', 'CUT') },
+        { label: 'Sao chép (Copy)', accelerator: 'CmdOrCtrl+C', click: () => mainWindow?.webContents.send('menu-command', 'COPY') },
+        { label: 'Dán (Paste)', accelerator: 'CmdOrCtrl+V', click: () => mainWindow?.webContents.send('menu-command', 'PASTE') },
         { type: 'separator' },
         { label: 'Chọn tất cả (Select All)', accelerator: 'CmdOrCtrl+A', click: () => mainWindow?.webContents.send('menu-command', 'SELECT_ALL') },
         { label: 'Xóa đối tượng (Delete)', accelerator: 'Delete', click: () => mainWindow?.webContents.send('menu-command', 'DELETE') },
@@ -242,6 +285,45 @@ function buildAppMenu() {
       submenu: [
         { label: 'Tải lại (Reload)', accelerator: 'CmdOrCtrl+R', click: () => mainWindow?.reload() },
         { label: 'Toàn màn hình (Fullscreen)', accelerator: 'F11', click: () => mainWindow?.setFullScreen(!mainWindow.isFullScreen()) },
+      ],
+    },
+    {
+      label: 'AutoCAD',
+      submenu: [
+        {
+          label: 'Cài / Sửa HNL AutoCAD Plugin',
+          click: async () => {
+            const result = installOrRepairAutoCadBundle();
+            await dialog.showMessageBox(mainWindow, {
+              type: result.success ? 'info' : 'warning',
+              title: 'HNL AutoCAD Plugin',
+              message: result.success ? 'Đã cài/sửa HNL.CadBridge.bundle.' : 'Chưa cài được HNL.CadBridge.bundle.',
+              detail: result.success
+                ? `${result.target}\nĐóng/mở lại AutoCAD để AutoLoader nạp plugin.`
+                : `${result.error || result.reason || 'Không rõ lỗi'}\n${result.source || ''}`
+            });
+          },
+        },
+        {
+          label: 'Kiểm tra trạng thái Plugin',
+          click: async () => {
+            const status = getAutoCadBundleStatus();
+            await dialog.showMessageBox(mainWindow, {
+              type: status.installed ? 'info' : 'warning',
+              title: 'AutoCAD Plugin Status',
+              message: status.installed ? 'Plugin đã được cài.' : 'Plugin chưa được cài hoặc thiếu DLL.',
+              detail: `Packaged: ${Boolean(status.packaged)}\nInstalled: ${Boolean(status.installed)}\n${status.target || ''}`
+            });
+          },
+        },
+        {
+          label: 'Mở thư mục Autodesk ApplicationPlugins',
+          click: async () => {
+            const { target } = getAutoCadBundlePaths();
+            fs.mkdirSync(path.dirname(target), { recursive: true });
+            await shell.openPath(path.dirname(target));
+          },
+        },
       ],
     },
     {
@@ -395,6 +477,19 @@ ipcMain.handle('print-html', async (_event, { html, printerName, landscape, copi
 
 
 
+ipcMain.handle('write-temp-text-file', async (_event, { fileName, content }) => {
+  try {
+    const safeName = String(fileName || `hnl_${Date.now()}.txt`).replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
+    const dir = path.join(app.getPath('temp'), 'HNL_CAD_AI', 'exports');
+    fs.mkdirSync(dir, { recursive: true });
+    const filePath = path.join(dir, safeName);
+    fs.writeFileSync(filePath, String(content || ''), 'utf-8');
+    return { success: true, filePath, bytes: Buffer.byteLength(String(content || ''), 'utf8') };
+  } catch (error) {
+    return { success: false, error: String(error?.message || error) };
+  }
+});
+
 ipcMain.handle('choose-save-path', async (_event, { title, defaultName, extension, description }) => {
   try {
     const result = await dialog.showSaveDialog(mainWindow, {
@@ -464,12 +559,33 @@ ipcMain.handle('open-sheetset-dialog', async () => {
   }
 });
 
+ipcMain.handle('install-autocad-bundle', async () => installOrRepairAutoCadBundle());
+ipcMain.handle('get-autocad-bundle-status', async () => getAutoCadBundleStatus());
+ipcMain.handle('open-autocad-plugin-folder', async () => {
+  try {
+    const { target } = getAutoCadBundlePaths();
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const error = await shell.openPath(path.dirname(target));
+    return error ? { success: false, error } : { success: true, folderPath: path.dirname(target) };
+  } catch (error) {
+    return { success: false, error: String(error?.message || error) };
+  }
+});
+
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
 // App Lifecycle
 app.whenReady().then(() => {
+  // Publish the actual EXE path so the AutoCAD palette can reopen HNL even if the user chose a custom install folder.
+  try {
+    const markerDir = path.join(app.getPath('appData'), 'HNL CAD AI');
+    fs.mkdirSync(markerDir, { recursive: true });
+    fs.writeFileSync(path.join(markerDir, 'manager-path.txt'), process.execPath, 'utf-8');
+  } catch (_) {}
+  // Per-user Autodesk ApplicationPlugins autoload: no NETLOAD required.
+  installOrRepairAutoCadBundle();
   createWindow();
 
   app.on('activate', () => {

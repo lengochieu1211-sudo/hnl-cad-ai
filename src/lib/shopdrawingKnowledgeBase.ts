@@ -308,6 +308,18 @@ export const SHOPDRAWING_DETAIL_CATALOG: ShopDetailRule[] = [
     warningNotes: "FIRESTOP REQUIRED! Bắt buộc sử dụng hệ keo & đai ngăn cháy đạt chứng chỉ cùng cấp EI với hệ vách (Hilti / 3M / Promat).",
     verificationTag: "PCCC SPECIFICATION / APPROVED FIRESTOP SUBMITTAL",
   },
+  {
+    detailId: "DET-CEILING-CONTROL-JOINT-01",
+    category: "CEILING_DETAIL",
+    title: "Chi tiết khe co giãn trần thạch cao (Control Joint / Shadowline)",
+    cadSymbol: "DT_KHE_CO_GIAN_TRAN",
+    triggerConditions: ["Mặt trần liên tục dài vượt khoảng cho phép của hệ được duyệt", "Giao khe kết cấu / khu vực biến dạng"],
+    keyComponents: ["Khe tách lớp tấm", "Thanh viền / Control Joint profile", "Ngắt khung theo chi tiết hệ", "Ghi chú khoảng cách theo Project Spec"],
+    cadLayer: "AP_DET_CEILING",
+    recommendedScale: "1:5",
+    warningNotes: "Khoảng cách và cấu tạo khe phải đối chiếu Project Spec, Approved System và yêu cầu nhà sản xuất; không dùng một ngưỡng cố định cho mọi dự án.",
+    verificationTag: "PROJECT SPEC / APPROVED CEILING SYSTEM",
+  },
 ];
 
 // Hàm tra cứu và kiểm định thông minh:

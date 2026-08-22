@@ -887,8 +887,12 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
                       <div className="text-[11px] text-neutral-400">Phát hiện 2 ống cấp thoát nước xuyên qua vách chống cháy chưa thể hiện ký hiệu đai Firestop Collar.</div>
                     </div>
                   </div>
-                  <button className="text-[11px] font-bold text-amber-300 hover:text-black px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500 transition">
-                    Tự động thêm Detail Firestop
+                  <button
+                    onClick={() => onApplyPresetToDrawing?.({ action: "OPEN_FIRESTOP_DETAIL", detailId: "DET-MEP-FIRESTOP-01" })}
+                    className="text-[11px] font-bold text-amber-300 hover:text-black px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500 transition"
+                    title="Mở workflow Detail Firestop để chọn vị trí và xác nhận trước khi chèn"
+                  >
+                    Mở Detail Firestop
                   </button>
                 </div>
 
@@ -900,8 +904,12 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
                       <div className="text-[11px] text-neutral-400">Chiều dài phòng 14m vượt ngưỡng 10m liên tục. AI đề xuất bố trí 1 khe co giãn Shadowline Control Joint.</div>
                     </div>
                   </div>
-                  <button className="text-[11px] font-bold text-cyan-300 hover:text-black px-2.5 py-1 rounded bg-cyan-500/20 hover:bg-cyan-500 transition">
-                    Định vị khe co giãn
+                  <button
+                    onClick={() => onApplyPresetToDrawing?.({ action: "OPEN_CONTROL_JOINT_DETAIL", detailId: "DET-CEILING-CONTROL-JOINT-01" })}
+                    className="text-[11px] font-bold text-cyan-300 hover:text-black px-2.5 py-1 rounded bg-cyan-500/20 hover:bg-cyan-500 transition"
+                    title="Mở workflow chi tiết khe co giãn để chọn vị trí; không tự chèn khi chưa xác nhận"
+                  >
+                    Mở Control Joint
                   </button>
                 </div>
               </div>

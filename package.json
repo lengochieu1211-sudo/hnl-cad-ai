@@ -1,7 +1,7 @@
 {
   "name": "hnl-cad-ai",
   "private": true,
-  "version": "2.0.5",
+  "version": "2.4.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -39,7 +39,7 @@
     "cross-env": "10.0.0"
   },
   "productName": "HNL CAD AI",
-  "description": "HNL CAD AI v2.0.5 - Packaged startup fix for ASAR root, internal server path, 2D Professional and bridges",
+  "description": "HNL CAD AI v2.4.0 - AutoCAD-first native DWG/commands, one-click AutoCAD plugin bundle, native palette, audited UI and standalone DXF fallback",
   "main": "electron/main.cjs",
   "build": {
     "appId": "vn.hnl.cadai",
@@ -79,7 +79,16 @@
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true,
       "allowElevation": true
-    }
+    },
+    "extraResources": [
+      {
+        "from": "autocad-plugin/HNL.CadBridge.bundle",
+        "to": "autocad/HNL.CadBridge.bundle",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
   },
   "author": "HNL"
 }

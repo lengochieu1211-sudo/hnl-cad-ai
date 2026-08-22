@@ -11,27 +11,16 @@ export function generateAutoCadDxf(entities: CadEntity[], drawingName: string = 
   lines.push("9", "$INSUNITS", "70", "4"); // 4 = Millimeters
   lines.push("0", "ENDSEC");
 
-  // DXF TABLES (LAYERS)
+  // DXF TABLES (LAYERS) — declare every layer referenced by entities.
   lines.push("0", "SECTION", "2", "TABLES");
-  lines.push("0", "TABLE", "2", "LAYER", "70", "10");
-
-  const standardLayers = [
-    { name: "0", color: 7 },
-    { name: "TUONG_220", color: 1 }, // Red
-    { name: "TUONG_110", color: 2 }, // Yellow
-    { name: "TRAN_THACH_CAO", color: 3 }, // Green
-    { name: "KHUNG_XUONG_CHINH", color: 4 }, // Cyan
-    { name: "KHUNG_XUONG_PHU", color: 6 }, // Magenta
-    { name: "TY_TREO_M8", color: 5 }, // Blue
-    { name: "KICHTHUOC_DIM", color: 8 }, // Gray
-    { name: "GHICHU_TEXT", color: 7 }, // White
-    { name: "MEP_THIETBI", color: 30 }, // Orange
-  ];
-
-  standardLayers.forEach((lay) => {
-    lines.push("0", "LAYER", "2", lay.name, "70", "0", "62", `${lay.color}`, "6", "CONTINUOUS");
+  const derivedLayers = new Set<string>(["0", "TUONG_220", "TUONG_110", "TRAN_THACH_CAO", "GHICHU_TEXT", "KICHTHUOC_DIM"]);
+  entities.forEach((ent: any) => derivedLayers.add(String(ent.layer || "0")));
+  const layerNames = [...derivedLayers].filter(Boolean);
+  lines.push("0", "TABLE", "2", "LAYER", "70", `${layerNames.length}`);
+  layerNames.forEach((name, index) => {
+    const color = name === "TUONG_220" ? 1 : name === "TUONG_110" ? 2 : name === "TRAN_THACH_CAO" ? 3 : name === "KICHTHUOC_DIM" ? 8 : 7;
+    lines.push("0", "LAYER", "2", name.replace(/[\r\n]/g, "_"), "70", "0", "62", `${color}`, "6", "CONTINUOUS");
   });
-
   lines.push("0", "ENDTAB");
   lines.push("0", "ENDSEC");
 
@@ -108,10 +97,55 @@ export function generateAutoCadDxf(entities: CadEntity[], drawingName: string = 
       case "TEXT": {
         const txt = ent as any;
         if (txt.position) {
-          lines.push("0", "TEXT", "8", "GHICHU_TEXT");
+          lines.push("0", "TEXT", "8", ent.layer || "GHICHU_TEXT");
           lines.push("10", `${txt.position.x}`, "20", `${txt.position.y}`, "30", "0.0");
-          lines.push("40", `${txt.height || 250}`);
-          lines.push("1", `${txt.text || ""}`);
+          lines.push("40", `${Math.max(1, Math.abs(Number(txt.height) || 250))}`);
+          lines.push("50", `${Number(txt.rotationDeg) || 0}`);
+          lines.push("1", String(txt.text || "").replace(/[\r\n]+/g, " "));
+        }
+        break;
+      }
+      case "MTEXT": {
+        const txt = ent as any;
+        if (txt.position) {
+          lines.push("0", "MTEXT", "8", ent.layer || "GHICHU_TEXT");
+          lines.push("10", `${txt.position.x}`, "20", `${txt.position.y}`, "30", "0.0");
+          lines.push("40", `${Math.max(1, Math.abs(Number(txt.height) || 250))}`);
+          lines.push("50", `${Number(txt.rotationDeg) || 0}`);
+          lines.push("1", String(txt.text || "").replace(/\r?\n/g, "\\P"));
+        }
+        break;
+      }
+      case "MLEADER": {
+        // R2000 DXF has no modern MLEADER entity. Preserve visible geometry as LINE + MTEXT fallback.
+        const ml = ent as any;
+        const pts = Array.isArray(ml.leaderPoints) ? ml.leaderPoints : [];
+        for (let i = 1; i < pts.length; i++) {
+          lines.push("0", "LINE", "8", ent.layer || "GHICHU_TEXT");
+          lines.push("10", `${pts[i-1].x}`, "20", `${pts[i-1].y}`, "30", "0.0");
+          lines.push("11", `${pts[i].x}`, "21", `${pts[i].y}`, "31", "0.0");
+        }
+        const tp = ml.textPosition || pts[pts.length - 1];
+        if (tp && ml.text) {
+          lines.push("0", "MTEXT", "8", ent.layer || "GHICHU_TEXT");
+          lines.push("10", `${tp.x}`, "20", `${tp.y}`, "30", "0.0", "40", `${Math.max(1, Number(ml.textHeight) || 200)}`);
+          lines.push("1", String(ml.text).replace(/\r?\n/g, "\\P"));
+        }
+        break;
+      }
+      case "DIMENSION": {
+        // Safe visual fallback for internal dimension objects in DXF R2000.
+        const dim = ent as any;
+        const p1 = dim.p1 || dim.start;
+        const p2 = dim.p2 || dim.end;
+        if (p1 && p2) {
+          lines.push("0", "LINE", "8", ent.layer || "KICHTHUOC_DIM");
+          lines.push("10", `${p1.x}`, "20", `${p1.y}`, "30", "0.0");
+          lines.push("11", `${p2.x}`, "21", `${p2.y}`, "31", "0.0");
+          const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+          const label = dim.text || dim.measurement || Math.hypot(p2.x-p1.x, p2.y-p1.y).toFixed(0);
+          lines.push("0", "TEXT", "8", ent.layer || "KICHTHUOC_DIM");
+          lines.push("10", `${mid.x}`, "20", `${mid.y}`, "30", "0.0", "40", `${Math.max(1, Number(dim.textHeight) || 150)}`, "1", `${label}`);
         }
         break;
       }
@@ -121,7 +155,7 @@ export function generateAutoCadDxf(entities: CadEntity[], drawingName: string = 
   lines.push("0", "ENDSEC");
   lines.push("0", "EOF");
 
-  return lines.join("\n");
+  return lines.join("\r\n");
 }
 
 /**

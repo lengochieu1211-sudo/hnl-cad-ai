@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('electronNative', {
   requestOpenFile: () => ipcRenderer.invoke('open-file-dialog'),
   openExternal: (url) => ipcRenderer.invoke('open-external-url', url),
   getVersion: () => ipcRenderer.invoke('get-app-version'),
+  installAutoCadBundle: () => ipcRenderer.invoke('install-autocad-bundle'),
+  getAutoCadBundleStatus: () => ipcRenderer.invoke('get-autocad-bundle-status'),
+  openAutoCadPluginFolder: () => ipcRenderer.invoke('open-autocad-plugin-folder'),
   sessionToken: process.env.HNL_API_TOKEN || '',
   setDirty: (value) => ipcRenderer.invoke('set-renderer-dirty', value),
   setWindowTitle: (title) => ipcRenderer.invoke('set-window-title', title),
@@ -19,6 +22,7 @@ contextBridge.exposeInMainWorld('electronNative', {
   openSheetSet: () => ipcRenderer.invoke('open-sheetset-dialog'),
   chooseOutputFolder: () => ipcRenderer.invoke('choose-output-folder'),
   chooseSavePath: (options) => ipcRenderer.invoke('choose-save-path', options),
+  writeTempTextFile: (options) => ipcRenderer.invoke('write-temp-text-file', options),
   renderPdfToPath: (options) => ipcRenderer.invoke('render-pdf-to-path', options),
   onMenuCommand: (callback) => {
     const listener = (_event, command) => callback(command);

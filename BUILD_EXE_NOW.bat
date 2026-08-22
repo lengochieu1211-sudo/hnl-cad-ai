@@ -1,12 +1,12 @@
 @echo off
 setlocal EnableExtensions
 chcp 65001 >nul
-title HNL CAD AI v2.0.5 - Build EXE
+title HNL CAD AI v2.3.0 - Build EXE
 color 0B
 cd /d "%~dp0"
 
 echo ============================================================
-echo HNL CAD AI v2.0.5 - BUILD WINDOWS 10/11 X64 INSTALLER
+echo HNL CAD AI v2.3.0 - BUILD WINDOWS 10/11 X64 INSTALLER
 echo ============================================================
 echo.
 

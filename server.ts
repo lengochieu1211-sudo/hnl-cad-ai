@@ -71,7 +71,7 @@ app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     app: "HNL CAD AI TOOL",
-    version: "2.0.5",
+    version: "2.4.0",
     hasApiKey: Boolean(process.env.GEMINI_API_KEY),
   });
 });

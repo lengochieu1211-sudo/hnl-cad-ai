@@ -14,14 +14,59 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
       - name: Toolchain versions
         run: |
           node --version
           npm --version
+      - name: Build AutoCAD plugins 2023-2026
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $projects = @(
+            @{ Year = "2023"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2023.csproj" },
+            @{ Year = "2024"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2024.csproj" },
+            @{ Year = "2025"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2025.csproj" },
+            @{ Year = "2026"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2026.csproj" }
+          )
+          foreach ($item in $projects) {
+            $out = "autocad-plugin/HNL.CadBridge.bundle/Contents/$($item.Year)"
+            New-Item -ItemType Directory -Force -Path $out | Out-Null
+            dotnet restore $item.Project
+            dotnet build $item.Project -c Release --no-restore -o $out
+            if ($LASTEXITCODE -ne 0) { throw "AutoCAD plugin build failed: $($item.Year)" }
+            Get-ChildItem $out -File | Where-Object {
+              $_.Name -match '^(Ac|AutoCAD).*\.dll$'
+            } | Remove-Item -Force -ErrorAction SilentlyContinue
+            if (-not (Test-Path "$out/Hnl.CadBridge.dll")) { throw "Missing Hnl.CadBridge.dll for $($item.Year)" }
+          }
+          Write-Host "AutoCAD bundle contents:"
+          Get-ChildItem "autocad-plugin/HNL.CadBridge.bundle" -Recurse -File | Select-Object FullName,Length
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: TypeScript audit
         run: npm run lint
+      - name: Verify AutoCAD bundle
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "autocad-plugin/HNL.CadBridge.bundle/PackageContents.xml")) { throw "Missing PackageContents.xml" }
+          foreach ($year in @("2023","2024","2025","2026")) {
+            $dll = "autocad-plugin/HNL.CadBridge.bundle/Contents/$year/Hnl.CadBridge.dll"
+            if (-not (Test-Path $dll)) { throw "Missing plugin DLL: $dll" }
+            Write-Host "$year plugin: $((Get-Item $dll).Length) bytes"
+          }
+
+      - name: Upload AutoCAD plugin bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: HNL-CAD-AI-v2.4.0-AutoCAD-Plugin-Bundle
+          path: autocad-plugin/HNL.CadBridge.bundle/**
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Build installer
         run: npm run dist:win
       - name: Verify installer exists
@@ -39,7 +84,7 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: HNL-CAD-AI-v2.0.5-Windows-Installer
+          name: HNL-CAD-AI-v2.4.0-Windows-Installer
           path: dist_electron/HNL_CAD_AI_Setup_*.exe
           if-no-files-found: error
           retention-days: 14

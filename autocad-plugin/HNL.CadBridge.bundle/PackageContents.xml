@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage
+  SchemaVersion="1.0"
+  AutodeskProduct="AutoCAD"
+  Name="HNL CAD AI Bridge"
+  Description="HNL CAD AI native AutoCAD bridge and palette"
+  AppVersion="2.4.0"
+  ProductCode="{F9665E05-DB34-5307-A699-C36282AD1C78}">
+  <CompanyDetails Name="HNL" Url="https://github.com/lengochieu1211-sudo/hnl-cad-ai-26" Email=""/>
+  <RuntimeRequirements OS="Win64" Platform="AutoCAD*" />
+
+  <Components Description="AutoCAD 2023">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.2" SeriesMax="R24.2" />
+    <ComponentEntry AppName="HNL CAD AI Bridge 2023" Version="2.4.0"
+      ModuleName="./Contents/2023/Hnl.CadBridge.dll"
+      AppDescription="HNL CAD AI Bridge for AutoCAD 2023"
+      LoadOnAutoCADStartup="True" />
+  </Components>
+
+  <Components Description="AutoCAD 2024">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.3" SeriesMax="R24.3" />
+    <ComponentEntry AppName="HNL CAD AI Bridge 2024" Version="2.4.0"
+      ModuleName="./Contents/2024/Hnl.CadBridge.dll"
+      AppDescription="HNL CAD AI Bridge for AutoCAD 2024"
+      LoadOnAutoCADStartup="True" />
+  </Components>
+
+  <Components Description="AutoCAD 2025">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R25.0" SeriesMax="R25.0" />
+    <ComponentEntry AppName="HNL CAD AI Bridge 2025" Version="2.4.0"
+      ModuleName="./Contents/2025/Hnl.CadBridge.dll"
+      AppDescription="HNL CAD AI Bridge for AutoCAD 2025"
+      LoadOnAutoCADStartup="True" />
+  </Components>
+
+  <Components Description="AutoCAD 2026">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R25.1" SeriesMax="R25.1" />
+    <ComponentEntry AppName="HNL CAD AI Bridge 2026" Version="2.4.0"
+      ModuleName="./Contents/2026/Hnl.CadBridge.dll"
+      AppDescription="HNL CAD AI Bridge for AutoCAD 2026"
+      LoadOnAutoCADStartup="True" />
+  </Components>
+</ApplicationPackage>

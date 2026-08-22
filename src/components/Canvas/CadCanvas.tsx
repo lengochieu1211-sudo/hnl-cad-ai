@@ -77,6 +77,7 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
   const [isBoxSelecting, setIsBoxSelecting] = useState(false);
   const [selectionBoxStart, setSelectionBoxStart] = useState<Point2D>({ x: 0, y: 0 });
   const [selectionBoxCurrent, setSelectionBoxCurrent] = useState<Point2D>({ x: 0, y: 0 });
+  const [hoveredEntityId, setHoveredEntityId] = useState<string | null>(null);
   const [isGridSnap, setIsGridSnap] = useState(false); // Off by default to prioritize precise Osnap
   const [isOrtho, setIsOrtho] = useState(false);
 
@@ -137,29 +138,133 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
     [viewTransform]
   );
 
-  // Global Keyboard shortcuts for CAD functions (F3 Osnap, F11 OTrack, F8 Ortho, F9 Grid, F12 DynMode)
+  const finishPolyline = useCallback((closed = false) => {
+    if (currentTool !== "POLYLINE" || !onAddEntity) return false;
+    if (tempPoints.length < 2) {
+      setTempPoints([]);
+      return false;
+    }
+    const points = [...tempPoints];
+    let length = 0;
+    for (let i = 1; i < points.length; i++) {
+      length += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    }
+    if (closed && points.length >= 3) {
+      length += Math.hypot(points[0].x - points[points.length - 1].x, points[0].y - points[points.length - 1].y);
+    }
+    onAddEntity({
+      id: `poly_${Date.now()}`,
+      handle: Math.random().toString(16).substring(2, 8).toUpperCase(),
+      type: "POLYLINE",
+      layer: "0",
+      color: "#00E5FF",
+      points,
+      closed,
+      length,
+    } as any);
+    setTempPoints([]);
+    if (onToolComplete) onToolComplete();
+    return true;
+  }, [currentTool, onAddEntity, onToolComplete, tempPoints]);
+
+  // Global Keyboard shortcuts for CAD functions + PLINE subcommands.
   useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null) => {
+      const el = target as HTMLElement | null;
+      return Boolean(el && (
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        el.isContentEditable ||
+        el.closest?.('input, textarea, [contenteditable="true"]')
+      ));
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "F3") {
         e.preventDefault();
         setOsnapSettings((prev) => ({ ...prev, enabled: !prev.enabled }));
+        return;
       } else if (e.key === "F11") {
         e.preventDefault();
         setOsnapSettings((prev) => ({ ...prev, trackingEnabled: !prev.trackingEnabled }));
+        return;
       } else if (e.key === "F8") {
         e.preventDefault();
         setIsOrtho((prev) => !prev);
+        return;
       } else if (e.key === "F9") {
         e.preventDefault();
         setIsGridSnap((prev) => !prev);
+        return;
       } else if (e.key === "F12") {
         e.preventDefault();
         setDynInput((prev) => ({ ...prev, enabled: !prev.enabled }));
+        return;
+      }
+
+      // AutoCAD-like PLINE session:
+      // click = next vertex, Enter/Space = finish, C = close, U = undo last vertex.
+      if (currentTool === "POLYLINE" && !isTypingTarget(e.target)) {
+        const key = e.key.toUpperCase();
+        if (e.key === "Enter" || e.code === "Space") {
+          e.preventDefault();
+          e.stopPropagation();
+          finishPolyline(false);
+          return;
+        }
+        if (key === "C" && tempPoints.length >= 3) {
+          e.preventDefault();
+          e.stopPropagation();
+          finishPolyline(true);
+          return;
+        }
+        if (key === "U" && tempPoints.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          setTempPoints((prev) => prev.slice(0, -1));
+          return;
+        }
+      }
+
+      if (e.key === "Escape") {
+        setTempPoints([]);
+        setIsBoxSelecting(false);
+        setIsPanning(false);
+        setActiveSnap(null);
+        setHoveredEntityId(null);
+        setDynInput((prev) => ({
+          ...prev,
+          lengthInput: "",
+          angleInput: "",
+          coordXInput: "",
+          coordYInput: "",
+          lockedLength: null,
+          lockedAngle: null,
+        }));
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [currentTool, tempPoints.length, finishPolyline]);
+
+  // Clear local command state whenever App returns to SELECT (ESC / command complete).
+  useEffect(() => {
+    if (currentTool !== "SELECT") return;
+    setTempPoints([]);
+    setIsBoxSelecting(false);
+    setIsPanning(false);
+    setActiveSnap(null);
+    setHoveredEntityId(null);
+    setDynInput((prev) => ({
+      ...prev,
+      lengthInput: "",
+      angleInput: "",
+      coordXInput: "",
+      coordYInput: "",
+      lockedLength: null,
+      lockedAngle: null,
+    }));
+  }, [currentTool]);
 
   // Auto Zoom Extents
   const handleZoomExtents = useCallback(() => {
@@ -260,7 +365,8 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
         const layerObj = layers.find((l) => l.name === entity.layer);
         if (layerObj && !layerObj.isVisible) return;
         const isSelected = selectedEntityIds.includes(entity.id);
-        drawEntity(ctx, entity, viewTransform, isSelected, false);
+        const isPreselected = !isSelected && hoveredEntityId === entity.id;
+        drawEntity(ctx, entity, viewTransform, isSelected || isPreselected, false);
       });
 
       // 3. Draw Ghost Preview Entities (AI Action preview)
@@ -314,6 +420,7 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
     currentTool,
     activeSnap,
     osnapSettings,
+    hoveredEntityId,
   ]);
 
   // Helper Drawing Functions
@@ -917,7 +1024,21 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
     const s1 = { x: p1.x * vt.scale + vt.offsetX, y: vt.offsetY - p1.y * vt.scale };
     const s2 = { x: currentPos.x * vt.scale + vt.offsetX, y: vt.offsetY - currentPos.y * vt.scale };
 
-    if (tool.startsWith("WALL")) {
+    if (tool === "POLYLINE") {
+      ctx.beginPath();
+      points.forEach((pt, index) => {
+        const sp = { x: pt.x * vt.scale + vt.offsetX, y: vt.offsetY - pt.y * vt.scale };
+        if (index === 0) ctx.moveTo(sp.x, sp.y);
+        else ctx.lineTo(sp.x, sp.y);
+      });
+      const last = points[points.length - 1];
+      if (last) {
+        const sl = { x: last.x * vt.scale + vt.offsetX, y: vt.offsetY - last.y * vt.scale };
+        ctx.moveTo(sl.x, sl.y);
+        ctx.lineTo(s2.x, s2.y);
+      }
+      ctx.stroke();
+    } else if (tool.startsWith("WALL")) {
       ctx.beginPath();
       ctx.moveTo(s1.x, s1.y);
       ctx.lineTo(s2.x, s2.y);
@@ -975,18 +1096,51 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
     const screenY = e.clientY - rect.top;
     const worldPos = screenToWorld(screenX, screenY);
 
-    // Middle Click or Space Key = Pan
-    if (e.button === 1 || e.buttons === 4 || e.shiftKey) {
+    // Middle mouse = Pan. Shift is reserved for CAD-style selection add/remove.
+    if (e.button === 1 || e.buttons === 4) {
       setIsPanning(true);
       setPanStart({ x: e.clientX, y: e.clientY });
       return;
     }
+
+    // Only left mouse creates/selects geometry. Right mouse is reserved for command completion/context.
+    if (e.button !== 0) return;
 
     // Determine final effective world coordinate (prefer precise Osnap lock if active)
     const effectivePos = activeSnap && osnapSettings.enabled ? activeSnap.point : worldPos;
 
     // Left Click in Active Drawing Tool mode
     if (currentTool !== "SELECT" && onAddEntity) {
+      if (currentTool === "MTEXT") {
+        const text = window.prompt("MTEXT — Nội dung:", "");
+        if (text && text.trim()) {
+          onAddEntity({
+            id: `mtext_${Date.now()}`,
+            handle: Math.random().toString(16).substring(2, 8).toUpperCase(),
+            type: "MTEXT",
+            layer: "0",
+            color: "#FFFFFF",
+            position: effectivePos,
+            text: text.trim(),
+            height: 250,
+          } as any);
+        }
+        setTempPoints([]);
+        if (onToolComplete) onToolComplete();
+        return;
+      }
+
+      if (currentTool === "POLYLINE") {
+        // Keep the command active and append vertices until Enter/Space/C/ESC.
+        setTempPoints((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && Math.hypot(last.x - effectivePos.x, last.y - effectivePos.y) < 1e-6) return prev;
+          return [...prev, effectivePos];
+        });
+        canvasRef.current?.focus();
+        return;
+      }
+
       if (tempPoints.length === 0) {
         setTempPoints([effectivePos]);
       } else {
@@ -1040,17 +1194,6 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
             center: p1,
             radius,
           } as any);
-        } else if (currentTool === "POLYLINE") {
-          onAddEntity({
-            id: `poly_${Date.now()}`,
-            handle: Math.random().toString(16).substring(2, 6).toUpperCase(),
-            type: "POLYLINE",
-            layer: "0",
-            color: "#00E5FF",
-            points: [p1, p2],
-            closed: false,
-            length: Math.hypot(p2.x - p1.x, p2.y - p1.y),
-          } as any);
         } else if (currentTool === "MLEADER" || currentTool === "MLEADER_ANNO" || currentTool === "MLEADER_MATERIAL") {
           const isMaterial = currentTool === "MLEADER_MATERIAL";
           const defaultText = isMaterial
@@ -1081,15 +1224,16 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
       // Find clicked entity
       const hitEntity = findEntityAtScreen(screenX, screenY);
       if (hitEntity) {
-        onSelectEntity(hitEntity.id, e.ctrlKey);
+        // PICKADD-like behavior: subsequent clicks add to the selection.
+        // Ctrl/Shift clicking a selected object toggles/removes it.
+        const additive = e.ctrlKey || e.shiftKey || selectedEntityIds.length > 0;
+        onSelectEntity(hitEntity.id, additive);
       } else {
-        // Start Box Selection
+        // Start AutoCAD-style Window/Crossing selection.
         setIsBoxSelecting(true);
         setSelectionBoxStart({ x: screenX, y: screenY });
         setSelectionBoxCurrent({ x: screenX, y: screenY });
-        if (!e.ctrlKey) {
-          onClearSelection();
-        }
+        if (!e.ctrlKey && !e.shiftKey) onClearSelection();
       }
     }
   };
@@ -1099,6 +1243,12 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
     if (!rect) return;
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
+
+    if (currentTool === "SELECT" && !isPanning && !isBoxSelecting) {
+      setHoveredEntityId(findEntityAtScreen(screenX, screenY)?.id || null);
+    } else if (currentTool !== "SELECT") {
+      setHoveredEntityId(null);
+    }
 
     if (isPanning) {
       const dx = e.clientX - panStart.x;
@@ -1156,33 +1306,31 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
   };
 
   const handleMouseUp = () => {
-    if (isPanning) {
-      setIsPanning(false);
-    }
-    if (isBoxSelecting) {
-      setIsBoxSelecting(false);
-      // Select all entities enclosed or crossing the box
-      const minX = Math.min(selectionBoxStart.x, selectionBoxCurrent.x);
-      const maxX = Math.max(selectionBoxStart.x, selectionBoxCurrent.x);
-      const minY = Math.min(selectionBoxStart.y, selectionBoxCurrent.y);
-      const maxY = Math.max(selectionBoxStart.y, selectionBoxCurrent.y);
+    if (isPanning) setIsPanning(false);
+    if (!isBoxSelecting) return;
 
-      if (maxX - minX > 5 && maxY - minY > 5) {
-        entities.forEach((ent) => {
-          if (ent.type === "WALL") {
-            const w = ent as CadWall;
-            const s1 = worldToScreen(w.p1.x, w.p1.y);
-            const s2 = worldToScreen(w.p2.x, w.p2.y);
-            if (
-              (s1.x >= minX && s1.x <= maxX && s1.y >= minY && s1.y <= maxY) ||
-              (s2.x >= minX && s2.x <= maxX && s2.y >= minY && s2.y <= maxY)
-            ) {
-              onSelectEntity(ent.id, true);
-            }
-          }
-        });
+    setIsBoxSelecting(false);
+    const leftToRight = selectionBoxCurrent.x >= selectionBoxStart.x;
+    const minX = Math.min(selectionBoxStart.x, selectionBoxCurrent.x);
+    const maxX = Math.max(selectionBoxStart.x, selectionBoxCurrent.x);
+    const minY = Math.min(selectionBoxStart.y, selectionBoxCurrent.y);
+    const maxY = Math.max(selectionBoxStart.y, selectionBoxCurrent.y);
+
+    if (maxX - minX <= 5 || maxY - minY <= 5) return;
+
+    const box={minX,minY,maxX,maxY};
+    const matched=entities.filter(ent=>{
+      const b=getEntityScreenBounds(ent);
+      if(!b)return false;
+      if(leftToRight){
+        // Blue Window: entity must be fully contained.
+        return b.minX>=box.minX && b.maxX<=box.maxX && b.minY>=box.minY && b.maxY<=box.maxY;
       }
-    }
+      // Green Crossing: any bounding overlap is enough.
+      return !(b.maxX<box.minX || b.minX>box.maxX || b.maxY<box.minY || b.minY>box.maxY);
+    });
+
+    matched.forEach(ent=>onSelectEntity(ent.id,true));
   };
 
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
@@ -1206,23 +1354,87 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
     });
   };
 
+  function getEntityWorldPoints(ent: CadEntity): Point2D[] {
+    const e:any=ent;
+    if(e.type==="WALL" && e.p1 && e.p2) return [e.p1,e.p2];
+    if(e.type==="LINE" && e.start && e.end) return [e.start,e.end];
+    if(e.type==="POLYLINE" && Array.isArray(e.points)) return e.points;
+    if(e.type==="RECTANGLE" && Number.isFinite(e.x) && Number.isFinite(e.y)){
+      return [{x:e.x,y:e.y},{x:e.x+e.width,y:e.y},{x:e.x+e.width,y:e.y+e.height},{x:e.x,y:e.y+e.height}];
+    }
+    if(e.type==="CIRCLE" && e.center && Number.isFinite(e.radius)){
+      return [
+        {x:e.center.x-e.radius,y:e.center.y-e.radius},
+        {x:e.center.x+e.radius,y:e.center.y+e.radius},
+      ];
+    }
+    if(Array.isArray(e.leaderPoints)) return e.leaderPoints;
+    if(Array.isArray(e.boundary)) return e.boundary;
+    if(e.p1 && e.p2) return [e.p1,e.p2];
+    if(e.start && e.end) return [e.start,e.end];
+    if(e.position) return [e.position];
+    if(e.textPosition) return [e.textPosition];
+    if(Number.isFinite(e.x)&&Number.isFinite(e.y)) return [{x:e.x,y:e.y}];
+    return [];
+  }
+
+  function getEntityScreenBounds(ent:CadEntity){
+    const e:any=ent;
+    if(e.type==="CIRCLE" && e.center && Number.isFinite(e.radius)){
+      const c=worldToScreen(e.center.x,e.center.y);
+      const r=Math.abs(e.radius*viewTransform.scale);
+      return{minX:c.x-r,maxX:c.x+r,minY:c.y-r,maxY:c.y+r};
+    }
+    const pts=getEntityWorldPoints(ent).map(p=>worldToScreen(p.x,p.y));
+    if(!pts.length)return null;
+    let minX=Math.min(...pts.map(p=>p.x)),maxX=Math.max(...pts.map(p=>p.x));
+    let minY=Math.min(...pts.map(p=>p.y)),maxY=Math.max(...pts.map(p=>p.y));
+    if(["TEXT","MTEXT","BLOCK_REF"].includes((ent as any).type)){
+      minX-=14;maxX+=80;minY-=18;maxY+=18;
+    }
+    return{minX,maxX,minY,maxY};
+  }
+
   function findEntityAtScreen(sx: number, sy: number): CadEntity | null {
-    const pickTolerancePx = 8;
+    const pickTolerancePx = 9;
     for (let i = entities.length - 1; i >= 0; i--) {
-      const ent = entities[i];
-      if (ent.type === "WALL") {
-        const wall = ent as CadWall;
-        const s1 = worldToScreen(wall.p1.x, wall.p1.y);
-        const s2 = worldToScreen(wall.p2.x, wall.p2.y);
-        const dist = distToSegment({ x: sx, y: sy }, s1, s2);
-        if (dist <= pickTolerancePx + (wall.thickness * viewTransform.scale) / 2) {
-          return ent;
+      const ent:any = entities[i];
+      const layerObj=layers.find(l=>l.name===ent.layer);
+      if(layerObj && !layerObj.isVisible)continue;
+
+      if (ent.type === "WALL" && ent.p1 && ent.p2) {
+        const s1 = worldToScreen(ent.p1.x, ent.p1.y);
+        const s2 = worldToScreen(ent.p2.x, ent.p2.y);
+        if (distToSegment({x:sx,y:sy},s1,s2) <= pickTolerancePx + Math.abs((ent.thickness||0)*viewTransform.scale)/2) return ent;
+      } else if (ent.type === "LINE" && ent.start && ent.end) {
+        if(distToSegment({x:sx,y:sy},worldToScreen(ent.start.x,ent.start.y),worldToScreen(ent.end.x,ent.end.y))<=pickTolerancePx)return ent;
+      } else if (ent.type === "POLYLINE" && Array.isArray(ent.points)) {
+        for(let j=1;j<ent.points.length;j++){
+          if(distToSegment({x:sx,y:sy},worldToScreen(ent.points[j-1].x,ent.points[j-1].y),worldToScreen(ent.points[j].x,ent.points[j].y))<=pickTolerancePx)return ent;
         }
+        if(ent.closed && ent.points.length>2 && distToSegment({x:sx,y:sy},worldToScreen(ent.points[ent.points.length-1].x,ent.points[ent.points.length-1].y),worldToScreen(ent.points[0].x,ent.points[0].y))<=pickTolerancePx)return ent;
+      } else if (ent.type === "RECTANGLE" && Number.isFinite(ent.x)) {
+        const ps=getEntityWorldPoints(ent).map(p=>worldToScreen(p.x,p.y));
+        for(let j=0;j<4;j++)if(distToSegment({x:sx,y:sy},ps[j],ps[(j+1)%4])<=pickTolerancePx)return ent;
+      } else if (ent.type === "CIRCLE" && ent.center && Number.isFinite(ent.radius)) {
+        const c=worldToScreen(ent.center.x,ent.center.y);
+        const d=Math.hypot(sx-c.x,sy-c.y);
+        if(Math.abs(d-Math.abs(ent.radius*viewTransform.scale))<=pickTolerancePx)return ent;
+      } else if (ent.type === "MLEADER" && Array.isArray(ent.leaderPoints)) {
+        const ps=ent.leaderPoints.map((p:Point2D)=>worldToScreen(p.x,p.y));
+        for(let j=1;j<ps.length;j++)if(distToSegment({x:sx,y:sy},ps[j-1],ps[j])<=pickTolerancePx)return ent;
+        if(ent.textPosition){const sp=worldToScreen(ent.textPosition.x,ent.textPosition.y);if(Math.hypot(sx-sp.x,sy-sp.y)<=24)return ent;}
+      } else if (ent.type === "CEILING_GRID" && Array.isArray(ent.boundary)) {
+        const ps=ent.boundary.map((p:Point2D)=>worldToScreen(p.x,p.y));
+        for(let j=0;j<ps.length;j++)if(distToSegment({x:sx,y:sy},ps[j],ps[(j+1)%ps.length])<=pickTolerancePx)return ent;
+      } else if (ent.type === "DIMENSION" && ent.p1 && ent.p2) {
+        if(distToSegment({x:sx,y:sy},worldToScreen(ent.p1.x,ent.p1.y),worldToScreen(ent.p2.x,ent.p2.y))<=pickTolerancePx+4)return ent;
       } else if (ent.type === "BLOCK_REF" || ent.type === "TEXT" || ent.type === "MTEXT") {
-        const p = (ent as any).position;
-        const sp = worldToScreen(p.x, p.y);
-        const d = Math.hypot(sx - sp.x, sy - sp.y);
-        if (d <= 20) return ent;
+        const p=ent.position;
+        if(p){const sp=worldToScreen(p.x,p.y);if(Math.hypot(sx-sp.x,sy-sp.y)<=24)return ent;}
+      } else {
+        const b=getEntityScreenBounds(ent);
+        if(b && sx>=b.minX-pickTolerancePx && sx<=b.maxX+pickTolerancePx && sy>=b.minY-pickTolerancePx && sy<=b.maxY+pickTolerancePx)return ent;
       }
     }
     return null;
@@ -1245,11 +1457,12 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
         </span>
         <span className="text-neutral-500">|</span>
         <span>
-          Scale: 1:{(1 / (viewTransform.scale * 10)).toFixed(0)}
+          Scale: 1:{Math.max(1, Math.round(1 / Math.max(0.000001, viewTransform.scale * 10)))}
         </span>
         {currentTool !== "SELECT" && (
           <span className="bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded text-[11px] font-medium animate-pulse border border-cyan-500/40">
             LỆNH ĐANG CHẠY: {currentTool}
+            {currentTool === "POLYLINE" ? ` • Đỉnh: ${tempPoints.length} • Enter=Kết thúc • C=Đóng kín • U=Lùi` : ""}
           </span>
         )}
       </div>
@@ -1327,7 +1540,16 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
           onChangeAngle={(val) => setDynInput((prev) => ({ ...prev, angleInput: val }))}
           onToggleField={(field) => setDynInput((prev) => ({ ...prev, activeField: field }))}
           onCommit={(targetPos) => {
-            // Trigger drawing entity completion
+            // PLINE keeps accumulating vertices; Dynamic Input must not end it after 2 points.
+            if (currentTool === "POLYLINE") {
+              setTempPoints((prev) => {
+                const last = prev[prev.length - 1];
+                if (last && Math.hypot(last.x - targetPos.x, last.y - targetPos.y) < 1e-6) return prev;
+                return [...prev, targetPos];
+              });
+              return;
+            }
+            // Trigger two-point drawing entity completion for other tools.
             if (tempPoints.length === 0) {
               setTempPoints([targetPos]);
             } else if (onAddEntity) {
@@ -1390,7 +1612,14 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
         }}
         onMouseUp={handleMouseUp}
         onWheel={handleWheel}
-        className="w-full h-full cursor-crosshair"
+        onContextMenu={(e) => {
+          if (currentTool === "POLYLINE") {
+            e.preventDefault();
+            finishPolyline(false);
+          }
+        }}
+        tabIndex={0}
+        className={`w-full h-full outline-none ${currentTool==="SELECT" ? (hoveredEntityId ? "cursor-pointer" : "cursor-crosshair") : "cursor-crosshair"}`}
       />
 
       {/* Bottom Status Bar / Coordinate Readout */}

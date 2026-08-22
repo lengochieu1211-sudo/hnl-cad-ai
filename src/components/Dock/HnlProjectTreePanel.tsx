@@ -77,6 +77,7 @@ export const HnlProjectTreePanel: React.FC<HnlProjectTreePanelProps> = ({
 
   // Quick Actions Section State
   const [isQuickActionsOpen, setIsQuickActionsOpen] = useState<boolean>(true);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState<boolean>(false);
   const [layerSearchQuery, setLayerSearchQuery] = useState<string>("");
 
   // Internal layer state fallback if callbacks are not passed
@@ -313,43 +314,45 @@ export const HnlProjectTreePanel: React.FC<HnlProjectTreePanelProps> = ({
             </button>
           )}
 
-          <div className="relative group">
+          <div className="relative">
             <button
+              onClick={() => setIsAddMenuOpen((v) => !v)}
+              aria-expanded={isAddMenuOpen}
               className="p-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition"
               title="Thêm Smart Object mới"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
-            <div className="absolute right-0 top-full mt-1 hidden group-hover:flex flex-col bg-neutral-900 border border-neutral-700 rounded shadow-2xl p-1 z-50 w-44">
+            {isAddMenuOpen && <div className="absolute right-0 top-full mt-1 flex flex-col bg-neutral-900 border border-neutral-700 rounded shadow-2xl p-1 z-50 w-44">
               <button
-                onClick={() => onAddNewSmartObject("CEILING")}
+                onClick={() => { onAddNewSmartObject("CEILING"); setIsAddMenuOpen(false); }}
                 className="text-left px-2 py-1 text-xs text-neutral-200 hover:bg-sky-500/20 hover:text-sky-300 rounded flex items-center space-x-1.5"
               >
                 <Grid className="w-3.5 h-3.5 text-cyan-400" />
                 <span>+ Thêm HNL Ceiling</span>
               </button>
               <button
-                onClick={() => onAddNewSmartObject("WALL")}
+                onClick={() => { onAddNewSmartObject("WALL"); setIsAddMenuOpen(false); }}
                 className="text-left px-2 py-1 text-xs text-neutral-200 hover:bg-amber-500/20 hover:text-amber-300 rounded flex items-center space-x-1.5"
               >
                 <Flame className="w-3.5 h-3.5 text-amber-400" />
                 <span>+ Thêm HNL Wall (EI)</span>
               </button>
               <button
-                onClick={() => onAddNewSmartObject("DETAIL")}
+                onClick={() => { onAddNewSmartObject("DETAIL"); setIsAddMenuOpen(false); }}
                 className="text-left px-2 py-1 text-xs text-neutral-200 hover:bg-purple-500/20 hover:text-purple-300 rounded flex items-center space-x-1.5"
               >
                 <Scissors className="w-3.5 h-3.5 text-purple-400" />
                 <span>+ Thêm HNL Detail</span>
               </button>
               <button
-                onClick={() => onAddNewSmartObject("SECTION")}
+                onClick={() => { onAddNewSmartObject("SECTION"); setIsAddMenuOpen(false); }}
                 className="text-left px-2 py-1 text-xs text-neutral-200 hover:bg-blue-500/20 hover:text-blue-300 rounded flex items-center space-x-1.5"
               >
                 <Sliders className="w-3.5 h-3.5 text-blue-400" />
                 <span>+ Thêm HNL Section</span>
               </button>
-            </div>
+            </div>}
           </div>
         </div>
       </div>

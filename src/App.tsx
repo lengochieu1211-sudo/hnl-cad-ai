@@ -3,6 +3,7 @@ import { HnlRibbon } from "./components/Ribbon/HnlRibbon";
 import { CadCanvas } from "./components/Canvas/CadCanvas";
 import { HnlPalette } from "./components/Palette/HnlPalette";
 import { CommandSearchModal } from "./components/CommandCenter/CommandSearchModal";
+import { CadCommandLine } from "./components/CommandCenter/CadCommandLine";
 import { NetPluginExporterModal } from "./components/Dialogs/NetPluginExporterModal";
 import { LispBuilderModal } from "./components/Dialogs/LispBuilderModal";
 import { TableBuilderModal } from "./components/Dialogs/TableBuilderModal";
@@ -58,11 +59,14 @@ import {
   evaluateExpression,
 } from "./lib/spreadsheetEngine";
 import { INITIAL_HNL_MODULES } from "./lib/moduleManagerEngine";
-import { detectAutoCadBridge, AutoCadBridgeStatus } from "./lib/autoCadBridge";
+import { detectAutoCadBridge, executeAutoCadAction, AutoCadBridgeStatus } from "./lib/autoCadBridge";
 import { loadProjectSnapshot, saveProjectSnapshot, clearProjectSnapshot } from "./lib/projectPersistence";
 import { DiagnosticEvent, errorToDetails, loadDiagnostics, makeDiagnostic, saveDiagnostics } from "./lib/diagnostics";
 import { markCommandHealth } from "./lib/commandHealth";
 import { saveRecoveryGeneration } from "./lib/recoveryGenerations";
+import { resolveCadAlias } from "./lib/cadCommandAliases";
+import { translateSelected, rotateSelected, scaleSelected, mirrorSelected } from "./lib/cadTransformEngine";
+import { cloneEntityForPaste, parseEntityClipboard, serializeEntityClipboard } from "./lib/entityClipboard";
 
 import {
   CadEntity,
@@ -92,6 +96,7 @@ import {
   calculateOptimalViewportScale,
 } from "./lib/cadEngine";
 import { parseBasicDxf } from "./lib/importEngine";
+import { generateAutoCadDxf } from "./lib/exportEngine";
 import {
   Plus,
   Layout as LayoutIcon,
@@ -108,6 +113,30 @@ import {
   Minimize2,
 } from "lucide-react";
 
+const AUTOCAD_NATIVE_COMMAND_BY_HNL_KEY: Record<string,string> = {
+  DRAW_LINE: "LINE",
+  DRAW_POLYLINE: "PLINE",
+  DRAW_CIRCLE: "CIRCLE",
+  DRAW_RECTANGLE: "RECTANG",
+  DRAW_POLYGON: "POLYGON",
+  DRAW_ARC: "ARC",
+  DRAW_HATCH: "HATCH",
+  EDIT_COPY: "COPY",
+  EDIT_MOVE: "MOVE",
+  EDIT_ROTATE: "ROTATE",
+  EDIT_SCALE: "SCALE",
+  EDIT_TRIM: "TRIM",
+  EDIT_EXTEND: "EXTEND",
+  EDIT_FILLET: "FILLET",
+  EDIT_CHAMFER: "CHAMFER",
+  EDIT_MIRROR: "MIRROR",
+  DRAW_OFFSET: "OFFSET",
+  DELETE_SELECTION: "ERASE",
+  MEASURE_DISTANCE: "DIST",
+  DRAW_MTEXT: "MTEXT",
+  EDIT_JOIN: "JOIN",
+};
+
 export default function App() {
   // Core CAD State
   const [entities, setEntities] = useState<CadEntity[]>(INITIAL_ENTITIES);
@@ -122,6 +151,8 @@ export default function App() {
 
   // Interaction State
   const [selectedEntityIds, setSelectedEntityIds] = useState<string[]>([]);
+  const entityClipboardRef = useRef<CadEntity[]>([]);
+  const pasteCountRef = useRef(0);
   const [ghostPreviewEntities, setGhostPreviewEntities] = useState<CadEntity[]>([]);
   const [currentTool, setCurrentTool] = useState<string>("SELECT");
   const [activeRibbonTab, setActiveRibbonTab] = useState<string>("VE_NHANH");
@@ -134,6 +165,9 @@ export default function App() {
   const [isAiPaletteOpen, setIsAiPaletteOpen] = useState(true);
   const [paletteDockPosition, setPaletteDockPosition] = useState<"left" | "right">("right");
   const [isCommandCenterOpen, setIsCommandCenterOpen] = useState(false);
+  const [isCommandLineVisible, setIsCommandLineVisible] = useState(true);
+  const [commandDraft, setCommandDraft] = useState("");
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [isNetPluginExporterOpen, setIsNetPluginExporterOpen] = useState(false);
   const [isLispBuilderOpen, setIsLispBuilderOpen] = useState(false);
   const [isTableBuilderOpen, setIsTableBuilderOpen] = useState(false);
@@ -152,7 +186,8 @@ export default function App() {
   const [autoCadBridgeStatus, setAutoCadBridgeStatus] = useState<AutoCadBridgeStatus>({ connected: false, source: "standalone", lastCheckedAt: Date.now() });
   const [lastAutosaveAt, setLastAutosaveAt] = useState<string | null>(null);
   const [recoveryLoaded, setRecoveryLoaded] = useState(false);
-  const [currentFileName, setCurrentFileName] = useState("Untitled.hnl.json");
+  const [currentFileName, setCurrentFileName] = useState("Untitled.dxf");
+  const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const suppressProjectDirtyRef = useRef(true);
   const [showStartCenter, setShowStartCenter] = useState(true);
@@ -586,38 +621,224 @@ export default function App() {
     }
   }, [historyIndex, history, showToast]);
 
-  // Global Keyboard Shortcuts
+  const createNewDrawing = useCallback(() => {
+    if (autoCadBridgeStatus.connected) {
+      void executeAutoCadAction("EXECUTE_COMMAND", { command: "QNEW" }).then((result:any) => {
+        if (result?.ok) showToast("AutoCAD: QNEW đã được chuyển sang cửa sổ DWG native.");
+        else showToast(`Không chạy được QNEW: ${result?.error||result?.reason||"Bridge error"}`);
+      });
+      return;
+    }
+    if (isDirty && !window.confirm("Bản vẽ có thay đổi chưa lưu. Tạo bản vẽ mới và bỏ các thay đổi này?")) return;
+    suppressProjectDirtyRef.current = true;
+    clearProjectSnapshot();
+    setEntities([]); setHistory([[]]); setHistoryIndex(0);
+    setLayers(INITIAL_LAYERS); setLayouts(INITIAL_LAYOUTS); setViewports(INITIAL_VIEWPORTS);
+    setSmartObjects([]); setSpreadsheetParameters(INITIAL_SPREADSHEET_PARAMETERS);
+    setTranslationMemory(INITIAL_TRANSLATION_MEMORY); setBlockLibrary(INITIAL_BLOCK_LIBRARY);
+    setDependencyEdges(INITIAL_DEPENDENCY_EDGES); setModules(INITIAL_HNL_MODULES);
+    setSelectedWorkbench("HNL_CAD"); setSelectedEntityIds([]); setActiveLayout(null);
+    setCurrentFileName("Untitled.dxf"); setCurrentFilePath(null); setIsDirty(false); setShowStartCenter(false);
+    showToast("Standalone: Đã tạo bản vẽ DXF mới.");
+  }, [autoCadBridgeStatus.connected, isDirty, showToast]);
+
+  const saveCadDxf = useCallback(async () => {
+    const nativeApi=(window as any).electronNative;
+    if(!nativeApi?.saveFile){showToast("Lưu DXF cần chạy trong HNL Desktop EXE.");return;}
+    const base=currentFileName.replace(/\.[^.]+$/,"")||"BanVe_HNL";
+    const dxf=generateAutoCadDxf(entities, base);
+    const defaultName=currentFileName.toLowerCase().endsWith(".dxf")?currentFileName:`${base}.dxf`;
+    const result=await nativeApi.saveFile({defaultName,content:dxf,extDescription:"AutoCAD DXF Drawing",extension:"dxf"});
+    if(result?.success){
+      setCurrentFilePath(result.filePath);
+      setCurrentFileName(String(result.filePath).split(/[\\/]/).pop()||defaultName);
+      setIsDirty(false);
+      showToast(`Đã lưu bản vẽ CAD DXF: ${result.filePath}`);
+    }else if(!result?.canceled)showToast(`Không lưu được DXF: ${result?.error||"Unknown error"}`);
+  },[entities,currentFileName,showToast]);
+
+  const saveProjectJson = useCallback(async () => {
+    const nativeApi=(window as any).electronNative;
+    if(!nativeApi?.saveFile){showToast("Lưu Project JSON cần chạy trong HNL Desktop EXE.");return;}
+    const payload=JSON.stringify({version:"2.4.0",schemaVersion:2,savedAt:new Date().toISOString(),currentFileName,activeLayoutId:activeLayout?.id||null,entities,layers,layouts,viewports,smartObjects,spreadsheetParameters,translationMemory,blockLibrary,dependencyEdges,modules,selectedWorkbench},null,2);
+    const base=currentFileName.replace(/\.[^.]+$/,"")||"BanVe_HNL";
+    const result=await nativeApi.saveFile({defaultName:`${base}.hnl.json`,content:payload,extDescription:"HNL Project JSON",extension:"json"});
+    if(result?.success)showToast(`Đã lưu Project HNL: ${result.filePath}`);
+    else if(!result?.canceled)showToast(`Không lưu được Project: ${result?.error||"Unknown error"}`);
+  },[currentFileName,activeLayout,entities,layers,layouts,viewports,smartObjects,spreadsheetParameters,translationMemory,blockLibrary,dependencyEdges,modules,selectedWorkbench,showToast]);
+
+  const saveDwgViaAutoCad = useCallback(async () => {
+    const nativeApi=(window as any).electronNative;
+    if(!autoCadBridgeStatus.connected){showToast("Lưu DWG native cần AutoCAD Bridge đang Connected.");return;}
+    if(!nativeApi?.chooseSavePath){showToast("Native file dialog chưa sẵn sàng.");return;}
+    const base=(autoCadBridgeStatus.drawingName || currentFileName).split(/[\\/]/).pop()?.replace(/\.[^.]+$/,"")||"BanVe_HNL";
+    const pick=await nativeApi.chooseSavePath({title:"AutoCAD Save As DWG",defaultName:`${base}.dwg`,extension:"dwg",description:"AutoCAD DWG Drawing"});
+    if(!pick?.success||!pick.filePath)return;
+    const result=await executeAutoCadAction("SAVE_AS_DWG",{outputPath:pick.filePath});
+    if(result?.ok){
+      setCurrentFilePath(pick.filePath);
+      setCurrentFileName(String(pick.filePath).split(/[\\/]/).pop()||`${base}.dwg`);
+      setIsDirty(false);
+      showToast(`AutoCAD đã Save As DWG: ${pick.filePath}`);
+    }else showToast(`Save As DWG thất bại: ${result?.error||result?.reason||"AutoCAD Bridge error"}`);
+  },[autoCadBridgeStatus.connected,autoCadBridgeStatus.drawingName,currentFileName,showToast]);
+
+  const savePrimaryDrawing = useCallback(async () => {
+    if(autoCadBridgeStatus.connected){
+      const result=await executeAutoCadAction("SAVE_CURRENT_DWG",{});
+      if(result?.ok){
+        const path=result?.result?.filePath || autoCadBridgeStatus.drawingName || currentFileName;
+        setCurrentFileName(String(path).split(/[\\/]/).pop()||currentFileName);
+        setIsDirty(false);
+        showToast(`AutoCAD: Đã lưu DWG native.`);
+      }else{
+        showToast(`Không lưu được DWG: ${result?.error||result?.reason||"Bridge error"}. Dùng Ctrl+Shift+S nếu bản vẽ chưa có đường dẫn.`);
+      }
+      return;
+    }
+    await saveCadDxf();
+  },[autoCadBridgeStatus.connected,autoCadBridgeStatus.drawingName,currentFileName,saveCadDxf,showToast]);
+
+  const saveAsPrimaryDrawing = useCallback(async () => {
+    if(autoCadBridgeStatus.connected) await saveDwgViaAutoCad();
+    else await saveCadDxf();
+  },[autoCadBridgeStatus.connected,saveDwgViaAutoCad,saveCadDxf]);
+
+  const openDrawingDialog=useCallback(()=>{
+    const nativeApi=(window as any).electronNative;
+    if(nativeApi?.requestOpenFile)nativeApi.requestOpenFile();
+    else showToast("Mở file cần chạy trong HNL Desktop EXE.");
+  },[showToast]);
+
+  // Global Keyboard Shortcuts — AutoCAD/Windows style.
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.code === "Space") {
-        e.preventDefault();
-        setIsCommandCenterOpen((prev) => !prev);
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        if (e.shiftKey) {
-          handleRedo();
-        } else {
-          handleUndo();
-        }
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
-        e.preventDefault();
-        handleRedo();
-      } else if (e.key === "Escape") {
-        setCurrentTool("SELECT");
+    const isTextEditingTarget=(target:EventTarget|null)=>{
+      const el=target as HTMLElement|null;
+      return Boolean(el && (
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        el.isContentEditable ||
+        el.closest?.('[contenteditable="true"], input, textarea, select')
+      ));
+    };
+
+    const copySelection=async(cut=false)=>{
+      const picked=entities.filter(ent=>selectedEntityIds.includes(ent.id));
+      if(!picked.length){showToast("Chưa chọn đối tượng để copy.");return;}
+      entityClipboardRef.current=structuredClone(picked);
+      pasteCountRef.current=0;
+      try{await navigator.clipboard.writeText(serializeEntityClipboard(picked));}catch{}
+      if(cut){
+        updateEntitiesWithHistory(entities.filter(ent=>!selectedEntityIds.includes(ent.id)));
         setSelectedEntityIds([]);
-        setGhostPreviewEntities([]);
-      } else if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedEntityIds.length > 0 && !(e.target instanceof HTMLInputElement)) {
-          const remaining = entities.filter((ent) => !selectedEntityIds.includes(ent.id));
-          updateEntitiesWithHistory(remaining);
-          setSelectedEntityIds([]);
-          showToast(`Đã xóa ${selectedEntityIds.length} đối tượng`);
+        showToast(`Ctrl+X: Đã cắt ${picked.length} đối tượng.`);
+      }else showToast(`Ctrl+C: Đã copy ${picked.length} đối tượng.`);
+    };
+
+    const pasteSelection=async()=>{
+      let source=entityClipboardRef.current;
+      if(!source.length){
+        try{
+          const txt=await navigator.clipboard.readText();
+          source=parseEntityClipboard(txt)||[];
+          if(source.length)entityClipboardRef.current=structuredClone(source);
+        }catch{}
+      }
+      if(!source.length){showToast("Clipboard chưa có đối tượng HNL CAD.");return;}
+      pasteCountRef.current+=1;
+      const d=250*pasteCountRef.current;
+      const pasted=source.map(ent=>cloneEntityForPaste(ent,d,-d));
+      updateEntitiesWithHistory([...entities,...pasted]);
+      setSelectedEntityIds(pasted.map(e=>e.id));
+      showToast(`Ctrl+V: Đã dán ${pasted.length} đối tượng (${d} mm offset).`);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const ctrl=e.ctrlKey||e.metaKey;
+      const key=e.key.toLowerCase();
+      const typing=isTextEditingTarget(e.target);
+
+      // Application-level shortcuts work even while the command line has focus.
+      if(ctrl && key==="n"){e.preventDefault();createNewDrawing();return;}
+      if(ctrl && key==="s" && e.shiftKey){e.preventDefault();void saveAsPrimaryDrawing();return;}
+      if(ctrl && key==="s"){e.preventDefault();void savePrimaryDrawing();return;}
+      if(ctrl && key==="o"){e.preventDefault();openDrawingDialog();return;}
+      if(ctrl && key==="p"){e.preventDefault();setIsPlotPublishOpen(true);return;}
+      if(ctrl && key==="1"){
+        e.preventDefault();
+        if(isLeftDockOpen && leftDockTab==="PROPERTIES")setIsLeftDockOpen(false);
+        else{setIsLeftDockOpen(true);setLeftDockTab("PROPERTIES");}
+        return;
+      }
+      if(ctrl && key==="9"){
+        e.preventDefault();
+        setIsCommandLineVisible(v=>!v);
+        return;
+      }
+      if (ctrl && e.code === "Space") {
+        e.preventDefault(); setIsCommandCenterOpen((prev) => !prev); return;
+      }
+
+      if(ctrl && typing) return; // Ctrl+A/C/X/V remain normal Windows editing inside text inputs.
+
+      if(ctrl && key==="a"){
+        e.preventDefault();
+        if(autoCadBridgeStatus.connected) void executeAutoCadAction("SELECT_ALL",{});
+        else { setCurrentTool("SELECT");setSelectedEntityIds(entities.map(ent=>ent.id));showToast(`Ctrl+A: Đã chọn ${entities.length} đối tượng.`); }
+      } else if(ctrl && key==="c"){
+        e.preventDefault();
+        if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"COPYCLIP"});
+        else void copySelection(false);
+      } else if(ctrl && key==="x"){
+        e.preventDefault();
+        if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"CUTCLIP"});
+        else void copySelection(true);
+      } else if(ctrl && key==="v"){
+        e.preventDefault();
+        if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"PASTECLIP"});
+        else void pasteSelection();
+      } else if(ctrl && key==="z"){
+        e.preventDefault();
+        if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:e.shiftKey?"REDO":"U"});
+        else if(e.shiftKey)handleRedo();else handleUndo();
+      } else if(ctrl && key==="y"){
+        e.preventDefault();
+        if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"REDO"});
+        else handleRedo();
+      } else if(e.key==="Escape"){
+        e.preventDefault();
+        setCommandDraft("");
+        if(isCommandCenterOpen){setIsCommandCenterOpen(false);showToast("ESC: Đã đóng Command Center.");}
+        else if(commandDraft.trim()){setCommandDraft("");showToast("ESC: Đã hủy nhập lệnh.");}
+        else if(autoCadBridgeStatus.connected){
+          void executeAutoCadAction("CANCEL_COMMAND",{});
+          showToast("AutoCAD native: ESC");
+        } else if(currentTool!=="SELECT"||ghostPreviewEntities.length>0){
+          setCurrentTool("SELECT");setGhostPreviewEntities([]);showToast("ESC: Đã hủy lệnh đang chạy.");
+        } else if(selectedEntityIds.length>0){
+          setSelectedEntityIds([]);showToast("ESC: Đã bỏ chọn đối tượng.");
         }
+      } else if((e.key==="Delete"||e.key==="Backspace")&&!typing){
+        if(autoCadBridgeStatus.connected){
+          e.preventDefault();void executeAutoCadAction("EXECUTE_COMMAND",{command:"ERASE"});
+        } else if(selectedEntityIds.length>0){
+          e.preventDefault();updateEntitiesWithHistory(entities.filter(ent=>!selectedEntityIds.includes(ent.id)));setSelectedEntityIds([]);showToast(`Đã xóa ${selectedEntityIds.length} đối tượng`);
+        }
+      } else if(!ctrl&&!e.altKey&&!e.metaKey&&!typing&&currentTool==="SELECT"&&e.key.length===1&&/^[a-z0-9]$/i.test(e.key)){
+        // AutoCAD-like direct command typing on canvas.
+        e.preventDefault();
+        setIsCommandLineVisible(true);
+        setCommandDraft(prev=>prev+e.key.toUpperCase());
+        setTimeout(()=>window.dispatchEvent(new Event("hnl-focus-command-line")),0);
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedEntityIds, entities, handleUndo, handleRedo, updateEntitiesWithHistory, showToast]);
+    window.addEventListener("keydown",handleKeyDown);
+    return()=>window.removeEventListener("keydown",handleKeyDown);
+  },[
+    selectedEntityIds,entities,handleUndo,handleRedo,updateEntitiesWithHistory,showToast,
+    currentTool,ghostPreviewEntities.length,isCommandCenterOpen,isLeftDockOpen,leftDockTab,commandDraft,autoCadBridgeStatus.connected,
+    createNewDrawing,savePrimaryDrawing,saveAsPrimaryDrawing,openDrawingDialog
+  ]);
 
   // Entity Selection Handler
   const handleSelectEntity = (id: string, multiSelect: boolean) => {
@@ -1118,7 +1339,50 @@ export default function App() {
         updateEntitiesWithHistory([...entities.filter(e=>!ids.has(e.id)),poly]); showToast(`Đã Join ${lines.length} Line thành Polyline.`); break;
       }
 
-      case "EDIT_TRIM": case "EDIT_EXTEND": case "EDIT_FILLET": case "EDIT_ARRAY": case "DRAW_HATCH":
+      case "EDIT_COPY": {
+        const picked=entities.filter(e=>selectedEntityIds.includes(e.id));
+        if(!picked.length){showToast("COPY: Hãy chọn đối tượng trước.");break;}
+        const copies=picked.map(e=>cloneEntityForPaste(e,250,-250));
+        updateEntitiesWithHistory([...entities,...copies]);setSelectedEntityIds(copies.map(e=>e.id));
+        showToast(`COPY: Đã sao chép ${copies.length} đối tượng, offset 250 mm.`);break;
+      }
+      case "EDIT_MOVE": {
+        if(!selectedEntityIds.length){showToast("MOVE: Hãy chọn đối tượng trước.");break;}
+        const dx=Number(window.prompt("MOVE — ΔX (mm):","0"));const dy=Number(window.prompt("MOVE — ΔY (mm):","0"));
+        if(!Number.isFinite(dx)||!Number.isFinite(dy)){showToast("MOVE: Giá trị không hợp lệ.");break;}
+        updateEntitiesWithHistory(translateSelected(entities,selectedEntityIds,dx,dy));showToast(`MOVE: ΔX=${dx}, ΔY=${dy} mm.`);break;
+      }
+      case "EDIT_ROTATE": {
+        if(!selectedEntityIds.length){showToast("ROTATE: Hãy chọn đối tượng trước.");break;}
+        const a=Number(window.prompt("ROTATE — Góc xoay (độ):","90"));if(!Number.isFinite(a)){showToast("ROTATE: Góc không hợp lệ.");break;}
+        updateEntitiesWithHistory(rotateSelected(entities,selectedEntityIds,a));showToast(`ROTATE: ${a}° quanh tâm selection.`);break;
+      }
+      case "EDIT_SCALE": {
+        if(!selectedEntityIds.length){showToast("SCALE: Hãy chọn đối tượng trước.");break;}
+        const f=Number(window.prompt("SCALE — Hệ số:","1"));if(!Number.isFinite(f)||f<=0){showToast("SCALE: Hệ số phải > 0.");break;}
+        updateEntitiesWithHistory(scaleSelected(entities,selectedEntityIds,f));showToast(`SCALE: x${f} quanh tâm selection.`);break;
+      }
+      case "EDIT_MIRROR": {
+        if(!selectedEntityIds.length){showToast("MIRROR: Hãy chọn đối tượng trước.");break;}
+        const axis=String(window.prompt("MIRROR — Trục qua tâm selection (X/Y):","Y")||"Y").toUpperCase()==="X"?"X":"Y";
+        updateEntitiesWithHistory(mirrorSelected(entities,selectedEntityIds,axis));showToast(`MIRROR: qua trục ${axis}.`);break;
+      }
+      case "DELETE_SELECTION": {
+        if(!selectedEntityIds.length){showToast("ERASE: Chưa có đối tượng được chọn.");break;}
+        const n=selectedEntityIds.length;updateEntitiesWithHistory(entities.filter(e=>!selectedEntityIds.includes(e.id)));setSelectedEntityIds([]);showToast(`ERASE: Đã xóa ${n} đối tượng.`);break;
+      }
+      case "MEASURE_DISTANCE": {
+        const e:any=entities.find(x=>selectedEntityIds.includes(x.id)&&(["LINE","WALL","DIMENSION"].includes((x as any).type)));
+        const p1=e?.start||e?.p1,p2=e?.end||e?.p2;
+        if(!p1||!p2){showToast("DIST: Chọn một LINE/WALL/DIMENSION để đo nhanh.");break;}
+        const d=Math.hypot(p2.x-p1.x,p2.y-p1.y);showToast(`DIST = ${d.toFixed(3)} mm`);break;
+      }
+      case "DRAW_MTEXT":
+        setCurrentTool("MTEXT");showToast("MTEXT: Nhấp vị trí đặt chữ, sau đó nhập nội dung.");break;
+      case "DRAW_POLYGON": case "DRAW_ARC":
+        reportCommandFailure(cmdKey,"Lệnh hình học đang hoàn thiện",`${cmdKey} đã có alias AutoCAD nhưng geometry kernel Standalone chưa hoàn thiện an toàn.`,"Dùng AutoCAD Bridge hoặc chờ geometry kernel native hoàn thiện.","WARNING");break;
+
+      case "EDIT_TRIM": case "EDIT_EXTEND": case "EDIT_FILLET": case "EDIT_CHAMFER": case "EDIT_ARRAY": case "DRAW_HATCH":
         reportCommandFailure(cmdKey, "Chức năng chưa hỗ trợ Standalone", "Geometry kernel hiện chưa đủ an toàn để thực thi lệnh này trong Standalone.", "Kết nối AutoCAD Bridge/plugin để dùng thao tác native, hoặc gửi yêu cầu để bổ sung geometry kernel.", "WARNING");
         break;
 
@@ -1226,6 +1490,20 @@ export default function App() {
 
   const handleExecuteCommand = (cmdKey: string) => {
     const started = performance.now();
+    const nativeCommand = AUTOCAD_NATIVE_COMMAND_BY_HNL_KEY[cmdKey];
+    if (autoCadBridgeStatus.connected && nativeCommand) {
+      void executeAutoCadAction("EXECUTE_COMMAND", { command: nativeCommand }).then((result:any) => {
+        const elapsed = Math.round(performance.now() - started);
+        if (result?.ok) {
+          markCommandHealth(cmdKey, true, elapsed);
+          showToast(`AutoCAD native: ${nativeCommand}`);
+        } else {
+          markCommandHealth(cmdKey, false, elapsed, result?.error || result?.reason || "Bridge error", "PARTIAL");
+          showToast(`AutoCAD ${nativeCommand} lỗi: ${result?.error || result?.reason || "Bridge error"}`);
+        }
+      });
+      return;
+    }
     try {
       handleExecuteCommandCore(cmdKey);
       markCommandHealth(cmdKey, true, Math.round(performance.now() - started));
@@ -1237,6 +1515,24 @@ export default function App() {
       showToast(`${code}: ${d.cause}`);
     }
   };
+
+  const executeCadCommandText=useCallback((raw:string)=>{
+    const def=resolveCadAlias(raw);
+    if(!def){
+      setCommandHistory(prev=>[`${raw.toUpperCase()} → Unknown command`,...prev].slice(0,20));
+      showToast(`Unknown command "${raw}".`);
+      return;
+    }
+    if(autoCadBridgeStatus.connected && def.nativeCommand){
+      setCommandHistory(prev=>[`${raw.toUpperCase()} → AutoCAD ${def.nativeCommand} [NATIVE]`,...prev].slice(0,20));
+      void executeAutoCadAction("EXECUTE_COMMAND",{command:def.nativeCommand}).then((result:any)=>{
+        showToast(result?.ok ? `AutoCAD native: ${def.nativeCommand}` : `AutoCAD command lỗi: ${result?.error||result?.reason||"Bridge error"}`);
+      });
+      return;
+    }
+    setCommandHistory(prev=>[`${raw.toUpperCase()} → ${def.label} [${def.support}]`,...prev].slice(0,20));
+    handleExecuteCommand(def.command);
+  },[autoCadBridgeStatus.connected,handleExecuteCommand,showToast]);
 
   useEffect(() => {
     const nativeApi = (window as any).electronNative;
@@ -1251,32 +1547,42 @@ export default function App() {
 
     const offMenu = nativeApi.onMenuCommand?.(async (command: string) => {
       switch (command) {
-        case "NEW_DRAWING": {
-          if (isDirty && !window.confirm("Bản vẽ có thay đổi chưa lưu. Tạo bản vẽ mới và bỏ các thay đổi này?")) break;
-          suppressProjectDirtyRef.current = true;
-          clearProjectSnapshot();
-          setEntities([]); setHistory([[]]); setHistoryIndex(0);
-          setLayers(INITIAL_LAYERS); setLayouts(INITIAL_LAYOUTS); setViewports(INITIAL_VIEWPORTS);
-          setSmartObjects([]); setSpreadsheetParameters(INITIAL_SPREADSHEET_PARAMETERS);
-          setTranslationMemory(INITIAL_TRANSLATION_MEMORY); setBlockLibrary(INITIAL_BLOCK_LIBRARY); setDependencyEdges(INITIAL_DEPENDENCY_EDGES); setModules(INITIAL_HNL_MODULES); setSelectedWorkbench("HNL_CAD");
-          setSelectedEntityIds([]); setActiveLayout(null); setCurrentFileName("Untitled.hnl.json"); setIsDirty(false);
-          setShowStartCenter(false); showToast("Đã tạo bản vẽ HNL mới sạch dữ liệu dự án.");
+        case "NEW_DRAWING": createNewDrawing(); break;
+        case "SAVE_DRAWING": await savePrimaryDrawing(); break;
+        case "SAVE_AS_DRAWING": await saveAsPrimaryDrawing(); break;
+        case "SAVE_CAD_DXF": await saveCadDxf(); break;
+        case "SAVE_PROJECT_JSON": await saveProjectJson(); break;
+        case "SAVE_DWG_BRIDGE": await saveDwgViaAutoCad(); break;
+        case "EXPORT_DXF": await saveCadDxf(); break;
+        case "PRINT_PDF":
+          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"PLOT"});
+          else setIsPlotPublishOpen(true);
           break;
-        }
-        case "SAVE_DRAWING": {
-          const payload = JSON.stringify({ version: "2.0.5", schemaVersion: 2, savedAt: new Date().toISOString(), currentFileName, activeLayoutId: activeLayout?.id || null, entities, layers, layouts, viewports, smartObjects, spreadsheetParameters, translationMemory, blockLibrary, dependencyEdges, modules, selectedWorkbench }, null, 2);
-          const result = await nativeApi.saveFile?.({ defaultName: currentFileName || "BanVe_HNL.json", content: payload, extDescription: "HNL Drawing JSON", extension: "json" });
-          if (result?.success) { setCurrentFileName(String(result.filePath).split(/[\\/]/).pop() || "BanVe_HNL.json"); setIsDirty(false); showToast(`Đã lưu đầy đủ dự án: ${result.filePath}`); }
-          else if (!result?.canceled) { pushDiagnostic({ code: "HNL-FILE-SAVE-001", severity: "ERROR", title: "Lưu dự án thất bại", message: "Electron không lưu được file dự án.", cause: result?.error || "Không có thông tin lỗi từ native layer", context: { file: currentFileName }, suggestion: "Thử lưu vào Documents/Desktop, kiểm tra quyền ghi và dung lượng ổ đĩa; sau đó copy log nếu vẫn lỗi." }, true); }
+        case "UNDO":
+          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"U"}); else handleUndo();
           break;
-        }
-        case "EXPORT_DXF": setIsMultiExportOpen(true); break;
-        case "PRINT_PDF": window.print(); break;
-        case "UNDO": handleUndo(); break;
-        case "REDO": handleRedo(); break;
-        case "SELECT_ALL": setSelectedEntityIds(entities.map((e) => e.id)); break;
+        case "REDO":
+          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"REDO"}); else handleRedo();
+          break;
+        case "SELECT_ALL":
+          if(autoCadBridgeStatus.connected) void executeAutoCadAction("SELECT_ALL",{});
+          else { setCurrentTool("SELECT"); setSelectedEntityIds(entities.map((e) => e.id)); showToast(`Đã chọn ${entities.length} đối tượng.`); }
+          break;
+        case "COPY":
+          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"COPYCLIP"});
+          else window.dispatchEvent(new KeyboardEvent("keydown",{key:"c",ctrlKey:true,bubbles:true}));
+          break;
+        case "CUT":
+          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"CUTCLIP"});
+          else window.dispatchEvent(new KeyboardEvent("keydown",{key:"x",ctrlKey:true,bubbles:true}));
+          break;
+        case "PASTE":
+          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"PASTECLIP"});
+          else window.dispatchEvent(new KeyboardEvent("keydown",{key:"v",ctrlKey:true,bubbles:true}));
+          break;
         case "DELETE":
-          if (selectedEntityIds.length > 0) {
+          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"ERASE"});
+          else if (selectedEntityIds.length > 0) {
             updateEntitiesWithHistory(entities.filter((e) => !selectedEntityIds.includes(e.id)));
             setSelectedEntityIds([]);
             showToast("Đã xóa các đối tượng được chọn.");
@@ -1295,7 +1601,22 @@ export default function App() {
       try {
         const fileName = String(data?.fileName || "");
         const lower = fileName.toLowerCase();
-        if (lower.endsWith(".dxf")) {
+        if (lower.endsWith(".dwg")) {
+          if (!autoCadBridgeStatus.connected) {
+            showToast("DWG cần AutoCAD Bridge. Hãy mở AutoCAD có HNL plugin rồi thử lại.");
+            return;
+          }
+          void executeAutoCadAction("OPEN_DWG", { filePath: String(data?.filePath || "") }).then((result:any) => {
+            if (result?.ok) {
+              setCurrentFileName(fileName);
+              setCurrentFilePath(String(data?.filePath || "") || null);
+              setShowStartCenter(false);
+              showToast(`AutoCAD đã mở DWG native: ${fileName}`);
+            } else {
+              showToast(`Không mở được DWG: ${result?.error || result?.reason || "Bridge error"}`);
+            }
+          });
+        } else if (lower.endsWith(".dxf")) {
           const imported = parseBasicDxf(String(data?.content || ""));
           if (imported.length === 0) {
             showToast("DXF không có entity được hỗ trợ hoặc file không phải DXF ASCII.");
@@ -1303,7 +1624,7 @@ export default function App() {
           }
           updateEntitiesWithHistory(imported);
           setSelectedEntityIds([]);
-          setCurrentFileName(fileName); setIsDirty(true); setShowStartCenter(false); showToast(`Đã nhập ${imported.length} entity từ ${fileName}.`);
+          setCurrentFileName(fileName); setCurrentFilePath(String(data?.filePath||"")||null); setIsDirty(false); setShowStartCenter(false); showToast(`Đã mở ${imported.length} entity từ ${fileName}.`);
         } else if (lower.endsWith(".json")) {
           suppressProjectDirtyRef.current = true;
           const parsed = JSON.parse(String(data?.content || "{}"));
@@ -1323,7 +1644,7 @@ export default function App() {
             if (parsed.selectedWorkbench) setSelectedWorkbench(parsed.selectedWorkbench);
             setActiveLayout(Array.isArray(parsed.layouts) ? parsed.layouts.find((l: any) => l.id === parsed.activeLayoutId) || null : null);
           }
-          setSelectedEntityIds([]); setCurrentFileName(fileName); setIsDirty(false); setShowStartCenter(false);
+          setSelectedEntityIds([]); setCurrentFileName(fileName); setCurrentFilePath(String(data?.filePath||"")||null); setIsDirty(false); setShowStartCenter(false);
           showToast(`Đã mở đầy đủ dự án HNL: ${fileName}`);
         } else if (lower.endsWith(".lsp")) {
           showToast(`Đã đọc ${fileName}; chạy AutoLISP cần AutoCAD plugin.`);
@@ -1337,7 +1658,7 @@ export default function App() {
       if (typeof offMenu === "function") offMenu();
       if (typeof offFile === "function") offFile();
     };
-  }, [entities, layers, layouts, viewports, smartObjects, selectedEntityIds, historyIndex]);
+  }, [entities, layers, layouts, viewports, smartObjects, selectedEntityIds, historyIndex, savePrimaryDrawing, saveAsPrimaryDrawing, saveCadDxf, saveProjectJson, saveDwgViaAutoCad]);
 
   const handleApplyComposer = (
     newLayouts: CadLayout[],
@@ -1363,7 +1684,7 @@ export default function App() {
             <div className="px-8 py-7 border-b border-neutral-800 bg-gradient-to-r from-[#15181c] to-[#101820] flex items-center justify-between gap-6">
               <div>
                 <div className="text-[11px] tracking-[0.24em] uppercase text-cyan-400 font-semibold">Professional CAD Workspace</div>
-                <h1 className="mt-2 text-2xl font-bold text-white">HNL CAD AI <span className="text-cyan-400">v2.0.5</span></h1>
+                <h1 className="mt-2 text-2xl font-bold text-white">HNL CAD AI <span className="text-cyan-400">v2.4.0</span></h1>
                 <p className="mt-2 text-sm text-neutral-400 max-w-2xl">Không gian làm việc Standalone + AutoCAD Bridge, tối ưu shopdrawing, thống kê, layout và trợ lý AI kỹ thuật.</p>
               </div>
               <div className={`px-3 py-2 rounded-lg border text-xs ${autoCadBridgeStatus.connected ? "border-emerald-700 bg-emerald-950/30 text-emerald-300" : "border-neutral-700 bg-neutral-900 text-neutral-400"}`}>
@@ -1379,7 +1700,7 @@ export default function App() {
                 <div className="text-white font-semibold">Mở dự án / DXF</div>
                 <div className="text-xs text-neutral-400 mt-2">Mở HNL JSON đầy đủ hoặc DXF ASCII trong chế độ độc lập.</div>
               </button>
-              <button onClick={() => { if (!isDirty || window.confirm("Bỏ thay đổi hiện tại và tạo bản vẽ mới?")) { suppressProjectDirtyRef.current = true; clearProjectSnapshot(); setEntities([]); setHistory([[]]); setHistoryIndex(0); setLayers(INITIAL_LAYERS); setLayouts(INITIAL_LAYOUTS); setViewports(INITIAL_VIEWPORTS); setSmartObjects([]); setSpreadsheetParameters(INITIAL_SPREADSHEET_PARAMETERS); setTranslationMemory(INITIAL_TRANSLATION_MEMORY); setBlockLibrary(INITIAL_BLOCK_LIBRARY); setDependencyEdges(INITIAL_DEPENDENCY_EDGES); setModules(INITIAL_HNL_MODULES); setSelectedWorkbench("HNL_CAD"); setSelectedEntityIds([]); setActiveLayout(null); setCurrentFileName("Untitled.hnl.json"); setIsDirty(false); setShowStartCenter(false); } }} className="text-left p-5 rounded-xl border border-neutral-700 bg-[#1d2025] hover:border-neutral-500 transition">
+              <button onClick={() => { if (!isDirty || window.confirm("Bỏ thay đổi hiện tại và tạo bản vẽ mới?")) { suppressProjectDirtyRef.current = true; clearProjectSnapshot(); setEntities([]); setHistory([[]]); setHistoryIndex(0); setLayers(INITIAL_LAYERS); setLayouts(INITIAL_LAYOUTS); setViewports(INITIAL_VIEWPORTS); setSmartObjects([]); setSpreadsheetParameters(INITIAL_SPREADSHEET_PARAMETERS); setTranslationMemory(INITIAL_TRANSLATION_MEMORY); setBlockLibrary(INITIAL_BLOCK_LIBRARY); setDependencyEdges(INITIAL_DEPENDENCY_EDGES); setModules(INITIAL_HNL_MODULES); setSelectedWorkbench("HNL_CAD"); setSelectedEntityIds([]); setActiveLayout(null); setCurrentFileName("Untitled.dxf"); setCurrentFilePath(null); setIsDirty(false); setShowStartCenter(false); } }} className="text-left p-5 rounded-xl border border-neutral-700 bg-[#1d2025] hover:border-neutral-500 transition">
                 <div className="text-white font-semibold">Bản vẽ mới</div>
                 <div className="text-xs text-neutral-400 mt-2">Khởi tạo project sạch với layer/layout mặc định HNL.</div>
               </button>
@@ -1668,6 +1989,15 @@ export default function App() {
         )}
       </div>
 
+      <CadCommandLine
+        visible={isCommandLineVisible}
+        draft={commandDraft}
+        setDraft={setCommandDraft}
+        history={commandHistory}
+        onExecute={executeCadCommandText}
+        onClose={() => setIsCommandLineVisible(false)}
+      />
+
       {/* 3. Bottom Layout Tabs Switcher (Model / Layout A3 / Layout A4 / +) */}
       <div className="h-8 bg-[#18191C] border-t border-neutral-800 px-2 flex items-center justify-between text-xs select-none">
         <div className="flex items-center space-x-1 overflow-x-auto scrollbar-none">
@@ -1828,6 +2158,18 @@ export default function App() {
         onClose={() => setIsDrywallStudioOpen(false)}
         entities={entities}
         onApplyPresetToDrawing={(preset) => {
+          if (preset?.action === "OPEN_FIRESTOP_DETAIL") {
+            setIsDrywallStudioOpen(false);
+            setIsAutoDetailComposerOpen(true);
+            showToast("Đã mở workflow Detail Firestop. Chọn vị trí/đối tượng và xác nhận trước khi chèn.");
+            return;
+          }
+          if (preset?.action === "OPEN_CONTROL_JOINT_DETAIL") {
+            setIsDrywallStudioOpen(false);
+            setIsAutoDetailComposerOpen(true);
+            showToast("Đã mở workflow Control Joint. Chọn vị trí khe và xác nhận trước khi chèn.");
+            return;
+          }
           showToast(`Đã chọn preset ${preset.wallSystem?.systemName || "Thạch cao"} để tham khảo. Chưa thay đổi hình học vì cần chọn vùng/Smart Object và xác nhận Project Spec.`);
         }}
       />
