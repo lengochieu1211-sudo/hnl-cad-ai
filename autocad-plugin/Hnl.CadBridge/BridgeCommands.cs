@@ -32,7 +32,7 @@ public sealed class BridgeCommands : IExtensionApplication
         Application.Idle += OnIdle;
         _pollTimer = new Timer(_ => PollServer(), null, 500, 750);
         Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
-            "\nHNL CAD AI Bridge v2.4.6 loaded. Commands: HNLBRIDGESTATUS, HNLBRIDGEPING, HNLPLOTDEVICES, HNLLAYOUTS");
+            "\nHNL CAD AI Bridge v2.4.7 loaded. Commands: HNLBRIDGESTATUS, HNLBRIDGEPING, HNLPLOTDEVICES, HNLLAYOUTS");
     }
 
     public void Terminate()
@@ -119,6 +119,34 @@ public sealed class BridgeCommands : IExtensionApplication
         doc.Editor.WriteMessage($"\nHNL Layers ({names.Count}): {string.Join(", ", names.Take(30))}{(names.Count > 30 ? " ..." : "")}");
     }
 
+
+
+    [CommandMethod("HNLSETLAYOUT")]
+    public void SetCurrentLayoutCommand()
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc == null) return;
+
+        var opt = new PromptStringOptions("\nTên Layout cần mở <Model>: ")
+        {
+            AllowSpaces = true,
+            DefaultValue = "Model",
+            UseDefaultValue = true
+        };
+        var result = doc.Editor.GetString(opt);
+        if (result.Status != PromptStatus.OK) return;
+
+        try
+        {
+            var payload = new JObject { ["name"] = result.StringResult.Trim() };
+            var output = SetCurrentLayout(payload);
+            doc.Editor.WriteMessage($"\nHNL: {JsonConvert.SerializeObject(output)}");
+        }
+        catch (System.Exception ex)
+        {
+            doc.Editor.WriteMessage($"\nHNL: Không chuyển được Layout: {ex.Message}");
+        }
+    }
 
     [CommandMethod("HNLRENLAYOUT")]
     public void RenameCurrentLayoutCommand()
@@ -215,7 +243,7 @@ public sealed class BridgeCommands : IExtensionApplication
                 using var req = MakeRequest(HttpMethod.Post, "/api/autocad/register", new {
                     version = Application.Version.ToString(),
                     drawingName = doc?.Name ?? "",
-                    pluginVersion = "2.4.6",
+                    pluginVersion = "2.4.7",
                     capabilities = new[] { "GET_STATUS","GET_PLOT_DEVICES","GET_LAYOUTS","SET_CURRENT_LAYOUT","RENAME_LAYOUT","EXECUTE_COMMAND","CANCEL_COMMAND","OPEN_DWG","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","CREATE_CEILING_GRID","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
                 });
                 var res = await Http.SendAsync(req);
@@ -296,7 +324,7 @@ public sealed class BridgeCommands : IExtensionApplication
     private static object GetStatusPayload()
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
-        return new { connected = true, version = Application.Version.ToString(), drawingName = doc?.Name ?? "", pluginVersion = "2.4.6" };
+        return new { connected = true, version = Application.Version.ToString(), drawingName = doc?.Name ?? "", pluginVersion = "2.4.7" };
     }
 
     private static object GetPlotDevicesPayload()
@@ -337,6 +365,37 @@ public sealed class BridgeCommands : IExtensionApplication
         return new { layouts = list };
     }
 
+
+
+    private static object SetCurrentLayout(JObject payload)
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument
+            ?? throw new InvalidOperationException("No active drawing.");
+
+        var name = ((string?)payload["name"] ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("name required");
+
+        // Resolve against the real Layout dictionary first so a bad UI name
+        // cannot leave AutoCAD in an inconsistent state.
+        using (doc.LockDocument())
+        using (var tr = doc.Database.TransactionManager.StartTransaction())
+        {
+            var dict = (DBDictionary)tr.GetObject(doc.Database.LayoutDictionaryId, OpenMode.ForRead);
+            if (!dict.Contains(name))
+                throw new InvalidOperationException($"Layout not found: {name}");
+            tr.Commit();
+
+            LayoutManager.Current.CurrentLayout = name;
+        }
+
+        return new
+        {
+            activated = true,
+            name,
+            currentLayout = LayoutManager.Current.CurrentLayout
+        };
+    }
 
 
     private static object RenameLayout(JObject payload)
@@ -865,7 +924,7 @@ public sealed class BridgeCommands : IExtensionApplication
     public void BridgeStatus()
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
-        doc?.Editor.WriteMessage($"\nHNL Bridge v2.4.6: {(_registered ? "Paired" : "Waiting for HNL EXE")} | AutoCAD {Application.Version} | Drawing: {doc?.Name}");
+        doc?.Editor.WriteMessage($"\nHNL Bridge v2.4.7: {(_registered ? "Paired" : "Waiting for HNL EXE")} | AutoCAD {Application.Version} | Drawing: {doc?.Name}");
     }
 
     [CommandMethod("HNLBRIDGEPING", CommandFlags.Session)]

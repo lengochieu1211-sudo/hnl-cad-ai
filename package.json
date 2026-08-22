@@ -1,7 +1,7 @@
 {
   "name": "hnl-cad-ai",
   "private": true,
-  "version": "2.4.6",
+  "version": "2.4.7",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -39,7 +39,7 @@
     "cross-env": "10.0.0"
   },
   "productName": "HNL CAD AI",
-  "description": "HNL CAD AI v2.4.6 - native layout rename/sync and configurable Smart Ceiling",
+  "description": "HNL CAD AI v2.4.7 - AutoCAD SET_CURRENT_LAYOUT compile fix and layout bridge hardening",
   "main": "electron/main.cjs",
   "build": {
     "appId": "vn.hnl.cadai",
