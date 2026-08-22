@@ -1,7 +1,7 @@
 {
   "name": "hnl-cad-ai",
   "private": true,
-  "version": "2.0.2",
+  "version": "2.0.3",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -39,7 +39,7 @@
     "cross-env": "10.0.0"
   },
   "productName": "HNL CAD AI",
-  "description": "HNL CAD AI v2.0.2 - GitHub TypeScript build fix for SketchUp mapping and Plot/Publish preflight",
+  "description": "HNL CAD AI v2.0.3 - Full source replace with 2D Professional, Lisp dedup, SketchUp/AutoCAD bridges, Plot/Publish and GitHub build fixes",
   "main": "electron/main.cjs",
   "build": {
     "appId": "vn.hnl.cadai",
@@ -67,8 +67,7 @@
         }
       ],
       "icon": "electron/icon.ico",
-      "artifactName": "HNL_CAD_AI_Setup_${version}.${ext}",
-      "publisherName": "HNL"
+      "artifactName": "HNL_CAD_AI_Setup_${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -81,5 +80,6 @@
       "runAfterFinish": true,
       "allowElevation": true
     }
-  }
+  },
+  "author": "HNL"
 }
