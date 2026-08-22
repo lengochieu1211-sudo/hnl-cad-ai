@@ -1,4 +1,4 @@
-# GitHub Actions build fix v2.0.4
+# GitHub Actions build fix v2.0.5
 
 Lỗi đã gặp:
 `GitHub Personal Access Token is not set, neither programmatically, nor using env "GH_TOKEN"`
@@ -16,4 +16,4 @@ Kết quả mong đợi:
 - Build installer: PASS
 - Verify installer exists: PASS
 - Upload Windows installer: PASS
-- Artifact: HNL-CAD-AI-v2.0.4-Windows-Installer
+- Artifact: HNL-CAD-AI-v2.0.5-Windows-Installer

@@ -1,7 +1,7 @@
 {
   "name": "hnl-cad-ai",
   "private": true,
-  "version": "2.0.4",
+  "version": "2.0.5",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -39,7 +39,7 @@
     "cross-env": "10.0.0"
   },
   "productName": "HNL CAD AI",
-  "description": "HNL CAD AI v2.0.4 - GitHub EXE build fix: disable electron-builder publishing and upload installer as Actions artifact",
+  "description": "HNL CAD AI v2.0.5 - Packaged startup fix for ASAR root, internal server path, 2D Professional and bridges",
   "main": "electron/main.cjs",
   "build": {
     "appId": "vn.hnl.cadai",

@@ -71,7 +71,7 @@ app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     app: "HNL CAD AI TOOL",
-    version: "2.0.4",
+    version: "2.0.5",
     hasApiKey: Boolean(process.env.GEMINI_API_KEY),
   });
 });
@@ -760,7 +760,11 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    // Packaged Electron sets HNL_APP_ROOT to resources/app.asar.
+    // Use that virtual root instead of process.cwd(), which is not stable when
+    // launched from Program Files, Start Menu, or a Desktop shortcut.
+    const appRoot = process.env.HNL_APP_ROOT || process.cwd();
+    const distPath = path.join(appRoot, "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));

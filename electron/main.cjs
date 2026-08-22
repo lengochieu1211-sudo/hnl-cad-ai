@@ -64,7 +64,10 @@ function createWindow() {
     } catch (_) {}
     try {
       const appRoot = app.getAppPath();
-      process.chdir(appRoot);
+      // Packaged Electron returns resources/app.asar here. app.asar is a file-backed
+      // virtual archive, not a real directory, so process.chdir(appRoot) fails on
+      // Windows. Pass the ASAR root to the bundled server explicitly instead.
+      process.env.HNL_APP_ROOT = appRoot;
       try { if (!process.env.GEMINI_API_KEY && safeStorage.isEncryptionAvailable() && fs.existsSync(getSecretPath())) process.env.GEMINI_API_KEY = safeStorage.decryptString(fs.readFileSync(getSecretPath())); } catch (_) {}
       require(path.join(appRoot, 'dist', 'server.cjs'));
       const appUrl = `http://127.0.0.1:${process.env.HNL_PORT}`;

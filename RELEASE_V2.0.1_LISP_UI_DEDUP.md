@@ -1,4 +1,4 @@
-# RELEASE v2.0.4 — Lisp UI Deduplication
+# RELEASE v2.0.5 — Lisp UI Deduplication
 
 Bản này tập trung **sắp xếp lại**, không thêm nút tràn lan.
 

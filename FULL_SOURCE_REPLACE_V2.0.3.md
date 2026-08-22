@@ -1,4 +1,4 @@
-# HNL CAD AI v2.0.4 — FULL SOURCE REPLACE
+# HNL CAD AI v2.0.5 — FULL SOURCE REPLACE
 
 ## Mục đích
 Bộ này dùng để **chép đè toàn bộ source repo** thay vì vá từng file.
@@ -22,7 +22,7 @@ Bộ này dùng để **chép đè toàn bộ source repo** thay vì vá từng 
 4. Script giữ nguyên `.git` và chép đè source.
 5. Chạy:
    `git add .`
-   `git commit -m "Update HNL CAD AI v2.0.4 full source"`
+   `git commit -m "Update HNL CAD AI v2.0.5 full source"`
    `git push`
 
 GitHub Actions sẽ tự build lại.

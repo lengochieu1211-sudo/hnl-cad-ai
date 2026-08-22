@@ -1,4 +1,4 @@
-# HNL CAD AI v2.0.4 — Sơ đồ chức năng hiện hành
+# HNL CAD AI v2.0.5 — Sơ đồ chức năng hiện hành
 
 ## Ribbon
 Home → 2D Professional → SketchUp → Layout & Publish → AI & Legacy → Kỹ thuật.
@@ -26,5 +26,5 @@ Home → 2D Professional → SketchUp → Layout & Publish → AI & Legacy → K
 - AUTOCAD: yêu cầu AutoCAD Bridge.
 
 ## Tài liệu kiểm tra
-- `AUDIT_LISP_DEDUP_LAYOUT_V2.0.4.md`
+- `AUDIT_LISP_DEDUP_LAYOUT_V2.0.5.md`
 - `AUDIT_44_LISP_TO_HNL_V2.0.0.md` (audit nguồn ban đầu)

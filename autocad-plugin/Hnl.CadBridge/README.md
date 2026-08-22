@@ -1,4 +1,4 @@
-# HNL AutoCAD Bridge v2.0.4
+# HNL AutoCAD Bridge v2.0.5
 
 ## Mục tiêu
 Bridge chạy **bên trong AutoCAD**, kết nối HNL CAD AI EXE qua localhost pairing có token.
