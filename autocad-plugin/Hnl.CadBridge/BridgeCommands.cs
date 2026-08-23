@@ -20,7 +20,7 @@ namespace Hnl.CadBridge;
 
 public sealed class BridgeCommands : IExtensionApplication
 {
-    internal const string PluginVersion = "2.7.3";
+    internal const string PluginVersion = "2.7.5";
     private static readonly HttpClient Http = new HttpClient();
     private static readonly ConcurrentQueue<JObject> UiActions = new ConcurrentQueue<JObject>();
     private static Timer? _pollTimer;
@@ -102,6 +102,24 @@ public sealed class BridgeCommands : IExtensionApplication
     {
         Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
             $"\nHNL Palette visible: {NativePaletteCommands.IsPaletteVisible}");
+    }
+
+    [CommandMethod("HNLVERSION", CommandFlags.Session)]
+    public void HnlVersionCommand()
+    {
+        var asm = typeof(BridgeCommands).Assembly;
+        var loc = "";
+        try { loc = asm.Location; } catch { }
+        Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+            $"\nHNL CAD AI Plugin v{PluginVersion} | Assembly: {asm.GetName().Version} | Path: {loc}");
+    }
+
+    [CommandMethod("HNLRIBBONRESET", CommandFlags.Session)]
+    public void HnlRibbonResetCommand()
+    {
+        var ok = HnlNativeRibbon.Rebuild();
+        Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+            ok ? $"\nHNL Ribbon v{PluginVersion}: REBUILT." : $"\nHNL Ribbon v{PluginVersion}: rebuild failed.");
     }
 
     [CommandMethod("HNLRIBBON", CommandFlags.Session)]

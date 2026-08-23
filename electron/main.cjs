@@ -3,7 +3,8 @@ const { app, BrowserWindow, dialog, ipcMain, Menu, shell, safeStorage } = requir
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const net = require('net');
+const { spawn, execFileSync } = require('child_process');
 
 let mainWindow = null;
 let isRendererDirty = false;
@@ -82,6 +83,70 @@ function getAutoCadBundlePaths() {
   return { source, target };
 }
 
+function readBundleVersion(bundlePath) {
+  try {
+    const xml = fs.readFileSync(path.join(bundlePath, 'PackageContents.xml'), 'utf8');
+    return xml.match(/\bAppVersion="([^"]+)"/i)?.[1] || null;
+  } catch {
+    return null;
+  }
+}
+
+function isAutoCadRunning() {
+  if (process.platform !== 'win32') return false;
+  try {
+    const out = execFileSync('tasklist.exe', ['/FI', 'IMAGENAME eq acad.exe', '/NH'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 3000,
+    });
+    return /\bacad\.exe\b/i.test(out);
+  } catch {
+    return false;
+  }
+}
+
+function findLegacyHnlBundles() {
+  const roots = [
+    path.join(app.getPath('appData'), 'Autodesk', 'ApplicationPlugins'),
+    process.env.ProgramData ? path.join(process.env.ProgramData, 'Autodesk', 'ApplicationPlugins') : null,
+  ].filter(Boolean);
+  const canonical = path.resolve(getAutoCadBundlePaths().target).toLowerCase();
+  const hits = [];
+  for (const root of roots) {
+    let dirs = [];
+    try { dirs = fs.readdirSync(root, { withFileTypes: true }); } catch { continue; }
+    for (const ent of dirs) {
+      if (!ent.isDirectory()) continue;
+      const candidate = path.join(root, ent.name);
+      const pc = path.join(candidate, 'PackageContents.xml');
+      if (!fs.existsSync(pc)) continue;
+      let xml = '';
+      try { xml = fs.readFileSync(pc, 'utf8'); } catch { continue; }
+      if (!/HNL\s+CAD\s+AI|HNL\.CadBridge|HNL CAD AI Bridge/i.test(xml + ' ' + ent.name)) continue;
+      const resolved = path.resolve(candidate).toLowerCase();
+      if (resolved === canonical) continue;
+      hits.push({ path: candidate, version: readBundleVersion(candidate), writableRoot: resolved.startsWith(path.resolve(app.getPath('appData')).toLowerCase()) });
+    }
+  }
+  return hits;
+}
+
+function removeWritableLegacyHnlBundles() {
+  const removed = [];
+  const blocked = [];
+  for (const item of findLegacyHnlBundles()) {
+    if (!item.writableRoot) { blocked.push(item); continue; }
+    try {
+      fs.rmSync(item.path, { recursive: true, force: true });
+      removed.push(item);
+    } catch (error) {
+      blocked.push({ ...item, error: String(error?.message || error) });
+    }
+  }
+  return { removed, blocked };
+}
+
 function bundleHasDll(bundlePath) {
   try {
     for (const year of ['2023','2024','2025','2026']) {
@@ -94,13 +159,49 @@ function bundleHasDll(bundlePath) {
 function installOrRepairAutoCadBundle() {
   try {
     const { source, target } = getAutoCadBundlePaths();
+    const packagedVersion = readBundleVersion(source);
     if (!fs.existsSync(path.join(source, 'PackageContents.xml')) || !bundleHasDll(source)) {
-      return { success: false, reason: 'PLUGIN_BUNDLE_NOT_PACKAGED', source, target };
+      return { success: false, reason: 'PLUGIN_BUNDLE_NOT_PACKAGED', source, target, packagedVersion };
     }
+
+    const autoCadWasRunning = isAutoCadRunning();
+    const legacy = removeWritableLegacyHnlBundles();
+
     fs.mkdirSync(path.dirname(target), { recursive: true });
     if (fs.existsSync(target)) fs.rmSync(target, { recursive: true, force: true });
     fs.cpSync(source, target, { recursive: true });
-    return { success: true, source, target, installedDll: bundleHasDll(target) };
+
+    const installedVersion = readBundleVersion(target);
+    const versionMatch = Boolean(packagedVersion && installedVersion === packagedVersion);
+    const restartRequired = autoCadWasRunning;
+
+    try {
+      const markerDir = path.join(app.getPath('appData'), 'HNL CAD AI');
+      fs.mkdirSync(markerDir, { recursive: true });
+      fs.writeFileSync(path.join(markerDir, 'autocad-plugin-state.json'), JSON.stringify({
+        updatedAt: new Date().toISOString(),
+        packagedVersion,
+        installedVersion,
+        target,
+        restartRequired,
+        legacyRemoved: legacy.removed,
+        legacyBlocked: legacy.blocked,
+      }, null, 2), 'utf8');
+    } catch {}
+
+    return {
+      success: versionMatch && bundleHasDll(target),
+      source,
+      target,
+      installedDll: bundleHasDll(target),
+      packagedVersion,
+      installedVersion,
+      versionMatch,
+      restartRequired,
+      autoCadWasRunning,
+      legacyRemoved: legacy.removed,
+      legacyBlocked: legacy.blocked,
+    };
   } catch (error) {
     return { success: false, error: String(error?.message || error) };
   }
@@ -109,18 +210,57 @@ function installOrRepairAutoCadBundle() {
 function getAutoCadBundleStatus() {
   try {
     const { source, target } = getAutoCadBundlePaths();
+    const packagedVersion = readBundleVersion(source);
+    const installedVersion = readBundleVersion(target);
     return {
       source,
       target,
       packaged: fs.existsSync(path.join(source, 'PackageContents.xml')) && bundleHasDll(source),
       installed: fs.existsSync(path.join(target, 'PackageContents.xml')) && bundleHasDll(target),
+      packagedVersion,
+      installedVersion,
+      versionMatch: Boolean(packagedVersion && installedVersion === packagedVersion),
+      autoCadRunning: isAutoCadRunning(),
+      legacyBundles: findLegacyHnlBundles(),
     };
   } catch (error) {
     return { packaged: false, installed: false, error: String(error?.message || error) };
   }
 }
 
-function createWindow() {
+
+function canBindLocalPort(port) {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.unref();
+    probe.once('error', () => resolve(false));
+    probe.listen({ host: '127.0.0.1', port, exclusive: true }, () => {
+      probe.close(() => resolve(true));
+    });
+  });
+}
+
+async function findAvailableHnlPort(preferred = 32145, attempts = 40) {
+  const start = Number.isFinite(Number(preferred)) ? Math.max(1024, Number(preferred)) : 32145;
+  for (let offset = 0; offset < Math.max(1, attempts); offset++) {
+    const port = start + offset;
+    if (port > 65535) break;
+    if (await canBindLocalPort(port)) return port;
+  }
+
+  return await new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.unref();
+    probe.once('error', reject);
+    probe.listen({ host: '127.0.0.1', port: 0, exclusive: true }, () => {
+      const address = probe.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
+      probe.close(() => port ? resolve(port) : reject(new Error('Không tìm được cổng localhost trống cho HNL.')));
+    });
+  });
+}
+
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 920,
@@ -148,18 +288,30 @@ function createWindow() {
     mainWindow.loadURL(process.env.ELECTRON_START_URL);
   } else {
     process.env.NODE_ENV = 'production';
-    process.env.HNL_PORT = process.env.HNL_PORT || '32145';
+
+    const preferredPort = Number(process.env.HNL_PORT || '32145');
+    const resolvedPort = await findAvailableHnlPort(preferredPort, 40);
+    const portAdjusted = resolvedPort !== preferredPort;
+    process.env.HNL_PORT = String(resolvedPort);
+
     try {
       const bridgeDir = path.join(app.getPath('temp'), 'HNL_CAD_AI');
       fs.mkdirSync(bridgeDir, { recursive: true });
       fs.writeFileSync(path.join(bridgeDir, 'bridge.json'), JSON.stringify({
         host: '127.0.0.1',
-        port: Number(process.env.HNL_PORT),
+        port: resolvedPort,
+        preferredPort,
+        portAdjusted,
         token: process.env.HNL_API_TOKEN,
         pid: process.pid,
-        version: app.getVersion()
+        version: app.getVersion(),
+        updatedAt: new Date().toISOString()
       }, null, 2), 'utf-8');
     } catch (_) {}
+
+    if (portAdjusted) {
+      console.warn(`[HNL] Port ${preferredPort} đang bận. Tự chuyển sang 127.0.0.1:${resolvedPort}.`);
+    }
     try {
       const appRoot = app.getAppPath();
       // Packaged Electron returns resources/app.asar here. app.asar is a file-backed
@@ -1066,7 +1218,7 @@ ipcMain.handle('get-app-version', () => {
 });
 
 // App Lifecycle
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Publish the actual EXE path so the AutoCAD palette can reopen HNL even if the user chose a custom install folder.
   try {
     const markerDir = path.join(app.getPath('appData'), 'HNL CAD AI');
@@ -1074,11 +1226,26 @@ app.whenReady().then(() => {
     fs.writeFileSync(path.join(markerDir, 'manager-path.txt'), process.execPath, 'utf-8');
   } catch (_) {}
   // Per-user Autodesk ApplicationPlugins autoload: no NETLOAD required.
-  installOrRepairAutoCadBundle();
-  createWindow();
+  const pluginInstallResult = installOrRepairAutoCadBundle();
+  await createWindow();
+
+  if (pluginInstallResult?.restartRequired || pluginInstallResult?.legacyBlocked?.length) {
+    setTimeout(() => {
+      const details = [];
+      if (pluginInstallResult.restartRequired) details.push('AutoCAD đang mở và vẫn giữ DLL/menu HNL cũ trong bộ nhớ. BẮT BUỘC đóng TOÀN BỘ AutoCAD rồi mở lại.');
+      if (pluginInstallResult.legacyRemoved?.length) details.push(`Đã tự xóa ${pluginInstallResult.legacyRemoved.length} bundle HNL cũ trong AppData.`);
+      if (pluginInstallResult.legacyBlocked?.length) details.push(`Phát hiện ${pluginInstallResult.legacyBlocked.length} bundle HNL khác trong ProgramData/đường dẫn cần quyền Admin.`);
+      dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: 'HNL AutoCAD Plugin cần khởi động lại',
+        message: `HNL plugin ${pluginInstallResult.installedVersion || app.getVersion()} đã cập nhật.`,
+        detail: details.join('\n\n'),
+      }).catch(() => {});
+    }, 700);
+  }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) void createWindow();
   });
 });
 

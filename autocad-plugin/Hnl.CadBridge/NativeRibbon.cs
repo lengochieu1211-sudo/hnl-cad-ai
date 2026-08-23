@@ -28,13 +28,17 @@ internal static class HnlNativeRibbon
             var tabs = ribbon.GetType().GetProperty("Tabs")?.GetValue(ribbon);
             if (tabs == null) return false;
 
+            // Never trust a pre-existing HNL tab. It can be left by an older HNL DLL
+            // loaded earlier in the same AutoCAD session or by a duplicate legacy bundle.
+            // Remove it and rebuild the current UI definition.
+            var staleTabs = new System.Collections.Generic.List<object>();
             foreach (var existing in (IEnumerable)tabs)
             {
                 var id = Convert.ToString(existing?.GetType().GetProperty("Id")?.GetValue(existing));
-                if (!string.Equals(id, TabId, StringComparison.Ordinal)) continue;
-                _installed = true;
-                return true;
+                if (string.Equals(id, TabId, StringComparison.Ordinal) && existing != null)
+                    staleTabs.Add(existing);
             }
+            foreach (var stale in staleTabs) TryRemoveCollection(tabs, stale);
 
             var tab = NewRibbon("RibbonTab");
             Set(tab, "Title", "HNL");
@@ -93,6 +97,30 @@ internal static class HnlNativeRibbon
             TryInstallClassicMenu();
             return false;
         }
+    }
+
+    public static bool Rebuild()
+    {
+        try
+        {
+            _installed = false;
+            var componentManager = Type.GetType("Autodesk.Windows.ComponentManager, AdWindows");
+            var ribbon = componentManager?.GetProperty("Ribbon", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var tabs = ribbon?.GetType().GetProperty("Tabs")?.GetValue(ribbon);
+            if (tabs != null)
+            {
+                var staleTabs = new System.Collections.Generic.List<object>();
+                foreach (var existing in (IEnumerable)tabs)
+                {
+                    var id = Convert.ToString(existing?.GetType().GetProperty("Id")?.GetValue(existing));
+                    if (string.Equals(id, TabId, StringComparison.Ordinal) && existing != null)
+                        staleTabs.Add(existing);
+                }
+                foreach (var stale in staleTabs) TryRemoveCollection(tabs, stale);
+            }
+        }
+        catch { }
+        return TryInstall();
     }
 
     public static bool Activate()
@@ -276,6 +304,24 @@ internal static class HnlNativeRibbon
             if(!ps[0].ParameterType.IsAssignableFrom(item.GetType())) continue;
             method.Invoke(collection,new[]{item}); return;
         }
+    }
+
+    private static bool TryRemoveCollection(object collection, object item)
+    {
+        try
+        {
+            foreach (var method in collection.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (method.Name != "Remove") continue;
+                var ps = method.GetParameters();
+                if (ps.Length != 1) continue;
+                if (!ps[0].ParameterType.IsAssignableFrom(item.GetType())) continue;
+                method.Invoke(collection, new[] { item });
+                return true;
+            }
+        }
+        catch { }
+        return false;
     }
 
     private static void TryInstallClassicMenu()

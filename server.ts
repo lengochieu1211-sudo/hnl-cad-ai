@@ -1081,8 +1081,16 @@ Trả JSON array: [{"tag":"...","layer":"...","color":"#RRGGBB","lineweight":0.1
   }
 });
 
-app.listen(PORT, "127.0.0.1", () => {
+const server = app.listen(PORT, "127.0.0.1", () => {
     console.log(`HNL CAD AI TOOL Server listening on port ${PORT}`);
+  });
+
+  server.on("error", (err: any) => {
+    if (err?.code === "EADDRINUSE") {
+      console.error(`[HNL] Port ${PORT} is already in use. Electron should select another free port before starting the server.`);
+      return;
+    }
+    console.error("[HNL] Local server error:", err);
   });
 }
 

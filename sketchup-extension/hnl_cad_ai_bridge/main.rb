@@ -5,7 +5,7 @@ require 'time'
 module HNL
   module CadAIBridge
     DICT = 'HNL_CAD_AI'
-    VERSION = '2.7.3'
+    VERSION = '2.7.5'
     MM_PER_INCH = 25.4
 
     def self.mm_point(pt)

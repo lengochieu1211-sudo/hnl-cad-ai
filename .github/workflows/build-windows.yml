@@ -30,6 +30,21 @@ jobs:
         run: |
           node --version
           npm --version
+      - name: Verify current HNL AutoCAD Ribbon source
+        shell: pwsh
+        run: |
+          $ribbon = Get-Content "autocad-plugin/Hnl.CadBridge/NativeRibbon.cs" -Raw
+          $bridge = Get-Content "autocad-plugin/Hnl.CadBridge/BridgeCommands.cs" -Raw
+          foreach ($token in @("AI Copilot","Field Doctor","Quick Dim","Data / BOQ","Layout+","HNLLIBRARY")) {
+            if (-not $ribbon.Contains($token)) { throw "NativeRibbon missing current UI token: $token" }
+          }
+          foreach ($legacy in @("AI Settings","Selection","Polyline","Data / Field","Properties","Plot Publish")) {
+            if ($ribbon.Contains("new ButtonSpec(`"$legacy`"")) { throw "Legacy Ribbon button still present: $legacy" }
+          }
+          if (-not $bridge.Contains('CommandMethod("HNLVERSION"')) { throw "Missing HNLVERSION command" }
+          if (-not $bridge.Contains('CommandMethod("HNLRIBBONRESET"')) { throw "Missing HNLRIBBONRESET command" }
+          Write-Host "HNL Ribbon source PASS"
+
       - name: Build AutoCAD plugins 2023-2026
         shell: pwsh
         run: |
