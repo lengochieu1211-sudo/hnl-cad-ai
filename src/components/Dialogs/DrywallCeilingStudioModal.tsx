@@ -39,6 +39,13 @@ import {
   lookupFireRatedAssembly,
 } from "../../lib/shopdrawingKnowledgeBase";
 import { CadEntity } from "../../types/cad";
+import {
+  HNL_BOARD_MODULE_RULES,
+  MANUFACTURER_CEILING_BRANDS,
+  MANUFACTURER_CEILING_KNOWLEDGE,
+  getManufacturerCeilingAiContext,
+} from "../../lib/manufacturerCeilingKnowledge";
+import { getSmartShopdrawingAiContext } from "../../lib/smartShopdrawingPlatform";
 
 type DrywallStudioTab =
   | "SYSTEM_BUILDER"
@@ -46,6 +53,7 @@ type DrywallStudioTab =
   | "CEILING_GRID_AI"
   | "DETAIL_ENGINE"
   | "SHOPDRAWING_AUDIT"
+  | "MANUFACTURER_KB"
   | "MULTI_PROVIDER_AI";
 
 interface DrywallCeilingStudioModalProps {
@@ -70,7 +78,7 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
   const [activeTab, setActiveTab] = useState<DrywallStudioTab>(initialTab);
 
   // Multi-Provider AI State
-  const [aiProvider, setAiProvider] = useState<"GEMINI" | "OPENAI" | "CLAUDE" | "OFFLINE_RULE">("GEMINI");
+  const [aiProvider, setAiProvider] = useState<"GEMINI" | "OPENAI" | "CLAUDE" | "GROK" | "OLLAMA" | "OFFLINE">("GEMINI");
   const [multiAiPrompt, setMultiAiPrompt] = useState("");
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [aiAnalysisResult, setAiAnalysisResult] = useState<any>(null);
@@ -91,7 +99,7 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
   // Ceiling System State
   const [ceilingSystem, setCeilingSystem] = useState<string>("C-CHIM-01");
   const [ceilingMainSpacing, setCeilingMainSpacing] = useState<number>(800);
-  const [ceilingCrossSpacing, setCeilingCrossSpacing] = useState<number>(400);
+  const [ceilingCrossSpacing, setCeilingCrossSpacing] = useState<number>(1220 / 3);
   const [ceilingHangerSpacing, setCeilingHangerSpacing] = useState<number>(900);
   const [ceilingRotationDeg, setCeilingRotationDeg] = useState<number>(0);
   const [ceilingLevelElevation, setCeilingLevelElevation] = useState<number>(2800);
@@ -107,6 +115,8 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
   // Search in Assemblies
   const [searchAssemblyQuery, setSearchAssemblyQuery] = useState("");
   const [selectedEiFilter, setSelectedEiFilter] = useState<string>("ALL");
+  const [manufacturerBrandFilter, setManufacturerBrandFilter] = useState<string>("ALL");
+  const [manufacturerQuery, setManufacturerQuery] = useState("");
 
   useEffect(() => {
     if (isOpen) setActiveTab(initialTab);
@@ -116,7 +126,7 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
     const spec = CEILING_SYSTEMS_KNOWLEDGE.find((c) => c.systemId === ceilingSystem);
     if (!spec) return;
     setCeilingMainSpacing(spec.mainRunnerSpacingMm || 800);
-    setCeilingCrossSpacing(spec.crossRunnerSpacingMm || 400);
+    setCeilingCrossSpacing(spec.crossRunnerSpacingMm || (1220 / 3));
     setCeilingHangerSpacing(spec.hangerSpacingMm || 900);
     setCeilingWallOffset(spec.wallAngleOffsetMm || 20);
     if (spec.type === "GRID_EXPOSED_600x600") {
@@ -128,6 +138,19 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
       setCeilingPanelHeight(2440);
     }
   }, [ceilingSystem]);
+
+  const filteredManufacturerCeilings = MANUFACTURER_CEILING_KNOWLEDGE.filter((item) => {
+    const byBrand = manufacturerBrandFilter === "ALL" || item.brand === manufacturerBrandFilter;
+    const q = manufacturerQuery.trim().toLowerCase();
+    const byQuery = !q || [
+      item.manufacturer,
+      item.systemName,
+      item.id,
+      ...(item.applications || []),
+      ...item.profiles.map((p) => p.name),
+    ].join(" ").toLowerCase().includes(q);
+    return byBrand && byQuery;
+  });
 
   if (!isOpen) return null;
 
@@ -202,7 +225,9 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
     setIsAiProcessing(true);
 
     try {
-      const res = await fetch("/api/gemini/plan", {
+      let approvedMaterials:any[] = [];
+      try { approvedMaterials = JSON.parse(localStorage.getItem("hnl.approvedMaterials.v1") || "[]"); } catch {}
+      const res = await fetch("/api/ai/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(((window as any).electronNative?.sessionToken) ? { "x-hnl-token": (window as any).electronNative.sessionToken } : {}) },
         body: JSON.stringify({
@@ -215,6 +240,9 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
             hasDoor: hasDoorOpening,
             hasDeflection: hasDeflectionReq,
             hasMep: hasMepPenetration,
+            manufacturerCeilingKnowledge: getManufacturerCeilingAiContext(),
+            hnlBoardModuleRules: HNL_BOARD_MODULE_RULES,
+            smartShopdrawingKnowledge: getSmartShopdrawingAiContext(approvedMaterials),
           },
         }),
       });
@@ -262,9 +290,12 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
                 onChange={(e) => setAiProvider(e.target.value as any)}
                 className="bg-neutral-800 text-cyan-300 text-xs font-bold rounded px-1.5 py-0.5 border border-neutral-600 focus:outline-none"
               >
-                <option value="GEMINI">Google Gemini 3.7 Pro CAD</option>
+                <option value="GEMINI">Google Gemini</option>
                 <option value="OPENAI">ChatGPT / GPT-4o Engineering</option>
-                <option value="CLAUDE">Claude 3.5 Sonnet Spec Analyst</option>
+                <option value="CLAUDE">Claude / Anthropic</option>
+                <option value="GROK">Grok / xAI</option>
+                <option value="OLLAMA">Ollama Local</option>
+                <option value="OFFLINE">HNL Offline Rules</option>
                 <option value="OFFLINE_RULE">Offline Deterministic Rules (HNL Standard)</option>
               </select>
             </div>
@@ -338,6 +369,18 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
           >
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
             <span>5. AI Shopdrawing Audit (Kiểm Tra Xung Đột)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("MANUFACTURER_KB")}
+            className={`flex items-center space-x-2 py-3 px-4 text-xs font-semibold border-b-2 transition whitespace-nowrap ${
+              activeTab === "MANUFACTURER_KB"
+                ? "border-emerald-500 text-emerald-400 bg-emerald-500/10"
+                : "border-transparent text-neutral-400 hover:text-neutral-200"
+            }`}
+          >
+            <Database className="w-4 h-4 text-emerald-400" />
+            <span>6. Hãng / Catalog Verified</span>
           </button>
 
           <button
@@ -722,9 +765,10 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
                   </div>
                   <div>
                     <label className="text-[10px] text-neutral-400 block mb-1">Xương phụ @</label>
-                    <input type="number" min={100} step={50} value={ceilingCrossSpacing}
+                    <input type="number" min={100} step={0.01} value={ceilingCrossSpacing}
                       onChange={(e) => setCeilingCrossSpacing(Math.max(100, Number(e.target.value) || 100))}
                       className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-xs font-mono" />
+                    <div className="text-[9px] text-cyan-400 mt-1">Module HNL: 1220/3 = {(1220 / 3).toFixed(2)}mm</div>
                   </div>
                   <div>
                     <label className="text-[10px] text-neutral-400 block mb-1">Ty treo @</label>
@@ -1078,6 +1122,116 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
           )}
 
           {/* TAB 6: MULTI PROVIDER AI CHAT */}
+          {activeTab === "MANUFACTURER_KB" && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4">
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="text-sm font-bold text-emerald-300">Manufacturer Ceiling Knowledge — có phân cấp nguồn</div>
+                    <p className="text-[11px] text-neutral-400 mt-1">
+                      HNL giữ nguyên số hãng công bố, không tự trộn hệ/revision. Quy tắc 1220/3 = 406.67mm được ghi riêng là HNL Project Rule.
+                    </p>
+                    <div className="mt-2 text-[10px] text-amber-300">
+                      Approved Material/Submittal của dự án luôn ưu tiên cao hơn dữ liệu website/catalog chung.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid lg:grid-cols-[1fr_280px] gap-3">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {MANUFACTURER_CEILING_BRANDS.map((b) => (
+                      <button key={b.id} onClick={() => setManufacturerBrandFilter(b.id)}
+                        className={`px-2.5 py-1.5 rounded border text-[10px] font-semibold ${
+                          manufacturerBrandFilter === b.id
+                            ? "bg-cyan-500/15 border-cyan-500 text-cyan-300"
+                            : "bg-neutral-900 border-neutral-700 text-neutral-400 hover:text-white"
+                        }`}>
+                        {b.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-neutral-500" />
+                    <input value={manufacturerQuery} onChange={(e) => setManufacturerQuery(e.target.value)}
+                      placeholder="Tìm Knauf Pro, TIKA, MacroTEK, Para 5..."
+                      className="w-full bg-neutral-950 border border-neutral-700 rounded-lg pl-8 pr-3 py-2 text-xs" />
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-cyan-950/20 border border-cyan-500/30 p-3">
+                  <div className="text-[10px] font-bold text-cyan-300">HNL MODULE RULE</div>
+                  <div className="mt-1 font-mono text-sm text-white">1220 / 3 = {(1220 / 3).toFixed(2)} mm</div>
+                  <div className="text-[10px] text-neutral-400 mt-1">Trần chìm 1220×2440: xương phụ theo module tấm.</div>
+                  <div className="mt-2 font-mono text-[10px] text-neutral-300">
+                    Vách: 1220/3 = {(1220 / 3).toFixed(2)} • 1220/2 = {(1220 / 2).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-3">
+                {filteredManufacturerCeilings.map((item) => (
+                  <div key={item.id} className="rounded-xl border border-neutral-700 bg-[#18191C] p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-[10px] font-bold text-cyan-400">{item.manufacturer}</div>
+                        <div className="text-sm font-semibold text-white">{item.systemName}</div>
+                        <div className="text-[9px] text-neutral-500 font-mono mt-0.5">{item.id}</div>
+                      </div>
+                      <span className={`shrink-0 px-2 py-1 rounded text-[9px] border ${
+                        item.spacing?.status === "PUBLISHED"
+                          ? "border-emerald-700 bg-emerald-950/30 text-emerald-300"
+                          : item.spacing?.status === "PARTIAL"
+                            ? "border-amber-700 bg-amber-950/30 text-amber-300"
+                            : "border-neutral-700 bg-neutral-900 text-neutral-400"
+                      }`}>
+                        {item.spacing?.status || "REFERENCE"}
+                      </span>
+                    </div>
+
+                    {item.spacing && (
+                      <div className="grid grid-cols-3 gap-1 text-[10px] font-mono">
+                        <div className="bg-neutral-900 rounded p-1.5">MAIN<br/><b className="text-cyan-300">{item.spacing.mainMm ?? item.spacing.mainMaxMm ?? "—"}</b>{item.spacing.mainMaxMm ? " max" : ""}</div>
+                        <div className="bg-neutral-900 rounded p-1.5">CROSS<br/><b className="text-cyan-300">{item.spacing.crossMm ?? item.spacing.crossMaxMm ?? "—"}</b>{item.spacing.crossMaxMm ? " max" : ""}</div>
+                        <div className="bg-neutral-900 rounded p-1.5">HANGER<br/><b className="text-cyan-300">{item.spacing.hangerMm ?? item.spacing.hangerMaxMm ?? "—"}</b>{item.spacing.hangerMaxMm ? " max" : ""}</div>
+                      </div>
+                    )}
+
+                    {item.profiles.length > 0 && (
+                      <div className="text-[10px] text-neutral-300">
+                        <span className="text-neutral-500">Profile: </span>
+                        {item.profiles.slice(0, 4).map((p) => `${p.name}${p.widthMm && p.heightMm ? ` ${p.widthMm}x${p.heightMm}` : ""}${p.thicknessMm ? `x${p.thicknessMm}` : ""}`).join(" • ")}
+                      </div>
+                    )}
+
+                    {item.spacing?.notes && <div className="text-[10px] text-neutral-400">{item.spacing.notes}</div>}
+
+                    {item.warnings?.map((w, i) => (
+                      <div key={i} className="flex items-start gap-1.5 text-[10px] text-amber-300">
+                        <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /><span>{w}</span>
+                      </div>
+                    ))}
+
+                    <div className="pt-1 border-t border-neutral-800 space-y-1">
+                      {item.sources.map((src, i) => (
+                        <div key={i} className="text-[9px] text-neutral-500 flex items-start gap-1">
+                          <FileText className="w-3 h-3 shrink-0 mt-0.5" />
+                          <span>{src.title} • {src.confidence}{src.publishedOrRevision ? ` • ${src.publishedOrRevision}` : ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {filteredManufacturerCeilings.length === 0 && (
+                <div className="py-10 text-center text-neutral-500 text-xs">Không có hệ phù hợp bộ lọc.</div>
+              )}
+            </div>
+          )}
+
           {activeTab === "MULTI_PROVIDER_AI" && (
             <div className="space-y-4 max-w-4xl mx-auto">
               <div className="p-4 rounded-xl bg-neutral-950 border border-neutral-800 space-y-3">

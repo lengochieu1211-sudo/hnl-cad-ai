@@ -30,6 +30,8 @@ import {
   DrawingAuditIssue,
   AICommandPlan,
 } from "../../types/cad";
+import { getManufacturerCeilingAiContext } from "../../lib/manufacturerCeilingKnowledge";
+import { getSmartShopdrawingAiContext } from "../../lib/smartShopdrawingPlatform";
 
 interface HnlPaletteProps {
   isOpen: boolean;
@@ -93,6 +95,7 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
 
   const [searchBlockQuery, setSearchBlockQuery] = useState("");
   const [selectedBlockCategory, setSelectedBlockCategory] = useState<string>("All");
+  const [showAiQuickTools, setShowAiQuickTools] = useState(false);
 
   useEffect(() => {
     if (!isOpen || activeTab !== "AI_CHAT") return;
@@ -142,6 +145,8 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
     setIsAiLoading(true);
 
     // Build CAD Context
+    let approvedMaterials:any[] = [];
+    try { approvedMaterials = JSON.parse(localStorage.getItem("hnl.approvedMaterials.v1") || "[]"); } catch {}
     const cadContext = {
       totalEntities: entities.length,
       selectionCount: selectedEntities.length,
@@ -149,10 +154,12 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
       wallCount: entities.filter((e) => e.type === "WALL").length,
       lightCount: entities.filter((e) => e.type === "BLOCK_REF" && (e as any).blockName?.includes("DEN")).length,
       activeUnits: "mm",
+      ceilingManufacturerKnowledge: getManufacturerCeilingAiContext(),
+      smartShopdrawingKnowledge: getSmartShopdrawingAiContext(approvedMaterials),
     };
 
     try {
-      const res = await fetch("/api/gemini/plan", {
+      const res = await fetch("/api/ai/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(((window as any).electronNative?.sessionToken) ? { "x-hnl-token": (window as any).electronNative.sessionToken } : {}) },
         body: JSON.stringify({ prompt: userText, cadContext }),
@@ -167,7 +174,7 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
         {
           id: `ai_${Date.now()}`,
           sender: "ai",
-          text: plan.explanation || `Đã phân tích yêu cầu: ${plan.intent || userText}`,
+          text: `${data?.provider ? `[${data.provider}${data.model ? ` • ${data.model}` : ""}] ` : ""}${plan.explanation || `Đã phân tích yêu cầu: ${plan.intent || userText}`}${Array.isArray((plan as any).sourceRefs) && (plan as any).sourceRefs.length ? `\nNguồn: ${(plan as any).sourceRefs.map((src:any)=>`${src.title || src.type}${src.revision ? ` (${src.revision})` : ""}`).join(" • ")}` : ""}${(plan as any).certainty ? `\nMức xác minh: ${(plan as any).certainty}` : ""}`,
           plan,
           timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
         },
@@ -238,103 +245,64 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
         </div>
       </div>
 
-      {/* Palette Tab Bar */}
-      <div className="flex items-center bg-[#1E1F22] border-b border-neutral-800 text-[11px] font-medium overflow-x-auto scrollbar-none px-1">
-        <button
-          onClick={() => setActiveTab("AI_CHAT")}
-          className={`px-3 py-2 border-b-2 whitespace-nowrap transition flex items-center space-x-1.5 ${
-            activeTab === "AI_CHAT"
-              ? "border-cyan-400 text-cyan-400 bg-[#25272C]"
-              : "border-transparent text-neutral-400 hover:text-neutral-200"
-          }`}
-        >
-          <Bot className="w-3.5 h-3.5" />
-          <span>AI Chat</span>
-        </button>
-        <button
-          onClick={() => setActiveTab("PRESETS")}
-          className={`px-3 py-2 border-b-2 whitespace-nowrap transition flex items-center space-x-1.5 ${
-            activeTab === "PRESETS"
-              ? "border-cyan-400 text-cyan-400 bg-[#25272C]"
-              : "border-transparent text-neutral-400 hover:text-neutral-200"
-          }`}
-        >
-          <Square className="w-3.5 h-3.5" />
-          <span>Vẽ Nhanh</span>
-        </button>
-        <button
-          onClick={() => setActiveTab("BLOCKS")}
-          className={`px-3 py-2 border-b-2 whitespace-nowrap transition flex items-center space-x-1.5 ${
-            activeTab === "BLOCKS"
-              ? "border-cyan-400 text-cyan-400 bg-[#25272C]"
-              : "border-transparent text-neutral-400 hover:text-neutral-200"
-          }`}
-        >
-          <Box className="w-3.5 h-3.5" />
-          <span>Block</span>
-        </button>
-        <button
-          onClick={() => setActiveTab("LISP")}
-          className={`px-3 py-2 border-b-2 whitespace-nowrap transition flex items-center space-x-1.5 ${
-            activeTab === "LISP"
-              ? "border-cyan-400 text-cyan-400 bg-[#25272C]"
-              : "border-transparent text-neutral-400 hover:text-neutral-200"
-          }`}
-        >
-          <Code2 className="w-3.5 h-3.5" />
-          <span>Lisp</span>
-        </button>
-        <button
-          onClick={() => setActiveTab("TRANSLATE")}
-          className={`px-3 py-2 border-b-2 whitespace-nowrap transition flex items-center space-x-1.5 ${
-            activeTab === "TRANSLATE"
-              ? "border-cyan-400 text-cyan-400 bg-[#25272C]"
-              : "border-transparent text-neutral-400 hover:text-neutral-200"
-          }`}
-        >
-          <Languages className="w-3.5 h-3.5" />
-          <span>Dịch</span>
-        </button>
-        <button
-          onClick={() => setActiveTab("AUDIT")}
-          className={`px-3 py-2 border-b-2 whitespace-nowrap transition flex items-center space-x-1.5 ${
-            activeTab === "AUDIT"
-              ? "border-amber-400 text-amber-400 bg-[#25272C]"
-              : "border-transparent text-neutral-400 hover:text-neutral-200"
-          }`}
-        >
-          <AlertTriangle className="w-3.5 h-3.5" />
-          <span>Audit ({auditIssues.length})</span>
-        </button>
+      {/* Palette Tab Bar — 2 rows x 3 columns to avoid horizontal clipping at 280-340px */}
+      <div className="grid grid-cols-3 gap-px bg-neutral-800 border-b border-neutral-800 text-[10px] font-medium p-px">
+        {([
+          ["AI_CHAT", "AI", <Bot className="w-3.5 h-3.5" />],
+          ["PRESETS", "Vẽ nhanh", <Square className="w-3.5 h-3.5" />],
+          ["BLOCKS", "Block", <Box className="w-3.5 h-3.5" />],
+          ["LISP", "Lisp", <Code2 className="w-3.5 h-3.5" />],
+          ["TRANSLATE", "Dịch", <Languages className="w-3.5 h-3.5" />],
+          ["AUDIT", `Audit ${auditIssues.length}`, <AlertTriangle className="w-3.5 h-3.5" />],
+        ] as const).map(([id, label, icon]) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`min-w-0 px-1.5 py-1.5 flex items-center justify-center gap-1 transition ${
+              activeTab === id
+                ? id === "AUDIT"
+                  ? "bg-[#25272C] text-amber-300"
+                  : "bg-[#25272C] text-cyan-300"
+                : "bg-[#1E1F22] text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"
+            }`}
+            title={label}
+          >
+            {icon}
+            <span className="truncate">{label}</span>
+          </button>
+        ))}
       </div>
 
       {/* Tab Content Area */}
-      <div className="flex-1 overflow-y-auto p-3 text-xs">
+      <div className={`flex-1 min-h-0 p-3 text-xs ${activeTab === "AI_CHAT" ? "overflow-hidden" : "overflow-y-auto"}`}>
         {/* TAB 1: AI CAD ASSISTANT CHAT */}
         {activeTab === "AI_CHAT" && (
           <div className="flex flex-col h-full min-h-0 space-y-3">
             {/* Live CAD Context Inspector Badge */}
-            <div className="bg-[#25272C] p-2.5 rounded-lg border border-neutral-700/60 text-[11px] flex flex-col space-y-1.5">
-              <div className="flex items-center justify-between text-neutral-400 font-semibold">
-                <span className="flex items-center space-x-1 text-cyan-400">
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>CAD CONTEXT ENGINE</span>
-                </span>
-                <span className="text-[10px] text-emerald-400">Đang đồng bộ</span>
+            <div className="shrink-0 bg-[#25272C] px-2.5 py-2 rounded-lg border border-neutral-700/60 text-[10px] flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1 text-cyan-400 font-semibold shrink-0">
+                <Layers className="w-3.5 h-3.5" />
+                CAD
+              </span>
+              <div className="min-w-0 flex-1 flex items-center justify-end gap-2 text-neutral-300 font-mono">
+                <span>Chọn <b className="text-cyan-400">{selectedEntities.length}</b></span>
+                <span>Tường <b>{entities.filter((e) => e.type === "WALL").length}</b></span>
+                <span>Block <b>{entities.filter((e) => e.type === "BLOCK_REF").length}</b></span>
               </div>
-              <div className="grid grid-cols-3 gap-1 text-neutral-300 font-mono text-[10px]">
-                <div className="bg-neutral-800/80 p-1 rounded">
-                  Đang chọn: <strong className="text-cyan-400">{selectedEntities.length}</strong>
-                </div>
-                <div className="bg-neutral-800/80 p-1 rounded">
-                  Tường: <strong>{entities.filter((e) => e.type === "WALL").length}</strong>
-                </div>
-                <div className="bg-neutral-800/80 p-1 rounded">
-                  Đèn: <strong>{entities.filter((e) => e.type === "BLOCK_REF").length}</strong>
-                </div>
-              </div>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="CAD Context đang đồng bộ" />
             </div>
 
+            <button
+              type="button"
+              onClick={() => setShowAiQuickTools((v) => !v)}
+              className="shrink-0 w-full flex items-center justify-between px-2.5 py-1.5 rounded bg-neutral-900/70 border border-neutral-800 text-[10px] text-neutral-400 hover:text-neutral-200"
+            >
+              <span>Công cụ nhanh & gợi ý</span>
+              <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showAiQuickTools ? "rotate-90" : ""}`} />
+            </button>
+
+            {showAiQuickTools && (
+              <div className="shrink-0 max-h-[210px] overflow-y-auto space-y-2 pr-1">
             {/* AI Auto Detail & Layout Composer Quick Launcher */}
             {onOpenAutoDetailComposer && (
               <div
@@ -374,22 +342,25 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
             )}
 
             {/* Quick Prompt Chips */}
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-1">
               {quickPrompts.slice(0, 3).map((prompt, idx) => (
                 <button
                   key={idx}
                   onClick={() => {
                     setChatInput(prompt);
                   }}
-                  className="px-2 py-1 rounded-full bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] border border-neutral-700/80 transition text-left"
+                  className="shrink-0 whitespace-nowrap px-2 py-1 rounded-full bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] border border-neutral-700/80 transition"
                 >
                   ✨ {prompt}
                 </button>
               ))}
             </div>
 
+              </div>
+            )}
+
             {/* Messages Stream */}
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
+            <div className="flex-1 min-h-[72px] overflow-y-auto space-y-3 pr-1 overscroll-contain">
               {messages.map((msg) => (
                 <div
                   key={msg.id}
@@ -462,7 +433,7 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
               onSubmit={handleSendMessage}
               onPointerDown={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
-              className="mt-auto shrink-0 flex items-end space-x-1.5 border-t border-neutral-800 pt-2 bg-[#1E1F22]"
+              className="sticky bottom-0 z-20 mt-auto shrink-0 flex items-end space-x-1.5 border-t border-neutral-800 pt-2 bg-[#1E1F22]"
             >
               <textarea
                 ref={aiInputRef}

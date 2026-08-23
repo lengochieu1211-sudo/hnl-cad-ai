@@ -162,18 +162,19 @@ export const HnlRibbon: React.FC<HnlRibbonProps> = ({
   return (
     <div className="w-full bg-[#1E1F22] border-b border-neutral-800 text-neutral-200 select-none shadow-md flex flex-col">
       {/* Top Application Bar with Brand, Undo/Redo, Quick Search & AI Trigger */}
-      <div className="min-h-10 px-2 xl:px-4 bg-[#141517] border-b border-neutral-800 flex items-center gap-2 justify-between text-xs overflow-x-auto scrollbar-none">
-        <div className="flex items-center space-x-3 shrink-0">
+      <div className="min-h-10 px-2 bg-[#141517] border-b border-neutral-800 flex items-center gap-2 text-xs overflow-hidden">
+        <div className="flex items-center gap-2 shrink-0 min-w-0">
           <div className="flex items-center space-x-2">
             <HnlLogo size="sm" showSubtitle={false} />
-            <div className="hidden lg:flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#202226] border border-neutral-800 max-w-[260px]" title={documentName}>
+            <div className="hidden 2xl:flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#202226] border border-neutral-800 max-w-[230px]" title={documentName}>
               <Save className={`w-3.5 h-3.5 ${isDirty ? "text-amber-400" : "text-emerald-400"}`} />
               <span className="truncate text-[11px] text-neutral-300">{documentName || "Untitled.hnl.json"}</span>
               {isDirty && <span className="text-amber-400 text-[10px] font-bold">●</span>}
             </div>
-            <button onClick={() => onExecuteCommand("AUTOCAD_BRIDGE_STATUS")} className={`px-1.5 py-0.5 rounded text-[10px] border font-mono flex items-center gap-1 ${connectionStatus?.connected ? "bg-emerald-950/40 border-emerald-700 text-emerald-300" : "bg-neutral-800 border-neutral-700 text-neutral-400"}`} title="Trạng thái AutoCAD Bridge">
-              <Link2 className="w-3 h-3" />
-              {connectionStatus?.connected ? `AutoCAD ${connectionStatus.version || ""} • ${connectionStatus.drawingName || "Connected"}` : "Standalone Workspace • AutoCAD plugin chưa kết nối"}
+            <button onClick={() => onExecuteCommand("AUTOCAD_BRIDGE_STATUS")} className={`px-1.5 py-1 rounded text-[10px] border font-mono flex items-center gap-1 max-w-[230px] ${connectionStatus?.connected ? "bg-emerald-950/40 border-emerald-700 text-emerald-300" : "bg-neutral-800 border-neutral-700 text-neutral-400"}`} title={connectionStatus?.connected ? `AutoCAD ${connectionStatus.version || ""} • ${connectionStatus.drawingName || "Connected"}` : "Standalone Workspace • AutoCAD plugin chưa kết nối"}>
+              <Link2 className="w-3 h-3 shrink-0" />
+              <span className="2xl:hidden">{connectionStatus?.connected ? `CAD ${connectionStatus.version || ""}` : "CAD OFF"}</span>
+              <span className="hidden 2xl:inline truncate">{connectionStatus?.connected ? `AutoCAD ${connectionStatus.version || ""} • ${connectionStatus.drawingName || "Connected"}` : "Standalone • AutoCAD offline"}</span>
             </button>
           </div>
 
@@ -207,13 +208,14 @@ export const HnlRibbon: React.FC<HnlRibbonProps> = ({
         {/* Global Command Center Search Bar (Ctrl + Space) */}
         <button
           onClick={onOpenCommandCenter}
-          className="flex items-center space-x-2 bg-[#1E1F22] hover:bg-[#25272C] text-neutral-400 hover:text-neutral-200 px-3 py-1.5 rounded-md border border-neutral-700/70 w-[clamp(240px,24vw,360px)] shrink-0 transition justify-between"
+          className="min-w-[150px] max-w-[320px] flex-1 flex items-center gap-2 bg-[#1E1F22] hover:bg-[#25272C] text-neutral-400 hover:text-neutral-200 px-2.5 py-1.5 rounded-md border border-neutral-700/70 transition justify-between overflow-hidden"
         >
-          <div className="flex items-center space-x-2 truncate">
-            <Search className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Tìm kiếm lệnh CAD (vd: mleader, vách, trần...)...</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <Search className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <span className="2xl:hidden truncate">Tìm lệnh CAD...</span>
+            <span className="hidden 2xl:inline truncate">Tìm kiếm lệnh CAD (mleader, vách, trần...)</span>
           </div>
-          <kbd className="bg-neutral-800 px-1.5 py-0.5 rounded text-[10px] font-mono border border-neutral-700 text-neutral-400">
+          <kbd className="hidden xl:inline bg-neutral-800 px-1.5 py-0.5 rounded text-[10px] font-mono border border-neutral-700 text-neutral-400 shrink-0">
             Ctrl+Space
           </kbd>
         </button>
@@ -221,15 +223,15 @@ export const HnlRibbon: React.FC<HnlRibbonProps> = ({
         <div className="hidden 2xl:flex items-center gap-1 text-[10px] text-neutral-500 shrink-0" title={lastAutosaveAt ? `AutoSave: ${new Date(lastAutosaveAt).toLocaleString()}` : "Chưa AutoSave"}><Save className="w-3 h-3 text-emerald-500"/><span>{lastAutosaveAt ? "AutoSave OK" : "AutoSave"}</span></div>
 
         {/* Action Buttons: Workbench Selector, FreeCAD Project Tree, Shop Check, Addon Manager, Drywall Studio, AI */}
-        <div className="flex items-center space-x-1.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 min-w-0">
           {/* FreeCAD-style Workbench Selector */}
           {onChangeWorkbench && (
-            <div className="flex items-center bg-neutral-900 border border-neutral-700 rounded px-1.5 py-0.5 space-x-1">
+            <div className="hidden xl:flex items-center bg-neutral-900 border border-neutral-700 rounded px-1.5 py-0.5 gap-1 max-w-[175px]">
               <span className="text-[10px] text-sky-400 font-mono font-bold">WB:</span>
               <select
                 value={selectedWorkbench || "HNL_CAD"}
                 onChange={(e) => onChangeWorkbench(e.target.value)}
-                className="bg-transparent text-xs text-neutral-100 font-semibold focus:outline-none cursor-pointer"
+                className="bg-transparent text-xs text-neutral-100 font-semibold focus:outline-none cursor-pointer max-w-[145px]"
               >
                 <option value="HNL_CAD" className="bg-neutral-900 text-neutral-100">HNL CAD 2D/3D</option>
                 <option value="HNL_CEILING" className="bg-neutral-900 text-neutral-100">HNL Ceiling (Trần)</option>
@@ -244,16 +246,18 @@ export const HnlRibbon: React.FC<HnlRibbonProps> = ({
 
           {onToggleProjectTree && (
             <button onClick={onToggleProjectTree} className="hidden xl:flex items-center gap-1 px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-sky-300 border border-neutral-700 text-xs" title="Cây dự án">
-              <Layers className="w-3.5 h-3.5" /><span>Project</span>
+              <Layers className="w-3.5 h-3.5" /><span className="hidden 2xl:inline">Project</span>
             </button>
           )}
           <div className="relative">
             <button onClick={() => setToolsOpen((v) => !v)} className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 text-xs font-semibold" title="Công cụ HNL">
-              <Settings className="w-3.5 h-3.5" /><span>Công cụ</span><ChevronDown className="w-3 h-3" />
+              <Settings className="w-3.5 h-3.5" /><span className="hidden 2xl:inline">Công cụ</span><ChevronDown className="hidden 2xl:block w-3 h-3" />
             </button>
             {toolsOpen && (
               <div className="absolute right-0 top-8 z-[80] w-56 rounded-lg border border-neutral-700 bg-[#1b1d20] shadow-2xl p-1 text-xs">
                 {onToggleSpreadsheet && <button onClick={() => { onToggleSpreadsheet(); setToolsOpen(false); }} className="w-full text-left px-3 py-2 rounded hover:bg-neutral-700">Spreadsheet tham số</button>}
+                <button onClick={() => { onExecuteCommand("SMART_SHOPDRAWING"); setToolsOpen(false); }} className="w-full text-left px-3 py-2 rounded hover:bg-cyan-900/30 text-cyan-200">Smart Shopdrawing Platform</button>
+                <button onClick={() => { onExecuteCommand("SMART_SHOPDRAWING"); setToolsOpen(false); }} className="w-full text-left px-3 py-2 rounded hover:bg-cyan-900/30 text-cyan-200">Smart Shopdrawing Platform</button>
                 {onOpenShopCheck && <button onClick={() => { onOpenShopCheck(); setToolsOpen(false); }} className="w-full text-left px-3 py-2 rounded hover:bg-neutral-700">HNL Shop Check</button>}
                 {onOpenDrywallCeilingStudio && <button onClick={() => { onOpenDrywallCeilingStudio(); setToolsOpen(false); }} className="w-full text-left px-3 py-2 rounded hover:bg-neutral-700">Thạch cao & PCCC</button>}
                 {onOpenAutoDetailComposer && <button onClick={() => { onOpenAutoDetailComposer(); setToolsOpen(false); }} className="w-full text-left px-3 py-2 rounded hover:bg-neutral-700">Auto Detail & Layout</button>}
@@ -277,7 +281,7 @@ export const HnlRibbon: React.FC<HnlRibbonProps> = ({
             }`}
           >
             <Bot className="w-3.5 h-3.5" />
-            <span>AI Palette</span>
+            <span className="hidden 2xl:inline">AI Palette</span>
           </button>
           {onToggleFocusDrawing && (
             <button
@@ -290,7 +294,7 @@ export const HnlRibbon: React.FC<HnlRibbonProps> = ({
               title={isFocusDrawing ? "Khôi phục giao diện HNL" : "Tối đa vùng vẽ: thu gọn Ribbon, Dock, AI và Command Line"}
             >
               <Monitor className="w-3.5 h-3.5" />
-              <span>{isFocusDrawing ? "Khôi phục UI" : "Tập trung vẽ"}</span>
+              <span className="hidden 2xl:inline">{isFocusDrawing ? "Khôi phục UI" : "Tập trung vẽ"}</span>
             </button>
           )}
           {onToggleCollapse && (
@@ -322,7 +326,7 @@ export const HnlRibbon: React.FC<HnlRibbonProps> = ({
       </div>
 
       {/* Active Ribbon Panel Toolbar */}
-      <div className="min-h-24 px-3 xl:px-4 py-2 bg-[#25272C] flex items-center space-x-4 overflow-x-auto text-[12px]">
+      <div className="min-h-24 px-3 py-2 pb-1 bg-[#25272C] flex items-center space-x-4 overflow-x-auto text-[12px] [scrollbar-width:thin] [scrollbar-color:#52525b_#25272C]">
         {activeTab === "VE_NHANH" && (
           <>
             {/* Nhóm Smart Wall */}
@@ -354,7 +358,7 @@ export const HnlRibbon: React.FC<HnlRibbonProps> = ({
                 <button
                   onClick={() => onExecuteCommand("SMART_CEILING")}
                   className="flex flex-col items-center justify-center w-20 h-14 p-1 rounded hover:bg-neutral-700 text-neutral-200 transition group"
-                  title="Tự động phân bổ hệ xương chính (@800), xương phụ (@400), ty treo và viền tường trong phòng"
+                  title="Tự động phân bổ hệ xương chính (@800), xương phụ (1220/3 = 406.67), ty treo và viền tường trong phòng"
                 >
                   <Grid className="w-5 h-5 text-amber-400 group-hover:scale-110 transition" />
                   <span className="mt-1 text-[11px] font-semibold text-center leading-tight">Trần thạch cao</span>

@@ -3,7 +3,7 @@ export interface CadAliasDefinition{
   aliases:string[];
   command:string;
   label:string;
-  group:"DRAW"|"EDIT"|"DIM_TEXT";
+  group:"DRAW"|"EDIT"|"DIM_TEXT"|"VIEW_SETUP";
   support:CadAliasSupport;
   note?:string;
   nativeCommand?:string;
@@ -29,6 +29,16 @@ export const CAD_COMMAND_ALIASES:CadAliasDefinition[]=[
   {aliases:["MI","MIRROR"],command:"EDIT_MIRROR",label:"MIRROR",group:"EDIT",support:"PARTIAL",note:"Standalone X/Y; AutoCAD Connected chạy MIRROR native.",nativeCommand:"MIRROR"},
   {aliases:["O","OFFSET"],command:"DRAW_OFFSET",label:"OFFSET",group:"EDIT",support:"PARTIAL",note:"Standalone LINE; AutoCAD Connected chạy OFFSET native.",nativeCommand:"OFFSET"},
   {aliases:["E","ERASE"],command:"DELETE_SELECTION",label:"ERASE",group:"EDIT",support:"READY",nativeCommand:"ERASE"},
+
+  {aliases:["UN","UNITS"],command:"NATIVE:UNITS",label:"UNITS",group:"VIEW_SETUP",support:"HYBRID",note:"AutoCAD Connected mở UNITS native; Standalone dùng mm.",nativeCommand:"UNITS"},
+  {aliases:["LIMITS"],command:"NATIVE:LIMITS",label:"LIMITS",group:"VIEW_SETUP",support:"HYBRID",nativeCommand:"LIMITS"},
+  {aliases:["Z","ZOOM"],command:"NATIVE:ZOOM",label:"ZOOM",group:"VIEW_SETUP",support:"HYBRID",nativeCommand:"ZOOM"},
+  {aliases:["P","PAN"],command:"NATIVE:PAN",label:"PAN",group:"VIEW_SETUP",support:"HYBRID",nativeCommand:"PAN"},
+  {aliases:["UCS"],command:"NATIVE:UCS",label:"UCS",group:"VIEW_SETUP",support:"HYBRID",nativeCommand:"UCS"},
+  {aliases:["GRID"],command:"NATIVE:GRID",label:"GRID",group:"VIEW_SETUP",support:"HYBRID",nativeCommand:"GRID"},
+  {aliases:["SNAP"],command:"NATIVE:SNAP",label:"SNAP",group:"VIEW_SETUP",support:"HYBRID",nativeCommand:"SNAP"},
+  {aliases:["QSAVE","SAVE"],command:"NATIVE:QSAVE",label:"QSAVE",group:"VIEW_SETUP",support:"HYBRID",nativeCommand:"QSAVE"},
+  {aliases:["QUIT"],command:"NATIVE:QUIT",label:"QUIT",group:"VIEW_SETUP",support:"HYBRID",nativeCommand:"QUIT"},
 
   {aliases:["D","DIMSTYLE"],command:"QUICK_DIM_CENTER",label:"DIMSTYLE",group:"DIM_TEXT",support:"HYBRID",nativeCommand:"DIMSTYLE"},
   {aliases:["DLI","DIMLINEAR"],command:"QUICK_DIM_CENTER",label:"DIMLINEAR",group:"DIM_TEXT",support:"HYBRID",nativeCommand:"DIMLINEAR"},

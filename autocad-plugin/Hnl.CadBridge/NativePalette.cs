@@ -26,19 +26,26 @@ public sealed class NativePaletteCommands
     private static Label? _aiStatus;
     private static Button? _aiSend;
 
-    [CommandMethod("HNL")]
-    [CommandMethod("HNLPALETTE")]
-    public void ShowPalette()
+    public static void ShowPaletteWindow() => ShowPaletteTab(0);
+
+    public static void ShowPaletteTab(int index)
     {
         EnsurePalette();
         _palette!.Visible = true;
+        var safe = Math.Max(0, Math.Min(index, (_tabs?.TabPages.Count ?? 1) - 1));
+        _palette.Activate(0);
+        if (_tabs != null) _tabs.SelectedIndex = safe;
     }
 
-    [CommandMethod("HNLHIDE")]
-    public void HidePalette()
+    public static void OpenManagerWindow() => OpenManager();
+
+    public static void HidePaletteWindow()
     {
         if (_palette != null) _palette.Visible = false;
     }
+
+    public static bool IsPaletteVisible =>
+        _palette != null && _palette.Visible;
 
     private static void EnsurePalette()
     {
@@ -307,7 +314,7 @@ public sealed class NativePaletteCommands
                 }
             };
 
-            using var req = new HttpRequestMessage(HttpMethod.Post, $"http://{host}:{port}/api/gemini/plan");
+            using var req = new HttpRequestMessage(HttpMethod.Post, $"http://{host}:{port}/api/ai/plan");
             if (!string.IsNullOrWhiteSpace(token))
                 req.Headers.TryAddWithoutValidation("x-hnl-token", token);
             req.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
@@ -324,11 +331,13 @@ public sealed class NativePaletteCommands
             var actionType = (string?)plan["actionType"] ?? "";
             var destructive = (bool?)plan["isDestructive"] ?? false;
             var offline = (bool?)json["isOfflineFallback"] ?? false;
+            var provider = (string?)json["provider"] ?? (offline ? "OFFLINE" : "AI");
+            var model = (string?)json["model"] ?? "";
 
             var sb = new StringBuilder();
             sb.AppendLine($"INTENT: {intent}");
             if (!string.IsNullOrWhiteSpace(actionType)) sb.AppendLine($"ACTION: {actionType}");
-            sb.AppendLine($"MODE: {(offline ? "OFFLINE RULES" : "AI ONLINE")}");
+            sb.AppendLine($"MODE: {provider}{(string.IsNullOrWhiteSpace(model) ? "" : $" / {model}")}");
             sb.AppendLine($"RISK: {(destructive ? "DESTRUCTIVE — REVIEW REQUIRED" : "SAFE / REVIEW")}");
             sb.AppendLine();
             if (!string.IsNullOrWhiteSpace(explanation)) sb.AppendLine(explanation);
@@ -384,9 +393,13 @@ public sealed class NativePaletteCommands
         f.Controls.Add(Section(_english ? "Draw" : "Vẽ",
             ("L", "LINE"), ("PL", "PLINE"), ("C", "CIRCLE"), ("REC", "RECTANG"),
             ("ARC", "ARC"), ("HATCH", "HATCH")));
-        f.Controls.Add(Section(_english ? "Ceiling / Shopdrawing" : "Trần / Shopdrawing",
-            (_english ? "Ceiling options" : "Trần tùy chọn", "HNLCEILING"),
-            (_english ? "HNL Manager" : "Mở Studio", "HNL_OPEN_MANAGER")));
+        f.Controls.Add(Section(_english ? "Smart Shopdrawing" : "Shopdrawing thông minh",
+            (_english ? "Smart Ceiling" : "Smart Ceiling", "HNLCEILING"),
+            (_english ? "Smart Wall" : "Smart Wall", "HNLWALL"),
+            (_english ? "Block Library" : "Thư viện Block", "HNLINSERT"),
+            (_english ? "Native BOQ" : "BOQ DWG", "HNLBOQ"),
+            (_english ? "Shop Audit" : "Audit Shopdrawing", "HNLSHOPAUDIT"),
+            (_english ? "HNL Manager" : "Mở HNL", "HNL_OPEN_MANAGER")));
         f.Controls.Add(Section(_english ? "Modify" : "Hiệu chỉnh",
             ("CO", "COPY"), ("M", "MOVE"), ("RO", "ROTATE"), ("SC", "SCALE"),
             ("TR", "TRIM"), ("EX", "EXTEND"), ("O", "OFFSET"), ("MI", "MIRROR"),
@@ -401,9 +414,10 @@ public sealed class NativePaletteCommands
         var f = Flow();
         f.Controls.Add(Section(_english ? "Text / Dimension" : "Text / Kích thước",
             ("MTEXT", "MTEXT"), ("DIM", "DIM"), ("DLI", "DIMLINEAR"), ("DI", "DIST")));
-        f.Controls.Add(Section(_english ? "HNL Data" : "Dữ liệu HNL",
+        f.Controls.Add(Section(_english ? "HNL Data / BOQ" : "Dữ liệu HNL / BOQ",
             (_english ? "Selection" : "Đối tượng chọn", "HNLSELECTION"),
-            (_english ? "Layers" : "Layer", "HNLLAYERS")));
+            (_english ? "Layers" : "Layer", "HNLLAYERS"),
+            (_english ? "Smart BOQ" : "BOQ Smart Object", "HNLBOQ")));
         page.Controls.Add(f);
         return page;
     }
@@ -429,7 +443,8 @@ public sealed class NativePaletteCommands
             (_english ? "Status" : "Trạng thái", "HNLBRIDGESTATUS"),
             (_english ? "Ping" : "Kiểm tra", "HNLBRIDGEPING"),
             (_english ? "Layouts" : "Danh sách Layout", "HNLLAYOUTS"),
-            (_english ? "Plot Devices" : "Máy in", "HNLPLOTDEVICES")));
+            (_english ? "Plot Devices" : "Máy in", "HNLPLOTDEVICES"),
+            (_english ? "Shop Audit" : "Audit Shopdrawing", "HNLSHOPAUDIT")));
         page.Controls.Add(f);
         return page;
     }

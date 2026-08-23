@@ -1,3 +1,5 @@
+import { HNL_APP_VERSION } from "./version";
+
 export type DiagnosticSeverity = "INFO" | "WARNING" | "ERROR" | "CRITICAL";
 
 export interface DiagnosticEvent {
@@ -46,7 +48,7 @@ export function errorToDetails(error: unknown): { cause: string; stack?: string 
   try { return { cause: JSON.stringify(error) }; } catch { return { cause: String(error) }; }
 }
 
-export function diagnosticsToText(events: DiagnosticEvent[], appVersion = "2.3.0") {
+export function diagnosticsToText(events: DiagnosticEvent[], appVersion = HNL_APP_VERSION) {
   const lines = [
     "HNL CAD AI - DIAGNOSTIC REPORT",
     `App version: ${appVersion}`,

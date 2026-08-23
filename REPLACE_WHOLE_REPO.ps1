@@ -10,7 +10,8 @@ if (-not (Test-Path $RepoPath)) {
   throw "RepoPath không tồn tại: $RepoPath"
 }
 
-Write-Host "HNL CAD AI v2.0.3 - Full Source Replace"
+$version = (Get-Content (Join-Path $PSScriptRoot "package.json") -Raw | ConvertFrom-Json).version
+Write-Host "HNL CAD AI v$version - Full Source Replace"
 Write-Host "Nguồn: $Source"
 Write-Host "Repo:  $RepoPath"
 Write-Host ""
@@ -35,9 +36,9 @@ Get-ChildItem -Path $Source -Force | Where-Object {
 }
 
 Write-Host ""
-Write-Host "Đã chép source v2.0.3 vào repo."
+Write-Host "Đã chép source v$version vào repo."
 Write-Host "Tiếp theo chạy:"
 Write-Host "  cd `"$RepoPath`""
 Write-Host "  git add ."
-Write-Host '  git commit -m "Update HNL CAD AI v2.0.3 full source"'
+Write-Host "  git commit -m `"Update HNL CAD AI v$version full source`""
 Write-Host "  git push"

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { HnlRibbon } from "./components/Ribbon/HnlRibbon";
-import { CadCanvas } from "./components/Canvas/CadCanvas";
+import { CadCanvas, CadDraftingAction, CadDraftingMode, CadDraftingStatus, CadPointerStatus } from "./components/Canvas/CadCanvas";
 import { HnlPalette } from "./components/Palette/HnlPalette";
 import { CommandSearchModal } from "./components/CommandCenter/CommandSearchModal";
 import { CadCommandLine } from "./components/CommandCenter/CadCommandLine";
@@ -25,6 +25,7 @@ import { DiagnosticsModal } from "./components/Dialogs/DiagnosticsModal";
 import { UsageGuideModal } from "./components/Dialogs/UsageGuideModal";
 import { SketchUp2DBridgeModal } from "./components/Dialogs/SketchUp2DBridgeModal";
 import { ProfessionalAuditCenterModal } from "./components/Dialogs/ProfessionalAuditCenterModal";
+import { HnlSmartShopdrawingPlatformModal } from "./components/Dialogs/HnlSmartShopdrawingPlatformModal";
 import { PlotPublishSheetSetModal } from "./components/Dialogs/PlotPublishSheetSetModal";
 import { LispInspiredToolCenterModal } from "./components/Dialogs/LispInspiredToolCenterModal";
 
@@ -59,6 +60,7 @@ import {
   evaluateExpression,
 } from "./lib/spreadsheetEngine";
 import { INITIAL_HNL_MODULES } from "./lib/moduleManagerEngine";
+import { HNL_APP_VERSION, HNL_DISPLAY_VERSION, HNL_PROJECT_SCHEMA_VERSION } from "./lib/version";
 import { detectAutoCadBridge, executeAutoCadAction, AutoCadBridgeStatus } from "./lib/autoCadBridge";
 import { loadProjectSnapshot, saveProjectSnapshot, clearProjectSnapshot } from "./lib/projectPersistence";
 import { DiagnosticEvent, errorToDetails, loadDiagnostics, makeDiagnostic, saveDiagnostics } from "./lib/diagnostics";
@@ -157,6 +159,18 @@ export default function App() {
   const [ghostPreviewEntities, setGhostPreviewEntities] = useState<CadEntity[]>([]);
   const [currentTool, setCurrentTool] = useState<string>("SELECT");
   const [activeRibbonTab, setActiveRibbonTab] = useState<string>("VE_NHANH");
+  const [draftingStatus, setDraftingStatus] = useState<CadDraftingStatus>({
+    snap: false,
+    osnap: true,
+    otrack: true,
+    ortho: false,
+    grid: true,
+    dyn: true,
+  });
+  const [draftingAction, setDraftingAction] = useState<CadDraftingAction | null>(null);
+  const [pointerStatus, setPointerStatus] = useState<CadPointerStatus>({
+    x: 0, y: 0, activeSnapMode: null,
+  });
 
   // History Stack for Undo/Redo
   const [history, setHistory] = useState<CadEntity[][]>([INITIAL_ENTITIES]);
@@ -189,7 +203,7 @@ export default function App() {
   const [isStandaloneExeBuilderOpen, setIsStandaloneExeBuilderOpen] = useState(false);
   const [isDrywallStudioOpen, setIsDrywallStudioOpen] = useState(false);
   const [drywallInitialTab, setDrywallInitialTab] = useState<
-    "SYSTEM_BUILDER" | "FIRE_ASSEMBLIES" | "CEILING_GRID_AI" | "DETAIL_ENGINE" | "SHOPDRAWING_AUDIT" | "MULTI_PROVIDER_AI"
+    "SYSTEM_BUILDER" | "FIRE_ASSEMBLIES" | "CEILING_GRID_AI" | "DETAIL_ENGINE" | "SHOPDRAWING_AUDIT" | "MANUFACTURER_KB" | "MULTI_PROVIDER_AI"
   >("SYSTEM_BUILDER");
   const [isWindowsCompatOpen, setIsWindowsCompatOpen] = useState(false);
   const [isSectionGenOpen, setIsSectionGenOpen] = useState(false);
@@ -197,6 +211,7 @@ export default function App() {
   const [isMultiExportOpen, setIsMultiExportOpen] = useState(false);
   const [isBuildingCodeOpen, setIsBuildingCodeOpen] = useState(false);
   const [isPileStudioOpen, setIsPileStudioOpen] = useState(false);
+  const [isSmartShopdrawingOpen, setIsSmartShopdrawingOpen] = useState(false);
   const [autoCadBridgeStatus, setAutoCadBridgeStatus] = useState<AutoCadBridgeStatus>({ connected: false, source: "standalone", lastCheckedAt: Date.now() });
   const [lastAutosaveAt, setLastAutosaveAt] = useState<string | null>(null);
   const [recoveryLoaded, setRecoveryLoaded] = useState(false);
@@ -205,6 +220,14 @@ export default function App() {
   const [isDirty, setIsDirty] = useState(false);
   const suppressProjectDirtyRef = useRef(true);
   const [showStartCenter, setShowStartCenter] = useState(true);
+  type DrawingWorkspaceMode = "STANDALONE" | "AUTOCAD_NATIVE" | "HNL_CANVAS_PREVIEW" | "DIRECT_DWG";
+  const [drawingWorkspaceMode, setDrawingWorkspaceMode] = useState<DrawingWorkspaceMode>("STANDALONE");
+  const [directDwgMode, setDirectDwgMode] = useState(false);
+  const [directDwgLiveSync, setDirectDwgLiveSync] = useState(true);
+  const [directDwgSyncInfo, setDirectDwgSyncInfo] = useState<{lastSync:number;returned:number;unsupported:number;truncated:boolean;intervalMs:number}>({lastSync:0,returned:0,unsupported:0,truncated:false,intervalMs:3000});
+  const directSyncBusyRef = useRef(false);
+  const directLayerSyncAtRef = useRef(0);
+  const isNativeDwgWorkspace = autoCadBridgeStatus.connected && (drawingWorkspaceMode === "AUTOCAD_NATIVE" || drawingWorkspaceMode === "DIRECT_DWG");
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [isUsageGuideOpen, setIsUsageGuideOpen] = useState(false);
   const [isSketchUpBridgeOpen, setIsSketchUpBridgeOpen] = useState(false);
@@ -251,6 +274,65 @@ export default function App() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   }, []);
+
+  const refreshDraftingStatus = useCallback(async () => {
+    if (!autoCadBridgeStatus.connected) return;
+    const response:any = await executeAutoCadAction("GET_DRAFTING_STATUS", {});
+    if (!response?.ok) return;
+    const data:any = response.result || {};
+    setDraftingStatus((prev) => ({
+      ...prev,
+      snap: Boolean(data.snap),
+      osnap: Boolean(data.osnap),
+      ortho: Boolean(data.ortho),
+      grid: Boolean(data.grid),
+      dyn: Boolean(data.dyn),
+    }));
+  }, [isNativeDwgWorkspace]);
+
+  useEffect(() => {
+    if (!isNativeDwgWorkspace) return;
+    void refreshDraftingStatus();
+    const timer = window.setInterval(() => void refreshDraftingStatus(), 2500);
+    return () => window.clearInterval(timer);
+  }, [isNativeDwgWorkspace, refreshDraftingStatus]);
+
+  const toggleDraftingMode = useCallback(async (mode: CadDraftingMode) => {
+    const key = mode.toLowerCase() as keyof CadDraftingStatus;
+    const enabled = !Boolean(draftingStatus[key]);
+
+    if (isNativeDwgWorkspace && mode !== "OTRACK") {
+      const response:any = await executeAutoCadAction("SET_DRAFTING_MODE", { mode, enabled });
+      if (!response?.ok) {
+        showToast(`Không đổi được ${mode}: ${response?.error || response?.reason || "AutoCAD Bridge error"}`);
+        return;
+      }
+      const data:any = response.result || {};
+      if (data.status) {
+        setDraftingStatus((prev) => ({
+          ...prev,
+          snap: Boolean(data.status.snap),
+          osnap: Boolean(data.status.osnap),
+          ortho: Boolean(data.status.ortho),
+          grid: Boolean(data.status.grid),
+          dyn: Boolean(data.status.dyn),
+        }));
+      }
+      return;
+    }
+
+    setDraftingStatus((prev) => ({ ...prev, [key]: enabled }));
+    setDraftingAction({ id: Date.now(), mode, enabled });
+  }, [draftingStatus, isNativeDwgWorkspace, showToast]);
+
+  const openUnits = useCallback(async () => {
+    if (isNativeDwgWorkspace) {
+      const response:any = await executeAutoCadAction("EXECUTE_COMMAND", { command: "UNITS" });
+      if (!response?.ok) showToast(`Không mở được UNITS: ${response?.error || response?.reason || "Bridge error"}`);
+      return;
+    }
+    showToast("Standalone hiện dùng đơn vị mm.");
+  }, [isNativeDwgWorkspace, showToast]);
 
   const isFocusDrawing = isRibbonCollapsed && !isLeftDockOpen && !isAiPaletteOpen && !isCommandLineVisible;
 
@@ -373,7 +455,7 @@ export default function App() {
 
   // When AutoCAD is connected, bottom Layout tabs mirror the real DWG layouts.
   useEffect(() => {
-    if (!autoCadBridgeStatus.connected) return;
+    if (!isNativeDwgWorkspace) return;
     let cancelled = false;
 
     const syncNativeLayouts = async () => {
@@ -434,7 +516,7 @@ export default function App() {
   }, [autoCadBridgeStatus.connected]);
 
   const handleActivateLayout = useCallback(async (layout: CadLayout | null) => {
-    if (autoCadBridgeStatus.connected) {
+    if (isNativeDwgWorkspace) {
       const name = layout?.name || "Model";
       const result = await executeAutoCadAction("SET_CURRENT_LAYOUT", { name });
       if (!result?.ok) {
@@ -443,7 +525,7 @@ export default function App() {
       }
     }
     setActiveLayout(layout);
-  }, [autoCadBridgeStatus.connected, showToast]);
+  }, [isNativeDwgWorkspace, showToast]);
 
   // Smart Object Selection
   const handleSelectSmartObject = useCallback((id: string | null) => {
@@ -539,7 +621,7 @@ export default function App() {
           mainFrameType: "V-KEEL_38",
           mainSpacingMm: 800,
           secondaryFrameType: "M-BAR",
-          secondarySpacingMm: 400,
+          secondarySpacingMm: 1220 / 3,
           hangerType: "THREADED_ROD_M6",
           hangerSpacingMm: 1000,
           perimeterType: "SHADOWLINE_Z",
@@ -550,7 +632,7 @@ export default function App() {
             { key: "levelElevationMm", label: "Cao độ trần (mm)", type: "number", value: 2800, unit: "mm", group: "General" },
             { key: "boardType", label: "Loại tấm", type: "select", value: "STANDARD_9.5", options: ["STANDARD_9.5", "MOISTURE_RESIST_9.5", "FIRE_RESIST_12.5"], group: "Board" },
             { key: "mainSpacingMm", label: "Khoảng cách xương chính", type: "number", value: 800, unit: "mm", group: "Framing" },
-            { key: "secondarySpacingMm", label: "Khoảng cách xương phụ", type: "number", value: 400, unit: "mm", group: "Framing" },
+            { key: "secondarySpacingMm", label: "Khoảng cách xương phụ", type: "number", value: 1220 / 3, unit: "mm", group: "Framing" },
             { key: "hangerSpacingMm", label: "Khoảng cách ty treo", type: "number", value: 1000, unit: "mm", group: "Framing" },
           ],
         };
@@ -571,7 +653,7 @@ export default function App() {
           totalThicknessMm: 125,
           studType: "C75_0.5MM",
           trackType: "U75_0.5MM",
-          studSpacingMm: 400,
+          studSpacingMm: 1220 / 3,
           heightMm: 3600,
           boardSideA: "2x12.5mm Gyproc FireStop",
           boardSideB: "2x12.5mm Gyproc FireStop",
@@ -584,7 +666,7 @@ export default function App() {
             { key: "wallType", label: "Cấu tạo vách", type: "select", value: "DRYWALL_SINGLE_STUD", options: ["DRYWALL_SINGLE_STUD", "DRYWALL_DOUBLE_STUD"], group: "General" },
             { key: "fireRating", label: "Cấp chống cháy", type: "select", value: "EI60", options: ["EI30", "EI60", "EI90", "EI120", "NONE"], group: "Fire & Acoustic" },
             { key: "heightMm", label: "Chiều cao tường (mm)", type: "number", value: 3600, unit: "mm", group: "General" },
-            { key: "studSpacingMm", label: "Khoảng cách Stud (mm)", type: "number", value: 400, unit: "mm", group: "Framing" },
+            { key: "studSpacingMm", label: "Khoảng cách Stud (mm)", type: "number", value: 1220 / 3, unit: "mm", group: "Framing" },
           ],
         };
       } else {
@@ -717,6 +799,10 @@ export default function App() {
   // Push new state to history stack
   const updateEntitiesWithHistory = useCallback(
     (newEntities: CadEntity[]) => {
+      if(directDwgMode){
+        showToast("Direct DWG: thao tác HNL này chưa có native bridge nên đã bị chặn để tránh chỉnh Canvas giả. Dùng công cụ native/Smart Shopdrawing tương ứng.");
+        return;
+      }
       const newHistory = history.slice(0, historyIndex + 1);
       newHistory.push(newEntities);
       setHistory(newHistory);
@@ -724,10 +810,11 @@ export default function App() {
       setEntities(newEntities);
       setIsDirty(true);
     },
-    [history, historyIndex]
+    [history, historyIndex, directDwgMode, showToast]
   );
 
   const handleUndo = useCallback(() => {
+    if(directDwgMode && autoCadBridgeStatus.connected){void executeAutoCadAction("EXECUTE_COMMAND",{command:"U"}).then(()=>window.setTimeout(()=>void refreshDirectDwgSnapshot(true),250));return;}
     if (historyIndex > 0) {
       const newIdx = historyIndex - 1;
       setHistoryIndex(newIdx);
@@ -735,9 +822,10 @@ export default function App() {
       setIsDirty(true);
       showToast("Undo: Đã quay lại trạng thái trước");
     }
-  }, [historyIndex, history, showToast]);
+  }, [historyIndex, history, showToast, directDwgMode, autoCadBridgeStatus.connected]);
 
   const handleRedo = useCallback(() => {
+    if(directDwgMode && autoCadBridgeStatus.connected){void executeAutoCadAction("EXECUTE_COMMAND",{command:"REDO"}).then(()=>window.setTimeout(()=>void refreshDirectDwgSnapshot(true),250));return;}
     if (historyIndex < history.length - 1) {
       const newIdx = historyIndex + 1;
       setHistoryIndex(newIdx);
@@ -745,10 +833,10 @@ export default function App() {
       setIsDirty(true);
       showToast("Redo: Đã làm lại thao tác");
     }
-  }, [historyIndex, history, showToast]);
+  }, [historyIndex, history, showToast, directDwgMode, autoCadBridgeStatus.connected]);
 
   const createNewDrawing = useCallback(() => {
-    if (autoCadBridgeStatus.connected) {
+    if (isNativeDwgWorkspace) {
       void executeAutoCadAction("EXECUTE_COMMAND", { command: "QNEW" }).then((result:any) => {
         if (result?.ok) showToast("AutoCAD: QNEW đã được chuyển sang cửa sổ DWG native.");
         else showToast(`Không chạy được QNEW: ${result?.error||result?.reason||"Bridge error"}`);
@@ -764,9 +852,10 @@ export default function App() {
     setTranslationMemory(INITIAL_TRANSLATION_MEMORY); setBlockLibrary(INITIAL_BLOCK_LIBRARY);
     setDependencyEdges(INITIAL_DEPENDENCY_EDGES); setModules(INITIAL_HNL_MODULES);
     setSelectedWorkbench("HNL_CAD"); setSelectedEntityIds([]); setActiveLayout(null);
+    setDirectDwgMode(false); setDrawingWorkspaceMode("STANDALONE");
     setCurrentFileName("Untitled.dxf"); setCurrentFilePath(null); setIsDirty(false); setShowStartCenter(false);
     showToast("Standalone: Đã tạo bản vẽ DXF mới.");
-  }, [autoCadBridgeStatus.connected, isDirty, showToast]);
+  }, [isNativeDwgWorkspace, isDirty, showToast]);
 
   const saveCadDxf = useCallback(async () => {
     const nativeApi=(window as any).electronNative;
@@ -786,7 +875,7 @@ export default function App() {
   const saveProjectJson = useCallback(async () => {
     const nativeApi=(window as any).electronNative;
     if(!nativeApi?.saveFile){showToast("Lưu Project JSON cần chạy trong HNL Desktop EXE.");return;}
-    const payload=JSON.stringify({version:"2.4.7",schemaVersion:2,savedAt:new Date().toISOString(),currentFileName,activeLayoutId:activeLayout?.id||null,entities,layers,layouts,viewports,smartObjects,spreadsheetParameters,translationMemory,blockLibrary,dependencyEdges,modules,selectedWorkbench},null,2);
+    const payload=JSON.stringify({version:HNL_APP_VERSION,schemaVersion:HNL_PROJECT_SCHEMA_VERSION,savedAt:new Date().toISOString(),currentFileName,activeLayoutId:activeLayout?.id||null,entities,layers,layouts,viewports,smartObjects,spreadsheetParameters,translationMemory,blockLibrary,dependencyEdges,modules,selectedWorkbench},null,2);
     const base=currentFileName.replace(/\.[^.]+$/,"")||"BanVe_HNL";
     const result=await nativeApi.saveFile({defaultName:`${base}.hnl.json`,content:payload,extDescription:"HNL Project JSON",extension:"json"});
     if(result?.success)showToast(`Đã lưu Project HNL: ${result.filePath}`);
@@ -810,7 +899,7 @@ export default function App() {
   },[autoCadBridgeStatus.connected,autoCadBridgeStatus.drawingName,currentFileName,showToast]);
 
   const savePrimaryDrawing = useCallback(async () => {
-    if(autoCadBridgeStatus.connected){
+    if(isNativeDwgWorkspace){
       const result=await executeAutoCadAction("SAVE_CURRENT_DWG",{});
       if(result?.ok){
         const path=result?.result?.filePath || autoCadBridgeStatus.drawingName || currentFileName;
@@ -823,12 +912,12 @@ export default function App() {
       return;
     }
     await saveCadDxf();
-  },[autoCadBridgeStatus.connected,autoCadBridgeStatus.drawingName,currentFileName,saveCadDxf,showToast]);
+  },[isNativeDwgWorkspace,autoCadBridgeStatus.drawingName,currentFileName,saveCadDxf,showToast]);
 
   const saveAsPrimaryDrawing = useCallback(async () => {
-    if(autoCadBridgeStatus.connected) await saveDwgViaAutoCad();
+    if(isNativeDwgWorkspace) await saveDwgViaAutoCad();
     else await saveCadDxf();
-  },[autoCadBridgeStatus.connected,saveDwgViaAutoCad,saveCadDxf]);
+  },[isNativeDwgWorkspace,saveDwgViaAutoCad,saveCadDxf]);
 
   const openDrawingDialog=useCallback(()=>{
     const nativeApi=(window as any).electronNative;
@@ -909,34 +998,34 @@ export default function App() {
 
       if(ctrl && key==="a"){
         e.preventDefault();
-        if(autoCadBridgeStatus.connected) void executeAutoCadAction("SELECT_ALL",{});
+        if(isNativeDwgWorkspace) void executeAutoCadAction("SELECT_ALL",{});
         else { setCurrentTool("SELECT");setSelectedEntityIds(entities.map(ent=>ent.id));showToast(`Ctrl+A: Đã chọn ${entities.length} đối tượng.`); }
       } else if(ctrl && key==="c"){
         e.preventDefault();
-        if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"COPYCLIP"});
+        if(isNativeDwgWorkspace) void executeAutoCadAction("EXECUTE_COMMAND",{command:"COPYCLIP"});
         else void copySelection(false);
       } else if(ctrl && key==="x"){
         e.preventDefault();
-        if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"CUTCLIP"});
+        if(isNativeDwgWorkspace) void executeAutoCadAction("EXECUTE_COMMAND",{command:"CUTCLIP"});
         else void copySelection(true);
       } else if(ctrl && key==="v"){
         e.preventDefault();
-        if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"PASTECLIP"});
+        if(isNativeDwgWorkspace) void executeAutoCadAction("EXECUTE_COMMAND",{command:"PASTECLIP"});
         else void pasteSelection();
       } else if(ctrl && key==="z"){
         e.preventDefault();
-        if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:e.shiftKey?"REDO":"U"});
+        if(isNativeDwgWorkspace) void executeAutoCadAction("EXECUTE_COMMAND",{command:e.shiftKey?"REDO":"U"});
         else if(e.shiftKey)handleRedo();else handleUndo();
       } else if(ctrl && key==="y"){
         e.preventDefault();
-        if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"REDO"});
+        if(isNativeDwgWorkspace) void executeAutoCadAction("EXECUTE_COMMAND",{command:"REDO"});
         else handleRedo();
       } else if(e.key==="Escape"){
         e.preventDefault();
         setCommandDraft("");
         if(isCommandCenterOpen){setIsCommandCenterOpen(false);showToast("ESC: Đã đóng Command Center.");}
         else if(commandDraft.trim()){setCommandDraft("");showToast("ESC: Đã hủy nhập lệnh.");}
-        else if(autoCadBridgeStatus.connected){
+        else if(isNativeDwgWorkspace){
           void executeAutoCadAction("CANCEL_COMMAND",{});
           showToast("AutoCAD native: ESC");
         } else if(currentTool!=="SELECT"||ghostPreviewEntities.length>0){
@@ -945,7 +1034,11 @@ export default function App() {
           setSelectedEntityIds([]);showToast("ESC: Đã bỏ chọn đối tượng.");
         }
       } else if((e.key==="Delete"||e.key==="Backspace")&&!typing){
-        if(autoCadBridgeStatus.connected){
+        if(directDwgMode && autoCadBridgeStatus.connected && selectedEntityIds.length>0){
+          e.preventDefault();
+          const handles=entities.filter((x:any)=>selectedEntityIds.includes(x.id)).map((x:any)=>String(x.handle||"")).filter(Boolean);
+          if(!isSafeMode || window.confirm(`Xóa ${handles.length} đối tượng trực tiếp trong DWG?`)) void executeAutoCadAction("ERASE_HANDLES",{handles}).then(()=>void refreshDirectDwgSnapshot(true));
+        } else if(isNativeDwgWorkspace){
           e.preventDefault();void executeAutoCadAction("EXECUTE_COMMAND",{command:"ERASE"});
         } else if(selectedEntityIds.length>0){
           e.preventDefault();updateEntitiesWithHistory(entities.filter(ent=>!selectedEntityIds.includes(ent.id)));setSelectedEntityIds([]);showToast(`Đã xóa ${selectedEntityIds.length} đối tượng`);
@@ -962,26 +1055,87 @@ export default function App() {
     return()=>window.removeEventListener("keydown",handleKeyDown);
   },[
     selectedEntityIds,entities,handleUndo,handleRedo,updateEntitiesWithHistory,showToast,
-    currentTool,ghostPreviewEntities.length,isCommandCenterOpen,isLeftDockOpen,leftDockTab,commandDraft,autoCadBridgeStatus.connected,
+    currentTool,ghostPreviewEntities.length,isCommandCenterOpen,isLeftDockOpen,leftDockTab,commandDraft,autoCadBridgeStatus.connected,isNativeDwgWorkspace,directDwgMode,isSafeMode,
     createNewDrawing,savePrimaryDrawing,saveAsPrimaryDrawing,openDrawingDialog
   ]);
 
+  const refreshDirectDwgSnapshot = useCallback(async (quiet = true) => {
+    if (!directDwgMode || !autoCadBridgeStatus.connected || directSyncBusyRef.current) return null;
+    directSyncBusyRef.current = true;
+    try {
+      const result:any = await executeAutoCadAction("GET_MODELSPACE_SNAPSHOT", { maxEntities: 15000 });
+      if (!result?.ok) {
+        if (!quiet) showToast(`Direct DWG sync lỗi: ${result?.error || result?.reason || "Bridge error"}`);
+        return null;
+      }
+      const data:any=result.result || {};
+      const nativeEntities=Array.isArray(data.entities) ? data.entities as CadEntity[] : [];
+      setEntities(nativeEntities);
+      setHistory([nativeEntities]); setHistoryIndex(0); setIsDirty(false);
+      const selectedHandles=new Set<string>((data.selection?.entities || []).map((x:any)=>String(x.handle||"")));
+      setSelectedEntityIds(nativeEntities.filter((e:any)=>selectedHandles.has(String(e.handle||""))).map((e:any)=>e.id));
+      setCurrentFileName(String(data.drawingName || autoCadBridgeStatus.drawingName || "Direct DWG"));
+      setCurrentFilePath(String(data.drawingName || "") || null);
+      const returned=Number(data.returned||0);
+      const intervalMs=returned>12000?8000:returned>5000?5000:3000;
+      setDirectDwgSyncInfo({lastSync:Date.now(),returned,unsupported:Number(data.unsupported||0),truncated:Boolean(data.truncated),intervalMs});
+      const now=Date.now();
+      if(!directLayerSyncAtRef.current || now-directLayerSyncAtRef.current>10000){
+        directLayerSyncAtRef.current=now;
+        const layerResult:any=await executeAutoCadAction("GET_LAYERS",{});
+        if(layerResult?.ok && Array.isArray(layerResult?.result?.layers)){
+          setLayers(layerResult.result.layers.map((l:any)=>({
+            name:String(l.name||"0"), color:"#FFFFFF",
+            isVisible:!Boolean(l.isOff||l.isFrozen), isLocked:Boolean(l.isLocked),
+          })) as any);
+        }
+      }
+      return {returned,intervalMs};
+    } finally {
+      directSyncBusyRef.current=false;
+    }
+  }, [directDwgMode, autoCadBridgeStatus.connected, autoCadBridgeStatus.drawingName, showToast]);
+
+  useEffect(()=>{
+    if(!directDwgMode || !autoCadBridgeStatus.connected || !directDwgLiveSync) return;
+    let cancelled=false; let timer:number|undefined;
+    const tick=async()=>{
+      const info=await refreshDirectDwgSnapshot(true);
+      if(cancelled)return;
+      timer=window.setTimeout(tick,info?.intervalMs || 3000);
+    };
+    void tick();
+    return()=>{cancelled=true;if(timer)window.clearTimeout(timer)};
+  },[directDwgMode,autoCadBridgeStatus.connected,directDwgLiveSync,refreshDirectDwgSnapshot]);
+
+  const syncDirectSelection = useCallback((ids:string[])=>{
+    if(!directDwgMode || !autoCadBridgeStatus.connected) return;
+    const handles=entities.filter((e:any)=>ids.includes(e.id)).map((e:any)=>String(e.handle||"")).filter(Boolean);
+    void executeAutoCadAction("SELECT_HANDLES",{handles});
+  },[directDwgMode,autoCadBridgeStatus.connected,entities]);
+
   // Entity Selection Handler
   const handleSelectEntity = (id: string, multiSelect: boolean) => {
-    if (multiSelect) {
-      setSelectedEntityIds((prev) =>
-        prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-      );
-    } else {
-      setSelectedEntityIds([id]);
-    }
+    setSelectedEntityIds((prev) => {
+      const next = multiSelect ? (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]) : [id];
+      syncDirectSelection(next);
+      return next;
+    });
   };
 
   const handleClearSelection = () => {
     setSelectedEntityIds([]);
+    if (directDwgMode && autoCadBridgeStatus.connected) void executeAutoCadAction("SELECT_HANDLES", { handles: [] });
   };
 
   const handleAddEntity = (entity: CadEntity) => {
+    if(directDwgMode && autoCadBridgeStatus.connected){
+      void executeAutoCadAction("CREATE_NATIVE_ENTITY",{entity}).then((r:any)=>{
+        if(r?.ok){showToast(`Direct DWG: đã tạo ${entity.type} native.`);void refreshDirectDwgSnapshot(true);}
+        else showToast(`Direct DWG tạo ${entity.type} lỗi: ${r?.error||r?.reason||"Bridge error"}`);
+      });
+      return;
+    }
     const updated = [...entities, entity];
     updateEntitiesWithHistory(updated);
     showToast(`Đã thêm đối tượng [${entity.type}] vào Model Space`);
@@ -989,6 +1143,11 @@ export default function App() {
 
   // AI Plan Execution Dispatcher
   const handleExecutePlan = (plan: AICommandPlan) => {
+    if (directDwgMode && autoCadBridgeStatus.connected && (plan.actionType === "DRAW_WALL" || plan.actionType === "DRAW_CEILING")) {
+      setIsSmartShopdrawingOpen(true);
+      showToast(`AI đã tạo kế hoạch ${plan.actionType}; Direct DWG yêu cầu Preview/xác nhận trong Smart Shopdrawing trước khi ghi vào DWG.`);
+      return;
+    }
     if (plan.actionType === "DRAW_WALL") {
       const newWall: CadWall = {
         id: `wall_${Date.now()}`,
@@ -1017,13 +1176,13 @@ export default function App() {
           { x: 0, y: 4000 },
         ],
         mainTeeSpacing: 800,
-        crossTeeSpacing: 400,
+        crossTeeSpacing: 1220 / 3,
         hangerSpacing: 1000,
         rotationDeg: 0,
         panelSize: { width: 600, height: 600 },
       };
       updateEntitiesWithHistory([...entities, newCeiling]);
-      showToast("AI: Đã bố trí hệ trần thạch cao chìm (Xương chính @800, phụ @400, ty treo @1000)!");
+      showToast(`AI: Đã bố trí hệ trần chìm (xương phụ 1220/3 = ${(1220/3).toFixed(2)}mm).`);
     } else if (plan.actionType === "AUTO_LAYOUT") {
       handleExecuteCommand("AUTO_LAYOUT_A3");
     } else if (plan.actionType === "CALC_AREA") {
@@ -1066,12 +1225,24 @@ export default function App() {
       return ent;
     });
 
+    if(directDwgMode && autoCadBridgeStatus.connected){
+      const updates=updated.filter((e:any)=>e.type==="TEXT"||e.type==="MTEXT").map((e:any)=>({handle:String(e.handle||""),text:String(e.text||"")})).filter((x:any)=>x.handle);
+      void executeAutoCadAction("UPDATE_TEXT_CONTENTS",{updates}).then((r:any)=>{
+        showToast(r?.ok?`Direct DWG: đã cập nhật ${r?.result?.changed||0} Text/MText.`:`Dịch Direct DWG lỗi: ${r?.error||r?.reason}`);
+        void refreshDirectDwgSnapshot(true);
+      });
+      return;
+    }
     updateEntitiesWithHistory(updated);
     showToast(`Dịch thuật hoàn tất: Đã chuyển đổi sang chế độ [${mode}]`);
   };
 
   // Audit Issue Fix Handler
   const handleFixAuditIssue = (issueId: string) => {
+    if(directDwgMode && autoCadBridgeStatus.connected){
+      showToast("Direct DWG: Auto-fix cục bộ đã bị khóa để tránh sửa HNL Canvas mà không ghi vào DWG. Dùng HNLSHOPAUDIT/Smart Shopdrawing.");
+      return;
+    }
     const issue = auditIssues.find((i) => i.id === issueId);
     if (!issue) return;
 
@@ -1127,7 +1298,7 @@ export default function App() {
     const newName = checked.name;
     if (newName === layout.name) return;
 
-    if (autoCadBridgeStatus.connected) {
+    if (isNativeDwgWorkspace) {
       const result = await executeAutoCadAction("RENAME_LAYOUT", { oldName: layout.name, newName });
       if (!result?.ok) {
         showToast(`AutoCAD không đổi được Layout: ${result?.error || result?.reason || "Bridge error"}`);
@@ -1139,8 +1310,8 @@ export default function App() {
     setViewports((prev) => prev.map((vp) => vp.layoutName === layout.name ? { ...vp, layoutName: newName } : vp));
     setActiveLayout((prev) => prev?.id === layout.id ? { ...prev, name: newName } : prev);
     setIsDirty(true);
-    showToast(`Đã đổi tên Layout: ${layout.name} → ${newName}${autoCadBridgeStatus.connected ? " (DWG native)" : ""}`);
-  }, [validateLayoutName, autoCadBridgeStatus.connected, showToast]);
+    showToast(`Đã đổi tên Layout: ${layout.name} → ${newName}${isNativeDwgWorkspace ? " (DWG native)" : ""}`);
+  }, [validateLayoutName, isNativeDwgWorkspace, showToast]);
 
   const getStandaloneCeilingBoundary = useCallback(() => {
     const selected = entities.find((e) => selectedEntityIds.includes(e.id));
@@ -1164,6 +1335,17 @@ export default function App() {
       case "SMART_WALL_200":
         setCurrentTool("WALL_200");
         showToast("Vẽ tường 200: Nhấp điểm 1 và điểm 2 trên bản vẽ");
+        break;
+
+      case "OPEN_DIRECT_DWG":
+        (window as any).electronNative?.requestOpenFile?.("DIRECT_DWG");
+        break;
+
+      case "SMART_SHOPDRAWING":
+      case "SMART_LIBRARY":
+      case "SMART_WALL_SYSTEM":
+        setIsSmartShopdrawingOpen(true);
+        showToast("HNL Smart Shopdrawing Platform: Library • Ceiling • Wall • Approved • BOQ • Audit.");
         break;
 
       case "SMART_CEILING": {
@@ -1414,7 +1596,8 @@ export default function App() {
       }
 
       case "OPEN_BLOCK_LIBRARY":
-        setIsAiPaletteOpen(true);
+        setIsSmartShopdrawingOpen(true);
+        showToast("Đã mở HNL Smart Library trong Smart Shopdrawing Platform.");
         break;
 
       case "OPEN_TABLE_BUILDER":
@@ -1639,8 +1822,53 @@ export default function App() {
 
   const handleExecuteCommand = (cmdKey: string) => {
     const started = performance.now();
+
+    if (cmdKey.startsWith("NATIVE:")) {
+      const native = cmdKey.slice("NATIVE:".length).trim().toUpperCase();
+      if (!native) return;
+      if (!autoCadBridgeStatus.connected) {
+        showToast(`${native}: cần AutoCAD Connected để chạy lệnh native.`);
+        return;
+      }
+      void executeAutoCadAction("EXECUTE_COMMAND", { command: native }).then((result:any) => {
+        showToast(result?.ok
+          ? `AutoCAD native: ${native}`
+          : `AutoCAD ${native} lỗi: ${result?.error || result?.reason || "Bridge error"}`);
+      });
+      return;
+    }
+
+    if (directDwgMode && autoCadBridgeStatus.connected && ["EDIT_MOVE","EDIT_ROTATE","EDIT_SCALE","DELETE_SELECTION"].includes(cmdKey)) {
+      const handles=entities.filter((e:any)=>selectedEntityIds.includes(e.id)).map((e:any)=>String(e.handle||"")).filter(Boolean);
+      if(!handles.length){showToast("Direct DWG: hãy chọn đối tượng trước.");return;}
+      if(cmdKey==="DELETE_SELECTION"){
+        if(isSafeMode && !window.confirm(`Xóa ${handles.length} đối tượng trực tiếp trong DWG?`))return;
+        void executeAutoCadAction("ERASE_HANDLES",{handles}).then((r:any)=>{showToast(r?.ok?`Direct DWG: đã xóa ${r?.result?.erased||handles.length} đối tượng.`:`Erase lỗi: ${r?.error||r?.reason}`);void refreshDirectDwgSnapshot(true)});return;
+      }
+      if(cmdKey==="EDIT_MOVE"){
+        const dx=Number(window.prompt("Direct DWG MOVE — ΔX (mm):","0"));const dy=Number(window.prompt("Direct DWG MOVE — ΔY (mm):","0"));
+        if(!Number.isFinite(dx)||!Number.isFinite(dy))return;
+        void executeAutoCadAction("APPLY_ENTITY_TRANSFORM",{handles,operation:"MOVE",dx,dy}).then(()=>void refreshDirectDwgSnapshot(true));return;
+      }
+      const picked=entities.filter((e:any)=>selectedEntityIds.includes(e.id));
+      const pts:any[]=[];
+      for(const e of picked as any[]){
+        if(e.start)pts.push(e.start);if(e.end)pts.push(e.end);if(e.center)pts.push(e.center);if(e.position)pts.push(e.position);
+        if(Array.isArray(e.points))pts.push(...e.points);
+      }
+      const basePoint=pts.length?{x:(Math.min(...pts.map(p=>Number(p.x||0)))+Math.max(...pts.map(p=>Number(p.x||0))))/2,y:(Math.min(...pts.map(p=>Number(p.y||0)))+Math.max(...pts.map(p=>Number(p.y||0))))/2}:{x:0,y:0};
+      if(cmdKey==="EDIT_ROTATE"){
+        const angleDeg=Number(window.prompt(`Direct DWG ROTATE — góc (độ), quanh tâm chọn ${basePoint.x.toFixed(1)},${basePoint.y.toFixed(1)}:`,"90"));if(!Number.isFinite(angleDeg))return;
+        void executeAutoCadAction("APPLY_ENTITY_TRANSFORM",{handles,operation:"ROTATE",angleDeg,basePoint}).then(()=>void refreshDirectDwgSnapshot(true));return;
+      }
+      if(cmdKey==="EDIT_SCALE"){
+        const factor=Number(window.prompt(`Direct DWG SCALE — hệ số, quanh tâm chọn ${basePoint.x.toFixed(1)},${basePoint.y.toFixed(1)}:`,"1"));if(!Number.isFinite(factor)||factor<=0)return;
+        void executeAutoCadAction("APPLY_ENTITY_TRANSFORM",{handles,operation:"SCALE",factor,basePoint}).then(()=>void refreshDirectDwgSnapshot(true));return;
+      }
+    }
+
     const nativeCommand = AUTOCAD_NATIVE_COMMAND_BY_HNL_KEY[cmdKey];
-    if (autoCadBridgeStatus.connected && nativeCommand) {
+    if (isNativeDwgWorkspace && nativeCommand) {
       void executeAutoCadAction("EXECUTE_COMMAND", { command: nativeCommand }).then((result:any) => {
         const elapsed = Math.round(performance.now() - started);
         if (result?.ok) {
@@ -1672,7 +1900,7 @@ export default function App() {
       showToast(`Unknown command "${raw}".`);
       return;
     }
-    if(autoCadBridgeStatus.connected && def.nativeCommand){
+    if(isNativeDwgWorkspace && def.nativeCommand){
       setCommandHistory(prev=>[`${raw.toUpperCase()} → AutoCAD ${def.nativeCommand} [NATIVE]`,...prev].slice(0,20));
       void executeAutoCadAction("EXECUTE_COMMAND",{command:def.nativeCommand}).then((result:any)=>{
         showToast(result?.ok ? `AutoCAD native: ${def.nativeCommand}` : `AutoCAD command lỗi: ${result?.error||result?.reason||"Bridge error"}`);
@@ -1681,7 +1909,7 @@ export default function App() {
     }
     setCommandHistory(prev=>[`${raw.toUpperCase()} → ${def.label} [${def.support}]`,...prev].slice(0,20));
     handleExecuteCommand(def.command);
-  },[autoCadBridgeStatus.connected,handleExecuteCommand,showToast]);
+  },[isNativeDwgWorkspace,handleExecuteCommand,showToast]);
 
   useEffect(() => {
     const nativeApi = (window as any).electronNative;
@@ -1704,33 +1932,33 @@ export default function App() {
         case "SAVE_DWG_BRIDGE": await saveDwgViaAutoCad(); break;
         case "EXPORT_DXF": await saveCadDxf(); break;
         case "PRINT_PDF":
-          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"PLOT"});
+          if(isNativeDwgWorkspace) void executeAutoCadAction("EXECUTE_COMMAND",{command:"PLOT"});
           else setIsPlotPublishOpen(true);
           break;
         case "UNDO":
-          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"U"}); else handleUndo();
+          if(isNativeDwgWorkspace) void executeAutoCadAction("EXECUTE_COMMAND",{command:"U"}); else handleUndo();
           break;
         case "REDO":
-          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"REDO"}); else handleRedo();
+          if(isNativeDwgWorkspace) void executeAutoCadAction("EXECUTE_COMMAND",{command:"REDO"}); else handleRedo();
           break;
         case "SELECT_ALL":
-          if(autoCadBridgeStatus.connected) void executeAutoCadAction("SELECT_ALL",{});
+          if(isNativeDwgWorkspace) void executeAutoCadAction("SELECT_ALL",{});
           else { setCurrentTool("SELECT"); setSelectedEntityIds(entities.map((e) => e.id)); showToast(`Đã chọn ${entities.length} đối tượng.`); }
           break;
         case "COPY":
-          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"COPYCLIP"});
+          if(isNativeDwgWorkspace) void executeAutoCadAction("EXECUTE_COMMAND",{command:"COPYCLIP"});
           else window.dispatchEvent(new KeyboardEvent("keydown",{key:"c",ctrlKey:true,bubbles:true}));
           break;
         case "CUT":
-          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"CUTCLIP"});
+          if(isNativeDwgWorkspace) void executeAutoCadAction("EXECUTE_COMMAND",{command:"CUTCLIP"});
           else window.dispatchEvent(new KeyboardEvent("keydown",{key:"x",ctrlKey:true,bubbles:true}));
           break;
         case "PASTE":
-          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"PASTECLIP"});
+          if(isNativeDwgWorkspace) void executeAutoCadAction("EXECUTE_COMMAND",{command:"PASTECLIP"});
           else window.dispatchEvent(new KeyboardEvent("keydown",{key:"v",ctrlKey:true,bubbles:true}));
           break;
         case "DELETE":
-          if(autoCadBridgeStatus.connected) void executeAutoCadAction("EXECUTE_COMMAND",{command:"ERASE"});
+          if(isNativeDwgWorkspace) void executeAutoCadAction("EXECUTE_COMMAND",{command:"ERASE"});
           else if (selectedEntityIds.length > 0) {
             updateEntitiesWithHistory(entities.filter((e) => !selectedEntityIds.includes(e.id)));
             setSelectedEntityIds([]);
@@ -1751,12 +1979,57 @@ export default function App() {
         const fileName = String(data?.fileName || "");
         const lower = fileName.toLowerCase();
         if (lower.endsWith(".dwg")) {
+          const openMode = String(data?.openMode || "AUTO").toUpperCase();
           if (!autoCadBridgeStatus.connected) {
-            showToast("DWG cần AutoCAD Bridge. Hãy mở AutoCAD có HNL plugin rồi thử lại.");
+            showToast("DWG native/full preview hiện cần AutoCAD Bridge. Không có Bridge: hãy mở DXF trực tiếp trong HNL.");
             return;
           }
+
+          if (openMode === "DIRECT_DWG") {
+            void executeAutoCadAction("OPEN_DWG", { filePath: String(data?.filePath || "") }).then(async (result:any) => {
+              if (!result?.ok) { showToast(`Không mở được Direct DWG: ${result?.error || result?.reason || "Bridge error"}`); return; }
+              setDirectDwgMode(true); setDrawingWorkspaceMode("DIRECT_DWG"); setDirectDwgLiveSync(true); setShowStartCenter(false); setCurrentFileName(fileName); setCurrentFilePath(String(data?.filePath || "") || null);
+              showToast(`DIRECT DWG: ${fileName} • HNL đang chỉnh database AutoCAD thật.`);
+              window.setTimeout(()=>void refreshDirectDwgSnapshot(false),350);
+            });
+            return;
+          }
+
+          if (openMode === "HNL_CANVAS") {
+            setDirectDwgMode(false);
+            void executeAutoCadAction("CONVERT_DWG_TO_DXF_PREVIEW", { filePath: String(data?.filePath || "") }).then(async (result:any) => {
+              if (!result?.ok) {
+                showToast(`Không tạo được HNL Canvas preview: ${result?.error || result?.reason || "Bridge error"}`);
+                return;
+              }
+              const outputPath = String(result?.result?.outputPath || "");
+              const read = await nativeApi?.readTextFile?.(outputPath);
+              if (!read?.success) {
+                showToast(`Không đọc được DXF preview: ${read?.error || "Unknown error"}`);
+                return;
+              }
+              const imported = parseBasicDxf(String(read.content || ""));
+              if (!imported.length) {
+                showToast("DWG đã chuyển sang DXF preview nhưng không có entity 2D mà HNL hiện hỗ trợ.");
+                return;
+              }
+              setDrawingWorkspaceMode("HNL_CANVAS_PREVIEW");
+              setEntities(imported); setHistory([imported]); setHistoryIndex(0);
+              setSelectedEntityIds([]);
+              setCurrentFileName(`${fileName} [HNL Canvas Preview]`);
+              // Không liên kết đường dẫn DWG gốc để Ctrl+S không ghi đè file nguồn.
+              setCurrentFilePath(null);
+              setIsDirty(false);
+              setShowStartCenter(false);
+              showToast(`HNL Canvas đã mở ${imported.length} entity từ ${fileName}. DWG gốc không bị thay đổi.`);
+            });
+            return;
+          }
+
+          setDirectDwgMode(false);
           void executeAutoCadAction("OPEN_DWG", { filePath: String(data?.filePath || "") }).then((result:any) => {
             if (result?.ok) {
+              setDrawingWorkspaceMode("AUTOCAD_NATIVE");
               setCurrentFileName(fileName);
               setCurrentFilePath(String(data?.filePath || "") || null);
               setShowStartCenter(false);
@@ -1766,15 +2039,17 @@ export default function App() {
             }
           });
         } else if (lower.endsWith(".dxf")) {
+          setDirectDwgMode(false); setDrawingWorkspaceMode("STANDALONE");
           const imported = parseBasicDxf(String(data?.content || ""));
           if (imported.length === 0) {
             showToast("DXF không có entity được hỗ trợ hoặc file không phải DXF ASCII.");
             return;
           }
-          updateEntitiesWithHistory(imported);
+          setEntities(imported); setHistory([imported]); setHistoryIndex(0);
           setSelectedEntityIds([]);
           setCurrentFileName(fileName); setCurrentFilePath(String(data?.filePath||"")||null); setIsDirty(false); setShowStartCenter(false); showToast(`Đã mở ${imported.length} entity từ ${fileName}.`);
         } else if (lower.endsWith(".json")) {
+          setDirectDwgMode(false); setDrawingWorkspaceMode("STANDALONE");
           suppressProjectDirtyRef.current = true;
           const parsed = JSON.parse(String(data?.content || "{}"));
           const imported = Array.isArray(parsed) ? parsed : parsed.entities;
@@ -1807,13 +2082,14 @@ export default function App() {
       if (typeof offMenu === "function") offMenu();
       if (typeof offFile === "function") offFile();
     };
-  }, [entities, layers, layouts, viewports, smartObjects, selectedEntityIds, historyIndex, savePrimaryDrawing, saveAsPrimaryDrawing, saveCadDxf, saveProjectJson, saveDwgViaAutoCad]);
+  }, [entities, layers, layouts, viewports, smartObjects, selectedEntityIds, historyIndex, savePrimaryDrawing, saveAsPrimaryDrawing, saveCadDxf, saveProjectJson, saveDwgViaAutoCad, autoCadBridgeStatus.connected, isNativeDwgWorkspace, refreshDirectDwgSnapshot]);
 
   const handleApplyComposer = (
     newLayouts: CadLayout[],
     newViewports: CadViewport[],
     newCalloutEntities: CadEntity[]
   ) => {
+    if(directDwgMode){showToast("Direct DWG: Auto Detail/Layout local chưa được ghi native hoàn chỉnh nên đã chặn Apply. Dùng Layout/Section native hoặc thoát Direct.");return;}
     setLayouts((prev) => [...prev, ...newLayouts]);
     setViewports((prev) => [...prev, ...newViewports]);
     updateEntitiesWithHistory([...entities, ...newCalloutEntities]);
@@ -1833,23 +2109,35 @@ export default function App() {
             <div className="px-8 py-7 border-b border-neutral-800 bg-gradient-to-r from-[#15181c] to-[#101820] flex items-center justify-between gap-6">
               <div>
                 <div className="text-[11px] tracking-[0.24em] uppercase text-cyan-400 font-semibold">Professional CAD Workspace</div>
-                <h1 className="mt-2 text-2xl font-bold text-white">HNL CAD AI <span className="text-cyan-400">v2.4.7</span></h1>
+                <h1 className="mt-2 text-2xl font-bold text-white">HNL CAD AI <span className="text-cyan-400">{HNL_DISPLAY_VERSION}</span></h1>
                 <p className="mt-2 text-sm text-neutral-400 max-w-2xl">Không gian làm việc Standalone + AutoCAD Bridge, tối ưu shopdrawing, thống kê, layout và trợ lý AI kỹ thuật.</p>
               </div>
               <div className={`px-3 py-2 rounded-lg border text-xs ${autoCadBridgeStatus.connected ? "border-emerald-700 bg-emerald-950/30 text-emerald-300" : "border-neutral-700 bg-neutral-900 text-neutral-400"}`}>
                 {autoCadBridgeStatus.connected ? `AutoCAD ${autoCadBridgeStatus.version || ""} Connected` : "Standalone Mode"}
               </div>
             </div>
-            <div className="grid md:grid-cols-3 gap-4 p-8">
+            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4 p-8">
               <button onClick={() => { setShowStartCenter(false); }} className="text-left p-5 rounded-xl border border-cyan-700/60 bg-cyan-950/20 hover:bg-cyan-900/30 transition">
                 <div className="text-cyan-300 font-semibold">Tiếp tục Workspace</div>
                 <div className="text-xs text-neutral-400 mt-2">Mở vùng làm việc hiện tại{lastAutosaveAt ? ` • AutoSave ${new Date(lastAutosaveAt).toLocaleTimeString()}` : ""}.</div>
               </button>
-              <button onClick={() => { (window as any).electronNative?.requestOpenFile?.(); }} className="text-left p-5 rounded-xl border border-neutral-700 bg-[#1d2025] hover:border-neutral-500 transition">
-                <div className="text-white font-semibold">Mở dự án / DXF</div>
-                <div className="text-xs text-neutral-400 mt-2">Mở HNL JSON đầy đủ hoặc DXF ASCII trong chế độ độc lập.</div>
+              <button onClick={() => { (window as any).electronNative?.requestOpenFile?.("DIRECT_DWG"); }} className="text-left p-5 rounded-xl border border-fuchsia-800 bg-fuchsia-950/20 hover:border-fuchsia-600 transition">
+                <div className="text-fuchsia-300 font-semibold">Direct DWG Edit • HNL</div>
+                <div className="text-xs text-neutral-400 mt-2">Chỉnh DWG thật từ HNL Canvas: live snapshot, selection 2 chiều, draw/move/rotate/scale/erase native.</div>
               </button>
-              <button onClick={() => { if (!isDirty || window.confirm("Bỏ thay đổi hiện tại và tạo bản vẽ mới?")) { suppressProjectDirtyRef.current = true; clearProjectSnapshot(); setEntities([]); setHistory([[]]); setHistoryIndex(0); setLayers(INITIAL_LAYERS); setLayouts(INITIAL_LAYOUTS); setViewports(INITIAL_VIEWPORTS); setSmartObjects([]); setSpreadsheetParameters(INITIAL_SPREADSHEET_PARAMETERS); setTranslationMemory(INITIAL_TRANSLATION_MEMORY); setBlockLibrary(INITIAL_BLOCK_LIBRARY); setDependencyEdges(INITIAL_DEPENDENCY_EDGES); setModules(INITIAL_HNL_MODULES); setSelectedWorkbench("HNL_CAD"); setSelectedEntityIds([]); setActiveLayout(null); setCurrentFileName("Untitled.dxf"); setCurrentFilePath(null); setIsDirty(false); setShowStartCenter(false); } }} className="text-left p-5 rounded-xl border border-neutral-700 bg-[#1d2025] hover:border-neutral-500 transition">
+              <button onClick={() => { (window as any).electronNative?.requestOpenFile?.("AUTOCAD_NATIVE"); }} className="text-left p-5 rounded-xl border border-emerald-800 bg-emerald-950/20 hover:border-emerald-600 transition">
+                <div className="text-emerald-300 font-semibold">Mở DWG • AutoCAD Native</div>
+                <div className="text-xs text-neutral-400 mt-2">Full fidelity DWG. Dùng cho chỉnh sửa chính thức, block/field/layout/xref/plot.</div>
+              </button>
+              <button onClick={() => { (window as any).electronNative?.requestOpenFile?.("HNL_CANVAS"); }} className="text-left p-5 rounded-xl border border-cyan-800 bg-cyan-950/20 hover:border-cyan-600 transition">
+                <div className="text-cyan-300 font-semibold">Mở DWG • HNL Canvas</div>
+                <div className="text-xs text-neutral-400 mt-2">Bridge đọc nền → DXF tạm → xem/audit/AI/chỉnh 2D nhẹ trong HNL. Không ghi đè DWG gốc.</div>
+              </button>
+              <button onClick={() => { (window as any).electronNative?.requestOpenFile?.("AUTO"); }} className="text-left p-5 rounded-xl border border-neutral-700 bg-[#1d2025] hover:border-neutral-500 transition">
+                <div className="text-white font-semibold">Mở dự án / DXF / DWG</div>
+                <div className="text-xs text-neutral-400 mt-2">HNL JSON, DXF trực tiếp hoặc DWG theo chế độ mặc định.</div>
+              </button>
+              <button onClick={() => { if (!isDirty || window.confirm("Bỏ thay đổi hiện tại và tạo bản vẽ mới?")) { suppressProjectDirtyRef.current = true; clearProjectSnapshot(); setEntities([]); setHistory([[]]); setHistoryIndex(0); setLayers(INITIAL_LAYERS); setLayouts(INITIAL_LAYOUTS); setViewports(INITIAL_VIEWPORTS); setSmartObjects([]); setSpreadsheetParameters(INITIAL_SPREADSHEET_PARAMETERS); setTranslationMemory(INITIAL_TRANSLATION_MEMORY); setBlockLibrary(INITIAL_BLOCK_LIBRARY); setDependencyEdges(INITIAL_DEPENDENCY_EDGES); setModules(INITIAL_HNL_MODULES); setSelectedWorkbench("HNL_CAD"); setSelectedEntityIds([]); setActiveLayout(null); setDirectDwgMode(false); setDrawingWorkspaceMode("STANDALONE"); setCurrentFileName("Untitled.dxf"); setCurrentFilePath(null); setIsDirty(false); setShowStartCenter(false); } }} className="text-left p-5 rounded-xl border border-neutral-700 bg-[#1d2025] hover:border-neutral-500 transition">
                 <div className="text-white font-semibold">Bản vẽ mới</div>
                 <div className="text-xs text-neutral-400 mt-2">Khởi tạo project sạch với layer/layout mặc định HNL.</div>
               </button>
@@ -1858,7 +2146,7 @@ export default function App() {
               <div className="rounded-lg bg-neutral-900/60 border border-neutral-800 p-3"><b className="text-neutral-300">Safe Mode</b><br/>{isSafeMode ? "Đang bật" : "Đang tắt"}</div>
               <div className="rounded-lg bg-neutral-900/60 border border-neutral-800 p-3"><b className="text-neutral-300">Recovery</b><br/>{lastAutosaveAt ? "Có AutoSave" : "Chưa có AutoSave"}</div>
               <div className="rounded-lg bg-neutral-900/60 border border-neutral-800 p-3"><b className="text-neutral-300">Project</b><br/>{currentFileName}</div>
-              <div className="rounded-lg bg-neutral-900/60 border border-neutral-800 p-3"><b className="text-neutral-300">Mode</b><br/>{autoCadBridgeStatus.connected ? "AutoCAD Bridge" : "Standalone"}</div>
+              <div className="rounded-lg bg-neutral-900/60 border border-neutral-800 p-3"><b className="text-neutral-300">Mode</b><br/>{drawingWorkspaceMode === "DIRECT_DWG" ? "DIRECT DWG" : drawingWorkspaceMode === "AUTOCAD_NATIVE" ? "AutoCAD Native" : drawingWorkspaceMode === "HNL_CANVAS_PREVIEW" ? "HNL Canvas Preview" : "Standalone"}</div>
             </div>
           </div>
         </div>
@@ -1905,8 +2193,8 @@ export default function App() {
         selectedWorkbench={selectedWorkbench}
         onChangeWorkbench={handleChangeWorkbench}
         isAiPaletteOpen={isAiPaletteOpen}
-        canUndo={historyIndex > 0}
-        canRedo={historyIndex < history.length - 1}
+        canUndo={directDwgMode || historyIndex > 0}
+        canRedo={directDwgMode || historyIndex < history.length - 1}
         onUndo={handleUndo}
         onRedo={handleRedo}
         connectionStatus={autoCadBridgeStatus}
@@ -1938,16 +2226,17 @@ export default function App() {
             onOpenAutoDetailComposer={() => setIsAutoDetailComposerOpen(true)}
             onOpenDrywallStudio={() => setIsDrywallStudioOpen(true)}
             onAddBlockToDrawing={(blk) => {
+              if(directDwgMode && autoCadBridgeStatus.connected){
+                void executeAutoCadAction("INSERT_EXISTING_BLOCK",{blockName:blk.name,layer:"KT_THIETBI",point:{x:3000,y:2000},attributes:blk.defaultAttributes||{}}).then((r:any)=>{
+                  showToast(r?.ok?`Direct DWG: đã chèn block [${blk.name}].`:`Block [${blk.name}] chưa có definition trong DWG. Hãy dùng Smart Library/Import DWG.`);
+                  if(r?.ok)void refreshDirectDwgSnapshot(true);
+                });
+                return;
+              }
               const newBlk: CadEntity = {
-                id: `blk_${Date.now()}`,
-                handle: Math.random().toString(16).substring(2, 6).toUpperCase(),
-                type: "BLOCK_REF",
-                layer: "KT_THIETBI",
-                color: "#FFD54F",
-                position: { x: 3000, y: 2000 },
-                blockName: blk.name,
-                rotationDeg: 0,
-                scale: { x: 1, y: 1, z: 1 },
+                id: `blk_${Date.now()}`, handle: Math.random().toString(16).substring(2, 6).toUpperCase(),
+                type: "BLOCK_REF", layer: "KT_THIETBI", color: "#FFD54F", position: { x: 3000, y: 2000 },
+                blockName: blk.name, rotationDeg: 0, scale: { x: 1, y: 1, z: 1 },
               } as any;
               updateEntitiesWithHistory([...entities, newBlk]);
               showToast(`Đã chèn Block [${blk.name}] vào Model Space nội bộ`);
@@ -2112,6 +2401,14 @@ export default function App() {
           </button>
         )}
 
+        {directDwgMode && (
+          <div className="absolute top-2 right-2 z-30 px-3 py-2 rounded-lg border border-fuchsia-700 bg-[#160f1c]/95 shadow-xl text-[10px] max-w-[430px]">
+            <div className="flex items-center gap-2"><b className="text-fuchsia-300">DIRECT DWG</b><span className="text-emerald-300">● AutoCAD Synced</span><span className="text-neutral-400">Native Save</span></div>
+            <div className="mt-1 text-neutral-500">Canvas {directDwgSyncInfo.returned} entity • unsupported {directDwgSyncInfo.unsupported}{directDwgSyncInfo.truncated?" • TRUNCATED":""} • {directDwgSyncInfo.lastSync?new Date(directDwgSyncInfo.lastSync).toLocaleTimeString():"chưa sync"}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-2"><label className="flex items-center gap-1"><input type="checkbox" checked={directDwgLiveSync} onChange={e=>setDirectDwgLiveSync(e.target.checked)}/>Live Sync adaptive {Math.round(directDwgSyncInfo.intervalMs/1000)}s</label><button onClick={()=>void refreshDirectDwgSnapshot(false)} className="px-2 py-0.5 rounded bg-fuchsia-900/50">Sync now</button><select defaultValue="" onChange={e=>{const layer=e.target.value;if(!layer)return;const handles=entities.filter((x:any)=>selectedEntityIds.includes(x.id)).map((x:any)=>String(x.handle||"")).filter(Boolean);if(handles.length)void executeAutoCadAction("SET_ENTITY_LAYER",{handles,layer}).then(()=>void refreshDirectDwgSnapshot(true));e.currentTarget.value=""}} className="bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5"><option value="">Chuyển layer...</option>{layers.slice(0,100).map((l:any)=><option key={l.name} value={l.name}>{l.name}</option>)}</select><button onClick={()=>{setDirectDwgMode(false);setDrawingWorkspaceMode("STANDALONE")}} className="px-2 py-0.5 rounded bg-neutral-800">Thoát Direct</button></div>
+          </div>
+        )}
+
         {/* CAD Canvas Engine */}
         <div className="flex-1 h-full relative">
           <CadCanvas
@@ -2126,6 +2423,12 @@ export default function App() {
             onAddEntity={handleAddEntity}
             currentTool={currentTool}
             onToolComplete={() => setCurrentTool("SELECT")}
+            draftingAction={draftingAction}
+            onDraftingStatusChange={(status) => {
+              if (!autoCadBridgeStatus.connected) setDraftingStatus(status);
+            }}
+            onPointerStatusChange={setPointerStatus}
+            hideInternalStatusBar={true}
           />
         </div>
 
@@ -2146,16 +2449,17 @@ export default function App() {
             onOpenAutoDetailComposer={() => setIsAutoDetailComposerOpen(true)}
             onOpenDrywallStudio={() => setIsDrywallStudioOpen(true)}
             onAddBlockToDrawing={(blk) => {
+              if(directDwgMode && autoCadBridgeStatus.connected){
+                void executeAutoCadAction("INSERT_EXISTING_BLOCK",{blockName:blk.name,layer:"KT_THIETBI",point:{x:3000,y:2000},attributes:blk.defaultAttributes||{}}).then((r:any)=>{
+                  showToast(r?.ok?`Direct DWG: đã chèn block [${blk.name}].`:`Block [${blk.name}] chưa có definition trong DWG. Hãy dùng Smart Library/Import DWG.`);
+                  if(r?.ok)void refreshDirectDwgSnapshot(true);
+                });
+                return;
+              }
               const newBlk: CadEntity = {
-                id: `blk_${Date.now()}`,
-                handle: Math.random().toString(16).substring(2, 6).toUpperCase(),
-                type: "BLOCK_REF",
-                layer: "KT_THIETBI",
-                color: "#FFD54F",
-                position: { x: 3000, y: 2000 },
-                blockName: blk.name,
-                rotationDeg: 0,
-                scale: { x: 1, y: 1, z: 1 },
+                id: `blk_${Date.now()}`, handle: Math.random().toString(16).substring(2, 6).toUpperCase(),
+                type: "BLOCK_REF", layer: "KT_THIETBI", color: "#FFD54F", position: { x: 3000, y: 2000 },
+                blockName: blk.name, rotationDeg: 0, scale: { x: 1, y: 1, z: 1 },
               } as any;
               updateEntitiesWithHistory([...entities, newBlk]);
               showToast(`Đã chèn Block [${blk.name}] vào Model Space nội bộ`);
@@ -2178,11 +2482,11 @@ export default function App() {
 
       {/* 3. Bottom Layout Tabs Switcher (Model / Layout A3 / Layout A4 / +) */}
       <div className="h-8 bg-[#18191C] border-t border-neutral-800 px-2 flex items-center justify-between text-xs select-none">
-        <div className="flex items-center space-x-1 overflow-x-auto scrollbar-none">
+        <div className="flex-1 min-w-0 flex items-center space-x-1 overflow-x-auto scrollbar-none">
           {/* Model Space Tab */}
           <button
             onClick={() => void handleActivateLayout(null)}
-            className={`px-3 py-1 text-xs font-semibold rounded-t flex items-center space-x-1.5 transition ${
+            className={`shrink-0 px-3 py-1 text-xs font-semibold rounded-t flex items-center space-x-1.5 transition ${
               activeLayout === null
                 ? "bg-[#1A1B1E] text-cyan-400 border-t-2 border-cyan-400 font-bold"
                 : "text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
@@ -2202,7 +2506,7 @@ export default function App() {
                 onDoubleClick={() => void handleRenameLayout(layout)}
                 onContextMenu={(e) => { e.preventDefault(); void handleRenameLayout(layout); }}
                 title="Click: mở Layout • Double-click / Right-click: đổi tên"
-                className={`px-3 py-1 text-xs font-semibold rounded-t flex items-center space-x-1.5 transition ${
+                className={`shrink-0 px-3 py-1 text-xs font-semibold rounded-t flex items-center space-x-1.5 transition ${
                   isActive
                     ? "bg-[#2B2D30] text-cyan-400 border-t-2 border-cyan-400 font-bold"
                     : "text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
@@ -2234,22 +2538,62 @@ export default function App() {
           )}
         </div>
 
-        {/* Right Status */}
-        <div className="hidden lg:flex items-center gap-2 text-xs text-neutral-400 pr-2 shrink-0">
-          <span className="font-mono text-neutral-500">X: — &nbsp; Y: —</span>
-          <span className="text-neutral-700">|</span>
-          <span className="px-1.5 py-0.5 rounded bg-neutral-800 text-cyan-300">SNAP</span>
-          <span className="px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300">ORTHO</span>
-          <span className="px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300">GRID</span>
-          <span className="px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300">mm</span>
-          <span className="text-neutral-700">|</span>
-          <span className={`font-mono ${autoCadBridgeStatus.connected ? "text-emerald-400" : "text-neutral-500"}`}>{autoCadBridgeStatus.connected ? `AutoCAD ${autoCadBridgeStatus.version || ""} • Connected` : "Standalone • AutoCAD Bridge offline"}</span>
+        {/* Functional CAD status bar — each drafting item is clickable */}
+        <div className="hidden md:flex items-center gap-1 text-[10px] text-neutral-400 pl-2 pr-1 shrink-0 border-l border-neutral-800">
+          <div className="hidden xl:flex items-center gap-1.5 font-mono mr-1">
+            <span><span className="text-neutral-600">X:</span> <b className="text-neutral-200">{pointerStatus.x.toFixed(0)}</b></span>
+            <span><span className="text-neutral-600">Y:</span> <b className="text-neutral-200">{pointerStatus.y.toFixed(0)}</b></span>
+            {pointerStatus.activeSnapMode && <span className="text-emerald-300">{pointerStatus.activeSnapMode}</span>}
+          </div>
+
+          {([
+            ["SNAP", "SNAP", "Snap Grid F9"],
+            ["OSNAP", "OSNAP", "Object Snap F3"],
+            ["ORTHO", "ORTHO", "Ortho F8"],
+            ["GRID", "GRID", "Grid Display F7"],
+            ["DYN", "DYN", "Dynamic Input F12"],
+          ] as Array<[CadDraftingMode,string,string]>).map(([mode,label,title]) => {
+            const key = mode.toLowerCase() as keyof CadDraftingStatus;
+            const enabled = Boolean(draftingStatus[key]);
+            return (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => void toggleDraftingMode(mode)}
+                title={title}
+                className={`px-1.5 py-0.5 rounded border font-mono font-bold transition pointer-events-auto ${
+                  enabled
+                    ? mode === "OSNAP"
+                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                      : mode === "DYN"
+                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                        : "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                    : "bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white"
+                } ${mode === "DYN" ? "hidden lg:inline-flex" : ""}`}
+              >
+                {label}
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => void openUnits()}
+            title={isNativeDwgWorkspace ? "Mở UNITS trong AutoCAD" : "Đơn vị HNL: mm"}
+            className="px-1.5 py-0.5 rounded border border-neutral-700 bg-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-700 pointer-events-auto"
+          >
+            mm
+          </button>
+
+          <span className={`hidden lg:inline font-mono ml-1 ${autoCadBridgeStatus.connected ? "text-emerald-400" : "text-neutral-500"}`}>
+            {autoCadBridgeStatus.connected ? `CAD ${autoCadBridgeStatus.version || ""}` : "Standalone"}
+          </span>
         </div>
       </div>
 
       {/* Floating Action Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 bg-[#25272C]/95 backdrop-blur-md text-neutral-100 px-4 py-2.5 rounded-lg border border-cyan-500/40 shadow-2xl text-xs flex items-center space-x-2 animate-in fade-in slide-in-from-bottom-2">
+        <div className={`fixed ${isCommandLineVisible ? "bottom-20" : "bottom-12"} left-1/2 -translate-x-1/2 z-50 bg-[#25272C]/95 backdrop-blur-md text-neutral-100 px-4 py-2.5 rounded-lg border border-cyan-500/40 shadow-2xl text-xs flex items-center space-x-2 animate-in fade-in slide-in-from-bottom-2`}>
           <Check className="w-4 h-4 text-cyan-400 shrink-0" />
           <span>{toastMessage}</span>
         </div>
@@ -2331,6 +2675,15 @@ export default function App() {
         onFixAllIssues={handleFixAllAuditIssues}
       />
 
+      <HnlSmartShopdrawingPlatformModal
+        isOpen={isSmartShopdrawingOpen}
+        onClose={() => setIsSmartShopdrawingOpen(false)}
+        autoCadConnected={autoCadBridgeStatus.connected}
+        onBridgeAction={(action, payload) => executeAutoCadAction(action, payload)}
+        onOpenDwg={(mode) => { (window as any).electronNative?.requestOpenFile?.(mode); }}
+        onOpenSectionGenerator={() => { setIsSmartShopdrawingOpen(false); setIsSectionGenOpen(true); }}
+      />
+
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -2366,7 +2719,7 @@ export default function App() {
 
           const cfg = preset?.ceilingConfig;
           if (cfg && drywallInitialTab === "CEILING_GRID_AI") {
-            if (autoCadBridgeStatus.connected) {
+            if (isNativeDwgWorkspace) {
               const result = await executeAutoCadAction("CREATE_CEILING_GRID", cfg);
               if (result?.ok) {
                 const data:any = result.result || {};
@@ -2388,9 +2741,9 @@ export default function App() {
               boundary,
               gridType: preset?.ceilingSystem?.type || cfg.systemType,
               mainSpacing: Number(cfg.mainSpacing) || 800,
-              subSpacing: Number(cfg.crossSpacing) || 400,
+              subSpacing: Number(cfg.crossSpacing) || (1220 / 3),
               mainTeeSpacing: Number(cfg.mainSpacing) || 800,
-              crossTeeSpacing: Number(cfg.crossSpacing) || 400,
+              crossTeeSpacing: Number(cfg.crossSpacing) || (1220 / 3),
               hangerSpacing: Number(cfg.hangerSpacing) || 900,
               wallAngleOffset: Number(cfg.wallAngleOffset) || 0,
               levelElevation: Number(cfg.levelElevation) || 0,

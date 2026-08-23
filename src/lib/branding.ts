@@ -1,3 +1,5 @@
+import { HNL_DISPLAY_VERSION } from "./version";
+
 /**
  * HNL CAD AI STUDIO - BRANDING & COLOR PALETTE DEFINITION
  * Professional Architectural & Engineering Theme
@@ -15,7 +17,7 @@ export const HNL_BRAND = {
   shortName: "HNL CAD",
   code: "HNL",
   edition: "Professional Shopdrawing & AI Edition",
-  version: "v2.6.0",
+  version: HNL_DISPLAY_VERSION,
   tagline: "Bộ công cụ CAD AI, Shopdrawing & Tự động hoá Bản vẽ Chuyên nghiệp",
   author: "HNL Architecture & Construction Solutions",
   authorShort: "HNL Architecture",

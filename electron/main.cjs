@@ -112,7 +112,7 @@ function createWindow() {
       // virtual archive, not a real directory, so process.chdir(appRoot) fails on
       // Windows. Pass the ASAR root to the bundled server explicitly instead.
       process.env.HNL_APP_ROOT = appRoot;
-      try { if (!process.env.GEMINI_API_KEY && safeStorage.isEncryptionAvailable() && fs.existsSync(getSecretPath())) process.env.GEMINI_API_KEY = safeStorage.decryptString(fs.readFileSync(getSecretPath())); } catch (_) {}
+      try { loadAiProviderStateIntoEnv(); } catch (_) {}
       require(path.join(appRoot, 'dist', 'server.cjs'));
       const appUrl = `http://127.0.0.1:${process.env.HNL_PORT}`;
       const loadApp = async () => {
@@ -160,7 +160,7 @@ function createWindow() {
   buildAppMenu();
 }
 
-async function openProjectFileDialog() {
+async function openProjectFileDialog(openMode = 'AUTO') {
   if (!mainWindow) return { success: false };
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Mở tệp HNL CAD AI',
@@ -176,8 +176,17 @@ async function openProjectFileDialog() {
   const filePath = result.filePaths[0];
   const ext = path.extname(filePath).toLowerCase();
   if (ext === '.dwg') {
-    mainWindow.webContents.send('file-opened', { filePath, fileName: path.basename(filePath), extension: 'dwg', requiresAutoCad: true });
-    return { success: true, filePath, requiresAutoCad: true };
+    const mode = ['AUTO','AUTOCAD_NATIVE','HNL_CANVAS','DIRECT_DWG'].includes(String(openMode || '').toUpperCase())
+      ? String(openMode).toUpperCase()
+      : 'AUTO';
+    mainWindow.webContents.send('file-opened', {
+      filePath,
+      fileName: path.basename(filePath),
+      extension: 'dwg',
+      openMode: mode,
+      requiresAutoCad: true,
+    });
+    return { success: true, filePath, openMode: mode, requiresAutoCad: true };
   }
   if (!['.dxf', '.json', '.lsp'].includes(ext)) {
     await dialog.showMessageBox(mainWindow, { type: 'warning', title: 'Định dạng chưa hỗ trợ', message: 'Chọn DWG/DXF/JSON/LSP.', detail: 'DWG được chuyển cho AutoCAD Bridge; DXF/JSON/LSP có thể xử lý trong HNL.' });
@@ -203,7 +212,19 @@ function buildAppMenu() {
         {
           label: 'Mở DWG / DXF / Project...',
           accelerator: 'CmdOrCtrl+O',
-          click: () => { openProjectFileDialog(); },
+          click: () => { openProjectFileDialog('AUTO'); },
+        },
+        {
+          label: 'Mở DWG bằng AutoCAD Native...',
+          click: () => { openProjectFileDialog('AUTOCAD_NATIVE'); },
+        },
+        {
+          label: 'Mở DWG trên HNL Canvas...',
+          click: () => { openProjectFileDialog('HNL_CANVAS'); },
+        },
+        {
+          label: 'Mở & chỉnh DWG trực tiếp trong HNL...',
+          click: () => { openProjectFileDialog('DIRECT_DWG'); },
         },
         {
           label: 'Lưu bản vẽ hiện tại (Save)',
@@ -353,7 +374,46 @@ function buildAppMenu() {
 }
 
 // IPC Handlers for Native OS Dialogs
-ipcMain.handle('open-file-dialog', async () => openProjectFileDialog());
+ipcMain.handle('open-file-dialog', async (_event, mode) => openProjectFileDialog(mode));
+ipcMain.handle('select-approved-document', async () => {
+  if (!mainWindow) return { success: false };
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Chọn Approved Material / Submittal / Catalog',
+    filters: [
+      { name: 'Technical Documents', extensions: ['pdf','dwg','dxf','xlsx','xls','docx','doc','jpg','jpeg','png'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+    properties: ['openFile'],
+  });
+  if (result.canceled || !result.filePaths.length) return { success: false };
+  const filePath = result.filePaths[0];
+  return { success: true, filePath, fileName: path.basename(filePath) };
+});
+
+ipcMain.handle('select-library-dwg', async () => {
+  if (!mainWindow) return { success: false };
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Nạp block/thư viện DWG vào HNL',
+    filters: [{ name: 'AutoCAD DWG', extensions: ['dwg'] }],
+    properties: ['openFile'],
+  });
+  if (result.canceled || !result.filePaths.length) return { success: false };
+  const filePath = result.filePaths[0];
+  return { success: true, filePath, fileName: path.basename(filePath) };
+});
+
+ipcMain.handle('read-text-file', async (_event, filePath) => {
+  try {
+    const target = String(filePath || '');
+    if (!target || !fs.existsSync(target)) return { success: false, error: 'File không tồn tại.' };
+    const stat = fs.statSync(target);
+    if (stat.size > 100 * 1024 * 1024) return { success: false, error: 'File text quá lớn (>100MB).' };
+    return { success: true, content: fs.readFileSync(target, 'utf-8'), filePath: target };
+  } catch (error) {
+    return { success: false, error: String(error?.message || error) };
+  }
+});
+
 
 ipcMain.handle('save-file-dialog', async (event, { defaultName, content, extDescription, extension }) => {
   const result = await dialog.showSaveDialog(mainWindow, {
@@ -385,17 +445,163 @@ ipcMain.handle('open-external-url', async (_event, url) => {
 ipcMain.handle('set-renderer-dirty', (_event, value) => { isRendererDirty = Boolean(value); return true; });
 ipcMain.handle('set-window-title', (_event, title) => { if (mainWindow && typeof title === 'string') mainWindow.setTitle(title.slice(0, 240)); return true; });
 
-const getSecretPath = () => path.join(app.getPath('userData'), 'gemini-key.bin');
+const AI_PROVIDER_IDS = ['OFFLINE','GEMINI','OPENAI','CLAUDE','GROK','OLLAMA','CUSTOM_OPENAI'];
+const AI_PROVIDER_DEFAULTS = {
+  OFFLINE: { model:'hnl-rules-v1', baseUrl:'' },
+  GEMINI: { model:'gemini-3.7-flash', baseUrl:'https://generativelanguage.googleapis.com' },
+  OPENAI: { model:'gpt-5.6', baseUrl:'https://api.openai.com/v1' },
+  CLAUDE: { model:'claude-sonnet-4-20250514', baseUrl:'https://api.anthropic.com/v1' },
+  GROK: { model:'grok-4.6', baseUrl:'https://api.x.ai/v1' },
+  OLLAMA: { model:'gemma3', baseUrl:'http://127.0.0.1:11434' },
+  CUSTOM_OPENAI: { model:'gpt-4o-mini', baseUrl:'http://127.0.0.1:1234/v1' },
+};
+
+const getAiProviderConfigPath = () => path.join(app.getPath('userData'), 'ai-provider-config.json');
+const getAiProviderSecretPath = () => path.join(app.getPath('userData'), 'ai-provider-secrets.bin');
+
+function readAiProviderConfig() {
+  const defaults = {
+    activeProvider: 'GEMINI',
+    autoFallbackOffline: true,
+    contextOnly: true,
+    previewBeforeExecute: true,
+    providers: Object.fromEntries(AI_PROVIDER_IDS.map(id => [id, {...AI_PROVIDER_DEFAULTS[id]}])),
+  };
+  try {
+    if (!fs.existsSync(getAiProviderConfigPath())) return defaults;
+    const raw = JSON.parse(fs.readFileSync(getAiProviderConfigPath(), 'utf-8'));
+    return {
+      ...defaults,
+      ...raw,
+      providers: Object.fromEntries(AI_PROVIDER_IDS.map(id => [
+        id,
+        { ...AI_PROVIDER_DEFAULTS[id], ...(raw?.providers?.[id] || {}) }
+      ])),
+    };
+  } catch (_) {
+    return defaults;
+  }
+}
+
+function writeAiProviderConfig(config) {
+  fs.mkdirSync(path.dirname(getAiProviderConfigPath()), { recursive: true });
+  fs.writeFileSync(getAiProviderConfigPath(), JSON.stringify(config, null, 2), 'utf-8');
+}
+
+function readAiProviderSecrets() {
+  try {
+    if (!safeStorage.isEncryptionAvailable() || !fs.existsSync(getAiProviderSecretPath())) return {};
+    return JSON.parse(safeStorage.decryptString(fs.readFileSync(getAiProviderSecretPath())) || '{}');
+  } catch (_) {
+    return {};
+  }
+}
+
+function writeAiProviderSecrets(secrets) {
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption chưa sẵn sàng.');
+  fs.mkdirSync(path.dirname(getAiProviderSecretPath()), { recursive: true });
+  fs.writeFileSync(getAiProviderSecretPath(), safeStorage.encryptString(JSON.stringify(secrets || {})));
+}
+
+function applyAiProviderStateToEnv(config = readAiProviderConfig(), secrets = readAiProviderSecrets()) {
+  const active = AI_PROVIDER_IDS.includes(String(config.activeProvider || '').toUpperCase())
+    ? String(config.activeProvider).toUpperCase()
+    : 'OFFLINE';
+  process.env.HNL_AI_ACTIVE_PROVIDER = active;
+  process.env.HNL_AI_AUTO_FALLBACK_OFFLINE = config.autoFallbackOffline === false ? 'false' : 'true';
+
+  for (const id of AI_PROVIDER_IDS) {
+    const p = { ...AI_PROVIDER_DEFAULTS[id], ...(config.providers?.[id] || {}) };
+    process.env[`HNL_AI_${id}_MODEL`] = String(p.model || '');
+    process.env[`HNL_AI_${id}_BASE_URL`] = String(p.baseUrl || '');
+  }
+
+  process.env.GEMINI_API_KEY = String(secrets.GEMINI || process.env.GEMINI_API_KEY || '');
+  process.env.OPENAI_API_KEY = String(secrets.OPENAI || process.env.OPENAI_API_KEY || '');
+  process.env.ANTHROPIC_API_KEY = String(secrets.CLAUDE || process.env.ANTHROPIC_API_KEY || '');
+  process.env.XAI_API_KEY = String(secrets.GROK || process.env.XAI_API_KEY || '');
+  process.env.CUSTOM_OPENAI_API_KEY = String(secrets.CUSTOM_OPENAI || process.env.CUSTOM_OPENAI_API_KEY || '');
+}
+
+function publicAiProviderConfig() {
+  const cfg = readAiProviderConfig();
+  const secrets = readAiProviderSecrets();
+  return {
+    ...cfg,
+    configured: Object.fromEntries(AI_PROVIDER_IDS.map(id => [
+      id,
+      id === 'OFFLINE' || id === 'OLLAMA' || Boolean(secrets[id])
+    ])),
+  };
+}
+
+ipcMain.handle('get-ai-provider-config', () => {
+  try {
+    applyAiProviderStateToEnv();
+    return { success: true, config: publicAiProviderConfig() };
+  } catch (error) {
+    return { success: false, error: String(error?.message || error) };
+  }
+});
+
+ipcMain.handle('save-ai-provider-config', async (_event, input) => {
+  try {
+    const provider = String(input?.provider || input?.activeProvider || 'GEMINI').toUpperCase();
+    if (!AI_PROVIDER_IDS.includes(provider)) throw new Error(`Provider không hợp lệ: ${provider}`);
+
+    const cfg = readAiProviderConfig();
+    cfg.activeProvider = String(input?.activeProvider || provider).toUpperCase();
+    cfg.autoFallbackOffline = input?.autoFallbackOffline !== false;
+    cfg.contextOnly = input?.contextOnly !== false;
+    cfg.previewBeforeExecute = input?.previewBeforeExecute !== false;
+    cfg.providers = cfg.providers || {};
+    cfg.providers[provider] = {
+      ...AI_PROVIDER_DEFAULTS[provider],
+      ...(cfg.providers[provider] || {}),
+      ...(typeof input?.model === 'string' ? { model: input.model.trim() } : {}),
+      ...(typeof input?.baseUrl === 'string' ? { baseUrl: input.baseUrl.trim() } : {}),
+    };
+    writeAiProviderConfig(cfg);
+
+    const secrets = readAiProviderSecrets();
+    if (input?.clearKey) delete secrets[provider];
+    if (typeof input?.apiKey === 'string' && input.apiKey.trim()) secrets[provider] = input.apiKey.trim();
+    if (provider !== 'OFFLINE' && provider !== 'OLLAMA' && (input?.clearKey || (typeof input?.apiKey === 'string' && input.apiKey.trim()))) {
+      writeAiProviderSecrets(secrets);
+    }
+
+    applyAiProviderStateToEnv(cfg, secrets);
+    return { success: true, config: publicAiProviderConfig() };
+  } catch (error) {
+    return { success: false, error: String(error?.message || error) };
+  }
+});
+
+// Legacy Gemini key IPC kept for old renderers.
+const getSecretPath = () => getAiProviderSecretPath();
 ipcMain.handle('save-ai-key', async (_event, key) => {
   try {
-    const value = String(key || '').trim(); if (!value) return { success: false, error: 'API key trống.' };
-    if (!safeStorage.isEncryptionAvailable()) return { success: false, error: 'Windows encryption chưa sẵn sàng.' };
-    fs.writeFileSync(getSecretPath(), safeStorage.encryptString(value)); process.env.GEMINI_API_KEY = value;
+    const value = String(key || '').trim();
+    if (!value) return { success: false, error: 'API key trống.' };
+    const secrets = readAiProviderSecrets();
+    secrets.GEMINI = value;
+    writeAiProviderSecrets(secrets);
+    const cfg = readAiProviderConfig();
+    cfg.activeProvider = 'GEMINI';
+    writeAiProviderConfig(cfg);
+    applyAiProviderStateToEnv(cfg, secrets);
     return { success: true };
-  } catch (error) { return { success: false, error: String(error?.message || error) }; }
+  } catch (error) {
+    return { success: false, error: String(error?.message || error) };
+  }
 });
 ipcMain.handle('get-ai-key-status', () => {
-  try { return { configured: Boolean(process.env.GEMINI_API_KEY) || fs.existsSync(getSecretPath()) }; } catch { return { configured: false }; }
+  try {
+    const secrets = readAiProviderSecrets();
+    return { configured: Boolean(secrets.GEMINI || process.env.GEMINI_API_KEY) };
+  } catch {
+    return { configured: false };
+  }
 });
 
 

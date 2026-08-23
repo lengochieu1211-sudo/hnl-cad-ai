@@ -74,7 +74,7 @@ export const INITIAL_SMART_OBJECTS: HnlSmartObject[] = [
     mainFrameType: "V-KEEL_38",
     mainSpacingMm: 800,
     secondaryFrameType: "M-BAR",
-    secondarySpacingMm: 400,
+    secondarySpacingMm: 1220 / 3,
     hangerType: "THREADED_ROD_M6",
     hangerSpacingMm: 1000,
     perimeterType: "SHADOWLINE_Z",
@@ -85,7 +85,7 @@ export const INITIAL_SMART_OBJECTS: HnlSmartObject[] = [
       { key: "levelElevationMm", label: "Cao độ trần (mm)", type: "number", value: 2800, unit: "mm", group: "General" },
       { key: "boardType", label: "Loại tấm thạch cao", type: "select", value: "MOISTURE_RESIST_9.5", options: ["STANDARD_9.5", "MOISTURE_RESIST_9.5", "FIRE_RESIST_12.5", "ACOUSTIC_PERFORATED", "MINERAL_FIBER_15"], group: "Board" },
       { key: "mainSpacingMm", label: "Khoảng cách xương chính (mm)", type: "number", value: 800, unit: "mm", group: "Framing" },
-      { key: "secondarySpacingMm", label: "Khoảng cách xương phụ (mm)", type: "number", value: 400, unit: "mm", group: "Framing" },
+      { key: "secondarySpacingMm", label: "Khoảng cách xương phụ (mm)", type: "number", value: 1220 / 3, unit: "mm", group: "Framing" },
       { key: "hangerSpacingMm", label: "Khoảng cách ty treo (mm)", type: "number", value: 1000, unit: "mm", group: "Framing" },
       { key: "perimeterType", label: "Thanh viền tường", type: "select", value: "SHADOWLINE_Z", options: ["SHADOWLINE_Z", "WALL_ANGLE_L20x20"], group: "Framing" },
       { key: "areaM2", label: "Diện tích trần (m²)", type: "number", value: 20.16, unit: "m²", isReadOnly: true, group: "Geometry" },
@@ -110,7 +110,7 @@ export const INITIAL_SMART_OBJECTS: HnlSmartObject[] = [
     totalThicknessMm: 100,
     studType: "C75_0.5MM",
     trackType: "U75_0.5MM",
-    studSpacingMm: 600,
+    studSpacingMm: 1220 / 2,
     heightMm: 3200,
     boardSideA: "1x12.5mm Gyproc Tiêu chuẩn",
     boardSideB: "1x12.5mm Gyproc Tiêu chuẩn",
@@ -122,7 +122,7 @@ export const INITIAL_SMART_OBJECTS: HnlSmartObject[] = [
       { key: "wallType", label: "Cấu tạo vách", type: "select", value: "DRYWALL_SINGLE_STUD", options: ["DRYWALL_SINGLE_STUD", "DRYWALL_DOUBLE_STUD", "SHAFT_WALL", "CURVED_WALL", "BRICK_200"], group: "General" },
       { key: "totalThicknessMm", label: "Tổng chiều dày vách (mm)", type: "number", value: 100, unit: "mm", group: "General" },
       { key: "heightMm", label: "Chiều cao tường (mm)", type: "number", value: 3200, unit: "mm", group: "General" },
-      { key: "studSpacingMm", label: "Khoảng cách Stud (mm)", type: "number", value: 600, unit: "mm", group: "Framing" },
+      { key: "studSpacingMm", label: "Khoảng cách Stud (mm)", type: "number", value: 1220 / 2, unit: "mm", group: "Framing" },
       { key: "insulationType", label: "Bông cách âm/nhiệt", type: "select", value: "GLASSWOOL_50MM_24KG", options: ["ROCKWOOL_50MM_50KG", "GLASSWOOL_50MM_24KG", "NONE"], group: "Fire & Acoustic" },
       { key: "acousticRatingRw", label: "Chỉ số cách âm (Rw dB)", type: "number", value: 42, unit: "dB", isReadOnly: true, group: "Fire & Acoustic" },
     ],
@@ -146,7 +146,7 @@ export const INITIAL_SMART_OBJECTS: HnlSmartObject[] = [
     totalThicknessMm: 125,
     studType: "C75_0.5MM",
     trackType: "SLOTTED_DEFLECTION_TRACK",
-    studSpacingMm: 400,
+    studSpacingMm: 1220 / 3,
     heightMm: 3600,
     boardSideA: "2x12.5mm Gyproc FireStop Chống Cháy",
     boardSideB: "2x12.5mm Gyproc FireStop Chống Cháy",
@@ -161,7 +161,7 @@ export const INITIAL_SMART_OBJECTS: HnlSmartObject[] = [
       { key: "testedAssemblyId", label: "Hệ đã chứng nhận (Tested Assembly)", type: "string", value: "W-EI60-01 (CẦN GẮN TEST REPORT DỰ ÁN)", isReadOnly: true, group: "Fire & Acoustic" },
       { key: "totalThicknessMm", label: "Tổng chiều dày vách (mm)", type: "number", value: 125, unit: "mm", group: "General" },
       { key: "heightMm", label: "Chiều cao tường (mm)", type: "number", value: 3600, unit: "mm", group: "General" },
-      { key: "studSpacingMm", label: "Khoảng cách Stud (mm)", type: "number", value: 400, unit: "mm", group: "Framing" },
+      { key: "studSpacingMm", label: "Khoảng cách Stud (mm)", type: "number", value: 1220 / 3, unit: "mm", group: "Framing" },
       { key: "insulationType", label: "Vật liệu cách âm/chống cháy", type: "select", value: "ROCKWOOL_50MM_50KG", options: ["ROCKWOOL_50MM_50KG", "GLASSWOOL_50MM_24KG", "NONE"], group: "Fire & Acoustic" },
       { key: "hasDeflectionHead", label: "Gối trượt đàn hồi dầm (Deflection Head)", type: "boolean", value: true, group: "Framing" },
     ],
@@ -498,7 +498,7 @@ export function calculateSmartObjectBOQ(smartObjects: HnlSmartObject[]) {
       totalBoardM2 += c.areaM2;
       totalMainFrameLm += (c.areaM2 / (c.mainSpacingMm / 1000)) * 1.05;
       totalSecFrameLm += (c.areaM2 / (c.secondarySpacingMm / 1000)) * 1.08;
-      totalHangerPcs += Math.ceil((c.areaM2 / (c.mainSpacingMm / 1000 / (c.hangerSpacingMm / 1000))) * 1.1);
+      totalHangerPcs += Math.ceil((c.areaM2 / ((c.mainSpacingMm / 1000) * (c.hangerSpacingMm / 1000))) * 1.1);
     } else if (obj.type === "HNL_WALL") {
       const w = obj as HnlWallSmartObject;
       const lengthM = Math.sqrt(Math.pow(w.p2.x - w.p1.x, 2) + Math.pow(w.p2.y - w.p1.y, 2)) / 1000;

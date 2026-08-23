@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { HNL_APP_VERSION } from "./src/lib/version";
 
 dotenv.config();
 
@@ -21,23 +22,259 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-// Lazy init for Gemini SDK
+type AiProviderId =
+  | "OFFLINE"
+  | "GEMINI"
+  | "OPENAI"
+  | "CLAUDE"
+  | "GROK"
+  | "OLLAMA"
+  | "CUSTOM_OPENAI";
+
+type AiProviderConfig = {
+  id: AiProviderId;
+  label: string;
+  model: string;
+  baseUrl: string;
+  apiKey: string;
+  configured: boolean;
+};
+
+const PROVIDER_DEFAULTS: Record<AiProviderId, {label:string; model:string; baseUrl:string; keyEnv?:string}> = {
+  OFFLINE: { label: "HNL Offline Rules", model: "hnl-rules-v1", baseUrl: "" },
+  GEMINI: { label: "Google Gemini", model: "gemini-3.7-flash", baseUrl: "https://generativelanguage.googleapis.com", keyEnv: "GEMINI_API_KEY" },
+  OPENAI: { label: "ChatGPT / OpenAI", model: "gpt-5.6", baseUrl: "https://api.openai.com/v1", keyEnv: "OPENAI_API_KEY" },
+  CLAUDE: { label: "Claude / Anthropic", model: "claude-sonnet-4-20250514", baseUrl: "https://api.anthropic.com/v1", keyEnv: "ANTHROPIC_API_KEY" },
+  GROK: { label: "Grok / xAI", model: "grok-4.6", baseUrl: "https://api.x.ai/v1", keyEnv: "XAI_API_KEY" },
+  OLLAMA: { label: "Ollama Local", model: "gemma3", baseUrl: "http://127.0.0.1:11434" },
+  CUSTOM_OPENAI: { label: "Custom OpenAI-compatible", model: "gpt-4o-mini", baseUrl: "http://127.0.0.1:1234/v1", keyEnv: "CUSTOM_OPENAI_API_KEY" },
+};
+
+function normalizeProviderId(value: unknown): AiProviderId {
+  const id = String(value || process.env.HNL_AI_ACTIVE_PROVIDER || "GEMINI").trim().toUpperCase();
+  return (Object.prototype.hasOwnProperty.call(PROVIDER_DEFAULTS, id) ? id : "OFFLINE") as AiProviderId;
+}
+
+function providerEnvPrefix(id: AiProviderId) {
+  return `HNL_AI_${id}`;
+}
+
+function getProviderConfig(idValue?: unknown): AiProviderConfig {
+  const id = normalizeProviderId(idValue);
+  const def = PROVIDER_DEFAULTS[id];
+  const prefix = providerEnvPrefix(id);
+  const model = process.env[`${prefix}_MODEL`] || def.model;
+  const baseUrl = (process.env[`${prefix}_BASE_URL`] || def.baseUrl).replace(/\/+$/, "");
+  const apiKey = def.keyEnv ? (process.env[def.keyEnv] || "") : (id === "CUSTOM_OPENAI" ? (process.env.CUSTOM_OPENAI_API_KEY || "") : "");
+  const configured = id === "OFFLINE" || id === "OLLAMA" || Boolean(apiKey);
+  return { id, label: def.label, model, baseUrl, apiKey, configured };
+}
+
+function getSafeProviderStatus() {
+  const ids = Object.keys(PROVIDER_DEFAULTS) as AiProviderId[];
+  return {
+    activeProvider: normalizeProviderId(process.env.HNL_AI_ACTIVE_PROVIDER),
+    providers: ids.map((id) => {
+      const cfg = getProviderConfig(id);
+      return {
+        id: cfg.id,
+        label: cfg.label,
+        model: cfg.model,
+        baseUrl: cfg.baseUrl,
+        configured: cfg.configured,
+      };
+    }),
+  };
+}
+
+function hasOnlineProvider(idValue?: unknown) {
+  const cfg = getProviderConfig(idValue);
+  return cfg.id !== "OFFLINE" && cfg.configured;
+}
+
+function openAiResponsesUrl(baseUrl: string) {
+  const base = baseUrl.replace(/\/+$/, "");
+  return base.endsWith("/responses") ? base : `${base}/responses`;
+}
+
+function openAiChatUrl(baseUrl: string) {
+  const base = baseUrl.replace(/\/+$/, "");
+  return base.endsWith("/chat/completions") ? base : `${base}/chat/completions`;
+}
+
+async function readJsonResponse(response: Response) {
+  const text = await response.text();
+  let data: any = null;
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  if (!response.ok) {
+    const message = data?.error?.message || data?.error || data?.message || text || `HTTP ${response.status}`;
+    throw new Error(String(message));
+  }
+  return data;
+}
+
+function extractOpenAiResponseText(data: any): string {
+  if (typeof data?.output_text === "string") return data.output_text;
+  if (Array.isArray(data?.output)) {
+    for (const item of data.output) {
+      if (!Array.isArray(item?.content)) continue;
+      for (const part of item.content) {
+        if (typeof part?.text === "string") return part.text;
+        if (part?.type === "output_text" && typeof part?.text === "string") return part.text;
+      }
+    }
+  }
+  if (typeof data?.choices?.[0]?.message?.content === "string") return data.choices[0].message.content;
+  return "";
+}
+
+function extractClaudeText(data: any): string {
+  if (!Array.isArray(data?.content)) return "";
+  return data.content.map((part:any) => part?.type === "text" ? String(part.text || "") : "").join("\n").trim();
+}
+
+// Lazy init retained only for the official Gemini SDK.
 let aiClient: GoogleGenAI | null = null;
 let aiClientKey = "";
-function getAI(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY || "";
+function getGeminiAI(apiKey: string): GoogleGenAI {
   if (!aiClient || aiClientKey !== apiKey) {
     aiClientKey = apiKey;
     aiClient = new GoogleGenAI({
       apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
+      httpOptions: { headers: { "User-Agent": "hnl-cad-ai" } },
     });
   }
   return aiClient;
+}
+
+async function callAiText(args: {
+  provider?: unknown;
+  prompt: string;
+  systemInstruction?: string;
+  jsonMode?: boolean;
+}): Promise<{text:string; provider:AiProviderId; model:string}> {
+  const cfg = getProviderConfig(args.provider);
+  const system = args.systemInstruction || "Bạn là trợ lý kỹ sư CAD của HNL.";
+  const userPrompt = args.jsonMode
+    ? `${args.prompt}\n\nYÊU CẦU ĐẦU RA: Chỉ trả JSON hợp lệ, không markdown fence.`
+    : args.prompt;
+
+  if (cfg.id === "OFFLINE") {
+    throw new Error("OFFLINE_PROVIDER");
+  }
+
+  if (cfg.id === "GEMINI") {
+    if (!cfg.apiKey) throw new Error("Gemini API key chưa cấu hình.");
+    const ai = getGeminiAI(cfg.apiKey);
+    const response = await ai.models.generateContent({
+      model: cfg.model,
+      contents: userPrompt,
+      config: {
+        systemInstruction: system,
+        ...(args.jsonMode ? { responseMimeType: "application/json" } : {}),
+      },
+    });
+    return { text: response.text || "", provider: cfg.id, model: cfg.model };
+  }
+
+  if (cfg.id === "OPENAI" || cfg.id === "GROK") {
+    if (!cfg.apiKey) throw new Error(`${cfg.label} API key chưa cấu hình.`);
+    const response = await fetch(openAiResponsesUrl(cfg.baseUrl), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${cfg.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: cfg.model,
+        input: [
+          { role: "system", content: system },
+          { role: "user", content: userPrompt },
+        ],
+      }),
+    });
+    const data = await readJsonResponse(response);
+    return { text: extractOpenAiResponseText(data), provider: cfg.id, model: cfg.model };
+  }
+
+  if (cfg.id === "CLAUDE") {
+    if (!cfg.apiKey) throw new Error("Claude API key chưa cấu hình.");
+    const base = cfg.baseUrl.replace(/\/+$/, "");
+    const response = await fetch(base.endsWith("/messages") ? base : `${base}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": cfg.apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: cfg.model,
+        max_tokens: args.jsonMode ? 4096 : 2048,
+        system,
+        messages: [{ role: "user", content: userPrompt }],
+      }),
+    });
+    const data = await readJsonResponse(response);
+    return { text: extractClaudeText(data), provider: cfg.id, model: cfg.model };
+  }
+
+  if (cfg.id === "OLLAMA") {
+    const base = cfg.baseUrl.replace(/\/+$/, "");
+    const url = base.endsWith("/api/chat") ? base : `${base}/api/chat`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: cfg.model,
+        stream: false,
+        ...(args.jsonMode ? { format: "json" } : {}),
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userPrompt },
+        ],
+      }),
+    });
+    const data = await readJsonResponse(response);
+    return { text: String(data?.message?.content || ""), provider: cfg.id, model: cfg.model };
+  }
+
+  if (cfg.id === "CUSTOM_OPENAI") {
+    const headers: Record<string,string> = { "Content-Type": "application/json" };
+    if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
+    // Prefer Responses API. If the custom server does not support it, retry Chat Completions.
+    try {
+      const response = await fetch(openAiResponsesUrl(cfg.baseUrl), {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: cfg.model,
+          input: [
+            { role: "system", content: system },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      });
+      const data = await readJsonResponse(response);
+      return { text: extractOpenAiResponseText(data), provider: cfg.id, model: cfg.model };
+    } catch {
+      const response = await fetch(openAiChatUrl(cfg.baseUrl), {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: cfg.model,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: userPrompt },
+          ],
+          stream: false,
+        }),
+      });
+      const data = await readJsonResponse(response);
+      return { text: extractOpenAiResponseText(data), provider: cfg.id, model: cfg.model };
+    }
+  }
+
+  throw new Error(`Provider không hỗ trợ: ${cfg.id}`);
 }
 
 // In-memory Translation Memory storage
@@ -71,8 +308,8 @@ app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     app: "HNL CAD AI TOOL",
-    version: "2.4.7",
-    hasApiKey: Boolean(process.env.GEMINI_API_KEY),
+    version: HNL_APP_VERSION,
+    ai: getSafeProviderStatus(),
   });
 });
 
@@ -83,6 +320,17 @@ type AutoCadBridgeRegistration = { connected:boolean; version?:string; drawingNa
 let autoCadBridge: AutoCadBridgeRegistration = { connected:false, lastSeen:0, capabilities:[] };
 const autoCadActionQueue: Array<{id:string;action:string;payload:any;createdAt:number}> = [];
 const autoCadActionResults = new Map<string, any>();
+const AUTOCAD_ACTION_TTL_MS = 30_000;
+const AUTOCAD_RESULT_TTL_MS = 60_000;
+const AUTOCAD_QUEUE_MAX = 200;
+function pruneAutoCadBridgeBuffers() {
+  const now = Date.now();
+  while (autoCadActionQueue.length && now - autoCadActionQueue[0].createdAt > AUTOCAD_ACTION_TTL_MS) autoCadActionQueue.shift();
+  if (autoCadActionQueue.length > AUTOCAD_QUEUE_MAX) autoCadActionQueue.splice(0, autoCadActionQueue.length - AUTOCAD_QUEUE_MAX);
+  for (const [id, value] of autoCadActionResults.entries()) {
+    if (now - Number(value?.receivedAt || now) > AUTOCAD_RESULT_TTL_MS) autoCadActionResults.delete(id);
+  }
+}
 
 app.post("/api/autocad/register", (req,res)=>{
   autoCadBridge={connected:true,version:String(req.body?.version||""),drawingName:String(req.body?.drawingName||""),pluginVersion:String(req.body?.pluginVersion||""),lastSeen:Date.now(),capabilities:Array.isArray(req.body?.capabilities)?req.body.capabilities.map(String):[]};
@@ -97,6 +345,7 @@ app.get("/api/autocad/status", (_req,res)=>{
   res.json({...autoCadBridge,connected:alive});
 });
 app.post("/api/autocad/action", (req,res)=>{
+  pruneAutoCadBridgeBuffers();
   const alive=autoCadBridge.connected && Date.now()-autoCadBridge.lastSeen<5000;
   if(!alive)return res.status(409).json({ok:false,reason:"AUTOCAD_BRIDGE_NOT_CONNECTED"});
   const id=`act_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
@@ -104,98 +353,123 @@ app.post("/api/autocad/action", (req,res)=>{
   res.json({ok:true,id});
 });
 app.get("/api/autocad/poll", (_req,res)=>{
+  pruneAutoCadBridgeBuffers();
   const item=autoCadActionQueue.shift()||null;res.json({item});
 });
 app.post("/api/autocad/result", (req,res)=>{
+  pruneAutoCadBridgeBuffers();
   const id=String(req.body?.id||"");if(id)autoCadActionResults.set(id,{...req.body,receivedAt:Date.now()});res.json({ok:true});
 });
 app.get("/api/autocad/result/:id", (req,res)=>{
-  const x=autoCadActionResults.get(req.params.id);if(!x)return res.status(404).json({ok:false,pending:true});res.json(x);
+  pruneAutoCadBridgeBuffers();
+  const x=autoCadActionResults.get(req.params.id);if(!x)return res.status(404).json({ok:false,pending:true});
+  autoCadActionResults.delete(req.params.id);
+  res.json(x);
 });
 
-// API: AI CAD Command Planner
-app.post("/api/gemini/plan", async (req, res) => {
-  try {
-    const { prompt, cadContext } = req.body;
-    if (!prompt) {
-      return res.status(400).json({ error: "Prompt is required" });
-    }
+// API: Unified AI Provider Manager / CAD Command Planner
+app.get("/api/ai/status", (_req, res) => {
+  res.json(getSafeProviderStatus());
+});
 
-    if (!process.env.GEMINI_API_KEY) {
-      // Fallback rule-based planner for offline mode
+app.post("/api/ai/test", async (req, res) => {
+  const provider = normalizeProviderId(req.body?.provider);
+  if (provider === "OFFLINE") {
+    return res.json({ ok: true, provider, model: "hnl-rules-v1", message: "HNL Offline Rules sẵn sàng." });
+  }
+  try {
+    const result = await callAiText({
+      provider,
+      prompt: "Return exactly: HNL_OK",
+      systemInstruction: "You are a connectivity test. Return exactly HNL_OK.",
+      jsonMode: false,
+    });
+    res.json({
+      ok: /HNL_OK/i.test(result.text),
+      provider: result.provider,
+      model: result.model,
+      message: result.text.slice(0, 300),
+    });
+  } catch (err:any) {
+    res.status(400).json({ ok: false, provider, error: err?.message || String(err) });
+  }
+});
+
+const CAD_PLAN_SYSTEM_INSTRUCTION = `Bạn là CAD Command Planner & AI Copilot cao cấp thuộc bộ công cụ HNL CAD AI TOOL cho AutoCAD 2023+.
+Nhận yêu cầu tiếng Việt/Anh cùng CAD Context và sinh Structured CAD Action Plan.
+
+QUY TẮC AN TOÀN:
+1. SAFE: vẽ mới, copy, đo, dimension, text, table, ghi chú.
+2. DESTRUCTIVE: delete, replace all, purge, xóa layer/layout, overwrite.
+3. Không tự thực thi thay đổi nguy hiểm. Chỉ trả plan để HNL Preview/xác nhận.
+4. Nếu CAD Context có Approved Material/Submittal: ưu tiên nguồn APPROVED trước Manufacturer Catalog, rồi mới đến HNL Project Rule.
+5. Không trộn thông số giữa hai hãng/hệ/revision.
+6. Nếu thiếu nguồn kỹ thuật: ghi certainty="UNVERIFIED" và yêu cầu kỹ sư xác nhận, không tự bịa.
+
+Trả JSON:
+{
+  "intent": "Mục đích ngắn",
+  "actionType": "DRAW_WALL | DRAW_CEILING | DRAW_RECT | DRAW_POLYLINE | DIMENSION | CALC_AREA | CREATE_TABLE | BATCH_MODIFY | TRANSLATE | AUDIT | AUTO_LAYOUT | EXPORT_BOQ",
+  "isDestructive": false,
+  "confidence": 0.0,
+  "certainty": "APPROVED_PROJECT | MANUFACTURER_VERIFIED | HNL_PROJECT_RULE | UNVERIFIED",
+  "explanation": "Giải thích cho kỹ sư",
+  "sourceRefs": [{"type":"APPROVED_SUBMITTAL | PROJECT_SPEC | MANUFACTURER | HNL_RULE","title":"...","revision":"...","note":"..."}],
+  "steps": [{"stepIndex":1,"command":"CAD_COMMAND_NAME","description":"...","parameters":{}}],
+  "previewData": {"entityType":"WALL | CEILING_GRID | RECTANGLE | TABLE | DIMENSION | TEXT","entitiesToAdd":[],"entitiesToModify":[],"entitiesToDelete":[]}
+}`;
+
+async function handleAiPlan(req:any, res:any) {
+  try {
+    const { prompt, cadContext, provider } = req.body || {};
+    if (!prompt) return res.status(400).json({ error: "Prompt is required" });
+
+    const selected = normalizeProviderId(provider);
+    if (selected === "OFFLINE" || !hasOnlineProvider(selected)) {
       return res.json({
         plan: generateOfflinePlan(prompt, cadContext),
+        provider: "OFFLINE",
+        model: "hnl-rules-v1",
         isOfflineFallback: true,
+        fallbackReason: selected === "OFFLINE" ? "OFFLINE_SELECTED" : "PROVIDER_NOT_CONFIGURED",
       });
     }
 
-    const ai = getAI();
-    const systemInstruction = `Bạn là CAD Command Planner & AI Copilot cao cấp thuộc bộ công cụ HNL CAD AI TOOL cho AutoCAD 2023+.
-Nhiệm vụ của bạn là nhận ngôn ngữ tự nhiên từ người dùng tiếng Việt hoặc tiếng Anh cùng với CAD Context (các đối tượng đang chọn, layer, kích thước, mặt bằng), sau đó phân tích và sinh ra "Structured CAD Action Plan".
-
-QUY TẮC AN TOÀN BẮT BUỘC:
-1. Phân loại tác vụ rõ ràng:
-   - "SAFE": Vẽ mới (Line, Polyline, Wall, Ceiling, Rect, Circle, Dim, Text, Table), copy, đo đạc, gán ghi chú.
-   - "DESTRUCTIVE": Xóa (Delete), Thay thế hàng loạt (Replace all), Purge, Xóa Layer, Xóa Layout, Overwrite.
-2. Không bao giờ thực thi trực tiếp mã nguy hiểm. Luôn trả về danh sách các bước rõ ràng để ứng dụng Preview cho người dùng xác nhận trước khi gọi AutoCAD API.
-
-Trả về định dạng JSON thuần túy có cấu trúc sau:
-{
-  "intent": "Mô tả mục đích ngắn gọn",
-  "actionType": "DRAW_WALL | DRAW_CEILING | DRAW_RECT | DRAW_POLYLINE | DIMENSION | CALC_AREA | CREATE_TABLE | BATCH_MODIFY | TRANSLATE | AUDIT | AUTO_LAYOUT | EXPORT_BOQ",
-  "isDestructive": boolean,
-  "confidence": number (0.0 to 1.0),
-  "explanation": "Giải thích chi tiết cho kỹ sư CAD",
-  "steps": [
-    {
-      "stepIndex": 1,
-      "command": "CAD_COMMAND_NAME",
-      "description": "Mô tả bước thực hiện",
-      "parameters": { ... }
-    }
-  ],
-  "previewData": {
-    "entityType": "WALL | CEILING_GRID | RECTANGLE | TABLE | DIMENSION | TEXT",
-    "entitiesToAdd": [
-      {
-        "type": "RECTANGLE | POLYLINE | WALL | CEILING | TEXT | TABLE | BLOCK",
-        "layer": "string",
-        "color": "string",
-        "props": { ... }
-      }
-    ],
-    "entitiesToModify": [],
-    "entitiesToDelete": []
-  }
-}`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
-      contents: `Yêu cầu người dùng: "${prompt}"
+    try {
+      const answer = await callAiText({
+        provider: selected,
+        systemInstruction: CAD_PLAN_SYSTEM_INSTRUCTION,
+        prompt: `Yêu cầu người dùng: "${prompt}"
 CAD Context hiện tại:
 ${JSON.stringify(cadContext || {}, null, 2)}`,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-      },
-    });
-
-    const text = response.text || "{}";
-    try {
-      const parsed = JSON.parse(text);
-      res.json({ plan: parsed, isOfflineFallback: false });
-    } catch {
-      res.json({ plan: generateOfflinePlan(prompt, cadContext), isOfflineFallback: true });
+        jsonMode: true,
+      });
+      const parsed = JSON.parse(answer.text || "{}");
+      return res.json({
+        plan: parsed,
+        provider: answer.provider,
+        model: answer.model,
+        isOfflineFallback: false,
+      });
+    } catch (providerError:any) {
+      const autoFallback = String(process.env.HNL_AI_AUTO_FALLBACK_OFFLINE || "true").toLowerCase() !== "false";
+      if (!autoFallback) throw providerError;
+      return res.json({
+        plan: generateOfflinePlan(prompt, cadContext),
+        provider: "OFFLINE",
+        model: "hnl-rules-v1",
+        isOfflineFallback: true,
+        error: providerError?.message || String(providerError),
+      });
     }
-  } catch (err: any) {
-    console.error("Gemini plan error:", err);
-    res.json({
-      plan: generateOfflinePlan(req.body.prompt || "", req.body.cadContext),
-      isOfflineFallback: true,
-      error: err.message,
-    });
+  } catch (err:any) {
+    return res.status(500).json({ error: err?.message || String(err) });
   }
-});
+}
+
+app.post("/api/ai/plan", handleAiPlan);
+// Backward compatibility for older HNL UI/plugin builds.
+app.post("/api/gemini/plan", handleAiPlan);
 
 // API: AI AutoLISP Builder
 app.post("/api/gemini/lisp", async (req, res) => {
@@ -205,14 +479,15 @@ app.post("/api/gemini/lisp", async (req, res) => {
       return res.status(400).json({ error: "Prompt is required" });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
+    const selectedProvider = normalizeProviderId(req.body?.provider);
+    if (selectedProvider === "OFFLINE" || !hasOnlineProvider(selectedProvider)) {
       return res.json({
         lisp: generateOfflineLisp(prompt, commandName),
+        provider: "OFFLINE",
         isOfflineFallback: true,
       });
     }
 
-    const ai = getAI();
     const systemInstruction = `Bạn là Chuyên gia AutoLISP & Visual LISP hàng đầu cho AutoCAD 2023-2026 thuộc HNL CAD AI TOOL.
 Nhiệm vụ: Viết mã AutoLISP (.lsp) chuẩn mực, tối ưu, có xử lý lỗi (*error*), kiểm tra Undo Group (vla-StartUndoMark / vla-EndUndoMark), biến hệ thống (OSMODE, CMDECHO, CLAYER), tương thích Unicode tiếng Việt, và không chạy lệnh nguy hiểm (không xóa file ổ đĩa, không shell script độc hại).
 
@@ -227,19 +502,16 @@ Trả về JSON:
   "usageInstructions": "Hướng dẫn sử dụng lệnh trong AutoCAD"
 }`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
-      contents: `Yêu cầu viết Lisp: "${prompt}"\nTên lệnh mong muốn: "${commandName}"`,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-      },
+    const answer = await callAiText({
+      provider: selectedProvider,
+      prompt: `Yêu cầu viết Lisp: "${prompt}"\nTên lệnh mong muốn: "${commandName}"`,
+      systemInstruction,
+      jsonMode: true,
     });
 
-    const text = response.text || "{}";
     try {
-      const parsed = JSON.parse(text);
-      res.json({ ...parsed, isOfflineFallback: false });
+      const parsed = JSON.parse(answer.text || "{}");
+      res.json({ ...parsed, provider: answer.provider, model: answer.model, isOfflineFallback: false });
     } catch {
       res.json({ lisp: generateOfflineLisp(prompt, commandName), isOfflineFallback: true });
     }
@@ -301,8 +573,8 @@ app.post("/api/gemini/translate", async (req, res) => {
       }
     });
 
-    if (itemsToCallAI.length > 0 && process.env.GEMINI_API_KEY) {
-      const ai = getAI();
+    if (itemsToCallAI.length > 0 && hasOnlineProvider(req.body?.provider)) {
+      const selectedProvider = normalizeProviderId(req.body?.provider);
       const prompt = `Dịch danh sách các thuật ngữ / ghi chú kỹ thuật bản vẽ CAD từ ${sourceLang} sang ${targetLang}.
 Giữ phong cách dịch chuẩn chuyên ngành Kiến trúc, Kết cấu, MEP, Xây dựng (Construction & Architecture CAD standards).
 
@@ -314,16 +586,15 @@ Trả về JSON array:
   { "id": "string", "translated": "string" }
 ]`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-        },
+      const answer = await callAiText({
+        provider: selectedProvider,
+        prompt,
+        systemInstruction: "Bạn là biên dịch viên kỹ thuật CAD/Xây dựng. Dịch chính xác, ngắn gọn, giữ ký hiệu và kích thước.",
+        jsonMode: true,
       });
 
       try {
-        const aiOutput: Array<{ id: string; translated: string }> = JSON.parse(response.text || "[]");
+        const aiOutput: Array<{ id: string; translated: string }> = JSON.parse(answer.text || "[]");
         aiOutput.forEach((resItem) => {
           const origObj = itemsToCallAI.find((x) => x.id === resItem.id);
           if (origObj) {
@@ -787,22 +1058,24 @@ app.post("/api/gemini/sketchup-map", async (req, res) => {
       if (/MEP|PIPE|DUCT|ELEC|ỐNG|ONG/.test(s)) return { tag, layer: "M-MEP", color: "#FF00FF", lineweight: 0.13, reason: "MEP keyword" };
       return { tag, layer: `SU-${tag.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 40) || "UNTAGGED"}`, color: "#BFBFBF", lineweight: 0.13, reason: "safe fallback" };
     });
-    if (!process.env.GEMINI_API_KEY) return res.json({ mappings: fallback, isOfflineFallback: true });
-    const ai = getAI();
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
-      contents: `Bạn là trợ lý chuẩn hóa layer CAD 2D. Chỉ đề xuất metadata, KHÔNG thay hình học.
-Tags SketchUp: ${JSON.stringify(tags)}
+    const selectedProvider = normalizeProviderId(req.body?.provider);
+    if (selectedProvider === "OFFLINE" || !hasOnlineProvider(selectedProvider))
+      return res.json({ mappings: fallback, provider: "OFFLINE", isOfflineFallback: true });
+
+    const answer = await callAiText({
+      provider: selectedProvider,
+      prompt: `Tags SketchUp: ${JSON.stringify(tags)}
 Trả JSON array: [{"tag":"...","layer":"...","color":"#RRGGBB","lineweight":0.18,"reason":"ngắn gọn"}].
 Ưu tiên layer kiến trúc/xây dựng dễ plot, tên ngắn, ByLayer. Không tự suy luận CUT/HIDDEN.`,
-      config: { responseMimeType: "application/json" }
+      systemInstruction: "Bạn là trợ lý chuẩn hóa layer CAD 2D. Chỉ đề xuất metadata, KHÔNG thay hình học.",
+      jsonMode: true,
     });
     let mappings = fallback;
     try {
-      const parsed = JSON.parse(response.text || "[]");
+      const parsed = JSON.parse(answer.text || "[]");
       if (Array.isArray(parsed)) mappings = tags.map((tag: string) => parsed.find((x:any)=>x?.tag===tag) || fallback.find((x:any)=>x.tag===tag));
     } catch {}
-    res.json({ mappings, isOfflineFallback: false });
+    res.json({ mappings, provider: answer.provider, model: answer.model, isOfflineFallback: false });
   } catch (err:any) {
     res.status(200).json({ mappings: [], isOfflineFallback: true, error: err?.message || String(err) });
   }

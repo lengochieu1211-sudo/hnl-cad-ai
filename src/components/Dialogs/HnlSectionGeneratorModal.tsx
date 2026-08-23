@@ -314,11 +314,11 @@ export const HnlSectionGeneratorModal: React.FC<HnlSectionGeneratorModalProps> =
                   </div>
                   <div className="flex justify-between py-1 border-b border-neutral-800">
                     <span className="text-neutral-400">Xương chính C38:</span>
-                    <span className="font-mono text-amber-400">Vĩnh Tường Serra @800mm</span>
+                    <span className="font-mono text-amber-400">Main runner @800mm (Project setting)</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-neutral-800">
                     <span className="text-neutral-400">Xương phụ M-Bar:</span>
-                    <span className="font-mono text-amber-400">Vĩnh Tường Tripflex @400mm</span>
+                    <span className="font-mono text-amber-400">Cross runner 1220/3 = 406.67mm</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-neutral-800">
                     <span className="text-neutral-400">Ty treo & Khóa liên kết:</span>
@@ -347,7 +347,7 @@ export const HnlSectionGeneratorModal: React.FC<HnlSectionGeneratorModalProps> =
                   </div>
                   <div className="flex justify-between py-1 border-b border-neutral-800">
                     <span className="text-neutral-400">Khung xương đứng:</span>
-                    <span className="font-mono text-amber-400">V-Wall C75 dày 0.5mm @400mm</span>
+                    <span className="font-mono text-amber-400">C75 dày 0.5mm @406.67mm (1220/3; Approved System ưu tiên)</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-neutral-800">
                     <span className="text-neutral-400">Lớp bông cách âm chống cháy:</span>

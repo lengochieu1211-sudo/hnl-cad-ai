@@ -11,9 +11,18 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve HNL version
+        id: hnl_version
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "HNL version: $v"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Verify release version sync
+        run: node scripts/check-version-sync.mjs
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -53,7 +62,13 @@ jobs:
               $failed += "$($item.Year):missing-dll"
               continue
             }
-            Write-Host "AutoCAD $($item.Year) plugin PASS: $((Get-Item "$out/Hnl.CadBridge.dll").Length) bytes"
+            $expectedVersion = "${{ steps.hnl_version.outputs.version }}"
+            $fileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path "$out/Hnl.CadBridge.dll")).FileVersion
+            if (-not $fileVersion.StartsWith($expectedVersion)) {
+              $failed += "$($item.Year):dll-version=$fileVersion expected=$expectedVersion"
+              continue
+            }
+            Write-Host "AutoCAD $($item.Year) plugin PASS: $((Get-Item "$out/Hnl.CadBridge.dll").Length) bytes • FileVersion $fileVersion"
           }
           if ($failed.Count -gt 0) {
             throw "AutoCAD plugin failures: $($failed -join ', ')"
@@ -89,7 +104,7 @@ jobs:
       - name: Upload AutoCAD plugin bundle
         uses: actions/upload-artifact@v4
         with:
-          name: HNL-CAD-AI-v2.4.7-AutoCAD-Plugin-Bundle
+          name: HNL-CAD-AI-v${{ steps.hnl_version.outputs.version }}-AutoCAD-Plugin-Bundle
           path: autocad-plugin/HNL.CadBridge.bundle/**
           if-no-files-found: error
           retention-days: 14
@@ -99,8 +114,10 @@ jobs:
       - name: Verify installer exists
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Path dist_electron -Filter "HNL_CAD_AI_Setup_*.exe" -Recurse
-          if (-not $files) { throw "Không tìm thấy HNL installer EXE" }
+          $expectedVersion = "${{ steps.hnl_version.outputs.version }}"
+          $expectedName = "HNL_CAD_AI_Setup_$expectedVersion.exe"
+          $files = Get-ChildItem -Path dist_electron -Filter $expectedName -Recurse
+          if (-not $files) { throw "Không tìm thấy installer đúng version: $expectedName" }
           $files | ForEach-Object {
             if ($_.Length -lt 5MB) { throw "Installer quá nhỏ, nghi build lỗi: $($_.FullName)" }
             $hash = Get-FileHash $_.FullName -Algorithm SHA256
@@ -111,7 +128,7 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: HNL-CAD-AI-v2.4.7-Windows-Installer
+          name: HNL-CAD-AI-v${{ steps.hnl_version.outputs.version }}-Windows-Installer
           path: dist_electron/HNL_CAD_AI_Setup_*.exe
           if-no-files-found: error
           retention-days: 14

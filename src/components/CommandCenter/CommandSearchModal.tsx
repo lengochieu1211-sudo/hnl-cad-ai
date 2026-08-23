@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Search, Command, ArrowRight, CornerDownLeft, Sparkles, Hash } from "lucide-react";
 import { CANONICAL_LISP_TOOLS } from "../../lib/lispCanonicalTools";
+import { AUTOCAD_2023_COMMAND_KNOWLEDGE } from "../../lib/autocad2023CommandKnowledge";
 
 interface CommandItem {
   id: string;
@@ -111,12 +112,30 @@ const BASE_COMMAND_DATABASE: CommandItem[] = [
     actionKey: "SMART_WALL_200",
   },
   {
+    id: "cmd_direct_dwg_edit",
+    title: "Direct DWG Edit • HNL",
+    category: "DWG / AutoCAD Bridge",
+    shortcut: "",
+    keywords: ["direct dwg","live sync","dwg edit","chỉnh dwg","autocad bridge"],
+    description: "Mở DWG thật và thao tác từ HNL Canvas trong khi AutoCAD giữ database native.",
+    actionKey: "OPEN_DIRECT_DWG",
+  },
+  {
+    id: "cmd_smart_shopdrawing_platform",
+    title: "HNL Smart Shopdrawing Platform",
+    category: "Shopdrawing / HNL",
+    shortcut: "HNL",
+    keywords: ["library","block","ceiling","wall","approved material","boq","audit","detail","template","dwg","trần","vách","thư viện","shopdrawing"],
+    description: "Smart Library + Smart Ceiling + Smart Wall + Approved Material + BOQ + Audit + Detail + Template + Open DWG.",
+    actionKey: "SMART_SHOPDRAWING",
+  },
+  {
     id: "cmd_tran_thach_cao",
     title: "Bố trí trần thạch cao chìm",
     category: "Smart Draw",
     shortcut: "APCEILING",
     keywords: ["trần", "tran", "thạch cao", "gypsum", "xương", "ty treo", "đèn"],
-    description: "Tự động rải xương chính @800, xương phụ @400, ty treo @1000",
+    description: "Tự động rải xương chính, xương phụ theo tấm 1220/3 = 406.67mm, ty treo theo cấu hình",
     actionKey: "SMART_CEILING",
   },
   {
@@ -252,7 +271,28 @@ const PRO_2D_COMMANDS:CommandItem[]=CANONICAL_LISP_TOOLS.map(t=>({
   description:`${t.summary} • ${t.mode} • ${t.sources.join(", ")}`,
   actionKey:proActionByCenter[t.center]||"OPEN_2D_PRO_CENTER",
 }));
-const COMMAND_DATABASE:CommandItem[]=[...BASE_COMMAND_DATABASE,...PRO_2D_COMMANDS];
+const AUTOCAD_2023_COMMANDS:CommandItem[]=AUTOCAD_2023_COMMAND_KNOWLEDGE.map((item)=>({
+  id:`acad23_${item.id.toLowerCase()}`,
+  title:`AutoCAD 2023 • ${item.command} — ${item.title}`,
+  category:`AutoCAD 2023 / ${item.category}`,
+  shortcut:item.shortcut || item.aliases[0],
+  keywords:[
+    item.command,
+    ...item.aliases,
+    item.title,
+    item.description,
+    ...(item.options || []),
+    ...item.workflow,
+  ].map((x)=>String(x).toLowerCase()),
+  description:`${item.description} • ${item.workflow.join(" → ")}${item.options?.length ? ` • Options: ${item.options.join(", ")}` : ""}`,
+  actionKey:item.nativeAction ? `NATIVE:${item.nativeAction}` : "OPEN_USAGE_GUIDE",
+}));
+
+const COMMAND_DATABASE:CommandItem[]=[
+  ...AUTOCAD_2023_COMMANDS,
+  ...BASE_COMMAND_DATABASE,
+  ...PRO_2D_COMMANDS,
+];
 
 export const CommandSearchModal: React.FC<CommandSearchModalProps> = ({
   isOpen,

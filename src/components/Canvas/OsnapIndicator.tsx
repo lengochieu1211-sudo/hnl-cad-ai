@@ -27,6 +27,8 @@ interface OsnapIndicatorProps {
   settings: OsnapSettings;
   onUpdateSettings: (newSettings: OsnapSettings) => void;
   activeOriginPoint?: Point2D | null;
+  viewportWidth?: number;
+  viewportHeight?: number;
 }
 
 export const OsnapIndicator: React.FC<OsnapIndicatorProps> = ({
@@ -34,6 +36,8 @@ export const OsnapIndicator: React.FC<OsnapIndicatorProps> = ({
   settings,
   onUpdateSettings,
   activeOriginPoint,
+  viewportWidth = 1000,
+  viewportHeight = 700,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -107,6 +111,14 @@ export const OsnapIndicator: React.FC<OsnapIndicatorProps> = ({
   ];
 
   const activeModesCount = Object.values(settings.modes).filter(Boolean).length;
+  const snapHudWidth = 270;
+  const snapHudHeight = 62;
+  const snapHudLeft = currentSnap
+    ? Math.max(8, Math.min(currentSnap.screenPos.x + 18, Math.max(8, viewportWidth - snapHudWidth - 8)))
+    : 8;
+  const snapHudTop = currentSnap
+    ? Math.max(8, Math.min(currentSnap.screenPos.y - 36, Math.max(8, viewportHeight - snapHudHeight - 8)))
+    : 8;
 
   return (
     <>
@@ -115,8 +127,8 @@ export const OsnapIndicator: React.FC<OsnapIndicatorProps> = ({
         <div
           className="pointer-events-none absolute z-30 flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-[#141619]/95 border border-emerald-500/70 shadow-2xl backdrop-blur-md transition-all duration-75 text-xs text-white animate-in fade-in zoom-in-95"
           style={{
-            left: `${currentSnap.screenPos.x + 18}px`,
-            top: `${currentSnap.screenPos.y - 36}px`,
+            left: `${snapHudLeft}px`,
+            top: `${snapHudTop}px`,
           }}
         >
           <div className="flex items-center justify-center w-5 h-5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
@@ -159,7 +171,7 @@ export const OsnapIndicator: React.FC<OsnapIndicatorProps> = ({
 
         {/* Osnap Settings Menu Popover */}
         {isMenuOpen && (
-          <div className="absolute right-0 bottom-full mb-2 w-72 bg-[#181A1E] border border-neutral-700 rounded-xl shadow-2xl z-50 p-3 text-xs text-neutral-200 backdrop-blur-xl">
+          <div className="absolute right-0 top-full mt-2 w-72 max-w-[min(18rem,calc(100vw-24px))] max-h-[min(58vh,430px)] overflow-y-auto bg-[#181A1E] border border-neutral-700 rounded-xl shadow-2xl z-50 p-3 text-xs text-neutral-200 backdrop-blur-xl">
             {/* Header */}
             <div className="flex items-center justify-between pb-2 border-b border-neutral-800 mb-2">
               <div className="flex items-center space-x-2">

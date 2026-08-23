@@ -19,6 +19,7 @@ namespace Hnl.CadBridge;
 
 public sealed class BridgeCommands : IExtensionApplication
 {
+    internal const string PluginVersion = "2.6.3";
     private static readonly HttpClient Http = new HttpClient();
     private static readonly ConcurrentQueue<JObject> UiActions = new ConcurrentQueue<JObject>();
     private static Timer? _pollTimer;
@@ -31,8 +32,9 @@ public sealed class BridgeCommands : IExtensionApplication
         TryLoadPairing();
         Application.Idle += OnIdle;
         _pollTimer = new Timer(_ => PollServer(), null, 500, 750);
+        HnlNativeRibbon.TryInstall();
         Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
-            "\nHNL CAD AI Bridge v2.4.7 loaded. Commands: HNLBRIDGESTATUS, HNLBRIDGEPING, HNLPLOTDEVICES, HNLLAYOUTS");
+            $"\nHNL CAD AI Bridge v{PluginVersion} loaded. Commands: HNLBRIDGESTATUS, HNLBRIDGEPING, HNLPLOTDEVICES, HNLLAYOUTS");
     }
 
     public void Terminate()
@@ -59,6 +61,118 @@ public sealed class BridgeCommands : IExtensionApplication
         doc?.Editor.WriteMessage(string.IsNullOrWhiteSpace(_baseUrl)
             ? "\nHNL Bridge: chưa tìm thấy pairing file. Hãy mở HNL CAD AI trước."
             : $"\nHNL Bridge: pairing OK → {_baseUrl}. Poll/heartbeat chạy nền.");
+    }
+
+    [CommandMethod("HNL", CommandFlags.Session)]
+    [CommandMethod("HNLPALETTE", CommandFlags.Session)]
+    public void ShowHnlPaletteCommand()
+    {
+        try
+        {
+            NativePaletteCommands.ShowPaletteWindow();
+            Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+                "\nHNL CAD AI Palette: OPEN.");
+        }
+        catch (System.Exception ex)
+        {
+            Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+                $"\nHNL Palette error: {ex.Message}");
+        }
+    }
+
+    [CommandMethod("HNLHIDE", CommandFlags.Session)]
+    public void HideHnlPaletteCommand()
+    {
+        try
+        {
+            NativePaletteCommands.HidePaletteWindow();
+            Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+                "\nHNL CAD AI Palette: HIDDEN.");
+        }
+        catch (System.Exception ex)
+        {
+            Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+                $"\nHNL Palette error: {ex.Message}");
+        }
+    }
+
+    [CommandMethod("HNLPALETTESTATUS", CommandFlags.Session)]
+    public void HnlPaletteStatusCommand()
+    {
+        Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+            $"\nHNL Palette visible: {NativePaletteCommands.IsPaletteVisible}");
+    }
+
+    [CommandMethod("HNLRIBBON", CommandFlags.Session)]
+    public void HnlRibbonCommand()
+    {
+        var ok = HnlNativeRibbon.Activate();
+        Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+            ok ? "\nHNL Ribbon: READY." : "\nHNL Ribbon chưa sẵn sàng. Palette HNL vẫn dùng được; thử lại HNLRIBBON sau khi Ribbon AutoCAD load.");
+    }
+
+    [CommandMethod("HNLAI", CommandFlags.Session)]
+    public void HnlAiCommand() => NativePaletteCommands.ShowPaletteTab(0);
+
+    [CommandMethod("HNL2D", CommandFlags.Session)]
+    public void Hnl2DCommand() => NativePaletteCommands.ShowPaletteTab(2);
+
+    [CommandMethod("HNLDATA", CommandFlags.Session)]
+    public void HnlDataCommand() => NativePaletteCommands.ShowPaletteTab(3);
+
+    [CommandMethod("HNLLAYOUT", CommandFlags.Session)]
+    public void HnlLayoutCommand() => NativePaletteCommands.ShowPaletteTab(4);
+
+    [CommandMethod("HNLTOOLS", CommandFlags.Session)]
+    public void HnlToolsCommand() => NativePaletteCommands.ShowPaletteTab(5);
+
+    [CommandMethod("HNLMANAGER", CommandFlags.Session)]
+    public void HnlManagerCommand() => NativePaletteCommands.OpenManagerWindow();
+
+    [CommandMethod("HNLWALL", CommandFlags.Session)]
+    public void HnlWallCommand()
+    {
+        try
+        {
+            var result = CreateWallSystem(new JObject());
+            Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage($"\nHNL Smart Wall: {JsonConvert.SerializeObject(result)}");
+        }
+        catch (System.Exception ex)
+        {
+            Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage($"\nHNL Wall error: {ex.Message}");
+        }
+    }
+
+    [CommandMethod("HNLINSERT", CommandFlags.Session)]
+    public void HnlInsertLibraryBlockCommand()
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument; if (doc == null) return;
+        var opt = new PromptKeywordOptions("\nHNL Library [Section/Level/Detail/BoardStart/Main/Cross/Hanger/Stud/Track/RHS/Plate] <Level>: ");
+        foreach (var k in new[] {"Section","Level","Detail","BoardStart","Main","Cross","Hanger","Stud","Track","RHS","Plate"}) opt.Keywords.Add(k);
+        opt.Keywords.Default="Level"; opt.AllowNone=true;
+        var r=doc.Editor.GetKeywords(opt); if(r.Status==PromptStatus.Cancel) return;
+        var key=(r.StringResult ?? "Level").ToUpperInvariant();
+        var map=new Dictionary<string,string>{
+            ["SECTION"]="SECTION_MARK",["LEVEL"]="LEVEL_MARK",["DETAIL"]="DETAIL_MARK",["BOARDSTART"]="BOARD_START",
+            ["MAIN"]="CEILING_MAIN",["CROSS"]="CEILING_CROSS",["HANGER"]="CEILING_HANGER",
+            ["STUD"]="WALL_STUD",["TRACK"]="WALL_TRACK",["RHS"]="STEEL_RHS",["PLATE"]="STEEL_PLATE"
+        };
+        try { InsertLibraryBlock(new JObject{{"symbolKey",map[key]},{"name",map[key]},{"layer","HNL_LIBRARY"}}); }
+        catch(System.Exception ex){ doc.Editor.WriteMessage($"\nHNL Library error: {ex.Message}"); }
+    }
+
+    [CommandMethod("HNLBOQ", CommandFlags.Session)]
+    public void HnlBoqCommand()
+    {
+        var doc=Application.DocumentManager.MdiActiveDocument;
+        doc?.Editor.WriteMessage($"\nHNL BOQ: {JsonConvert.SerializeObject(GetHnlBoq())}");
+    }
+
+    [CommandMethod("HNLSHOPAUDIT", CommandFlags.Session)]
+    public void HnlShopAuditCommand()
+    {
+        var doc=Application.DocumentManager.MdiActiveDocument;
+        doc?.Editor.WriteMessage($"\nHNL Shopdrawing Audit: {JsonConvert.SerializeObject(AuditHnlShopdrawing())}");
     }
 
     [CommandMethod("HNLPLOTDEVICES")]
@@ -121,6 +235,13 @@ public sealed class BridgeCommands : IExtensionApplication
 
 
 
+    [CommandMethod("HNLDRAFTSTATUS")]
+    public void DraftingStatusCommand()
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument;
+        doc?.Editor.WriteMessage($"\nHNL Drafting: {JsonConvert.SerializeObject(GetDraftingStatus())}");
+    }
+
     [CommandMethod("HNLSETLAYOUT")]
     public void SetCurrentLayoutCommand()
     {
@@ -180,11 +301,11 @@ public sealed class BridgeCommands : IExtensionApplication
         var exposed=string.Equals(kr.StringResult,"Noi",StringComparison.OrdinalIgnoreCase);
 
         double Ask(string label,double def) {
-            var o=new PromptDoubleOptions($"\n{label} <{def:0}>: "){DefaultValue=def,UseDefaultValue=true,AllowNegative=false,AllowZero=false};
+            var o=new PromptDoubleOptions($"\n{label} <{def:0.##}>: "){DefaultValue=def,UseDefaultValue=true,AllowNegative=false,AllowZero=false};
             var r=ed.GetDouble(o); return r.Status==PromptStatus.OK?r.Value:def;
         }
         var main=Ask("Xương chính @ (mm)",exposed?1200:800);
-        var cross=Ask("Xương phụ @ (mm)",exposed?600:400);
+        var cross=Ask("Xương phụ @ (mm)",exposed?610:(1220.0/3.0));
         var hanger=Ask("Ty treo @ (mm)",exposed?1200:900);
         var ao=new PromptDoubleOptions("\nGóc xoay hệ xương (độ) <0>: "){DefaultValue=0,UseDefaultValue=true,AllowNegative=true,AllowZero=true};
         var ar=ed.GetDouble(ao); var angle=ar.Status==PromptStatus.OK?ar.Value:0;
@@ -243,8 +364,8 @@ public sealed class BridgeCommands : IExtensionApplication
                 using var req = MakeRequest(HttpMethod.Post, "/api/autocad/register", new {
                     version = Application.Version.ToString(),
                     drawingName = doc?.Name ?? "",
-                    pluginVersion = "2.4.7",
-                    capabilities = new[] { "GET_STATUS","GET_PLOT_DEVICES","GET_LAYOUTS","SET_CURRENT_LAYOUT","RENAME_LAYOUT","EXECUTE_COMMAND","CANCEL_COMMAND","OPEN_DWG","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","CREATE_CEILING_GRID","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
+                    pluginVersion = PluginVersion,
+                    capabilities = new[] { "GET_STATUS","GET_DRAFTING_STATUS","SET_DRAFTING_MODE","GET_PLOT_DEVICES","GET_LAYOUTS","SET_CURRENT_LAYOUT","RENAME_LAYOUT","EXECUTE_COMMAND","CANCEL_COMMAND","OPEN_DWG","CONVERT_DWG_TO_DXF_PREVIEW","GET_MODELSPACE_SNAPSHOT","SELECT_HANDLES","CREATE_NATIVE_ENTITY","APPLY_ENTITY_TRANSFORM","ERASE_HANDLES","SET_ENTITY_LAYER","UPDATE_TEXT_CONTENTS","INSERT_EXISTING_BLOCK","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","CREATE_CEILING_GRID","CREATE_CEILING_SMART","CREATE_WALL_SYSTEM","INSERT_LIBRARY_BLOCK","GET_HNL_BOQ","AUDIT_HNL_SHOPDRAWING","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
                 });
                 var res = await Http.SendAsync(req);
                 _registered = res.IsSuccessStatusCode;
@@ -268,6 +389,7 @@ public sealed class BridgeCommands : IExtensionApplication
 
     private static void OnIdle(object? sender, EventArgs e)
     {
+        if (!HnlNativeRibbon.IsInstalled) HnlNativeRibbon.TryInstall();
         if (!UiActions.TryDequeue(out var item)) return;
         ExecuteQueuedAction(item);
     }
@@ -293,6 +415,8 @@ public sealed class BridgeCommands : IExtensionApplication
             object result = action switch
             {
                 "GET_STATUS" => GetStatusPayload(),
+                "GET_DRAFTING_STATUS" => GetDraftingStatus(),
+                "SET_DRAFTING_MODE" => SetDraftingMode(payload),
                 "GET_PLOT_DEVICES" => GetPlotDevicesPayload(),
                 "GET_LAYOUTS" => GetLayoutsPayload(),
                 "SET_CURRENT_LAYOUT" => SetCurrentLayout(payload),
@@ -300,12 +424,26 @@ public sealed class BridgeCommands : IExtensionApplication
                 "EXECUTE_COMMAND" => ExecuteNativeCommand(payload),
                 "CANCEL_COMMAND" => CancelNativeCommand(),
                 "OPEN_DWG" => OpenDwg(payload),
+                "CONVERT_DWG_TO_DXF_PREVIEW" => ConvertDwgToDxfPreview(payload),
+                "GET_MODELSPACE_SNAPSHOT" => GetModelspaceSnapshot(payload),
+                "SELECT_HANDLES" => SelectHandles(payload),
+                "CREATE_NATIVE_ENTITY" => CreateNativeEntity(payload),
+                "APPLY_ENTITY_TRANSFORM" => ApplyEntityTransform(payload),
+                "ERASE_HANDLES" => EraseHandles(payload),
+                "SET_ENTITY_LAYER" => SetEntityLayer(payload),
+                "UPDATE_TEXT_CONTENTS" => UpdateTextContents(payload),
+                "INSERT_EXISTING_BLOCK" => InsertExistingBlock(payload),
                 "SAVE_CURRENT_DWG" => SaveCurrentDwg(),
                 "SAVE_AS_DWG" => SaveAsDwg(payload),
                 "GET_SELECTION" => GetSelectionPayload(),
                 "SELECT_ALL" => SelectAllObjects(),
                 "GET_LAYERS" => GetLayersPayload(),
                 "CREATE_CEILING_GRID" => CreateCeilingGrid(payload),
+                "CREATE_CEILING_SMART" => CreateCeilingSmart(payload),
+                "CREATE_WALL_SYSTEM" => CreateWallSystem(payload),
+                "INSERT_LIBRARY_BLOCK" => InsertLibraryBlock(payload),
+                "GET_HNL_BOQ" => GetHnlBoq(),
+                "AUDIT_HNL_SHOPDRAWING" => AuditHnlShopdrawing(),
                 "PUBLISH_LAYOUTS_PDF" => PublishLayoutsPdf(payload),
                 "PLOT_CURRENT_PDF" => PlotCurrentLayoutPdf(payload),
                 "SAVE_DXF_AS_DWG" => SaveDxfAsDwg(payload),
@@ -324,7 +462,105 @@ public sealed class BridgeCommands : IExtensionApplication
     private static object GetStatusPayload()
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
-        return new { connected = true, version = Application.Version.ToString(), drawingName = doc?.Name ?? "", pluginVersion = "2.4.7" };
+        return new { connected = true, version = Application.Version.ToString(), drawingName = doc?.Name ?? "", pluginVersion = PluginVersion };
+    }
+
+
+    private static int GetSysInt(string name, int fallback = 0)
+    {
+        try { return Convert.ToInt32(Application.GetSystemVariable(name)); }
+        catch { return fallback; }
+    }
+
+    private static object GetDraftingStatus()
+    {
+        var snapMode = GetSysInt("SNAPMODE");
+        var orthoMode = GetSysInt("ORTHOMODE");
+        var gridMode = GetSysInt("GRIDMODE");
+        var osMode = GetSysInt("OSMODE");
+        var dynMode = GetSysInt("DYNMODE");
+        var osnapSuppressed = (osMode & 16384) != 0;
+        var osnapMask = osMode & 16383;
+
+        return new
+        {
+            snap = snapMode != 0,
+            ortho = orthoMode != 0,
+            grid = gridMode != 0,
+            osnap = !osnapSuppressed && osnapMask != 0,
+            dyn = dynMode > 0,
+            raw = new
+            {
+                SNAPMODE = snapMode,
+                ORTHOMODE = orthoMode,
+                GRIDMODE = gridMode,
+                OSMODE = osMode,
+                DYNMODE = dynMode
+            }
+        };
+    }
+
+    private static object SetDraftingMode(JObject payload)
+    {
+        var mode = ((string?)payload["mode"] ?? "").Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(mode))
+            throw new ArgumentException("mode required");
+
+        bool enabled;
+        if (payload["enabled"]?.Type == JTokenType.Boolean)
+            enabled = (bool)payload["enabled"]!;
+        else
+        {
+            var state = JObject.FromObject(GetDraftingStatus());
+            enabled = !((bool?)state[mode.ToLowerInvariant()] ?? false);
+        }
+
+        switch (mode)
+        {
+            case "SNAP":
+                Application.SetSystemVariable("SNAPMODE", enabled ? 1 : 0);
+                break;
+
+            case "ORTHO":
+                Application.SetSystemVariable("ORTHOMODE", enabled ? 1 : 0);
+                break;
+
+            case "GRID":
+                Application.SetSystemVariable("GRIDMODE", enabled ? 1 : 0);
+                break;
+
+            case "OSNAP":
+            {
+                var osMode = GetSysInt("OSMODE");
+                if (enabled)
+                {
+                    osMode &= ~16384;
+                    if ((osMode & 16383) == 0)
+                        osMode |= 1 | 2 | 4 | 32; // endpoint, midpoint, center, intersection
+                }
+                else
+                {
+                    osMode |= 16384; // temporary OSNAP suppression, preserving user's mask
+                }
+                Application.SetSystemVariable("OSMODE", osMode);
+                break;
+            }
+
+            case "DYN":
+            {
+                var dynMode = GetSysInt("DYNMODE");
+                if (enabled)
+                    Application.SetSystemVariable("DYNMODE", dynMode == 0 ? 3 : Math.Abs(dynMode));
+                else
+                    Application.SetSystemVariable("DYNMODE", dynMode > 0 ? -dynMode : dynMode);
+                break;
+            }
+
+            default:
+                throw new InvalidOperationException($"Unsupported drafting mode: {mode}");
+        }
+
+        return new { mode, enabled, status = GetDraftingStatus() };
     }
 
     private static object GetPlotDevicesPayload()
@@ -422,6 +658,42 @@ public sealed class BridgeCommands : IExtensionApplication
         tr.AddNewlyCreatedDBObject(rec, true);
     }
 
+
+    private const string HnlRegApp = "HNL_CAD_AI";
+
+    private static void EnsureHnlRegApp(Transaction tr, Database db)
+    {
+        var table = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
+        if (table.Has(HnlRegApp)) return;
+        table.UpgradeOpen();
+        var rec = new RegAppTableRecord { Name = HnlRegApp };
+        table.Add(rec);
+        tr.AddNewlyCreatedDBObject(rec, true);
+    }
+
+    private static void TagHnlEntity(Entity ent, string component, string smartId, string? meta = null)
+    {
+        ent.XData = new ResultBuffer(
+            new TypedValue(1001, HnlRegApp),
+            new TypedValue(1000, component ?? ""),
+            new TypedValue(1000, smartId ?? ""),
+            new TypedValue(1000, meta ?? "")
+        );
+    }
+
+    private static (string component, string smartId, string meta)? ReadHnlTag(Entity ent)
+    {
+        var rb = ent.GetXDataForApplication(HnlRegApp);
+        if (rb == null) return null;
+        var arr = rb.AsArray();
+        if (arr.Length < 3) return null;
+        return (
+            arr.Length > 1 ? Convert.ToString(arr[1].Value) ?? "" : "",
+            arr.Length > 2 ? Convert.ToString(arr[2].Value) ?? "" : "",
+            arr.Length > 3 ? Convert.ToString(arr[3].Value) ?? "" : ""
+        );
+    }
+
     private static Point2d ToLocal(Point2d p, Point2d origin, double radians)
     {
         var x = p.X - origin.X; var y = p.Y - origin.Y;
@@ -500,7 +772,7 @@ public sealed class BridgeCommands : IExtensionApplication
     private static object CreateCeilingGridForPolyline(Document doc,ObjectId boundaryId,JObject payload)
     {
         var mainSpacing=Math.Max(100.0,(double?)payload["mainSpacing"]??800.0);
-        var crossSpacing=Math.Max(100.0,(double?)payload["crossSpacing"]??400.0);
+        var crossSpacing=Math.Max(100.0,(double?)payload["crossSpacing"]??(1220.0/3.0));
         var hangerSpacing=Math.Max(100.0,(double?)payload["hangerSpacing"]??900.0);
         var rotationDeg=(double?)payload["rotationDeg"]??0.0;
         var mode=((string?)payload["originMode"]??"CENTER").ToUpperInvariant();
@@ -528,6 +800,9 @@ public sealed class BridgeCommands : IExtensionApplication
 
             EnsureLayer(tr,doc.Database,mainLayer); EnsureLayer(tr,doc.Database,crossLayer);
             if(drawHangers) EnsureLayer(tr,doc.Database,hangerLayer);
+            EnsureHnlRegApp(tr, doc.Database);
+            var smartId=((string?)payload["id"] ?? (string?)payload["smartId"] ?? $"CEILING_{Guid.NewGuid():N}").Trim();
+            var meta=$"main={mainSpacing:0.###};cross={crossSpacing:0.###};hanger={hangerSpacing:0.###};board=1220x2440";
             var bt=(BlockTable)tr.GetObject(doc.Database.BlockTableId,OpenMode.ForRead);
             var ms=(BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace],OpenMode.ForWrite);
 
@@ -538,6 +813,7 @@ public sealed class BridgeCommands : IExtensionApplication
                     var a=ToWorld(new Point2d(x,ys[i]),origin,rad);
                     var b=ToWorld(new Point2d(x,ys[i+1]),origin,rad);
                     var ln=new Line(new Point3d(a.X,a.Y,0),new Point3d(b.X,b.Y,0)){Layer=mainLayer};
+                    TagHnlEntity(ln,"CEILING_MAIN",smartId,meta);
                     ms.AppendEntity(ln); tr.AddNewlyCreatedDBObject(ln,true); mainCount++;
                 }
                 if(drawHangers) {
@@ -545,6 +821,7 @@ public sealed class BridgeCommands : IExtensionApplication
                         var lp=new Point2d(x,y); if(!Inside(local,lp)) continue;
                         var wp=ToWorld(lp,origin,rad);
                         var c=new Circle(new Point3d(wp.X,wp.Y,0),Vector3d.ZAxis,20){Layer=hangerLayer};
+                        TagHnlEntity(c,"CEILING_HANGER",smartId,meta);
                         ms.AppendEntity(c); tr.AddNewlyCreatedDBObject(c,true); hangerCount++;
                     }
                 }
@@ -557,12 +834,591 @@ public sealed class BridgeCommands : IExtensionApplication
                     var a=ToWorld(new Point2d(xs[i],y),origin,rad);
                     var b=ToWorld(new Point2d(xs[i+1],y),origin,rad);
                     var ln=new Line(new Point3d(a.X,a.Y,0),new Point3d(b.X,b.Y,0)){Layer=crossLayer};
+                    TagHnlEntity(ln,"CEILING_CROSS",smartId,meta);
                     ms.AppendEntity(ln); tr.AddNewlyCreatedDBObject(ln,true); crossCount++;
                 }
             }
             tr.Commit();
         }
         return new {created=true,boundaryHandle=boundaryId.Handle.ToString(),mainSegments=mainCount,crossSegments=crossCount,hangers=hangerCount,mainSpacing,crossSpacing,hangerSpacing,rotationDeg,originMode=mode};
+    }
+
+
+    private static object CreateCeilingSmart(JObject payload)
+    {
+        payload["crossSpacing"] = (double?)payload["crossSpacing"] ?? (1220.0 / 3.0);
+        payload["rotationDeg"] = (double?)payload["rotationDeg"] ?? (double?)payload["boardDirectionDeg"] ?? 0.0;
+        if (payload["startMode"] != null && payload["originMode"] == null)
+            payload["originMode"] = string.Equals((string?)payload["startMode"], "CENTER", StringComparison.OrdinalIgnoreCase) ? "CENTER" : "FROM_EDGE";
+        payload["boardWidth"] = (double?)payload["boardWidth"] ?? 1220.0;
+        payload["boardLength"] = (double?)payload["boardLength"] ?? 2440.0;
+        payload["smartId"] = (string?)payload["id"] ?? $"CEILING_{Guid.NewGuid():N}";
+        return CreateCeilingGrid(payload);
+    }
+
+    private static Point3d PromptPoint(Editor ed, string message)
+    {
+        var r = ed.GetPoint(new PromptPointOptions(message));
+        if (r.Status != PromptStatus.OK) throw new InvalidOperationException("Point selection cancelled.");
+        return r.Value;
+    }
+
+    private static object CreateWallSystem(JObject payload)
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var ed = doc.Editor;
+        Point3d p1, p2;
+        if (payload["p1"] is JObject p1j && payload["p2"] is JObject p2j)
+        {
+            p1 = new Point3d((double?)p1j["x"] ?? 0, (double?)p1j["y"] ?? 0, 0);
+            p2 = new Point3d((double?)p2j["x"] ?? 0, (double?)p2j["y"] ?? 0, 0);
+        }
+        else
+        {
+            p1 = PromptPoint(ed, "\nHNL Smart Wall - điểm đầu: ");
+            var opt = new PromptPointOptions("\nĐiểm cuối: ") { BasePoint = p1, UseBasePoint = true };
+            var r2 = ed.GetPoint(opt);
+            if (r2.Status != PromptStatus.OK) throw new InvalidOperationException("Point selection cancelled.");
+            p2 = r2.Value;
+        }
+
+        var boardWidth = Math.Max(100.0, (double?)payload["boardWidthMm"] ?? 1220.0);
+        var division = (int?)payload["studDivision"] ?? 3;
+        if (division != 2 && division != 3) throw new InvalidOperationException("HNL wall studDivision must be 2 or 3.");
+        var studSpacing = boardWidth / division;
+        var height = Math.Max(100.0, (double?)payload["heightMm"] ?? 3000.0);
+        var studLayer = ((string?)payload["studLayer"] ?? "HNL_WALL_STUD").Trim();
+        var trackLayer = ((string?)payload["trackLayer"] ?? "HNL_WALL_TRACK").Trim();
+        var smartId = ((string?)payload["id"] ?? $"WALL_{Guid.NewGuid():N}").Trim();
+
+        var vector = p2 - p1;
+        var length = vector.Length;
+        if (length < 1e-6) throw new InvalidOperationException("Wall length is zero.");
+        var dir = vector.GetNormal();
+        var perp = new Vector3d(-dir.Y, dir.X, 0);
+        var studHalf = 60.0;
+        var studCount = Math.Max(2, (int)Math.Ceiling(length / studSpacing) + 1);
+
+        using (doc.LockDocument())
+        using (var tr = doc.Database.TransactionManager.StartTransaction())
+        {
+            EnsureLayer(tr, doc.Database, studLayer);
+            EnsureLayer(tr, doc.Database, trackLayer);
+            EnsureHnlRegApp(tr, doc.Database);
+            var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+            var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+            var meta = $"board=1220x2440;division={division};spacing={studSpacing:0.###};height={height:0.###}";
+
+            var track = new Line(p1, p2) { Layer = trackLayer };
+            TagHnlEntity(track, "WALL_TRACK", smartId, meta);
+            ms.AppendEntity(track); tr.AddNewlyCreatedDBObject(track, true);
+
+            for (var i = 0; i < studCount; i++)
+            {
+                var d = Math.Min(length, i * studSpacing);
+                if (i == studCount - 1) d = length;
+                var c = p1 + dir * d;
+                var stud = new Line(c - perp * studHalf, c + perp * studHalf) { Layer = studLayer };
+                TagHnlEntity(stud, "WALL_STUD", smartId, meta);
+                ms.AppendEntity(stud); tr.AddNewlyCreatedDBObject(stud, true);
+            }
+            tr.Commit();
+        }
+
+        return new {
+            created = true, smartId,
+            boardWidthMm = boardWidth, boardLengthMm = 2440.0,
+            studDivision = division, studSpacingMm = studSpacing,
+            wallLengthMm = length, heightMm = height, studCount
+        };
+    }
+
+    private static ObjectId EnsureBuiltinLibraryBlock(Transaction tr, Database db, string symbolKey, string blockName)
+    {
+        var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+        if (bt.Has(blockName)) return bt[blockName];
+
+        bt.UpgradeOpen();
+        var btr = new BlockTableRecord { Name = blockName, Origin = Point3d.Origin };
+        var id = bt.Add(btr);
+        tr.AddNewlyCreatedDBObject(btr, true);
+
+        void Add(Entity e) { btr.AppendEntity(e); tr.AddNewlyCreatedDBObject(e, true); }
+        DBText Text(string value, Point3d pos, double h=80) => new DBText { TextString=value, Position=pos, Height=h };
+
+        switch ((symbolKey ?? "").ToUpperInvariant())
+        {
+            case "LEVEL_MARK":
+                Add(new Line(new Point3d(-180,0,0), new Point3d(180,0,0)));
+                Add(new Line(new Point3d(0,0,0), new Point3d(60,60,0)));
+                Add(new Line(new Point3d(0,0,0), new Point3d(60,-60,0)));
+                Add(Text("±0.000", new Point3d(80,20,0), 70));
+                break;
+            case "SECTION_MARK":
+                Add(new Circle(Point3d.Origin, Vector3d.ZAxis, 120));
+                Add(new Line(new Point3d(-260,0,0), new Point3d(260,0,0)));
+                Add(Text("A", new Point3d(-30,-35,0), 80));
+                break;
+            case "DETAIL_MARK":
+                Add(new Circle(Point3d.Origin, Vector3d.ZAxis, 140));
+                Add(Text("D", new Point3d(-35,-40,0), 90));
+                break;
+            case "BOARD_START":
+                Add(new Circle(Point3d.Origin, Vector3d.ZAxis, 50));
+                Add(new Line(Point3d.Origin, new Point3d(300,0,0)));
+                Add(new Line(new Point3d(300,0,0), new Point3d(230,45,0)));
+                Add(new Line(new Point3d(300,0,0), new Point3d(230,-45,0)));
+                Add(Text("1220x2440", new Point3d(70,60,0), 55));
+                break;
+            case "CEILING_MAIN":
+                Add(new Line(new Point3d(-250,0,0), new Point3d(250,0,0)));
+                Add(Text("MAIN", new Point3d(-100,40,0), 55));
+                break;
+            case "CEILING_CROSS":
+                Add(new Line(new Point3d(0,-250,0), new Point3d(0,250,0)));
+                Add(Text("CROSS", new Point3d(40,-25,0), 55));
+                break;
+            case "CEILING_HANGER":
+                Add(new Circle(Point3d.Origin, Vector3d.ZAxis, 40));
+                Add(new Line(new Point3d(-65,0,0), new Point3d(65,0,0)));
+                Add(new Line(new Point3d(0,-65,0), new Point3d(0,65,0)));
+                break;
+            case "WALL_STUD":
+                Add(new Line(new Point3d(-37.5,-15,0), new Point3d(37.5,-15,0)));
+                Add(new Line(new Point3d(37.5,-15,0), new Point3d(37.5,15,0)));
+                Add(new Line(new Point3d(37.5,15,0), new Point3d(-37.5,15,0)));
+                Add(new Line(new Point3d(-37.5,15,0), new Point3d(-37.5,-15,0)));
+                break;
+            case "WALL_TRACK":
+                Add(new Line(new Point3d(-150,-35,0), new Point3d(150,-35,0)));
+                Add(new Line(new Point3d(-150,35,0), new Point3d(150,35,0)));
+                break;
+            case "DOOR_JAMB":
+                Add(new Line(new Point3d(-55,-45,0), new Point3d(-55,45,0)));
+                Add(new Line(new Point3d(-25,-45,0), new Point3d(-25,45,0)));
+                Add(new Line(new Point3d(25,-45,0), new Point3d(25,45,0)));
+                Add(new Line(new Point3d(55,-45,0), new Point3d(55,45,0)));
+                break;
+            case "STEEL_RHS":
+                Add(new Line(new Point3d(-40,-20,0), new Point3d(40,-20,0)));
+                Add(new Line(new Point3d(40,-20,0), new Point3d(40,20,0)));
+                Add(new Line(new Point3d(40,20,0), new Point3d(-40,20,0)));
+                Add(new Line(new Point3d(-40,20,0), new Point3d(-40,-20,0)));
+                Add(Text("RHS", new Point3d(-25,-10,0), 25));
+                break;
+            case "STEEL_PLATE":
+                Add(new Line(new Point3d(-75,-50,0), new Point3d(75,-50,0)));
+                Add(new Line(new Point3d(75,-50,0), new Point3d(75,50,0)));
+                Add(new Line(new Point3d(75,50,0), new Point3d(-75,50,0)));
+                Add(new Line(new Point3d(-75,50,0), new Point3d(-75,-50,0)));
+                break;
+            default:
+                Add(new Line(new Point3d(-150,0,0), new Point3d(150,0,0)));
+                Add(new Line(new Point3d(0,-75,0), new Point3d(0,75,0)));
+                Add(Text(symbolKey ?? "HNL", new Point3d(20,30,0), 45));
+                break;
+        }
+        return id;
+    }
+
+    private static object InsertLibraryBlock(JObject payload)
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var ed = doc.Editor;
+        var symbolKey = ((string?)payload["symbolKey"] ?? "HNL_SYMBOL").Trim().ToUpperInvariant();
+        var name = ((string?)payload["name"] ?? symbolKey).Trim();
+        var layer = ((string?)payload["layer"] ?? "HNL_LIBRARY").Trim();
+        var sourceDwg = ((string?)payload["sourceDwg"] ?? "").Trim();
+        var blockName = "HNL_" + new string(name.Select(ch => char.IsLetterOrDigit(ch) ? char.ToUpperInvariant(ch) : '_').ToArray());
+        var point = payload["point"] is JObject pj
+            ? new Point3d((double?)pj["x"] ?? 0, (double?)pj["y"] ?? 0, 0)
+            : PromptPoint(ed, $"\nĐiểm chèn {name}: ");
+        var scale = Math.Max(0.001, (double?)payload["scale"] ?? 1.0);
+        var rotation = ((double?)payload["rotationDeg"] ?? 0.0) * Math.PI / 180.0;
+
+        using (doc.LockDocument())
+        {
+            ObjectId blockId;
+            if (!string.IsNullOrWhiteSpace(sourceDwg))
+            {
+                if (!File.Exists(sourceDwg)) throw new FileNotFoundException("Library DWG not found.", sourceDwg);
+                using var srcDb = new Database(false, true);
+                srcDb.ReadDwgFile(sourceDwg, FileOpenMode.OpenForReadAndAllShare, true, "");
+                srcDb.CloseInput(true);
+                blockId = doc.Database.Insert(blockName, srcDb, false);
+            }
+            else
+            {
+                using var tr0 = doc.Database.TransactionManager.StartTransaction();
+                blockId = EnsureBuiltinLibraryBlock(tr0, doc.Database, symbolKey, blockName);
+                tr0.Commit();
+            }
+
+            using var tr = doc.Database.TransactionManager.StartTransaction();
+            EnsureLayer(tr, doc.Database, layer);
+            EnsureHnlRegApp(tr, doc.Database);
+            var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+            var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+            var br = new BlockReference(point, blockId) {
+                Layer = layer,
+                Rotation = rotation,
+                ScaleFactors = new Scale3d(scale)
+            };
+            TagHnlEntity(br, "LIBRARY_BLOCK", blockName, $"symbol={symbolKey};source={sourceDwg}");
+            ms.AppendEntity(br);
+            tr.AddNewlyCreatedDBObject(br, true);
+            tr.Commit();
+        }
+        return new { inserted=true, blockName, symbolKey, layer, sourceDwg, point=new {x=point.X,y=point.Y}, scale, rotationDeg=rotation*180.0/Math.PI };
+    }
+
+    private static object GetHnlBoq()
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        double mainLm=0, crossLm=0, wallTrackLm=0;
+        int hanger=0, wallStud=0, libraryBlocks=0, smartEntities=0;
+        using var tr = doc.Database.TransactionManager.StartTransaction();
+        var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+        var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+        foreach (ObjectId id in ms)
+        {
+            if (!(tr.GetObject(id, OpenMode.ForRead, false) is Entity ent)) continue;
+            var tag = ReadHnlTag(ent);
+            if (tag == null) continue;
+            smartEntities++;
+            switch (tag.Value.component)
+            {
+                case "CEILING_MAIN": if (ent is Line ml) mainLm += ml.Length / 1000.0; break;
+                case "CEILING_CROSS": if (ent is Line cl) crossLm += cl.Length / 1000.0; break;
+                case "CEILING_HANGER": hanger++; break;
+                case "WALL_TRACK": if (ent is Line wl) wallTrackLm += wl.Length / 1000.0; break;
+                case "WALL_STUD": wallStud++; break;
+                case "LIBRARY_BLOCK": libraryBlocks++; break;
+            }
+        }
+        tr.Commit();
+        return new {
+            smartEntities,
+            ceilingMainLm=Math.Round(mainLm,2),
+            ceilingCrossLm=Math.Round(crossLm,2),
+            ceilingHangerPcs=hanger,
+            wallTrackLm=Math.Round(wallTrackLm,2),
+            wallStudPcs=wallStud,
+            libraryBlocks
+        };
+    }
+
+    private static object AuditHnlShopdrawing()
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var issues = new List<object>();
+        int smartEntities=0;
+        using var tr = doc.Database.TransactionManager.StartTransaction();
+        var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+        var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+        foreach (ObjectId id in ms)
+        {
+            if (!(tr.GetObject(id, OpenMode.ForRead, false) is Entity ent)) continue;
+            var tag = ReadHnlTag(ent);
+            if (tag != null) smartEntities++;
+            if (ent is BlockReference br && br.Name.StartsWith("HNL_", StringComparison.OrdinalIgnoreCase))
+            {
+                var sc = br.ScaleFactors;
+                if (Math.Abs(sc.X-sc.Y)>1e-6 || Math.Abs(sc.X-1.0)>1e-6)
+                    issues.Add(new { severity="WARNING", handle=ent.Handle.ToString(), category="BLOCK_SCALE", message=$"{br.Name} scale = {sc.X:0.###},{sc.Y:0.###},{sc.Z:0.###}" });
+            }
+        }
+        tr.Commit();
+        if (smartEntities == 0)
+            issues.Add(new { severity="INFO", handle="", category="SMART_DATA", message="DWG chưa có HNL Smart Object/XData." });
+        return new { smartEntities, issueCount=issues.Count, issues };
+    }
+
+
+    private static ObjectId ObjectIdFromHandle(Database db, string handleText)
+    {
+        if (string.IsNullOrWhiteSpace(handleText)) return ObjectId.Null;
+        if (!long.TryParse(handleText, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var value))
+            return ObjectId.Null;
+        try { return db.GetObjectId(false, new Handle(value), 0); }
+        catch { return ObjectId.Null; }
+    }
+
+    private static string CadColorHex(Entity ent) => "#FFFFFF";
+
+    private static object? SnapshotEntity(Transaction tr, Entity ent)
+    {
+        var common = new Dictionary<string, object?> {
+            ["id"] = "dwg_" + ent.Handle,
+            ["handle"] = ent.Handle.ToString(),
+            ["layer"] = ent.Layer,
+            ["color"] = CadColorHex(ent),
+            ["nativeType"] = ent.GetType().Name,
+        };
+        if (ent is Line ln)
+        {
+            common["type"]="LINE";
+            common["start"]=new { x=ln.StartPoint.X, y=ln.StartPoint.Y };
+            common["end"]=new { x=ln.EndPoint.X, y=ln.EndPoint.Y };
+            return common;
+        }
+        if (ent is Polyline pl)
+        {
+            var pts=new List<object>();
+            for(int i=0;i<pl.NumberOfVertices;i++) { var q=pl.GetPoint2dAt(i); pts.Add(new {x=q.X,y=q.Y}); }
+            common["type"]="POLYLINE"; common["points"]=pts; common["closed"]=pl.Closed;
+            try { common["area"]=pl.Closed ? pl.Area : 0.0; } catch { }
+            try { common["length"]=pl.Length; } catch { }
+            return common;
+        }
+        if (ent is Circle cir)
+        {
+            common["type"]="CIRCLE";
+            common["center"]=new {x=cir.Center.X,y=cir.Center.Y}; common["radius"]=cir.Radius;
+            return common;
+        }
+        if (ent is DBText tx)
+        {
+            common["type"]="TEXT"; common["position"]=new {x=tx.Position.X,y=tx.Position.Y};
+            common["text"]=tx.TextString; common["height"]=tx.Height; common["rotation"]=tx.Rotation*180.0/Math.PI;
+            return common;
+        }
+        if (ent is MText mt)
+        {
+            common["type"]="MTEXT"; common["position"]=new {x=mt.Location.X,y=mt.Location.Y};
+            common["text"]=mt.Contents; common["height"]=mt.TextHeight; common["rotation"]=mt.Rotation*180.0/Math.PI;
+            return common;
+        }
+        if (ent is BlockReference br)
+        {
+            common["type"]="BLOCK_REF"; common["position"]=new {x=br.Position.X,y=br.Position.Y};
+            common["blockName"]=br.Name; common["rotation"]=br.Rotation*180.0/Math.PI;
+            common["scale"]=new {x=br.ScaleFactors.X,y=br.ScaleFactors.Y,z=br.ScaleFactors.Z};
+            return common;
+        }
+        return null;
+    }
+
+    private static object GetModelspaceSnapshot(JObject payload)
+    {
+        var doc=Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var max=Math.Max(100,Math.Min(50000,(int?)payload["maxEntities"] ?? 12000));
+        var result=new List<object>(); var unsupported=0; var total=0; var truncated=false;
+        using var tr=doc.Database.TransactionManager.StartTransaction();
+        var bt=(BlockTable)tr.GetObject(doc.Database.BlockTableId,OpenMode.ForRead);
+        var ms=(BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace],OpenMode.ForRead);
+        foreach(ObjectId id in ms)
+        {
+            total++;
+            if(result.Count>=max){truncated=true;break;}
+            if(!(tr.GetObject(id,OpenMode.ForRead,false) is Entity ent)){unsupported++;continue;}
+            var item=SnapshotEntity(tr,ent); if(item==null){unsupported++;continue;} result.Add(item);
+        }
+        tr.Commit();
+        var selected=GetSelectionPayload();
+        return new {
+            drawingName=doc.Name,
+            currentLayout=LayoutManager.Current.CurrentLayout,
+            entities=result,
+            returned=result.Count,total,unsupported,truncated,
+            selection=selected,
+            mode="DIRECT_DWG"
+        };
+    }
+
+    private static object SelectHandles(JObject payload)
+    {
+        var doc=Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var handles=payload["handles"]?.Values<string>().Where(x=>!string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray() ?? Array.Empty<string>();
+        var ids=new List<ObjectId>();
+        foreach(var h in handles){var id=ObjectIdFromHandle(doc.Database,h);if(!id.IsNull&&id.IsValid&&!id.IsErased)ids.Add(id);}
+        doc.Editor.SetImpliedSelection(ids.ToArray());
+        return new {count=ids.Count,handles};
+    }
+
+    private static object CreateNativeEntity(JObject payload)
+    {
+        var doc=Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var entity=payload["entity"] as JObject ?? payload;
+        var type=((string?)entity["type"] ?? "").ToUpperInvariant();
+        var layer=((string?)entity["layer"] ?? "0").Trim();
+        Entity created;
+        static Point3d P3(JToken? t) => t is JObject o ? new Point3d((double?)o["x"]??0,(double?)o["y"]??0,0) : Point3d.Origin;
+
+        switch(type)
+        {
+            case "LINE": created=new Line(P3(entity["start"]),P3(entity["end"])); break;
+            case "WALL":
+                var wp1=P3(entity["p1"]); var wp2=P3(entity["p2"]); var thickness=Math.Max(1e-6,(double?)entity["thickness"]??100.0);
+                var wv=wp2-wp1; if(wv.Length<1e-9) throw new InvalidOperationException("Wall length is zero.");
+                var wn=wv.GetNormal(); var wperp=new Vector3d(-wn.Y,wn.X,0)*(thickness/2.0);
+                var wpl=new Polyline(4);
+                var w0=wp1+wperp; var w1=wp2+wperp; var w2=wp2-wperp; var w3=wp1-wperp;
+                wpl.AddVertexAt(0,new Point2d(w0.X,w0.Y),0,0,0); wpl.AddVertexAt(1,new Point2d(w1.X,w1.Y),0,0,0);
+                wpl.AddVertexAt(2,new Point2d(w2.X,w2.Y),0,0,0); wpl.AddVertexAt(3,new Point2d(w3.X,w3.Y),0,0,0); wpl.Closed=true; created=wpl; break;
+            case "CIRCLE": created=new Circle(P3(entity["center"]),Vector3d.ZAxis,Math.Max(1e-6,(double?)entity["radius"]??1)); break;
+            case "POLYLINE":
+                var points=entity["points"] as JArray ?? new JArray();
+                var pl=new Polyline(); int pi=0; foreach(var token in points){var q=P3(token);pl.AddVertexAt(pi++,new Point2d(q.X,q.Y),0,0,0);} pl.Closed=(bool?)entity["closed"]??false; created=pl; break;
+            case "RECTANGLE":
+                var x=(double?)entity["x"]??0;var y=(double?)entity["y"]??0;var w=(double?)entity["width"]??0;var h=(double?)entity["height"]??0;
+                var rp=new Polyline(4);rp.AddVertexAt(0,new Point2d(x,y),0,0,0);rp.AddVertexAt(1,new Point2d(x+w,y),0,0,0);rp.AddVertexAt(2,new Point2d(x+w,y+h),0,0,0);rp.AddVertexAt(3,new Point2d(x,y+h),0,0,0);rp.Closed=true;created=rp;break;
+            case "TEXT":
+                created=new DBText{Position=P3(entity["position"]),TextString=(string?)entity["text"]??"",Height=Math.Max(1,(double?)entity["height"]??250),Rotation=((double?)entity["rotation"]??0)*Math.PI/180.0};break;
+            case "MTEXT":
+                created=new MText{Location=P3(entity["position"]),Contents=(string?)entity["text"]??"",TextHeight=Math.Max(1,(double?)entity["height"]??250),Rotation=((double?)entity["rotation"]??0)*Math.PI/180.0};break;
+            default: throw new InvalidOperationException($"Direct DWG create does not support entity type: {type}");
+        }
+        using(doc.LockDocument()) using(var tr=doc.Database.TransactionManager.StartTransaction())
+        {
+            EnsureLayer(tr,doc.Database,layer); created.Layer=layer;
+            var bt=(BlockTable)tr.GetObject(doc.Database.BlockTableId,OpenMode.ForRead);
+            var ms=(BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace],OpenMode.ForWrite);
+            ms.AppendEntity(created);tr.AddNewlyCreatedDBObject(created,true);tr.Commit();
+        }
+        return new {created=true,handle=created.Handle.ToString(),type,layer};
+    }
+
+    private static object ApplyEntityTransform(JObject payload)
+    {
+        var doc=Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var handles=payload["handles"]?.Values<string>().Where(x=>!string.IsNullOrWhiteSpace(x)).ToArray() ?? Array.Empty<string>();
+        var op=((string?)payload["operation"]??"MOVE").ToUpperInvariant(); int changed=0;
+        using(doc.LockDocument()) using(var tr=doc.Database.TransactionManager.StartTransaction())
+        {
+            foreach(var h in handles)
+            {
+                var id=ObjectIdFromHandle(doc.Database,h); if(id.IsNull||!id.IsValid||id.IsErased)continue;
+                if(!(tr.GetObject(id,OpenMode.ForWrite,false) is Entity ent))continue;
+                Matrix3d m;
+                if(op=="MOVE") m=Matrix3d.Displacement(new Vector3d((double?)payload["dx"]??0,(double?)payload["dy"]??0,0));
+                else if(op=="ROTATE")
+                {
+                    var basePt=payload["basePoint"] is JObject bp ? new Point3d((double?)bp["x"]??0,(double?)bp["y"]??0,0) : Point3d.Origin;
+                    m=Matrix3d.Rotation(((double?)payload["angleDeg"]??0)*Math.PI/180.0,Vector3d.ZAxis,basePt);
+                }
+                else if(op=="SCALE")
+                {
+                    var basePt=payload["basePoint"] is JObject bp ? new Point3d((double?)bp["x"]??0,(double?)bp["y"]??0,0) : Point3d.Origin;
+                    m=Matrix3d.Scaling(Math.Max(1e-6,(double?)payload["factor"]??1),basePt);
+                }
+                else throw new InvalidOperationException($"Unsupported direct transform: {op}");
+                ent.TransformBy(m); changed++;
+            }
+            tr.Commit();
+        }
+        return new {changed,operation=op,handles};
+    }
+
+    private static object EraseHandles(JObject payload)
+    {
+        var doc=Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var handles=payload["handles"]?.Values<string>().Where(x=>!string.IsNullOrWhiteSpace(x)).ToArray() ?? Array.Empty<string>();int erased=0;
+        using(doc.LockDocument()) using(var tr=doc.Database.TransactionManager.StartTransaction())
+        {
+            foreach(var h in handles){var id=ObjectIdFromHandle(doc.Database,h);if(id.IsNull||!id.IsValid||id.IsErased)continue;if(tr.GetObject(id,OpenMode.ForWrite,false) is DBObject obj){obj.Erase();erased++;}}
+            tr.Commit();
+        }
+        doc.Editor.SetImpliedSelection(Array.Empty<ObjectId>());
+        return new {erased,handles};
+    }
+
+    private static object SetEntityLayer(JObject payload)
+    {
+        var doc=Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var handles=payload["handles"]?.Values<string>().Where(x=>!string.IsNullOrWhiteSpace(x)).ToArray() ?? Array.Empty<string>();
+        var layer=((string?)payload["layer"]??"").Trim();if(string.IsNullOrWhiteSpace(layer))throw new ArgumentException("layer required");int changed=0;
+        using(doc.LockDocument()) using(var tr=doc.Database.TransactionManager.StartTransaction())
+        {
+            EnsureLayer(tr,doc.Database,layer);
+            foreach(var h in handles){var id=ObjectIdFromHandle(doc.Database,h);if(id.IsNull||!id.IsValid||id.IsErased)continue;if(tr.GetObject(id,OpenMode.ForWrite,false) is Entity ent){ent.Layer=layer;changed++;}}
+            tr.Commit();
+        }
+        return new {changed,layer,handles};
+    }
+
+    private static object UpdateTextContents(JObject payload)
+    {
+        var doc=Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var updates=payload["updates"] as JArray ?? new JArray();
+        int changed=0, skipped=0;
+        using(doc.LockDocument()) using(var tr=doc.Database.TransactionManager.StartTransaction())
+        {
+            foreach(var token in updates.OfType<JObject>())
+            {
+                var handle=(string?)token["handle"] ?? "";
+                var text=(string?)token["text"] ?? "";
+                var id=ObjectIdFromHandle(doc.Database,handle);
+                if(id.IsNull||!id.IsValid||id.IsErased){skipped++;continue;}
+                var obj=tr.GetObject(id,OpenMode.ForWrite,false);
+                if(obj is DBText tx){tx.TextString=text;changed++;}
+                else if(obj is MText mt){mt.Contents=text;changed++;}
+                else skipped++;
+            }
+            tr.Commit();
+        }
+        return new {changed,skipped};
+    }
+
+    private static object InsertExistingBlock(JObject payload)
+    {
+        var doc=Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var blockName=((string?)payload["blockName"] ?? "").Trim();
+        if(string.IsNullOrWhiteSpace(blockName)) throw new ArgumentException("blockName required");
+        var layer=((string?)payload["layer"] ?? "0").Trim();
+        var point=payload["point"] is JObject pj
+            ? new Point3d((double?)pj["x"]??0,(double?)pj["y"]??0,0)
+            : Point3d.Origin;
+        var rotation=((double?)payload["rotationDeg"]??0)*Math.PI/180.0;
+        var scale=Math.Max(1e-6,(double?)payload["scale"]??1.0);
+        var attrs=payload["attributes"] as JObject;
+        string handle="";
+        using(doc.LockDocument()) using(var tr=doc.Database.TransactionManager.StartTransaction())
+        {
+            var bt=(BlockTable)tr.GetObject(doc.Database.BlockTableId,OpenMode.ForRead);
+            if(!bt.Has(blockName)) throw new InvalidOperationException($"Block definition not found in DWG: {blockName}");
+            EnsureLayer(tr,doc.Database,layer);
+            var ms=(BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace],OpenMode.ForWrite);
+            var br=new BlockReference(point,bt[blockName]){Layer=layer,Rotation=rotation,ScaleFactors=new Scale3d(scale)};
+            ms.AppendEntity(br);tr.AddNewlyCreatedDBObject(br,true);
+            var def=(BlockTableRecord)tr.GetObject(bt[blockName],OpenMode.ForRead);
+            if(def.HasAttributeDefinitions)
+            {
+                foreach(ObjectId id in def)
+                {
+                    if(!(tr.GetObject(id,OpenMode.ForRead,false) is AttributeDefinition ad) || ad.Constant) continue;
+                    var ar=new AttributeReference();
+                    ar.SetAttributeFromBlock(ad,br.BlockTransform);
+                    var supplied=attrs?[ad.Tag];
+                    if(supplied!=null) ar.TextString=Convert.ToString(supplied) ?? ad.TextString;
+                    br.AttributeCollection.AppendAttribute(ar);tr.AddNewlyCreatedDBObject(ar,true);
+                }
+            }
+            tr.Commit();handle=br.Handle.ToString();
+        }
+        return new {inserted=true,blockName,handle,layer,point=new{x=point.X,y=point.Y}};
+    }
+
+    private static object ConvertDwgToDxfPreview(JObject payload)
+    {
+        var filePath = (string?)payload["filePath"] ?? throw new ArgumentException("filePath required");
+        if (!File.Exists(filePath)) throw new FileNotFoundException("DWG not found.", filePath);
+        if (!string.Equals(Path.GetExtension(filePath), ".dwg", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Input must be .dwg.");
+        var dir = Path.Combine(Path.GetTempPath(), "HNL_CAD_AI", "dwg-preview");
+        Directory.CreateDirectory(dir);
+        var outputPath = Path.Combine(dir, $"{Path.GetFileNameWithoutExtension(filePath)}_{Guid.NewGuid():N}.dxf");
+        using var db = new Database(false, true);
+        db.ReadDwgFile(filePath, FileOpenMode.OpenForReadAndAllShare, true, "");
+        db.CloseInput(true);
+        db.DxfOut(outputPath, 16, DwgVersion.Current);
+        return new {
+            outputPath,
+            sourceDwg=filePath,
+            bytes=new FileInfo(outputPath).Length,
+            mode="HNL_CANVAS_PREVIEW",
+            warning="DXF preview does not guarantee full DWG fidelity for dynamic blocks, fields, xrefs, proxy/custom objects."
+        };
     }
 
     private static object ExecuteNativeCommand(JObject payload)
@@ -920,27 +1776,4 @@ public sealed class BridgeCommands : IExtensionApplication
         }
     }
 
-    [CommandMethod("HNLBRIDGESTATUS", CommandFlags.Session)]
-    public void BridgeStatus()
-    {
-        var doc = Application.DocumentManager.MdiActiveDocument;
-        doc?.Editor.WriteMessage($"\nHNL Bridge v2.4.7: {(_registered ? "Paired" : "Waiting for HNL EXE")} | AutoCAD {Application.Version} | Drawing: {doc?.Name}");
-    }
-
-    [CommandMethod("HNLBRIDGEPING", CommandFlags.Session)]
-    public void Ping() => Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\nHNL_PONG");
-
-    [CommandMethod("HNLPLOTDEVICES", CommandFlags.Session)]
-    public void PlotDevices()
-    {
-        var data = GetPlotDevicesPayload();
-        Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\n" + JsonConvert.SerializeObject(data, Formatting.Indented));
-    }
-
-    [CommandMethod("HNLLAYOUTS", CommandFlags.Session)]
-    public void Layouts()
-    {
-        var data = GetLayoutsPayload();
-        Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\n" + JsonConvert.SerializeObject(data, Formatting.Indented));
-    }
 }

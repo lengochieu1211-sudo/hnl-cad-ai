@@ -60,7 +60,7 @@ export const TableBuilderModal: React.FC<TableBuilderModalProps> = ({
       ["1", "Tường xây gạch tuynel 100", "100", "24.5", "68.6", "KT_TUONG"],
       ["2", "Tường xây gạch tuynel 200", "200", "18.0", "50.4", "KT_TUONG"],
       ["3", "Khung xương trần chìm @800", "0.6", "36.0", "36.0", "KT_TRAN_XUONGCHINH"],
-      ["4", "Khung xương trần phụ @400", "0.6", "72.0", "72.0", "KT_TRAN_XUONGPHU"],
+      ["4", "Khung xương trần phụ @406.67 (1220/3)", "0.6", "72.0", "72.0", "KT_TRAN_XUONGPHU"],
     ];
   }
 

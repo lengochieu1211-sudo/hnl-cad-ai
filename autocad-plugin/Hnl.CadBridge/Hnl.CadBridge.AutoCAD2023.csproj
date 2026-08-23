@@ -4,8 +4,13 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <AssemblyName>Hnl.CadBridge</AssemblyName>
+    <Version>2.6.3</Version>
+    <AssemblyVersion>2.6.3.0</AssemblyVersion>
+    <FileVersion>2.6.3.0</FileVersion>
+    <InformationalVersion>2.6.3</InformationalVersion>
     <RootNamespace>Hnl.CadBridge</RootNamespace>
     <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
   </PropertyGroup>
   <ItemGroup>

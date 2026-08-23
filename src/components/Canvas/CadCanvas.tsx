@@ -34,6 +34,29 @@ import {
   Magnet,
 } from "lucide-react";
 
+export type CadDraftingMode = "SNAP" | "OSNAP" | "OTRACK" | "ORTHO" | "GRID" | "DYN";
+
+export interface CadDraftingStatus {
+  snap: boolean;
+  osnap: boolean;
+  otrack: boolean;
+  ortho: boolean;
+  grid: boolean;
+  dyn: boolean;
+}
+
+export interface CadDraftingAction {
+  id: number;
+  mode: CadDraftingMode;
+  enabled: boolean;
+}
+
+export interface CadPointerStatus {
+  x: number;
+  y: number;
+  activeSnapMode?: string | null;
+}
+
 interface CadCanvasProps {
   entities: CadEntity[];
   layers: CadLayer[];
@@ -46,6 +69,10 @@ interface CadCanvasProps {
   onAddEntity?: (entity: CadEntity) => void;
   currentTool?: string; // "SELECT" | "LINE" | "WALL_100" | "WALL_200" | "CEILING" | "RECTANGLE" | "AREA_PICK"
   onToolComplete?: () => void;
+  draftingAction?: CadDraftingAction | null;
+  onDraftingStatusChange?: (status: CadDraftingStatus) => void;
+  onPointerStatusChange?: (status: CadPointerStatus) => void;
+  hideInternalStatusBar?: boolean;
 }
 
 export const CadCanvas: React.FC<CadCanvasProps> = ({
@@ -60,9 +87,14 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
   onAddEntity,
   currentTool = "SELECT",
   onToolComplete,
+  draftingAction = null,
+  onDraftingStatusChange,
+  onPointerStatusChange,
+  hideInternalStatusBar = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [viewportSize, setViewportSize] = useState({ width: 1000, height: 700 });
 
   // View transform state: scale and pan offset
   const [viewTransform, setViewTransform] = useState({
@@ -78,7 +110,8 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
   const [selectionBoxStart, setSelectionBoxStart] = useState<Point2D>({ x: 0, y: 0 });
   const [selectionBoxCurrent, setSelectionBoxCurrent] = useState<Point2D>({ x: 0, y: 0 });
   const [hoveredEntityId, setHoveredEntityId] = useState<string | null>(null);
-  const [isGridSnap, setIsGridSnap] = useState(false); // Off by default to prioritize precise Osnap
+  const [isGridSnap, setIsGridSnap] = useState(false); // SNAPMODE / F9
+  const [isGridVisible, setIsGridVisible] = useState(true); // GRIDMODE / F7
   const [isOrtho, setIsOrtho] = useState(false);
 
   // Real-time Object Snap (Osnap) State
@@ -100,6 +133,64 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
 
   // Temporary points for interactive drawing tools
   const [tempPoints, setTempPoints] = useState<Point2D[]>([]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setViewportSize({
+      width: Math.max(1, el.clientWidth),
+      height: Math.max(1, el.clientHeight),
+    });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!draftingAction) return;
+    switch (draftingAction.mode) {
+      case "SNAP": setIsGridSnap(draftingAction.enabled); break;
+      case "GRID": setIsGridVisible(draftingAction.enabled); break;
+      case "ORTHO": setIsOrtho(draftingAction.enabled); break;
+      case "OSNAP":
+        setOsnapSettings((prev) => ({ ...prev, enabled: draftingAction.enabled }));
+        break;
+      case "OTRACK":
+        setOsnapSettings((prev) => ({ ...prev, trackingEnabled: draftingAction.enabled }));
+        break;
+      case "DYN":
+        setDynInput((prev) => ({ ...prev, enabled: draftingAction.enabled }));
+        break;
+    }
+  }, [draftingAction?.id]);
+
+  useEffect(() => {
+    onDraftingStatusChange?.({
+      snap: isGridSnap,
+      osnap: osnapSettings.enabled,
+      otrack: osnapSettings.trackingEnabled,
+      ortho: isOrtho,
+      grid: isGridVisible,
+      dyn: dynInput.enabled,
+    });
+  }, [
+    isGridSnap,
+    isGridVisible,
+    isOrtho,
+    osnapSettings.enabled,
+    osnapSettings.trackingEnabled,
+    dynInput.enabled,
+    onDraftingStatusChange,
+  ]);
+
+  useEffect(() => {
+    onPointerStatusChange?.({
+      x: mousePosCad.x,
+      y: mousePosCad.y,
+      activeSnapMode: activeSnap?.mode || null,
+    });
+  }, [mousePosCad.x, mousePosCad.y, activeSnap?.mode, onPointerStatusChange]);
 
   // Convert screen coordinates to Raw CAD World coordinates
   const screenToWorldRaw = useCallback(
@@ -187,6 +278,10 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
       } else if (e.key === "F11") {
         e.preventDefault();
         setOsnapSettings((prev) => ({ ...prev, trackingEnabled: !prev.trackingEnabled }));
+        return;
+      } else if (e.key === "F7") {
+        e.preventDefault();
+        setIsGridVisible((prev) => !prev);
         return;
       } else if (e.key === "F8") {
         e.preventDefault();
@@ -342,8 +437,10 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
     ctx.fillStyle = isPaperSpace ? "#2B2D30" : "#1A1B1E";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw Grid
-    drawGrid(ctx, canvas.width, canvas.height, viewTransform, isPaperSpace);
+    // Draw Grid (GRIDMODE / F7)
+    if (isGridVisible) {
+      drawGrid(ctx, canvas.width, canvas.height, viewTransform, isPaperSpace);
+    }
 
     if (isPaperSpace && activeLayout) {
       // Draw Sheet Outline (A3/A4) with Shadow
@@ -412,6 +509,7 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
     selectedEntityIds,
     ghostPreviewEntities,
     viewTransform,
+    isGridVisible,
     isBoxSelecting,
     selectionBoxStart,
     selectionBoxCurrent,
@@ -1451,7 +1549,7 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
   return (
     <div ref={containerRef} className="relative w-full h-full bg-[#1A1B1E] select-none overflow-hidden flex flex-col">
       {/* Top Left Canvas HUD */}
-      <div className="absolute top-3 left-3 z-10 flex items-center space-x-2 bg-[#25272C]/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-neutral-700/60 shadow-lg text-xs text-neutral-300">
+      <div className="absolute top-3 left-3 z-10 max-w-[48%] overflow-hidden flex items-center space-x-2 bg-[#25272C]/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-neutral-700/60 shadow-lg text-xs text-neutral-300">
         <span className="font-semibold text-cyan-400">
           {activeLayout ? `[Layout] ${activeLayout.name} (${activeLayout.paperSize})` : "[Model Space] 2D Wireframe"}
         </span>
@@ -1460,7 +1558,7 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
           Scale: 1:{Math.max(1, Math.round(1 / Math.max(0.000001, viewTransform.scale * 10)))}
         </span>
         {currentTool !== "SELECT" && (
-          <span className="bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded text-[11px] font-medium animate-pulse border border-cyan-500/40">
+          <span className="min-w-0 truncate bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded text-[11px] font-medium animate-pulse border border-cyan-500/40">
             LỆNH ĐANG CHẠY: {currentTool}
             {currentTool === "POLYLINE" ? ` • Đỉnh: ${tempPoints.length} • Enter=Kết thúc • C=Đóng kín • U=Lùi` : ""}
           </span>
@@ -1502,10 +1600,10 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
         </button>
         <div className="w-[1px] h-4 bg-neutral-700 mx-1" />
         <button
-          onClick={() => setIsGridSnap(!isGridSnap)}
-          title={`Snap Grid [F9]: ${isGridSnap ? "ON (100mm)" : "OFF"}`}
+          onClick={() => setIsGridVisible((prev) => !prev)}
+          title={`Grid Display [F7]: ${isGridVisible ? "ON" : "OFF"}`}
           className={`p-1.5 rounded transition ${
-            isGridSnap ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40" : "hover:bg-neutral-700"
+            isGridVisible ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40" : "hover:bg-neutral-700"
           }`}
         >
           <GridIcon className="w-4 h-4" />
@@ -1526,6 +1624,8 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
           settings={osnapSettings}
           onUpdateSettings={setOsnapSettings}
           activeOriginPoint={tempPoints.length > 0 ? tempPoints[0] : null}
+          viewportWidth={viewportSize.width}
+          viewportHeight={viewportSize.height}
         />
       </div>
 
@@ -1539,6 +1639,8 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
           onChangeLength={(val) => setDynInput((prev) => ({ ...prev, lengthInput: val }))}
           onChangeAngle={(val) => setDynInput((prev) => ({ ...prev, angleInput: val }))}
           onToggleField={(field) => setDynInput((prev) => ({ ...prev, activeField: field }))}
+          viewportWidth={viewportSize.width}
+          viewportHeight={viewportSize.height}
           onCommit={(targetPos) => {
             // PLINE keeps accumulating vertices; Dynamic Input must not end it after 2 points.
             if (currentTool === "POLYLINE") {
@@ -1619,95 +1721,89 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
           }
         }}
         tabIndex={0}
-        className={`w-full h-full outline-none ${currentTool==="SELECT" ? (hoveredEntityId ? "cursor-pointer" : "cursor-crosshair") : "cursor-crosshair"}`}
+        className={`w-full flex-1 min-h-0 outline-none ${currentTool==="SELECT" ? (hoveredEntityId ? "cursor-pointer" : "cursor-crosshair") : "cursor-crosshair"}`}
       />
 
-      {/* Bottom Status Bar / Coordinate Readout */}
-      <div className="h-7 bg-[#1E1F22] border-t border-neutral-800 px-4 flex items-center justify-between text-xs text-neutral-400 select-none">
-        <div className="flex items-center space-x-4 font-mono">
-          <span className="flex items-center space-x-1">
-            <span className="text-neutral-500">X:</span>
-            <span className="text-neutral-200">{mousePosCad.x.toFixed(0)}</span>
-          </span>
-          <span className="flex items-center space-x-1">
-            <span className="text-neutral-500">Y:</span>
-            <span className="text-neutral-200">{mousePosCad.y.toFixed(0)}</span>
-          </span>
-          <span className="flex items-center space-x-1">
-            <span className="text-neutral-500">Z:</span>
-            <span className="text-neutral-200">0.00</span>
-          </span>
+      {!hideInternalStatusBar && (
+        <>
+      {/* Bottom CAD Status — real states, not decorative labels */}
+      <div className="h-7 shrink-0 bg-[#1E1F22] border-t border-neutral-800 px-2 flex items-center gap-2 text-[10px] text-neutral-400 select-none overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-2 font-mono shrink-0">
+          <span><span className="text-neutral-600">X:</span> <b className="text-neutral-200">{mousePosCad.x.toFixed(0)}</b></span>
+          <span><span className="text-neutral-600">Y:</span> <b className="text-neutral-200">{mousePosCad.y.toFixed(0)}</b></span>
           {activeSnap && (
-            <span className="flex items-center space-x-1 text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 text-[11px] font-sans">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              <span className="font-bold font-mono">SNAP:</span>
-              <span>{activeSnap.mode}</span>
+            <span className="flex items-center gap-1 text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              {activeSnap.mode}
             </span>
           )}
         </div>
 
-        <div className="flex items-center space-x-3 text-[11px]">
-          <div className="flex items-center space-x-1.5">
-            <button
-              onClick={() => setOsnapSettings((prev) => ({ ...prev, enabled: !prev.enabled }))}
-              title="Bật/Tắt Object Snap [F3]"
-              className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold transition ${
-                osnapSettings.enabled
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                  : "bg-neutral-800 text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              OSNAP [F3]
-            </button>
-            <button
-              onClick={() => setOsnapSettings((prev) => ({ ...prev, trackingEnabled: !prev.trackingEnabled }))}
-              title="Bật/Tắt Object Snap Tracking [F11]"
-              className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold transition ${
-                osnapSettings.trackingEnabled
-                  ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
-                  : "bg-neutral-800 text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              OTRACK [F11]
-            </button>
-            <button
-              onClick={() => setIsOrtho((prev) => !prev)}
-              title="Bật/Tắt Ortho [F8]"
-              className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold transition ${
-                isOrtho
-                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                  : "bg-neutral-800 text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              ORTHO [F8]
-            </button>
-            <button
-              onClick={() => setDynInput((prev) => ({ ...prev, enabled: !prev.enabled }))}
-              title="Bật/Tắt Dynamic Input [F12]"
-              className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold transition ${
-                dynInput.enabled
-                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                  : "bg-neutral-800 text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              DYN [F12]
-            </button>
-          </div>
-          <span className="text-neutral-600">|</span>
-          <span className="text-neutral-400">
-            Selected: <strong className="text-cyan-400">{selectedEntityIds.length}</strong> objects
-          </span>
-          <span className="text-neutral-600">|</span>
-          <span className="text-neutral-400">
-            Total Entities: <strong className="text-neutral-200">{entities.length}</strong>
-          </span>
-          <span className="text-neutral-600">|</span>
-          <span className="text-amber-400 flex items-center space-x-1">
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
-            <span>Standalone Mode • AutoCAD bridge chưa kết nối</span>
-          </span>
+        <span className="text-neutral-700 shrink-0">|</span>
+
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => setIsGridSnap((prev) => !prev)}
+            title="Grid Snap [F9] — khóa con trỏ theo bước lưới 100mm"
+            className={`px-1.5 py-0.5 rounded font-mono font-bold transition border ${
+              isGridSnap ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" : "bg-neutral-800 text-neutral-500 border-neutral-800 hover:text-neutral-300"
+            }`}
+          >
+            SNAP F9
+          </button>
+          <button
+            onClick={() => setOsnapSettings((prev) => ({ ...prev, enabled: !prev.enabled }))}
+            title="Object Snap [F3] — bắt Endpoint/Midpoint/Center/..."
+            className={`px-1.5 py-0.5 rounded font-mono font-bold transition border ${
+              osnapSettings.enabled ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" : "bg-neutral-800 text-neutral-500 border-neutral-800 hover:text-neutral-300"
+            }`}
+          >
+            OSNAP F3
+          </button>
+          <button
+            onClick={() => setOsnapSettings((prev) => ({ ...prev, trackingEnabled: !prev.trackingEnabled }))}
+            title="Object Snap Tracking [F11]"
+            className={`px-1.5 py-0.5 rounded font-mono font-bold transition border ${
+              osnapSettings.trackingEnabled ? "bg-sky-500/20 text-sky-300 border-sky-500/40" : "bg-neutral-800 text-neutral-500 border-neutral-800 hover:text-neutral-300"
+            }`}
+          >
+            OTRACK F11
+          </button>
+          <button
+            onClick={() => setIsGridVisible((prev) => !prev)}
+            title="Grid Display [F7]"
+            className={`px-1.5 py-0.5 rounded font-mono font-bold transition border ${
+              isGridVisible ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" : "bg-neutral-800 text-neutral-500 border-neutral-800 hover:text-neutral-300"
+            }`}
+          >
+            GRID F7
+          </button>
+          <button
+            onClick={() => setIsOrtho((prev) => !prev)}
+            title="Ortho [F8]"
+            className={`px-1.5 py-0.5 rounded font-mono font-bold transition border ${
+              isOrtho ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" : "bg-neutral-800 text-neutral-500 border-neutral-800 hover:text-neutral-300"
+            }`}
+          >
+            ORTHO F8
+          </button>
+          <button
+            onClick={() => setDynInput((prev) => ({ ...prev, enabled: !prev.enabled }))}
+            title="Dynamic Input [F12]"
+            className={`px-1.5 py-0.5 rounded font-mono font-bold transition border ${
+              dynInput.enabled ? "bg-amber-500/20 text-amber-300 border-amber-500/40" : "bg-neutral-800 text-neutral-500 border-neutral-800 hover:text-neutral-300"
+            }`}
+          >
+            DYN F12
+          </button>
         </div>
-      </div>
+
+        <span className="ml-auto shrink-0 text-neutral-600">
+          Sel <b className="text-cyan-400">{selectedEntityIds.length}</b> / {entities.length}
+        </span>
+      </div>        </>
+      )}
+
     </div>
   );
 };

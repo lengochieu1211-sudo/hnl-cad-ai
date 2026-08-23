@@ -10,6 +10,8 @@ interface DynamicInputHUDProps {
   onChangeLength: (val: string) => void;
   onChangeAngle: (val: string) => void;
   onToggleField: (field: "LENGTH" | "ANGLE" | "COORDS") => void;
+  viewportWidth?: number;
+  viewportHeight?: number;
 }
 
 export const DynamicInputHUD: React.FC<DynamicInputHUDProps> = ({
@@ -21,6 +23,8 @@ export const DynamicInputHUD: React.FC<DynamicInputHUDProps> = ({
   onChangeLength,
   onChangeAngle,
   onToggleField,
+  viewportWidth = 1000,
+  viewportHeight = 700,
 }) => {
   const lengthInputRef = useRef<HTMLInputElement>(null);
   const angleInputRef = useRef<HTMLInputElement>(null);
@@ -64,12 +68,17 @@ export const DynamicInputHUD: React.FC<DynamicInputHUDProps> = ({
 
   if (!state.enabled) return null;
 
+  const hudWidth = startPoint ? 330 : 180;
+  const hudHeight = 40;
+  const hudLeft = Math.max(8, Math.min(mouseScreenPos.x + 22, Math.max(8, viewportWidth - hudWidth - 8)));
+  const hudTop = Math.max(8, Math.min(mouseScreenPos.y + 16, Math.max(8, viewportHeight - hudHeight - 8)));
+
   return (
     <div
       className="pointer-events-auto absolute z-40 flex items-center space-x-1 p-1 rounded-md bg-[#16181D]/95 border border-cyan-500/50 shadow-2xl backdrop-blur-md text-[11px] text-white select-none animate-in fade-in zoom-in-95"
       style={{
-        left: `${mouseScreenPos.x + 22}px`,
-        top: `${mouseScreenPos.y + 16}px`,
+        left: `${hudLeft}px`,
+        top: `${hudTop}px`,
       }}
     >
       {startPoint ? (

@@ -205,21 +205,21 @@ export const CEILING_SYSTEMS_KNOWLEDGE: CeilingSystemSpec[] = [
     mainRunnerProfile: "Thanh chính BASI M4038 (dày 0.75mm)",
     mainRunnerSpacingMm: 800, // Khuyến nghị 800mm (max 1000mm)
     crossRunnerProfile: "Thanh phụ BASI M3812 (dày 0.38mm)",
-    crossRunnerSpacingMm: 400, // 400mm hoặc 406mm cho tấm 1220x2440
+    crossRunnerSpacingMm: 1220 / 3, // HNL project rule: 406.666...mm; không làm tròn 400mm
     wallAngleProfile: "Thanh viền nhôm Shadowline VTC 20/20 có rãnh chống nứt biên",
     wallAngleOffsetMm: 20,
     hangerType: "Ty ren M6/M8 + Nở đạn (hoặc ty dây lò xo cho dân dụng)",
     hangerSpacingMm: 900, // Khuyến nghị 900mm (max 1000mm)
     firstHangerDistanceMm: 400, // Max 400mm từ tường biên
     firstMainDistanceMm: 400,
-    boardType: "Tấm Gypsum tiêu chuẩn 9mm/12.7mm",
+    boardType: "Tấm Gypsum 1220x2440mm tiêu chuẩn 9mm/12.7mm",
     boardThicknessMm: 9.0,
     layersCount: 1,
     screwSpacingMm: { field: 250, edge: 150 },
     jointTreatment: "Băng keo giấy đục lỗ + Bột Gyp-Filler 3 lớp chà nhám mịn",
     expansionJointIntervalM: 10, // Khe co giãn Control Joint mỗi 10m
     openingReinforcementRule: "Bắt buộc bo khung thanh chính gia cường (Trimmer channel) cho miệng gió, hộp đèn > 300mm",
-    sourceDoc: "TCVN 8256:2009 / ASTM C635 & C636 / Sổ tay thi công Vĩnh Tường 2024",
+    sourceDoc: "HNL PROJECT RULE: board 1220x2440 → cross runner 1220/3 = 406.67mm. Manufacturer spacing phải tra theo hệ/revision riêng.",
   },
   {
     systemId: "C-NOI-600",
