@@ -20,7 +20,7 @@ namespace Hnl.CadBridge;
 
 public sealed class BridgeCommands : IExtensionApplication
 {
-    internal const string PluginVersion = "2.7.2";
+    internal const string PluginVersion = "2.7.3";
     private static readonly HttpClient Http = new HttpClient();
     private static readonly ConcurrentQueue<JObject> UiActions = new ConcurrentQueue<JObject>();
     private static Timer? _pollTimer;
@@ -168,7 +168,7 @@ public sealed class BridgeCommands : IExtensionApplication
     [CommandMethod("HNLLIBRARY", CommandFlags.Session)]
     public void HnlLibraryManagerCommand()
     {
-        NativePalette.OpenManagerWindow("LIBRARY");
+        NativePaletteCommands.OpenManagerWindow("LIBRARY");
     }
 
     [CommandMethod("HNLINSERT", CommandFlags.Session)]

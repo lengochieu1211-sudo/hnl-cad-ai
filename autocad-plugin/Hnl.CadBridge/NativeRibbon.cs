@@ -322,7 +322,7 @@ internal sealed class HnlRibbonCommandHandler : ICommand
             if (parameter == null) return;
             var cmd = Convert.ToString(parameter.GetType().GetProperty("CommandParameter")?.GetValue(parameter)) ?? "";
             if (string.IsNullOrWhiteSpace(cmd)) return;
-            Application.DocumentManager.MdiActiveDocument?.SendStringToExecute(cmd.EndsWith(" ") ? cmd : cmd + " ", true, false, true);
+            Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument?.SendStringToExecute(cmd.EndsWith(" ") ? cmd : cmd + " ", true, false, true);
         }
         catch { }
     }

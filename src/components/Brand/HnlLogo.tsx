@@ -159,17 +159,14 @@ export const HnlLogo: React.FC<HnlLogoProps> = ({
 
   return (
     <div className={`flex items-center space-x-2.5 select-none ${className}`}>
-      {/* Official HNL logo supplied by the user */}
-      <div className={`relative ${iconDimensions[size]} flex-shrink-0 group`}>
-        <div className="absolute -inset-0.5 rounded-xl bg-sky-500/25 blur-[3px] opacity-70 group-hover:opacity-100 transition" />
-        <div className="relative w-full h-full rounded-xl overflow-hidden shadow-xl ring-1 ring-white/15 bg-white/95">
-          <img
-            src="/hnl-logo.png"
-            alt="HNL"
-            className="w-full h-full object-contain"
-            draggable={false}
-          />
-        </div>
+      {/* Official HNL logo supplied by the user — render the uploaded artwork directly. */}
+      <div className={`${iconDimensions[size]} flex-shrink-0`}>
+        <img
+          src="/hnl-logo.png"
+          alt="HNL"
+          className="w-full h-full object-contain"
+          draggable={false}
+        />
       </div>
 
       {/* Typography Brand Name */}
