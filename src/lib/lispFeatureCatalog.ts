@@ -47,3 +47,76 @@ export const LISP_FEATURE_CATALOG:LispFeatureItem[]=[
 {"commands": "FIELDOBJECTS", "name": "Field Object Locator", "center": "FIELD", "summary": "Zoom/highlight geometry được Field tham chiếu", "mode": "AUTOCAD", "priority": "P1", "ownerId": "FIELD_DOCTOR"},
 {"commands": "INC/MVAT", "name": "Attribute Number/Move", "center": "TEXT", "summary": "Đánh số attribute + dời attribute text", "mode": "HYBRID", "priority": "P1", "ownerId": "ATTRIBUTE_MANAGER"},
 ];
+
+export type LispGuide = {
+  whenToUse:string;
+  prerequisites:string[];
+  selection:string;
+  steps:string[];
+  expected:string;
+  commonErrors:string[];
+};
+
+export function primaryLispCommand(commands:string){
+  return String(commands||"")
+    .split("/")
+    .map(x=>x.trim())
+    .find(x=>x && !x.includes("-")) || "";
+}
+
+export function buildLispGuide(item:LispFeatureItem):LispGuide{
+  const mode = item.mode;
+  const cmd = primaryLispCommand(item.commands);
+  const requiresAcad = mode==="AUTOCAD" || mode==="HYBRID";
+  const selectionByCenter:Record<string,string>={
+    TEXT:"Thường chọn Text/MText/MLeader hoặc Block Attribute tùy lệnh.",
+    FIELD:"Chọn Text/MText/Attribute có Field và/hoặc geometry được Field tham chiếu.",
+    GEOMETRY:"Chọn Line/Polyline/Circle/Spline/geometry theo yêu cầu lệnh.",
+    DIMENSION:"Chọn geometry hoặc Dimension liên quan; kiểm tra DimStyle/Layer.",
+    QUANTITY:"Chọn geometry/block cần thống kê hoặc phạm vi bản vẽ.",
+    LAYOUT:"Chọn Layout/Viewport/khung bản vẽ theo workflow.",
+    BLOCK_FIELD:"Chọn Block/Attribute/Dynamic Block hoặc boundary liên quan.",
+    CEILING:"Chọn boundary trần/phòng và thiết bị MEP nếu workflow yêu cầu.",
+    TOOLS:"Phụ thuộc công cụ; thường không cần selection ban đầu."
+  };
+  const centerStep:Record<string,string>={
+    TEXT:"Kiểm tra đúng loại Text/Attribute và Tag trước khi xác nhận thay đổi hàng loạt.",
+    FIELD:"Không xóa geometry tham chiếu trước khi kiểm tra Field/ObjectID.",
+    GEOMETRY:"Preview hình học, kiểm tra phía/điểm/ngưỡng trước thao tác phá hủy.",
+    DIMENSION:"Kiểm tra DIMSTYLE, layer DIM, scale Model/Paper trước khi tạo dim.",
+    QUANTITY:"Kiểm tra đơn vị, layer, loại entity và phạm vi thống kê.",
+    LAYOUT:"Kiểm tra Paper size, viewport scale, CTB/STB/Page Setup trước batch.",
+    BLOCK_FIELD:"Kiểm tra tên block, Dynamic/Attribute/Xref trước khi sửa block.",
+    CEILING:"Kiểm tra module, board width, spacing, hướng chạy và boundary.",
+    TOOLS:"Đọc Command Line sau khi chạy để xác nhận công cụ đã nạp/thực thi."
+  };
+
+  return {
+    whenToUse:`Dùng khi cần: ${item.summary}.`,
+    prerequisites:[
+      "Save/Save As bản vẽ trước thao tác batch hoặc phá hủy.",
+      requiresAcad ? "Cần AutoCAD + HNL Bridge Connected để chạy Lisp gốc/native DWG." : "Có thể dùng workflow HNL tương ứng; Lisp gốc vẫn cần AutoCAD để LOAD.",
+      mode==="AUTOCAD" ? "Đây là workflow phụ thuộc AutoCAD native; Standalone không thể chạy tương đương đầy đủ." :
+      mode==="HYBRID" ? "Một phần có thể có HNL native, nhưng Field/Layout/Block/DWG thật vẫn cần AutoCAD." :
+      "Ưu tiên công cụ HNL native nếu đã có; Lisp nguồn dùng để tương thích lệnh cũ."
+    ],
+    selection:selectionByCenter[item.center] || "Chọn đối tượng theo prompt của Lisp.",
+    steps:[
+      `Trong tab 44 Lisp nguồn, tìm ${cmd || item.commands}.`,
+      "Nếu chưa có file nguồn: bấm Nạp file Lisp hoặc Nạp thư mục Lisp và chọn thư mục đã giải nén AI.zip.",
+      "Kiểm tra cột File nguồn phải hiện ĐÃ TÌM THẤY.",
+      "Bấm Nạp để AutoCAD LOAD file .lsp. Xem Command Line để xác nhận không có lỗi SECURELOAD/dependency.",
+      `Bấm Nạp + Chạy để LOAD rồi gọi lệnh ${cmd || item.commands}.`,
+      centerStep[item.center] || "Làm theo prompt trên AutoCAD Command Line.",
+      "Sau khi chạy, kiểm tra kết quả; nếu không đúng dùng Undo và gửi Diagnostic + dòng lỗi AutoCAD."
+    ],
+    expected:`Lệnh ${cmd || item.commands} được AutoCAD nạp/chạy; kết quả mong đợi: ${item.summary}.`,
+    commonErrors:[
+      "Bridge OFFLINE: HNL không thể LOAD Lisp vào AutoCAD.",
+      "SECURELOAD / trusted path: AutoCAD có thể chặn .lsp ngoài Trusted Locations.",
+      "Unknown command sau LOAD: file không định nghĩa command đã chọn, LOAD lỗi, hoặc command nằm trong dependency khác.",
+      "DCL/Excel/COM lỗi: Lisp cũ có thể cần file phụ, Excel hoặc đường dẫn riêng.",
+      "Không có đối tượng phù hợp: làm đúng bước selection theo prompt AutoCAD."
+    ]
+  };
+}

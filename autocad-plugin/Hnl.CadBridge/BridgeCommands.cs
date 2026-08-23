@@ -20,7 +20,7 @@ namespace Hnl.CadBridge;
 
 public sealed class BridgeCommands : IExtensionApplication
 {
-    internal const string PluginVersion = "2.7.5";
+    internal const string PluginVersion = "2.7.7";
     private static readonly HttpClient Http = new HttpClient();
     private static readonly ConcurrentQueue<JObject> UiActions = new ConcurrentQueue<JObject>();
     private static Timer? _pollTimer;
@@ -418,7 +418,7 @@ public sealed class BridgeCommands : IExtensionApplication
                     version = Application.Version.ToString(),
                     drawingName = doc?.Name ?? "",
                     pluginVersion = PluginVersion,
-                    capabilities = new[] { "GET_STATUS","GET_DRAFTING_STATUS","SET_DRAFTING_MODE","GET_PLOT_DEVICES","GET_LAYOUTS","SET_CURRENT_LAYOUT","RENAME_LAYOUT","EXECUTE_COMMAND","CANCEL_COMMAND","OPEN_DWG","CONVERT_DWG_TO_DXF_PREVIEW","GET_MODELSPACE_SNAPSHOT","SELECT_HANDLES","CREATE_NATIVE_ENTITY","APPLY_ENTITY_TRANSFORM","ERASE_HANDLES","SET_ENTITY_LAYER","UPDATE_TEXT_CONTENTS","INSERT_EXISTING_BLOCK","GET_DYNAMIC_BLOCK_PROPERTIES","SET_DYNAMIC_BLOCK_PROPERTIES","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","ENSURE_HNL_STANDARDS","CREATE_CEILING_GRID","CREATE_CEILING_SMART","CREATE_WALL_SYSTEM","INSERT_LIBRARY_BLOCK","INSPECT_LIBRARY_DWG","IMPORT_LIBRARY_DEFINITION","GET_HNL_BOQ","AUDIT_HNL_SHOPDRAWING","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
+                    capabilities = new[] { "GET_STATUS","GET_DRAFTING_STATUS","SET_DRAFTING_MODE","GET_PLOT_DEVICES","GET_LAYOUTS","SET_CURRENT_LAYOUT","RENAME_LAYOUT","EXECUTE_COMMAND","LOAD_LISP_FILE","CANCEL_COMMAND","OPEN_DWG","CONVERT_DWG_TO_DXF_PREVIEW","GET_MODELSPACE_SNAPSHOT","SELECT_HANDLES","CREATE_NATIVE_ENTITY","APPLY_ENTITY_TRANSFORM","ERASE_HANDLES","SET_ENTITY_LAYER","UPDATE_TEXT_CONTENTS","INSERT_EXISTING_BLOCK","GET_DYNAMIC_BLOCK_PROPERTIES","SET_DYNAMIC_BLOCK_PROPERTIES","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","ENSURE_HNL_STANDARDS","CREATE_CEILING_GRID","CREATE_CEILING_SMART","CREATE_WALL_SYSTEM","INSERT_LIBRARY_BLOCK","INSPECT_LIBRARY_DWG","IMPORT_LIBRARY_DEFINITION","GET_HNL_BOQ","AUDIT_HNL_SHOPDRAWING","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
                 });
                 var res = await Http.SendAsync(req);
                 _registered = res.IsSuccessStatusCode;
@@ -475,6 +475,7 @@ public sealed class BridgeCommands : IExtensionApplication
                 "SET_CURRENT_LAYOUT" => SetCurrentLayout(payload),
                 "RENAME_LAYOUT" => RenameLayout(payload),
                 "EXECUTE_COMMAND" => ExecuteNativeCommand(payload),
+                "LOAD_LISP_FILE" => LoadLispFile(payload),
                 "CANCEL_COMMAND" => CancelNativeCommand(),
                 "OPEN_DWG" => OpenDwg(payload),
                 "CONVERT_DWG_TO_DXF_PREVIEW" => ConvertDwgToDxfPreview(payload),
@@ -1886,6 +1887,41 @@ public sealed class BridgeCommands : IExtensionApplication
             throw new InvalidOperationException("Unsafe characters in command name.");
         doc.SendStringToExecute($"_.{command} ", true, false, true);
         return new { queued = true, command, drawingName = doc.Name };
+    }
+
+    private static object LoadLispFile(JObject payload)
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument
+            ?? throw new InvalidOperationException("No active drawing.");
+
+        var filePath = ((string?)payload["filePath"] ?? "").Trim();
+        var runCommand = ((string?)payload["runCommand"] ?? "").Trim().ToUpperInvariant();
+
+        if (string.IsNullOrWhiteSpace(filePath))
+            throw new ArgumentException("filePath required");
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException("Lisp file not found.", filePath);
+        if (!string.Equals(Path.GetExtension(filePath), ".lsp", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("LOAD_LISP_FILE only accepts .lsp.");
+
+        if (!string.IsNullOrWhiteSpace(runCommand) &&
+            !runCommand.All(ch => char.IsLetterOrDigit(ch) || ch == '_' || ch == '-' || ch == '$'))
+            throw new InvalidOperationException("Unsafe Lisp command name.");
+
+        // AutoLISP accepts forward slashes on Windows; escape quotes defensively.
+        var safePath = filePath.Replace("\\", "/").Replace("\"", "\\\"");
+        doc.SendStringToExecute($"(load \\\"{safePath}\\\") ", true, false, true);
+
+        if (!string.IsNullOrWhiteSpace(runCommand))
+            doc.SendStringToExecute($"{runCommand} ", true, false, true);
+
+        return new
+        {
+            queued = true,
+            filePath,
+            runCommand = string.IsNullOrWhiteSpace(runCommand) ? null : runCommand,
+            note = "AutoCAD Command Line is authoritative for LOAD/SECURELOAD/DCL/dependency errors."
+        };
     }
 
     private static object CancelNativeCommand()

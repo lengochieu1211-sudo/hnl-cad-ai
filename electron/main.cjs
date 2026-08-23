@@ -369,11 +369,16 @@ async function createWindow() {
 
 async function openProjectFileDialog(openMode = 'AUTO') {
   if (!mainWindow) return { success: false };
+  const normalizedMode = String(openMode || 'AUTO').toUpperCase();
+  const localOnly = normalizedMode === 'HNL_LOCAL';
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Mở tệp HNL CAD AI',
-    filters: [
-      { name: 'CAD Drawings', extensions: ['dwg', 'dxf'] },
-      { name: 'HNL Project', extensions: ['json'] },
+    title: localOnly ? 'Mở DXF / Dự án HNL' : 'Mở tệp HNL CAD AI',
+    filters: localOnly ? [
+      { name: 'HNL / DXF', extensions: ['dxf', 'json'] },
+      { name: 'AutoLISP Scripts', extensions: ['lsp'] },
+    ] : [
+      { name: 'AutoCAD DWG', extensions: ['dwg'] },
+      { name: 'DXF / HNL Project', extensions: ['dxf', 'json'] },
       { name: 'AutoLISP Scripts', extensions: ['lsp'] },
       { name: 'All Files', extensions: ['*'] },
     ],
@@ -417,21 +422,26 @@ function buildAppMenu() {
           },
         },
         {
-          label: 'Mở DWG / DXF / Project...',
+          label: 'Mở DWG bằng AutoCAD + HNL...',
           accelerator: 'CmdOrCtrl+O',
-          click: () => { openProjectFileDialog('AUTO'); },
-        },
-        {
-          label: 'Mở DWG bằng AutoCAD Native...',
           click: () => { openProjectFileDialog('AUTOCAD_NATIVE'); },
         },
         {
-          label: 'Mở DWG trên HNL Canvas...',
-          click: () => { openProjectFileDialog('HNL_CANVAS'); },
+          label: 'Mở DXF / Dự án HNL...',
+          click: () => { openProjectFileDialog('HNL_LOCAL'); },
         },
         {
-          label: 'Mở & chỉnh DWG trực tiếp trong HNL...',
-          click: () => { openProjectFileDialog('DIRECT_DWG'); },
+          label: 'Tùy chọn DWG nâng cao',
+          submenu: [
+            {
+              label: 'Điều khiển DWG từ HNL (cần AutoCAD Bridge)...',
+              click: () => { openProjectFileDialog('DIRECT_DWG'); },
+            },
+            {
+              label: 'Xem DWG nhanh trên HNL Canvas (DXF tạm)...',
+              click: () => { openProjectFileDialog('HNL_CANVAS'); },
+            },
+          ],
         },
         {
           label: 'Lưu bản vẽ hiện tại (Save)',
@@ -703,6 +713,52 @@ async function importLibraryFile(sourcePath, options, index) {
   return { item, duplicate: false };
 }
 
+
+function scanLispCommands(filePath) {
+  try {
+    const text = fs.readFileSync(filePath, 'utf8');
+    const found = [];
+    const rx = /\(\s*defun\s+c:([A-Za-z0-9_\-$]+)\b/gi;
+    let m;
+    while ((m = rx.exec(text))) {
+      const cmd = String(m[1] || '').toUpperCase();
+      if (cmd && !found.includes(cmd)) found.push(cmd);
+    }
+    return found;
+  } catch {
+    return [];
+  }
+}
+
+function collectLispFiles(folder, depth = 0, out = []) {
+  if (depth > 8 || out.length >= 2000) return out;
+  let entries = [];
+  try { entries = fs.readdirSync(folder, { withFileTypes: true }); } catch { return out; }
+  for (const entry of entries) {
+    if (out.length >= 2000) break;
+    const full = path.join(folder, entry.name);
+    if (entry.isDirectory()) collectLispFiles(full, depth + 1, out);
+    else if (entry.isFile() && path.extname(entry.name).toLowerCase() === '.lsp') out.push(full);
+  }
+  return out;
+}
+
+function buildLispIndex(filePaths) {
+  return filePaths
+    .filter((p) => path.extname(String(p || '')).toLowerCase() === '.lsp' && fs.existsSync(p))
+    .map((filePath) => {
+      let stat = null;
+      try { stat = fs.statSync(filePath); } catch {}
+      return {
+        path: filePath,
+        name: path.basename(filePath),
+        commands: scanLispCommands(filePath),
+        sizeBytes: stat?.size || 0,
+        modifiedAt: stat?.mtime?.toISOString?.() || null,
+      };
+    });
+}
+
 // IPC Handlers for Native OS Dialogs
 ipcMain.handle('open-file-dialog', async (_event, mode) => openProjectFileDialog(mode));
 ipcMain.handle('launch-autocad-with-dwg', async (_event, filePath) => launchAutoCadWithDwg(filePath));
@@ -721,6 +777,29 @@ ipcMain.handle('select-approved-document', async () => {
   return { success: true, filePath, fileName: path.basename(filePath) };
 });
 
+
+
+ipcMain.handle('select-lisp-files', async () => {
+  if (!mainWindow) return { success: false, items: [] };
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Chọn AutoLISP nguồn (.lsp)',
+    filters: [{ name: 'AutoLISP', extensions: ['lsp'] }],
+    properties: ['openFile', 'multiSelections'],
+  });
+  if (result.canceled || !result.filePaths.length) return { success: false, canceled: true, items: [] };
+  return { success: true, items: buildLispIndex(result.filePaths) };
+});
+
+ipcMain.handle('select-lisp-folder', async () => {
+  if (!mainWindow) return { success: false, items: [] };
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Chọn thư mục chứa AutoLISP nguồn',
+    properties: ['openDirectory'],
+  });
+  if (result.canceled || !result.filePaths.length) return { success: false, canceled: true, items: [] };
+  const files = collectLispFiles(result.filePaths[0]);
+  return { success: true, root: result.filePaths[0], items: buildLispIndex(files) };
+});
 
 ipcMain.handle('get-library-index', async () => ({
   success: true,

@@ -28,6 +28,7 @@ import { ProfessionalAuditCenterModal } from "./components/Dialogs/ProfessionalA
 import { HnlSmartShopdrawingPlatformModal } from "./components/Dialogs/HnlSmartShopdrawingPlatformModal";
 import { PlotPublishSheetSetModal } from "./components/Dialogs/PlotPublishSheetSetModal";
 import { LispInspiredToolCenterModal } from "./components/Dialogs/LispInspiredToolCenterModal";
+import { HnlLogo } from "./components/Brand/HnlLogo";
 
 // FreeCAD-inspired Dock Panels
 import { HnlProjectTreePanel } from "./components/Dock/HnlProjectTreePanel";
@@ -115,6 +116,11 @@ import {
   Maximize2,
   Minimize2,
   Pencil,
+  FolderOpen,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+  MonitorCog,
 } from "lucide-react";
 
 const AUTOCAD_NATIVE_COMMAND_BY_HNL_KEY: Record<string,string> = {
@@ -222,6 +228,7 @@ export default function App() {
   const [isDirty, setIsDirty] = useState(false);
   const suppressProjectDirtyRef = useRef(true);
   const [showStartCenter, setShowStartCenter] = useState(true);
+  const [showStartAdvanced, setShowStartAdvanced] = useState(false);
   type DrawingWorkspaceMode = "STANDALONE" | "AUTOCAD_NATIVE" | "HNL_CANVAS_PREVIEW" | "DIRECT_DWG";
   const [drawingWorkspaceMode, setDrawingWorkspaceMode] = useState<DrawingWorkspaceMode>("STANDALONE");
   const [directDwgMode, setDirectDwgMode] = useState(false);
@@ -2170,49 +2177,141 @@ export default function App() {
   return (
     <div className="w-screen h-screen flex flex-col bg-[#141517] overflow-hidden select-none font-sans text-neutral-200">
       {showStartCenter && recoveryLoaded && (
-        <div className="fixed inset-0 z-[45] bg-[#0b0d10]/95 backdrop-blur-md flex items-center justify-center p-6">
-          <div className="w-full max-w-5xl rounded-2xl border border-neutral-700/80 bg-[#16181c] shadow-2xl overflow-hidden">
-            <div className="px-8 py-7 border-b border-neutral-800 bg-gradient-to-r from-[#15181c] to-[#101820] flex items-center justify-between gap-6">
-              <div>
-                <div className="text-[11px] tracking-[0.24em] uppercase text-cyan-400 font-semibold">Professional CAD Workspace</div>
-                <h1 className="mt-2 text-2xl font-bold text-white">HNL CAD AI <span className="text-cyan-400">{HNL_DISPLAY_VERSION}</span></h1>
-                <p className="mt-2 text-sm text-neutral-400 max-w-2xl">Không gian làm việc Standalone + AutoCAD Bridge, tối ưu shopdrawing, thống kê, layout và trợ lý AI kỹ thuật.</p>
-              </div>
-              <div className={`px-3 py-2 rounded-lg border text-xs ${autoCadBridgeStatus.connected ? "border-emerald-700 bg-emerald-950/30 text-emerald-300" : "border-neutral-700 bg-neutral-900 text-neutral-400"}`}>
-                {autoCadBridgeStatus.connected ? `AutoCAD ${autoCadBridgeStatus.version || ""} Connected` : "Standalone Mode"}
+        <div className="fixed inset-0 z-[45] bg-[#0b0d10]/96 backdrop-blur-md flex items-center justify-center p-5">
+          <div className="w-full max-w-4xl rounded-2xl border border-neutral-700/80 bg-[#15171a] shadow-2xl overflow-hidden">
+            <div className="px-7 py-6 border-b border-neutral-800 bg-gradient-to-r from-[#15181c] to-[#101820]">
+              <div className="flex items-center justify-between gap-5">
+                <div className="flex items-center gap-4 min-w-0">
+                  <HnlLogo size="lg" showText={false} showSubtitle={false} showBadge={false} />
+                  <div className="min-w-0">
+                    <div className="text-[10px] tracking-[0.22em] uppercase text-cyan-400 font-semibold">Professional CAD Workspace</div>
+                    <h1 className="mt-1 text-2xl font-bold text-white">HNL CAD AI <span className="text-cyan-400">{HNL_DISPLAY_VERSION}</span></h1>
+                    <p className="mt-1 text-xs text-neutral-500">DWG chính thức qua AutoCAD + HNL • DXF và dự án HNL mở trực tiếp.</p>
+                  </div>
+                </div>
+                <div className={`shrink-0 px-3 py-2 rounded-lg border text-[11px] ${autoCadBridgeStatus.connected ? "border-emerald-700/70 bg-emerald-950/25 text-emerald-300" : "border-neutral-700 bg-neutral-900 text-neutral-400"}`}>
+                  {autoCadBridgeStatus.connected ? `● AutoCAD ${autoCadBridgeStatus.version || ""}` : "○ AutoCAD chưa kết nối"}
+                </div>
               </div>
             </div>
-            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4 p-8">
-              <button onClick={() => { setShowStartCenter(false); }} className="text-left p-5 rounded-xl border border-cyan-700/60 bg-cyan-950/20 hover:bg-cyan-900/30 transition">
-                <div className="text-cyan-300 font-semibold">Tiếp tục Workspace</div>
-                <div className="text-xs text-neutral-400 mt-2">Mở vùng làm việc hiện tại{lastAutosaveAt ? ` • AutoSave ${new Date(lastAutosaveAt).toLocaleTimeString()}` : ""}.</div>
-              </button>
-              <button onClick={() => { (window as any).electronNative?.requestOpenFile?.("DIRECT_DWG"); }} className="text-left p-5 rounded-xl border border-fuchsia-800 bg-fuchsia-950/20 hover:border-fuchsia-600 transition">
-                <div className="text-fuchsia-300 font-semibold">Direct DWG Edit • HNL</div>
-                <div className="text-xs text-neutral-400 mt-2">Chỉnh DWG thật từ HNL Canvas: live snapshot, selection 2 chiều, draw/move/rotate/scale/erase native.</div>
-              </button>
-              <button onClick={() => { (window as any).electronNative?.requestOpenFile?.("AUTOCAD_NATIVE"); }} className="text-left p-5 rounded-xl border border-emerald-800 bg-emerald-950/20 hover:border-emerald-600 transition">
-                <div className="text-emerald-300 font-semibold">Mở DWG • AutoCAD Native</div>
-                <div className="text-xs text-neutral-400 mt-2">Full fidelity DWG. Dùng cho chỉnh sửa chính thức, block/field/layout/xref/plot.</div>
-              </button>
-              <button onClick={() => { (window as any).electronNative?.requestOpenFile?.("HNL_CANVAS"); }} className="text-left p-5 rounded-xl border border-cyan-800 bg-cyan-950/20 hover:border-cyan-600 transition">
-                <div className="text-cyan-300 font-semibold">Mở DWG • HNL Canvas</div>
-                <div className="text-xs text-neutral-400 mt-2">Bridge đọc nền → DXF tạm → xem/audit/AI/chỉnh 2D nhẹ trong HNL. Không ghi đè DWG gốc.</div>
-              </button>
-              <button onClick={() => { (window as any).electronNative?.requestOpenFile?.("AUTO"); }} className="text-left p-5 rounded-xl border border-neutral-700 bg-[#1d2025] hover:border-neutral-500 transition">
-                <div className="text-white font-semibold">Mở dự án / DXF / DWG</div>
-                <div className="text-xs text-neutral-400 mt-2">HNL JSON, DXF trực tiếp hoặc DWG theo chế độ mặc định.</div>
-              </button>
-              <button onClick={() => { if (!isDirty || window.confirm("Bỏ thay đổi hiện tại và tạo bản vẽ mới?")) { suppressProjectDirtyRef.current = true; clearProjectSnapshot(); setEntities([]); setHistory([[]]); setHistoryIndex(0); setLayers(INITIAL_LAYERS); setLayouts(INITIAL_LAYOUTS); setViewports(INITIAL_VIEWPORTS); setSmartObjects([]); setSpreadsheetParameters(INITIAL_SPREADSHEET_PARAMETERS); setTranslationMemory(INITIAL_TRANSLATION_MEMORY); setBlockLibrary(INITIAL_BLOCK_LIBRARY); setDependencyEdges(INITIAL_DEPENDENCY_EDGES); setModules(INITIAL_HNL_MODULES); setSelectedWorkbench("HNL_CAD"); setSelectedEntityIds([]); setActiveLayout(null); setDirectDwgMode(false); setDrawingWorkspaceMode("STANDALONE"); setCurrentFileName("Untitled.dxf"); setCurrentFilePath(null); setIsDirty(false); setShowStartCenter(false); } }} className="text-left p-5 rounded-xl border border-neutral-700 bg-[#1d2025] hover:border-neutral-500 transition">
-                <div className="text-white font-semibold">Bản vẽ mới</div>
-                <div className="text-xs text-neutral-400 mt-2">Khởi tạo project sạch với layer/layout mặc định HNL.</div>
-              </button>
-            </div>
-            <div className="px-8 pb-7 grid md:grid-cols-4 gap-3 text-[11px] text-neutral-500">
-              <div className="rounded-lg bg-neutral-900/60 border border-neutral-800 p-3"><b className="text-neutral-300">Safe Mode</b><br/>{isSafeMode ? "Đang bật" : "Đang tắt"}</div>
-              <div className="rounded-lg bg-neutral-900/60 border border-neutral-800 p-3"><b className="text-neutral-300">Recovery</b><br/>{lastAutosaveAt ? "Có AutoSave" : "Chưa có AutoSave"}</div>
-              <div className="rounded-lg bg-neutral-900/60 border border-neutral-800 p-3"><b className="text-neutral-300">Project</b><br/>{currentFileName}</div>
-              <div className="rounded-lg bg-neutral-900/60 border border-neutral-800 p-3"><b className="text-neutral-300">Mode</b><br/>{drawingWorkspaceMode === "DIRECT_DWG" ? "DIRECT DWG" : drawingWorkspaceMode === "AUTOCAD_NATIVE" ? "AutoCAD Native" : drawingWorkspaceMode === "HNL_CANVAS_PREVIEW" ? "HNL Canvas Preview" : "Standalone"}</div>
+
+            <div className="p-7">
+              <div className="grid md:grid-cols-2 gap-3">
+                <button
+                  onClick={() => setShowStartCenter(false)}
+                  className="group text-left p-5 rounded-xl border border-cyan-700/60 bg-cyan-950/20 hover:bg-cyan-900/30 hover:border-cyan-500 transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg border border-cyan-800/70 bg-cyan-950/50 flex items-center justify-center text-cyan-300">
+                      <MonitorCog className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-cyan-200 font-semibold">Tiếp tục</div>
+                      <div className="text-[11px] text-neutral-500 mt-1">
+                        Workspace hiện tại{lastAutosaveAt ? ` • AutoSave ${new Date(lastAutosaveAt).toLocaleTimeString()}` : ""}.
+                      </div>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => (window as any).electronNative?.requestOpenFile?.("AUTOCAD_NATIVE")}
+                  className="group text-left p-5 rounded-xl border border-emerald-700/60 bg-emerald-950/20 hover:bg-emerald-900/25 hover:border-emerald-500 transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg border border-emerald-800/70 bg-emerald-950/50 flex items-center justify-center text-emerald-300">
+                      <FolderOpen className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-emerald-200 font-semibold">Mở DWG bằng AutoCAD + HNL</div>
+                      <div className="text-[11px] text-neutral-500 mt-1">Khuyên dùng • chỉnh DWG đầy đủ, giữ Block/Field/Xref/Layout.</div>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => (window as any).electronNative?.requestOpenFile?.("HNL_LOCAL")}
+                  className="group text-left p-5 rounded-xl border border-neutral-700 bg-[#1d2025] hover:border-cyan-700/70 hover:bg-[#20242a] transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg border border-neutral-700 bg-neutral-900 flex items-center justify-center text-cyan-300">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-white font-semibold">Mở DXF / Dự án HNL</div>
+                      <div className="text-[11px] text-neutral-500 mt-1">HNL mở trực tiếp • không cần AutoCAD cho DXF/JSON.</div>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (!isDirty || window.confirm("Bỏ thay đổi hiện tại và tạo bản vẽ mới?")) {
+                      suppressProjectDirtyRef.current = true;
+                      clearProjectSnapshot();
+                      setEntities([]); setHistory([[]]); setHistoryIndex(0);
+                      setLayers(INITIAL_LAYERS); setLayouts(INITIAL_LAYOUTS); setViewports(INITIAL_VIEWPORTS);
+                      setSmartObjects([]); setSpreadsheetParameters(INITIAL_SPREADSHEET_PARAMETERS);
+                      setTranslationMemory(INITIAL_TRANSLATION_MEMORY); setBlockLibrary(INITIAL_BLOCK_LIBRARY);
+                      setDependencyEdges(INITIAL_DEPENDENCY_EDGES); setModules(INITIAL_HNL_MODULES);
+                      setSelectedWorkbench("HNL_CAD"); setSelectedEntityIds([]); setActiveLayout(null);
+                      setDirectDwgMode(false); setDrawingWorkspaceMode("STANDALONE");
+                      setCurrentFileName("Untitled.dxf"); setCurrentFilePath(null); setIsDirty(false);
+                      setShowStartCenter(false);
+                    }
+                  }}
+                  className="group text-left p-5 rounded-xl border border-neutral-700 bg-[#1d2025] hover:border-neutral-500 hover:bg-[#20242a] transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg border border-neutral-700 bg-neutral-900 flex items-center justify-center text-neutral-300">
+                      <Plus className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-white font-semibold">Bản vẽ mới</div>
+                      <div className="text-[11px] text-neutral-500 mt-1">Tạo workspace DXF/HNL sạch với chuẩn HNL.</div>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              <div className="mt-5 border-t border-neutral-800 pt-4">
+                <button
+                  onClick={() => setShowStartAdvanced((v) => !v)}
+                  className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg hover:bg-neutral-900/70 text-left transition"
+                >
+                  <div>
+                    <div className="text-xs font-medium text-neutral-300">Tùy chọn DWG nâng cao</div>
+                    <div className="text-[10px] text-neutral-600 mt-0.5">Chỉ dùng khi cần điều khiển DWG từ HNL hoặc tạo bản preview DXF.</div>
+                  </div>
+                  {showStartAdvanced ? <ChevronUp className="w-4 h-4 text-neutral-500" /> : <ChevronDown className="w-4 h-4 text-neutral-500" />}
+                </button>
+
+                {showStartAdvanced && (
+                  <div className="grid md:grid-cols-2 gap-2 mt-2">
+                    <button
+                      onClick={() => (window as any).electronNative?.requestOpenFile?.("DIRECT_DWG")}
+                      className="text-left px-4 py-3 rounded-lg border border-fuchsia-900/70 bg-fuchsia-950/10 hover:border-fuchsia-700 transition"
+                    >
+                      <div className="text-xs font-medium text-fuchsia-300">Điều khiển DWG từ HNL</div>
+                      <div className="text-[10px] text-neutral-600 mt-1">Cần AutoCAD Bridge • DWG thật vẫn do AutoCAD giữ database.</div>
+                    </button>
+                    <button
+                      onClick={() => (window as any).electronNative?.requestOpenFile?.("HNL_CANVAS")}
+                      className="text-left px-4 py-3 rounded-lg border border-cyan-900/70 bg-cyan-950/10 hover:border-cyan-700 transition"
+                    >
+                      <div className="text-xs font-medium text-cyan-300">Xem DWG nhanh trên HNL Canvas</div>
+                      <div className="text-[10px] text-neutral-600 mt-1">AutoCAD chuyển DWG → DXF tạm • không ghi đè DWG gốc.</div>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-[10px] text-neutral-600">
+                <span><b className={isSafeMode ? "text-emerald-400" : "text-neutral-500"}>{isSafeMode ? "●" : "○"}</b> Safe Mode</span>
+                <span><b className={lastAutosaveAt ? "text-emerald-400" : "text-neutral-500"}>{lastAutosaveAt ? "●" : "○"}</b> {lastAutosaveAt ? "AutoSave OK" : "Chưa có AutoSave"}</span>
+                <span className="truncate max-w-[360px]">Project: <b className="text-neutral-400 font-medium">{currentFileName}</b></span>
+                <span>Mode: <b className="text-neutral-400 font-medium">{drawingWorkspaceMode === "DIRECT_DWG" ? "Direct DWG" : drawingWorkspaceMode === "AUTOCAD_NATIVE" ? "AutoCAD + HNL" : drawingWorkspaceMode === "HNL_CANVAS_PREVIEW" ? "Preview" : "Standalone"}</b></span>
+              </div>
             </div>
           </div>
         </div>
@@ -2896,6 +2995,7 @@ export default function App() {
         onOpenPlotPublish={() => { setIs2DProfessionalOpen(false); setIsPlotPublishOpen(true); }}
         onOpenCeiling={() => { setIs2DProfessionalOpen(false); setIsDrywallStudioOpen(true); }}
         onOpenLispBuilder={() => { setIs2DProfessionalOpen(false); setIsLispBuilderOpen(true); }}
+        onBridgeAction={(action,payload) => executeAutoCadAction(action,payload)}
         onDiagnostic={(e) => pushDiagnostic(e, e.severity === "ERROR" || e.severity === "CRITICAL")}
       />
 
