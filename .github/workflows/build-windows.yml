@@ -104,6 +104,20 @@ jobs:
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+
+      - name: Prepare bundled 44 Lisp source
+        shell: pwsh
+        run: |
+          npm run prepare:lisp
+          if ($LASTEXITCODE -ne 0) { throw "prepare:lisp failed" }
+          $lsp = Get-ChildItem "resources/legacy-lisp/extracted" -Recurse -File -Filter *.lsp
+          $arx = Get-ChildItem "resources/legacy-lisp/extracted" -Recurse -File -Filter *.arx
+          if ($lsp.Count -ne 44) { throw "Expected 44 Lisp files, found $($lsp.Count)" }
+          if ($arx.Count -ne 1) { throw "Expected 1 legacy ARX, found $($arx.Count)" }
+          $index = Get-Content "resources/legacy-lisp/extracted/legacy-lisp-index.json" -Raw | ConvertFrom-Json
+          if ($index.lispCount -ne 44) { throw "Runtime Lisp index count mismatch: $($index.lispCount)" }
+          Write-Host "Bundled Lisp PASS: $($lsp.Count) Lisp + $($arx.Count) legacy ARX"
+
       - name: TypeScript audit
         run: npm run lint
       - name: Verify AutoCAD bundle

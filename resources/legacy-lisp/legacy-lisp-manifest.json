@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "sourceArchive": "AI.rar",
+  "sourceSha256": "7a34fadfe6d4afb7b61eb41e47c2b6b0c64742f0b22850c60e6050d5e5b84f0e",
+  "expectedLispCount": 44,
+  "expectedArxCount": 1,
+  "lispFiles": [
+    {
+      "name": "Block - Copy Block Att_APA 5.lsp",
+      "sizeBytes": 11323,
+      "compressedBytes": 3543
+    },
+    {
+      "name": "Block - Đánh số Block Att trùng_INC, Dời Attribute Text_MVAT 2.6.lsp",
+      "sizeBytes": 23080,
+      "compressedBytes": 4835
+    },
+    {
+      "name": "Block - Edit Block_QB Vào, BS Lưu, BQ Hủy, BN Đổi tên (New).lsp",
+      "sizeBytes": 3115,
+      "compressedBytes": 1186
+    },
+    {
+      "name": "Block - FieldObjectsV1-1_Khoan vùng đối tượng New 7.lsp",
+      "sizeBytes": 7820,
+      "compressedBytes": 2278
+    },
+    {
+      "name": "Block - TCD_Trích chi tiết trên model và layout 7.lsp",
+      "sizeBytes": 13687,
+      "compressedBytes": 4055
+    },
+    {
+      "name": "Block - Thong ke Block Att, Dynamic New 8.lsp",
+      "sizeBytes": 75650,
+      "compressedBytes": 15238
+    },
+    {
+      "name": "Block_BFM Chọn block theo tùy chọn trong vùng poline.lsp",
+      "sizeBytes": 4775,
+      "compressedBytes": 1773
+    },
+    {
+      "name": "Block-V2_RBL1 Thay thế block.lsp",
+      "sizeBytes": 670,
+      "compressedBytes": 331
+    },
+    {
+      "name": "Cover Lsp to Fas, Vxl_LTFV.lsp",
+      "sizeBytes": 5093,
+      "compressedBytes": 1791
+    },
+    {
+      "name": "Demtc_Tính tấm trần nổi 2.lsp",
+      "sizeBytes": 18708,
+      "compressedBytes": 4448
+    },
+    {
+      "name": "Dim - Join Dim_JD.lsp",
+      "sizeBytes": 3988,
+      "compressedBytes": 1482
+    },
+    {
+      "name": "Dim - Quick Dim_DN Dim nhanh xuyên block - New 50.lsp",
+      "sizeBytes": 46886,
+      "compressedBytes": 7796
+    },
+    {
+      "name": "Dim - Thống kê Dim Bán kính và Dim Arc_TKD.lsp",
+      "sizeBytes": 3747,
+      "compressedBytes": 1501
+    },
+    {
+      "name": "Field - CalculateAreaPerimeter_Tổng diện tích, chu vi.lsp",
+      "sizeBytes": 2658,
+      "compressedBytes": 1025
+    },
+    {
+      "name": "Field - CFM, CFA, CFE, CFL, CFS (Check Field Duplicate, Errors, Links) 12.lsp",
+      "sizeBytes": 28000,
+      "compressedBytes": 5722
+    },
+    {
+      "name": "Field - LengthAreaFieldV1-4 AF,LF,BF Tổng diện tích, chu vi, block New 6.lsp",
+      "sizeBytes": 12869,
+      "compressedBytes": 3247
+    },
+    {
+      "name": "Geomprops_TKT Tính tổng diện tích, chu vi, xuất bảng - 87.lsp",
+      "sizeBytes": 111624,
+      "compressedBytes": 17506
+    },
+    {
+      "name": "Int_eng_Đánh số các điểm giao nhau.lsp",
+      "sizeBytes": 3388,
+      "compressedBytes": 1182
+    },
+    {
+      "name": "IPMX_Chèn Point Điểm Giao 2 Polyline (Có đánh số).lsp",
+      "sizeBytes": 2011,
+      "compressedBytes": 840
+    },
+    {
+      "name": "Layer - Change Color Tìm, Đổi Màu Đối Tượng và Phụ Hồi DM, RDM, FDM New 10.lsp",
+      "sizeBytes": 20100,
+      "compressedBytes": 4921
+    },
+    {
+      "name": "Layer_Tạo Layer từ Excel_TLE 3.lsp",
+      "sizeBytes": 10979,
+      "compressedBytes": 3500
+    },
+    {
+      "name": "Layout - CPV1, CPV2_Sao chép VP freeze xuyên layout và bản vẽ.lsp",
+      "sizeBytes": 3088,
+      "compressedBytes": 1208
+    },
+    {
+      "name": "Layout - DMBV tạo bảng từ text, mtext từ layout New 10.lsp",
+      "sizeBytes": 24944,
+      "compressedBytes": 5779
+    },
+    {
+      "name": "Layout - Ms2psV1-0_Copy, Move Model Sang Layout Nhanh Trong Viewport New.lsp",
+      "sizeBytes": 1707,
+      "compressedBytes": 761
+    },
+    {
+      "name": "Layout - Page setup For All Layouts_SAP Áp Page setup Layout New.lsp",
+      "sizeBytes": 3859,
+      "compressedBytes": 1359
+    },
+    {
+      "name": "Layout - Rename Layout List_RNL - New 8.lsp",
+      "sizeBytes": 15005,
+      "compressedBytes": 3829
+    },
+    {
+      "name": "Layout - Tạo Khung Tự Động Từ Model Sang Layout_TKL New 43.lsp",
+      "sizeBytes": 22138,
+      "compressedBytes": 5579
+    },
+    {
+      "name": "Layout - TaoKhung_Tạo Viewport Từ Model.lsp",
+      "sizeBytes": 2157,
+      "compressedBytes": 980
+    },
+    {
+      "name": "Layout - Viewport_APT Khóa hoặc mở khóa Viewport - New 2.lsp",
+      "sizeBytes": 4107,
+      "compressedBytes": 1595
+    },
+    {
+      "name": "Layout- Copy Layout và Model_CLM 3.lsp",
+      "sizeBytes": 8096,
+      "compressedBytes": 2276
+    },
+    {
+      "name": "Layout- PSL Thiết lập PsltScale.lsp",
+      "sizeBytes": 2409,
+      "compressedBytes": 1011
+    },
+    {
+      "name": "Layout_LL Làm nhẹ Layout_BT Mở lại giá trị bình thường.lsp",
+      "sizeBytes": 1456,
+      "compressedBytes": 759
+    },
+    {
+      "name": "Polyline - Chuyển circle sang polyline_C2P.lsp",
+      "sizeBytes": 3381,
+      "compressedBytes": 1403
+    },
+    {
+      "name": "Polyline - Offset Field Text_OFT 7.lsp",
+      "sizeBytes": 8621,
+      "compressedBytes": 2832
+    },
+    {
+      "name": "Polyline - Offset Nhanh Polyline_MOF.lsp",
+      "sizeBytes": 2968,
+      "compressedBytes": 1196
+    },
+    {
+      "name": "Polyline - Polyline Break_BRK_V5.0.lsp",
+      "sizeBytes": 83315,
+      "compressedBytes": 20281
+    },
+    {
+      "name": "Polyline - Polyline To 2 Polyline_APTD 6.lsp",
+      "sizeBytes": 10976,
+      "compressedBytes": 2618
+    },
+    {
+      "name": "Text - Calculator Text_APC, APS, APE 6.lsp",
+      "sizeBytes": 8771,
+      "compressedBytes": 2395
+    },
+    {
+      "name": "Text - Change Text Style 8.lsp",
+      "sizeBytes": 91525,
+      "compressedBytes": 12951
+    },
+    {
+      "name": "Text - Copy Text, Att, Dynamic v1.01b_QQ New 39.lsp",
+      "sizeBytes": 47491,
+      "compressedBytes": 10829
+    },
+    {
+      "name": "Text - Find Replace Multiple_FRM.lsp",
+      "sizeBytes": 11144,
+      "compressedBytes": 2881
+    },
+    {
+      "name": "Text - Translate Text, Mtext_TransCad 17.lsp",
+      "sizeBytes": 85817,
+      "compressedBytes": 19463
+    },
+    {
+      "name": "Vẽ Xương Trần V6.7.2_VXT.lsp",
+      "sizeBytes": 136049,
+      "compressedBytes": 20760
+    },
+    {
+      "name": "Block - AddObjectsToBlockV1-2_ATB New 11_FixLag_All.lsp",
+      "sizeBytes": 40880,
+      "compressedBytes": 7893
+    }
+  ],
+  "legacyArx": [
+    {
+      "name": "GeomProps2021x64.arx",
+      "sizeBytes": 125952,
+      "note": "Legacy AutoCAD 2021 x64 ARX. Packaged for reference only; never auto-load on AutoCAD 2023-2026."
+    }
+  ]
+}

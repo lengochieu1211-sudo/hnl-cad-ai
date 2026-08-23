@@ -20,7 +20,7 @@ namespace Hnl.CadBridge;
 
 public sealed class BridgeCommands : IExtensionApplication
 {
-    internal const string PluginVersion = "2.7.7";
+    internal const string PluginVersion = "2.7.8";
     private static readonly HttpClient Http = new HttpClient();
     private static readonly ConcurrentQueue<JObject> UiActions = new ConcurrentQueue<JObject>();
     private static Timer? _pollTimer;

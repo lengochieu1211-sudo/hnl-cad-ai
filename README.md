@@ -1,4 +1,4 @@
-# HNL CAD AI v2.7.7
+# HNL CAD AI v2.7.8
 
 HNL CAD AI là ứng dụng CAD/Shopdrawing dạng Windows Desktop (Electron) có hai chế độ kiến trúc:
 
@@ -24,7 +24,7 @@ npm install
 npm run lint
 npm run dist:win
 ```
-Output: `dist_electron/HNL_CAD_AI_Setup_2.7.7.exe`
+Output: `dist_electron/HNL_CAD_AI_Setup_2.7.8.exe`
 
 Có thể dùng `.github/workflows/build-windows.yml` trên GitHub Actions Windows runner.
 
@@ -85,16 +85,16 @@ AutoCAD .NET compilation/runtime still requires GitHub Actions Windows and insta
 
 
 
-## v2.7.7 — Version Sync Hardening
+## v2.7.8 — Version Sync Hardening
 
 - Canonical renderer/server version constants.
-- package.json / metadata / AutoCAD bundle / DLL AssemblyVersion / SketchUp Bridge synchronized to 2.7.7.
+- package.json / metadata / AutoCAD bundle / DLL AssemblyVersion / SketchUp Bridge synchronized to 2.7.8.
 - GitHub artifact names derive from package.json instead of hard-coded version strings.
 - `node scripts/check-version-sync.mjs` is a required GitHub build gate.
 - Historical release documents keep their original version labels intentionally.
 
 
-## v2.7.7 — Managed Dynamic Block Library
+## v2.7.8 — Managed Dynamic Block Library
 - Multi-DWG / folder import.
 - COPY-to-HNL or LINK-source library.
 - Project / My Library scopes, search, Favorite, Recent.
@@ -104,7 +104,7 @@ AutoCAD .NET compilation/runtime still requires GitHub Actions Windows and insta
 - AutoCAD Ribbon Library opens HNL Library Manager directly.
 
 
-## v2.7.7 — Compact Professional AutoCAD UI
+## v2.7.8 — Compact Professional AutoCAD UI
 - HNL Ribbon chỉ còn chức năng riêng HNL, bỏ lệnh AutoCAD native trùng.
 - 6 primary Large buttons; utilities dùng Standard size.
 - Native Palette giảm từ 6 xuống 4 tab: AI / SHOP / DATA / TOOLS.
@@ -112,13 +112,13 @@ AutoCAD .NET compilation/runtime still requires GitHub Actions Windows and insta
 - Library Ribbon mở HNL Library Manager trực tiếp.
 
 
-## v2.7.7 — GitHub Build + Official Logo Fix
+## v2.7.8 — GitHub Build + Official Logo Fix
 - Fix CS0103 NativePalette -> NativePaletteCommands.
 - Fix CS0104 ambiguous Application in NativeRibbon.
 - Replace UI logo, Electron icon, installer/shortcut icon and favicon with the user-uploaded official HNL logo.
 
 
-## v2.7.7 — Ribbon Stale Plugin Hardening
+## v2.7.8 — Ribbon Stale Plugin Hardening
 - Detect/update stale HNL AutoCAD bundle and duplicate per-user bundles.
 - Warn when AutoCAD restart is mandatory after plugin update.
 - `HNLVERSION` shows the exact loaded plugin version/path.
@@ -126,13 +126,13 @@ AutoCAD .NET compilation/runtime still requires GitHub Actions Windows and insta
 - GitHub gate rejects legacy Ribbon buttons.
 
 
-## v2.7.7 — EADDRINUSE Port Fix
+## v2.7.8 — EADDRINUSE Port Fix
 - HNL no longer crashes when localhost:32145 is already occupied.
 - Automatically selects another free localhost port.
 - AutoCAD Bridge follows the resolved port through bridge.json.
 
 
-## v2.7.7 — Clean Start Center
+## v2.7.8 — Clean Start Center
 - Start Center now has only four primary actions.
 - One recommended DWG workflow: AutoCAD + HNL.
 - DXF/HNL project is clearly separated as HNL-direct.
@@ -140,9 +140,17 @@ AutoCAD .NET compilation/runtime still requires GitHub Actions Windows and insta
 - File menu uses the same simplified terminology.
 
 
-## v2.7.7 — Detailed Help + Lisp Runtime
+## v2.7.8 — Detailed Help + Lisp Runtime
 - Expanded Help Center for 2D Professional and 44 Lisp workflows.
 - Select individual Lisp files or scan a Lisp folder.
 - Detect `(defun c:COMMAND)` definitions and match them to the 44-source catalog.
 - Load or Load+Run real `.lsp` files through AutoCAD Bridge.
 - AutoCAD Command Line remains the authoritative runtime/error source.
+
+
+## v2.7.8 — Bundled 44 Lisp
+- Includes the user's exact AI.rar source archive.
+- Windows/GitHub build extracts and verifies exactly 44 Lisp files.
+- Installed HNL auto-indexes the bundled Lisp resource; no manual AI.rar folder selection is required.
+- LOAD / LOAD+RUN operates through AutoCAD Bridge.
+- Legacy GeomProps2021x64.arx is packaged for reference but is never auto-loaded on AutoCAD 2023-2026.

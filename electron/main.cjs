@@ -714,6 +714,70 @@ async function importLibraryFile(sourcePath, options, index) {
 }
 
 
+
+function getBundledLispRoot() {
+  if (app.isPackaged) return path.join(process.resourcesPath, 'legacy-lisp');
+  return path.join(__dirname, '..', 'resources', 'legacy-lisp', 'extracted');
+}
+
+function getBundledLispManifestPath() {
+  if (app.isPackaged) return path.join(process.resourcesPath, 'legacy-lisp', 'legacy-lisp-manifest.json');
+  return path.join(__dirname, '..', 'resources', 'legacy-lisp', 'legacy-lisp-manifest.json');
+}
+
+function getBundledLispIndex() {
+  const root = getBundledLispRoot();
+  const manifestPath = getBundledLispManifestPath();
+  let manifest = null;
+  try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')); } catch {}
+
+  const lispFiles = collectLispFiles(root);
+  const items = buildLispIndex(lispFiles).map(x => ({ ...x, bundled: true, origin: 'HNL_BUNDLED_44' }));
+
+  let runtimeIndex = null;
+  try {
+    runtimeIndex = JSON.parse(fs.readFileSync(path.join(root, 'legacy-lisp-index.json'), 'utf8'));
+  } catch {}
+
+  const arx = [];
+  try {
+    for (const filePath of collectFilesByExtension(root, '.arx')) {
+      const stat = fs.statSync(filePath);
+      arx.push({
+        name: path.basename(filePath),
+        path: filePath,
+        sizeBytes: stat.size,
+        autoLoad: false,
+        compatibility: 'LEGACY_AUTOCAD_2021_X64_UNVERIFIED_FOR_2023_2026'
+      });
+    }
+  } catch {}
+
+  return {
+    success: true,
+    root,
+    manifest,
+    runtimeIndex,
+    items,
+    lispCount: items.length,
+    expectedLispCount: Number(manifest?.expectedLispCount || 44),
+    complete: items.length === Number(manifest?.expectedLispCount || 44),
+    legacyArx: arx,
+  };
+}
+
+function collectFilesByExtension(folder, ext, depth = 0, out = []) {
+  if (depth > 8 || out.length >= 2000) return out;
+  let entries = [];
+  try { entries = fs.readdirSync(folder, { withFileTypes: true }); } catch { return out; }
+  for (const entry of entries) {
+    const full = path.join(folder, entry.name);
+    if (entry.isDirectory()) collectFilesByExtension(full, ext, depth + 1, out);
+    else if (entry.isFile() && path.extname(entry.name).toLowerCase() === ext.toLowerCase()) out.push(full);
+  }
+  return out;
+}
+
 function scanLispCommands(filePath) {
   try {
     const text = fs.readFileSync(filePath, 'utf8');
@@ -778,6 +842,16 @@ ipcMain.handle('select-approved-document', async () => {
 });
 
 
+
+
+ipcMain.handle('get-bundled-lisp-index', async () => getBundledLispIndex());
+
+ipcMain.handle('reveal-bundled-lisp-root', async () => {
+  const root = getBundledLispRoot();
+  if (!fs.existsSync(root)) return { success: false, root, error: 'Bundled Lisp folder is missing.' };
+  const error = await shell.openPath(root);
+  return { success: !error, root, error: error || null };
+});
 
 ipcMain.handle('select-lisp-files', async () => {
   if (!mainWindow) return { success: false, items: [] };

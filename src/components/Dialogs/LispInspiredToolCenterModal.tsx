@@ -23,10 +23,28 @@ export const LispInspiredToolCenterModal:React.FC<{
  const [blockFrom,setBlockFrom]=useState("");const [blockTo,setBlockTo]=useState("");
  const [query,setQuery]=useState("");
  const [sourceQuery,setSourceQuery]=useState("");
- const [lispFiles,setLispFiles]=useState<Array<{path:string;name:string;commands:string[];sizeBytes?:number}>>(()=>{try{return JSON.parse(localStorage.getItem("hnl.lispSourceIndex.v1")||"[]")}catch{return []}});
+ const [lispFiles,setLispFiles]=useState<Array<{path:string;name:string;commands:string[];sizeBytes?:number;bundled?:boolean;origin?:string}>>(()=>{try{return JSON.parse(localStorage.getItem("hnl.lispSourceIndex.v1")||"[]")}catch{return []}});
+ const [bundledLispStatus,setBundledLispStatus]=useState<{lispCount:number;expectedLispCount:number;complete:boolean;root?:string;legacyArx?:any[]} | null>(null);
  const [selectedSource,setSelectedSource]=useState<LispFeatureItem|null>(null);
  const [lispMessage,setLispMessage]=useState("");
- useEffect(()=>{localStorage.setItem("hnl.lispSourceIndex.v1",JSON.stringify(lispFiles))},[lispFiles]);
+ useEffect(()=>{localStorage.setItem("hnl.lispSourceIndex.v1",JSON.stringify(lispFiles.filter(x=>!x.bundled)))},[lispFiles]);
+ useEffect(()=>{
+   if(!isOpen)return;
+   const loadBundled=async()=>{
+     const native=(window as any).electronNative;
+     const r=await native?.getBundledLispIndex?.();
+     if(!r?.success)return;
+     setBundledLispStatus({lispCount:r.lispCount||0,expectedLispCount:r.expectedLispCount||44,complete:Boolean(r.complete),root:r.root,legacyArx:r.legacyArx||[]});
+     const bundled=Array.isArray(r.items)?r.items:[];
+     setLispFiles(prev=>{
+       const custom=prev.filter(x=>!x.bundled);
+       const byPath=new Map<string,any>();
+       for(const x of [...bundled,...custom])byPath.set(x.path,x);
+       return [...byPath.values()];
+     });
+   };
+   void loadBundled();
+ },[isOpen]);
  const fieldAudit=useMemo(()=>hnlFieldAudit(entities),[entities]);
  const quantities=useMemo(()=>quantitySummary(entities),[entities]);
  const filteredTools=useMemo(()=>{const q=query.trim().toLowerCase();return CANONICAL_LISP_TOOLS.filter(x=>!q||`${x.id} ${x.name} ${x.summary} ${x.sources.join(" ")} ${x.center} ${x.mode}`.toLowerCase().includes(q));},[query]);
@@ -87,16 +105,24 @@ export const LispInspiredToolCenterModal:React.FC<{
    {tab==="LAYOUT"&&<div className="grid grid-cols-2 gap-5"><Panel title={`Layout Automation • ${count(["LAYOUT"])} Lisp/features`}><div className="text-sm text-neutral-300 leading-7">Gom TKL, RNL, TAOKHUNG, DMBV, SAP, PSL, APT, CPV, MS2PS vào một workflow: Frames → Layouts → Viewports → Page Setup → Drawing Index → Publish.</div><button onClick={onOpenPlotPublish} className="mt-3 px-4 py-2 rounded bg-sky-500 text-black font-semibold">Mở Plot / Publish / Sheet Set</button></Panel><Panel title="AutoCAD Native"><div className={`p-3 rounded border ${autoCadConnected?"border-emerald-800 text-emerald-300":"border-neutral-700 text-neutral-500"}`}>{autoCadConnected?"Bridge Connected: Page Setup/CTB/STB/Viewport/DST native có thể dùng bridge.":"Bridge Offline: các lệnh CHSPACE, VP Freeze, PSLTSCALE, Page Setup native không chạy Standalone."}</div></Panel></div>}
    {tab==="TOOLS"&&<div><div className="flex gap-2 items-center mb-4"><div className="relative w-96"><Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-500"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Tìm công cụ chuẩn hoặc lệnh Lisp cũ..." className="w-full pl-9 pr-3 py-2 rounded bg-neutral-900 border border-neutral-700"/></div><span className="text-xs text-neutral-500">{filteredTools.length}/{CANONICAL_LISP_TOOLS.length} công cụ chuẩn</span></div><div className="border border-neutral-800 rounded overflow-hidden"><div className="grid grid-cols-[190px_160px_110px_70px_1fr_1.3fr] bg-neutral-900 p-2 text-[10px] text-neutral-500"><span>Công cụ chuẩn</span><span>Nhóm</span><span>Mode</span><span>Priority</span><span>Chức năng</span><span>Lệnh Lisp đã gộp</span></div>{filteredTools.map(t=><div key={t.id} className="grid grid-cols-[190px_160px_110px_70px_1fr_1.3fr] p-2 border-t border-neutral-800 text-xs items-start"><span className="text-cyan-300 font-semibold">{t.name}</span><span>{t.center}</span><span className={t.mode==="NATIVE"||t.mode==="NATIVE_AI"?"text-emerald-300":t.mode==="HYBRID"?"text-amber-300":"text-violet-300"}>{t.mode}</span><span>{t.priority}</span><span className="text-neutral-400">{t.summary}</span><span className="font-mono text-neutral-500 break-words">{t.sources.join(" • ")}</span></div>)}</div><div className="mt-3 p-3 rounded border border-neutral-800 bg-[#1d2025] text-xs text-neutral-400">Đây là danh sách dùng trong UI chính. Những Lisp trùng mục tiêu đã được gộp vào một công cụ chuẩn; tên lệnh cũ chỉ là alias/nguồn tham khảo.</div></div>}
    {tab==="SOURCES"&&<div className="space-y-4">
-    <div className="rounded-xl border border-amber-900/60 bg-amber-950/15 p-3 text-xs text-neutral-300">
-      <b className="text-amber-300">44 Lisp nguồn không được nhúng sẵn trong bản HNL hiện tại.</b>
-      <div className="mt-1 text-neutral-500">Tab cũ chỉ là catalog nên bấm không chạy. Bản này cho chọn file/thư mục Lisp thật, tự đọc command <code>(defun c:...)</code>, rồi LOAD/Run qua AutoCAD Bridge.</div>
+    <div className={`rounded-xl border p-3 text-xs ${bundledLispStatus?.complete?"border-emerald-800/60 bg-emerald-950/15":"border-amber-900/60 bg-amber-950/15"}`}>
+      <b className={bundledLispStatus?.complete?"text-emerald-300":"text-amber-300"}>
+        {bundledLispStatus?.complete
+          ? `✓ 44 Lisp nguồn của bạn đã được tích hợp vào HNL (${bundledLispStatus.lispCount}/44).`
+          : `Bộ Lisp tích hợp chưa đầy đủ (${bundledLispStatus?.lispCount||0}/${bundledLispStatus?.expectedLispCount||44}).`}
+      </b>
+      <div className="mt-1 text-neutral-500">
+        Installer chính thức lấy đúng <code>AI.rar</code> người dùng cung cấp, giải nén lúc build và đóng 44 file .lsp vào resources. Nạp file/thư mục bên dưới chỉ dành cho Lisp bổ sung ngoài bộ 44.
+      </div>
+      {bundledLispStatus?.legacyArx?.length?<div className="mt-1 text-amber-500">GeomProps2021x64.arx được giữ làm nguồn legacy nhưng không auto-load trên AutoCAD 2023–2026.</div>:null}
     </div>
 
     <div className="flex flex-wrap gap-2 items-center">
       <div className="relative w-80"><Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-500"/><input value={sourceQuery} onChange={e=>setSourceQuery(e.target.value)} placeholder="Tìm BRK, TKL, Field..." className="w-full pl-9 pr-3 py-2 rounded bg-neutral-900 border border-neutral-700"/></div>
-      <span className="text-xs text-neutral-500">{filteredSources.length}/44 Lisp • {lispFiles.length} file đã lập chỉ mục</span>
-      <button onClick={()=>void importLisp("FILES")} className="ml-auto px-3 py-2 rounded bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 text-xs flex gap-1.5 items-center"><FileInput className="w-4 h-4"/>Nạp file Lisp</button>
-      <button onClick={()=>void importLisp("FOLDER")} className="px-3 py-2 rounded bg-cyan-900/40 border border-cyan-700 hover:bg-cyan-900/60 text-xs flex gap-1.5 items-center"><FolderInput className="w-4 h-4"/>Nạp thư mục Lisp</button>
+      <span className="text-xs text-neutral-500">{filteredSources.length}/44 Lisp • {lispFiles.filter(x=>x.bundled).length} tích hợp • {lispFiles.filter(x=>!x.bundled).length} bổ sung</span>
+      <button onClick={()=>void (window as any).electronNative?.revealBundledLispRoot?.()} className="ml-auto px-3 py-2 rounded bg-emerald-950/30 border border-emerald-800 hover:bg-emerald-900/40 text-xs">Mở thư mục 44 Lisp</button>
+      <button onClick={()=>void importLisp("FILES")} className="px-3 py-2 rounded bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 text-xs flex gap-1.5 items-center"><FileInput className="w-4 h-4"/>Nạp Lisp bổ sung</button>
+      <button onClick={()=>void importLisp("FOLDER")} className="px-3 py-2 rounded bg-cyan-900/40 border border-cyan-700 hover:bg-cyan-900/60 text-xs flex gap-1.5 items-center"><FolderInput className="w-4 h-4"/>Nạp thư mục bổ sung</button>
       <button onClick={onOpenLispBuilder} className="px-3 py-2 rounded bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 text-xs">AI Lisp Builder</button>
     </div>
 
@@ -113,7 +139,7 @@ export const LispInspiredToolCenterModal:React.FC<{
           <span>{f.name}</span>
           <span className={f.mode==="NATIVE"||f.mode==="NATIVE_AI"?"text-emerald-300":f.mode==="HYBRID"?"text-amber-300":"text-violet-300"}>{f.mode}</span>
           <span>{f.priority}</span>
-          <span className={found?"text-emerald-300":"text-red-300"}>{found?`✓ ${files.length} file`:"CHƯA CÓ"}</span>
+          <span className={found?"text-emerald-300":"text-red-300"}>{found?`✓ ${files.length} file${files.some(x=>x.bundled)?" • HNL":""}`:"CHƯA MATCH"}</span>
           <span className="text-neutral-400">{f.summary}</span>
           <span className="flex gap-1 flex-wrap">
             <button onClick={()=>setSelectedSource(f)} className="px-2 py-1 rounded border border-neutral-700 hover:bg-neutral-800 flex items-center gap-1"><BookOpen className="w-3 h-3"/>Hướng dẫn</button>

@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('electronNative', {
   launchAutoCadWithDwg: (filePath) => ipcRenderer.invoke('launch-autocad-with-dwg', filePath),
   openExternal: (url) => ipcRenderer.invoke('open-external-url', url),
   selectApprovedDocument: () => ipcRenderer.invoke('select-approved-document'),
+  getBundledLispIndex: () => ipcRenderer.invoke('get-bundled-lisp-index'),
+  revealBundledLispRoot: () => ipcRenderer.invoke('reveal-bundled-lisp-root'),
   selectLispFiles: () => ipcRenderer.invoke('select-lisp-files'),
   selectLispFolder: () => ipcRenderer.invoke('select-lisp-folder'),
   getLibraryIndex: () => ipcRenderer.invoke('get-library-index'),

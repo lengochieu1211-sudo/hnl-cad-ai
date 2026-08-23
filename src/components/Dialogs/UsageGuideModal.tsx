@@ -16,15 +16,15 @@ const items:HelpItem[] = [
    purpose:"Dùng 2D Professional theo workflow HNL và chạy lại Lisp gốc khi cần tương thích lệnh cũ.",
    prerequisites:[
     "Nếu chạy Lisp gốc: phải có AutoCAD + HNL Bridge Connected.",
-    "Giải nén bộ AI.zip/Lisp nguồn thành thư mục .lsp trước khi nạp.",
+    "Installer chính thức đã tích hợp 44 Lisp từ AI.rar; không cần giải nén/nạp thủ công bộ 44.",
     "Save As DWG trước các lệnh batch, Field, Block, Layout, Trim/Break.",
     "Nếu AutoCAD bật SECURELOAD, thư mục Lisp phải nằm trong Trusted Locations hoặc được AutoCAD cho phép.",
     "DCL/Excel/COM: giữ các file phụ đi kèm Lisp trong đúng cấu trúc thư mục."
    ],
    steps:[
     "Mở HNL → 2D Professional Tool Center. Các tab Text/Field/Geometry/Dimension/BOQ/Layout là công cụ HNL đã gom theo workflow.",
-    "Muốn chạy Lisp cũ: mở tab 44 Lisp nguồn → Nạp thư mục Lisp → chọn thư mục đã giải nén AI.zip.",
-    "HNL đọc từng .lsp và tìm các khai báo (defun c:COMMAND). Cột File nguồn đổi từ CHƯA CÓ sang ✓ khi match được command.",
+    "Muốn chạy Lisp cũ: mở tab 44 Lisp nguồn. Bộ 44 tích hợp phải hiện 44/44; chỉ dùng Nạp Lisp bổ sung cho file ngoài AI.rar.",
+    "HNL tự đọc 44 .lsp tích hợp và tìm các khai báo (defun c:COMMAND). Cột File nguồn hiện ✓ ... • HNL khi match được command.",
     "Bấm Hướng dẫn ở đúng dòng Lisp để xem: dùng khi nào, cần chọn gì, điều kiện, từng bước, kết quả và lỗi thường gặp.",
     "Bấm Nạp: HNL gửi LOAD_LISP_FILE qua AutoCAD Bridge. Kiểm tra AutoCAD Command Line; chỉ coi là thành công khi AutoCAD không báo lỗi.",
     "Bấm Nạp + Chạy: HNL LOAD file rồi gọi command chính của dòng đó. Ví dụ BRK → LOAD file BRK → gọi BRK.",
@@ -35,7 +35,7 @@ const items:HelpItem[] = [
    ],
    result:"Người dùng có thể phân biệt rõ công cụ HNL native với Lisp gốc, nạp file Lisp thật và chạy qua AutoCAD thay vì chỉ xem catalog 44 dòng.",
    errors:[
-    "Tab báo CHƯA CÓ: HNL chưa được trỏ tới file .lsp thật; catalog không phải source code.",
+    "Tab báo CHƯA MATCH hoặc bộ tích hợp <44/44: installer/build chưa đóng đủ Lisp hoặc command trong file không khớp catalog; xem Build Log và runtime index.",
     "Bridge Offline: không thể LOAD Lisp vào AutoCAD.",
     "SECURELOAD / trusted path: AutoCAD chặn file Lisp.",
     "Unknown command: LOAD thất bại, sai file, command khác tên hoặc thiếu dependency.",
@@ -45,7 +45,7 @@ const items:HelpItem[] = [
     "Field/ObjectID lỗi: tránh sửa/xóa geometry tham chiếu ngoài workflow Field an toàn."
    ],
    notes:[
-    "44 mục trong catalog là đặc tả chức năng, không phải 44 file .lsp đã nhúng.",
+    "44 mục trong catalog được ghép với 44 file .lsp thật lấy từ AI.rar của người dùng trong installer chính thức.",
     "HNL không tuyên bố LOAD thành công chỉ vì HTTP Bridge trả ok; Command Line AutoCAD mới là xác nhận cuối.",
     "Ưu tiên Native HNL cho tác vụ đã viết lại; dùng Lisp gốc cho tương thích hoặc chức năng chưa native hóa."
    ]},
@@ -64,7 +64,7 @@ const items:HelpItem[] = [
    result:"Linework vector 2D được chuyển sang SketchUp qua gói Bridge.",errors:["HNL-SU-EXPORT-ERR: sửa geometry/layer lỗi rồi xuất lại.","Bản hiện tại chưa ghi file .SKP binary trực tiếp."],
    notes:["Layer CAD được giữ thành Tag metadata; Block có metadata để chuẩn bị Component mapping."]},
   {id:"SU_TO_CAD",title:"SketchUp → CAD 2D",category:"SKETCHUP",status:"PARTIAL",risk:"HIGH",
-   purpose:"Lấy Scene/Section từ SketchUp, chiếu thành linework 2D để chỉnh tiếp trong HNL/AutoCAD và Publish.",prerequisites:["Cài HNL CAD AI Bridge v2.7.7.rbz trong SketchUp.","Nên chọn Parallel Projection và Scene/Section rõ ràng."],
+   purpose:"Lấy Scene/Section từ SketchUp, chiếu thành linework 2D để chỉnh tiếp trong HNL/AutoCAD và Publish.",prerequisites:["Cài HNL CAD AI Bridge v2.7.8.rbz trong SketchUp.","Nên chọn Parallel Projection và Scene/Section rõ ràng."],
    steps:["Trong SketchUp chọn Scene/Section cần xuất.","Extensions → HNL CAD AI Bridge → Export Scene/Section → HNL CAD.","Trong HNL mở Công cụ → CAD 2D ⇄ SketchUp Bridge → SketchUp → CAD.","Chọn HNL_SketchUp_Scene.json.","Có thể chạy AI gợi ý Layer/Nét; AI chỉ gợi ý metadata.","Bấm Project → CAD 2D để đưa linework vào workspace hoặc Xuất DXF 2D để tạo file CAD trung gian.","Chạy Cleanup và kiểm tra layer/nét.","Nếu AutoCAD Bridge online: gửi DXF/HNL sang AutoCAD, SaveAs DWG và Publish."],
    result:"Scene SketchUp được chiếu thành linework 2D và có thể xuất DXF.",errors:["Perspective vẫn có thể project nhưng nên dùng Parallel Projection để bản vẽ kỹ thuật ổn định.","Section crossing hiện chỉ là metadata; chưa coi là CUT contour thật.","True occlusion hidden-line và silhouette classifier vẫn cần phát triển sâu hơn.","Không raster hóa thành ảnh nếu mục tiêu là CAD editable."],
    notes:["Nên ưu tiên orthographic projection; Perspective chỉ dùng tham khảo.","Cần Link ID để Update lần sau thay vì import chồng."]},

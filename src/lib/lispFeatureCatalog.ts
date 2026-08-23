@@ -103,8 +103,8 @@ export function buildLispGuide(item:LispFeatureItem):LispGuide{
     selection:selectionByCenter[item.center] || "Chọn đối tượng theo prompt của Lisp.",
     steps:[
       `Trong tab 44 Lisp nguồn, tìm ${cmd || item.commands}.`,
-      "Nếu chưa có file nguồn: bấm Nạp file Lisp hoặc Nạp thư mục Lisp và chọn thư mục đã giải nén AI.zip.",
-      "Kiểm tra cột File nguồn phải hiện ĐÃ TÌM THẤY.",
+      "Bộ 44 Lisp chính thức đã được tích hợp. Nếu dòng này chưa match file, kiểm tra trạng thái 44/44; chỉ Nạp file/thư mục khi dùng Lisp bổ sung.",
+      "Kiểm tra cột File nguồn phải hiện dấu ✓ và nhãn HNL đối với Lisp tích hợp.",
       "Bấm Nạp để AutoCAD LOAD file .lsp. Xem Command Line để xác nhận không có lỗi SECURELOAD/dependency.",
       `Bấm Nạp + Chạy để LOAD rồi gọi lệnh ${cmd || item.commands}.`,
       centerStep[item.center] || "Làm theo prompt trên AutoCAD Command Line.",

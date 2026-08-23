@@ -1,15 +1,16 @@
 {
   "name": "hnl-cad-ai",
   "private": true,
-  "version": "2.7.7",
+  "version": "2.7.8",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "npm run prepare:lisp && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "lint": "tsc --noEmit",
     "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:3000 && cross-env ELECTRON_START_URL=http://127.0.0.1:3000 electron .\"",
-    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never"
+    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "prepare:lisp": "node scripts/prepare-legacy-lisp.mjs"
   },
   "dependencies": {
     "@google/genai": "2.4.0",
@@ -39,7 +40,7 @@
     "cross-env": "10.0.0"
   },
   "productName": "HNL CAD AI",
-  "description": "HNL CAD AI v2.7.7 - detailed Help Center and executable legacy Lisp source loader through AutoCAD Bridge",
+  "description": "HNL CAD AI v2.7.8 - bundled user 44-Lisp source pack with verified build-time extraction and AutoCAD runtime loader",
   "main": "electron/main.cjs",
   "build": {
     "appId": "vn.hnl.cadai",
@@ -87,6 +88,19 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "resources/legacy-lisp/extracted",
+        "to": "legacy-lisp",
+        "filter": [
+          "**/*.lsp",
+          "**/*.arx",
+          "legacy-lisp-index.json"
+        ]
+      },
+      {
+        "from": "resources/legacy-lisp/legacy-lisp-manifest.json",
+        "to": "legacy-lisp/legacy-lisp-manifest.json"
       }
     ]
   },
