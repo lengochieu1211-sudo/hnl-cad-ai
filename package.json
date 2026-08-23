@@ -1,7 +1,7 @@
 {
   "name": "hnl-cad-ai",
   "private": true,
-  "version": "2.6.3",
+  "version": "2.7.2",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -39,7 +39,7 @@
     "cross-env": "10.0.0"
   },
   "productName": "HNL CAD AI",
-  "description": "HNL CAD AI v2.6.3 - version-sync hardening, Direct DWG safety, Smart Shopdrawing and automated release consistency checks",
+  "description": "HNL CAD AI v2.7.2 - Compact Professional AutoCAD Ribbon and 4-tab native HNL Palette",
   "main": "electron/main.cjs",
   "build": {
     "appId": "vn.hnl.cadai",

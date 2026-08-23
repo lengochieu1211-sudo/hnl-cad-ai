@@ -1,5 +1,6 @@
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.PlottingServices;
@@ -19,7 +20,7 @@ namespace Hnl.CadBridge;
 
 public sealed class BridgeCommands : IExtensionApplication
 {
-    internal const string PluginVersion = "2.6.3";
+    internal const string PluginVersion = "2.7.2";
     private static readonly HttpClient Http = new HttpClient();
     private static readonly ConcurrentQueue<JObject> UiActions = new ConcurrentQueue<JObject>();
     private static Timer? _pollTimer;
@@ -118,16 +119,37 @@ public sealed class BridgeCommands : IExtensionApplication
     public void Hnl2DCommand() => NativePaletteCommands.ShowPaletteTab(2);
 
     [CommandMethod("HNLDATA", CommandFlags.Session)]
-    public void HnlDataCommand() => NativePaletteCommands.ShowPaletteTab(3);
+    public void HnlDataCommand() => NativePaletteCommands.ShowPaletteTab(2);
 
     [CommandMethod("HNLLAYOUT", CommandFlags.Session)]
-    public void HnlLayoutCommand() => NativePaletteCommands.ShowPaletteTab(4);
+    public void HnlLayoutCommand() => NativePaletteCommands.ShowPaletteTab(2);
 
     [CommandMethod("HNLTOOLS", CommandFlags.Session)]
-    public void HnlToolsCommand() => NativePaletteCommands.ShowPaletteTab(5);
+    public void HnlToolsCommand() => NativePaletteCommands.ShowPaletteTab(3);
 
     [CommandMethod("HNLMANAGER", CommandFlags.Session)]
     public void HnlManagerCommand() => NativePaletteCommands.OpenManagerWindow();
+
+    [CommandMethod("HNLTEXT", CommandFlags.Session)]
+    public void HnlTextCommand() => NativePaletteCommands.OpenManagerWindow("TEXT");
+
+    [CommandMethod("HNLFIELD", CommandFlags.Session)]
+    public void HnlFieldCommand() => NativePaletteCommands.OpenManagerWindow("FIELD");
+
+    [CommandMethod("HNLGEOM", CommandFlags.Session)]
+    public void HnlGeometryCommand() => NativePaletteCommands.OpenManagerWindow("GEOMETRY");
+
+    [CommandMethod("HNLDIM", CommandFlags.Session)]
+    public void HnlDimensionCommand() => NativePaletteCommands.OpenManagerWindow("DIMENSION");
+
+    [CommandMethod("HNLQTY", CommandFlags.Session)]
+    public void HnlQuantityCommand() => NativePaletteCommands.OpenManagerWindow("QUANTITY");
+
+    [CommandMethod("HNLLAYOUTAUTO", CommandFlags.Session)]
+    public void HnlLayoutAutomationCommand() => NativePaletteCommands.OpenManagerWindow("LAYOUT");
+
+    [CommandMethod("HNLLISP", CommandFlags.Session)]
+    public void HnlLispCenterCommand() => NativePaletteCommands.OpenManagerWindow("SOURCES");
 
     [CommandMethod("HNLWALL", CommandFlags.Session)]
     public void HnlWallCommand()
@@ -141,6 +163,12 @@ public sealed class BridgeCommands : IExtensionApplication
         {
             Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage($"\nHNL Wall error: {ex.Message}");
         }
+    }
+
+    [CommandMethod("HNLLIBRARY", CommandFlags.Session)]
+    public void HnlLibraryManagerCommand()
+    {
+        NativePalette.OpenManagerWindow("LIBRARY");
     }
 
     [CommandMethod("HNLINSERT", CommandFlags.Session)]
@@ -235,6 +263,13 @@ public sealed class BridgeCommands : IExtensionApplication
 
 
 
+    [CommandMethod("HNLLAYERSYNC", CommandFlags.Session)]
+    public void HnlLayerSyncCommand()
+    {
+        try { Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage($"\nHNL Layer Standards: {JsonConvert.SerializeObject(EnsureHnlStandards())}"); }
+        catch (System.Exception ex) { Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage($"\nHNL Layer Standards error: {ex.Message}"); }
+    }
+
     [CommandMethod("HNLDRAFTSTATUS")]
     public void DraftingStatusCommand()
     {
@@ -314,7 +349,7 @@ public sealed class BridgeCommands : IExtensionApplication
             var payload=new JObject{
                 ["mainSpacing"]=main,["crossSpacing"]=cross,["hangerSpacing"]=hanger,
                 ["rotationDeg"]=angle,["originMode"]="CENTER",["drawHangers"]=true,
-                ["mainLayer"]="HNL_CEILING_MAIN",["crossLayer"]="HNL_CEILING_CROSS",["hangerLayer"]="HNL_CEILING_HANGER"
+                ["mainLayer"]="HNL-CLG-MAIN",["crossLayer"]="HNL-CLG-CROSS",["hangerLayer"]="HNL-CLG-HANGER"
             };
             var result=CreateCeilingGridForPolyline(doc,er.ObjectId,payload);
             ed.WriteMessage($"\nHNL Ceiling: {JsonConvert.SerializeObject(result)}");
@@ -365,7 +400,7 @@ public sealed class BridgeCommands : IExtensionApplication
                     version = Application.Version.ToString(),
                     drawingName = doc?.Name ?? "",
                     pluginVersion = PluginVersion,
-                    capabilities = new[] { "GET_STATUS","GET_DRAFTING_STATUS","SET_DRAFTING_MODE","GET_PLOT_DEVICES","GET_LAYOUTS","SET_CURRENT_LAYOUT","RENAME_LAYOUT","EXECUTE_COMMAND","CANCEL_COMMAND","OPEN_DWG","CONVERT_DWG_TO_DXF_PREVIEW","GET_MODELSPACE_SNAPSHOT","SELECT_HANDLES","CREATE_NATIVE_ENTITY","APPLY_ENTITY_TRANSFORM","ERASE_HANDLES","SET_ENTITY_LAYER","UPDATE_TEXT_CONTENTS","INSERT_EXISTING_BLOCK","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","CREATE_CEILING_GRID","CREATE_CEILING_SMART","CREATE_WALL_SYSTEM","INSERT_LIBRARY_BLOCK","GET_HNL_BOQ","AUDIT_HNL_SHOPDRAWING","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
+                    capabilities = new[] { "GET_STATUS","GET_DRAFTING_STATUS","SET_DRAFTING_MODE","GET_PLOT_DEVICES","GET_LAYOUTS","SET_CURRENT_LAYOUT","RENAME_LAYOUT","EXECUTE_COMMAND","CANCEL_COMMAND","OPEN_DWG","CONVERT_DWG_TO_DXF_PREVIEW","GET_MODELSPACE_SNAPSHOT","SELECT_HANDLES","CREATE_NATIVE_ENTITY","APPLY_ENTITY_TRANSFORM","ERASE_HANDLES","SET_ENTITY_LAYER","UPDATE_TEXT_CONTENTS","INSERT_EXISTING_BLOCK","GET_DYNAMIC_BLOCK_PROPERTIES","SET_DYNAMIC_BLOCK_PROPERTIES","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","ENSURE_HNL_STANDARDS","CREATE_CEILING_GRID","CREATE_CEILING_SMART","CREATE_WALL_SYSTEM","INSERT_LIBRARY_BLOCK","INSPECT_LIBRARY_DWG","IMPORT_LIBRARY_DEFINITION","GET_HNL_BOQ","AUDIT_HNL_SHOPDRAWING","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
                 });
                 var res = await Http.SendAsync(req);
                 _registered = res.IsSuccessStatusCode;
@@ -433,15 +468,20 @@ public sealed class BridgeCommands : IExtensionApplication
                 "SET_ENTITY_LAYER" => SetEntityLayer(payload),
                 "UPDATE_TEXT_CONTENTS" => UpdateTextContents(payload),
                 "INSERT_EXISTING_BLOCK" => InsertExistingBlock(payload),
+                "GET_DYNAMIC_BLOCK_PROPERTIES" => GetDynamicBlockProperties(payload),
+                "SET_DYNAMIC_BLOCK_PROPERTIES" => SetDynamicBlockProperties(payload),
                 "SAVE_CURRENT_DWG" => SaveCurrentDwg(),
                 "SAVE_AS_DWG" => SaveAsDwg(payload),
                 "GET_SELECTION" => GetSelectionPayload(),
                 "SELECT_ALL" => SelectAllObjects(),
                 "GET_LAYERS" => GetLayersPayload(),
+                "ENSURE_HNL_STANDARDS" => EnsureHnlStandards(),
                 "CREATE_CEILING_GRID" => CreateCeilingGrid(payload),
                 "CREATE_CEILING_SMART" => CreateCeilingSmart(payload),
                 "CREATE_WALL_SYSTEM" => CreateWallSystem(payload),
                 "INSERT_LIBRARY_BLOCK" => InsertLibraryBlock(payload),
+                "INSPECT_LIBRARY_DWG" => InspectLibraryDwg(payload),
+                "IMPORT_LIBRARY_DEFINITION" => ImportLibraryDefinition(payload),
                 "GET_HNL_BOQ" => GetHnlBoq(),
                 "AUDIT_HNL_SHOPDRAWING" => AuditHnlShopdrawing(),
                 "PUBLISH_LAYOUTS_PDF" => PublishLayoutsPdf(payload),
@@ -648,14 +688,85 @@ public sealed class BridgeCommands : IExtensionApplication
         return new { renamed = true, oldName, newName };
     }
 
+    private sealed class HnlLayerProfile
+    {
+        public string Name = "";
+        public short Aci;
+        public LineWeight Weight;
+        public string Linetype = "Continuous";
+        public bool Plottable = true;
+    }
+
+    private static HnlLayerProfile? GetHnlLayerProfile(string name)
+    {
+        switch ((name ?? "").Trim().ToUpperInvariant())
+        {
+            case "HNL-CLG-BOARD": return new HnlLayerProfile { Name=name, Aci=151, Weight=LineWeight.LineWeight018, Linetype="Continuous" };
+            case "HNL-CLG-MAIN": return new HnlLayerProfile { Name=name, Aci=30, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
+            case "HNL-CLG-CROSS": return new HnlLayerProfile { Name=name, Aci=2, Weight=LineWeight.LineWeight025, Linetype="Continuous" };
+            case "HNL-CLG-HANGER": return new HnlLayerProfile { Name=name, Aci=3, Weight=LineWeight.LineWeight018, Linetype="HIDDEN2" };
+            case "HNL-CLG-START": return new HnlLayerProfile { Name=name, Aci=4, Weight=LineWeight.LineWeight025, Linetype="CENTER2" };
+            case "HNL-WALL-BOARD": return new HnlLayerProfile { Name=name, Aci=7, Weight=LineWeight.LineWeight018, Linetype="Continuous" };
+            case "HNL-WALL-STUD": return new HnlLayerProfile { Name=name, Aci=6, Weight=LineWeight.LineWeight025, Linetype="Continuous" };
+            case "HNL-WALL-TRACK": return new HnlLayerProfile { Name=name, Aci=5, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
+            case "HNL-WALL-REINF": return new HnlLayerProfile { Name=name, Aci=1, Weight=LineWeight.LineWeight040, Linetype="Continuous" };
+            case "HNL-STEEL-RHS": return new HnlLayerProfile { Name=name, Aci=1, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
+            case "HNL-STEEL-PLATE": return new HnlLayerProfile { Name=name, Aci=30, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
+            case "HNL-ANNO-SECTION": return new HnlLayerProfile { Name=name, Aci=7, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
+            case "HNL-ANNO-LEVEL": return new HnlLayerProfile { Name=name, Aci=4, Weight=LineWeight.LineWeight025, Linetype="Continuous" };
+            case "HNL-ANNO-DETAIL": return new HnlLayerProfile { Name=name, Aci=2, Weight=LineWeight.LineWeight025, Linetype="Continuous" };
+            case "HNL-DATA-FIELD": return new HnlLayerProfile { Name=name, Aci=92, Weight=LineWeight.LineWeight018, Linetype="Continuous" };
+            case "HNL-NOPLOT-HELPER": return new HnlLayerProfile { Name=name, Aci=8, Weight=LineWeight.LineWeight005, Linetype="DASHED", Plottable=false };
+            default: return null;
+        }
+    }
+
+    private static void EnsureLineType(Database db, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || string.Equals(name, "Continuous", StringComparison.OrdinalIgnoreCase)) return;
+        try
+        {
+            using var tr = db.TransactionManager.StartOpenCloseTransaction();
+            var lt = (LinetypeTable)tr.GetObject(db.LinetypeTableId, OpenMode.ForRead);
+            if (lt.Has(name)) return;
+        }
+        catch { }
+        try { db.LoadLineTypeFile(name, "acadiso.lin"); return; } catch { }
+        try { db.LoadLineTypeFile(name, "acad.lin"); } catch { }
+    }
+
+    private static void ApplyHnlLayerProfile(Transaction tr, Database db, LayerTableRecord rec, HnlLayerProfile profile)
+    {
+        EnsureLineType(db, profile.Linetype);
+        if (!rec.IsWriteEnabled) rec.UpgradeOpen();
+        rec.Color = Color.FromColorIndex(ColorMethod.ByAci, profile.Aci);
+        rec.LineWeight = profile.Weight;
+        rec.IsPlottable = profile.Plottable;
+        try
+        {
+            var lt = (LinetypeTable)tr.GetObject(db.LinetypeTableId, OpenMode.ForRead);
+            if (lt.Has(profile.Linetype)) rec.LinetypeObjectId = lt[profile.Linetype];
+        }
+        catch { }
+    }
+
     private static void EnsureLayer(Transaction tr, Database db, string name)
     {
         var table = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
-        if (table.Has(name)) return;
-        table.UpgradeOpen();
-        var rec = new LayerTableRecord { Name = name };
-        table.Add(rec);
-        tr.AddNewlyCreatedDBObject(rec, true);
+        LayerTableRecord rec;
+        if (table.Has(name))
+        {
+            rec = (LayerTableRecord)tr.GetObject(table[name], OpenMode.ForRead);
+        }
+        else
+        {
+            table.UpgradeOpen();
+            rec = new LayerTableRecord { Name = name };
+            table.Add(rec);
+            tr.AddNewlyCreatedDBObject(rec, true);
+        }
+        var profile = GetHnlLayerProfile(name);
+        if (profile != null) ApplyHnlLayerProfile(tr, db, rec, profile);
     }
 
 
@@ -692,6 +803,24 @@ public sealed class BridgeCommands : IExtensionApplication
             arr.Length > 2 ? Convert.ToString(arr[2].Value) ?? "" : "",
             arr.Length > 3 ? Convert.ToString(arr[3].Value) ?? "" : ""
         );
+    }
+
+    private static object EnsureHnlStandards()
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var names = new[] {
+            "HNL-CLG-BOARD","HNL-CLG-MAIN","HNL-CLG-CROSS","HNL-CLG-HANGER","HNL-CLG-START",
+            "HNL-WALL-BOARD","HNL-WALL-STUD","HNL-WALL-TRACK","HNL-WALL-REINF",
+            "HNL-STEEL-RHS","HNL-STEEL-PLATE","HNL-ANNO-SECTION","HNL-ANNO-LEVEL","HNL-ANNO-DETAIL",
+            "HNL-DATA-FIELD","HNL-NOPLOT-HELPER"
+        };
+        using (doc.LockDocument())
+        using (var tr = doc.Database.TransactionManager.StartTransaction())
+        {
+            foreach (var name in names) EnsureLayer(tr, doc.Database, name);
+            tr.Commit();
+        }
+        return new { updated = names.Length, layers = names };
     }
 
     private static Point2d ToLocal(Point2d p, Point2d origin, double radians)
@@ -779,9 +908,9 @@ public sealed class BridgeCommands : IExtensionApplication
         var offsetX=(double?)payload["offsetX"]??0.0;
         var offsetY=(double?)payload["offsetY"]??0.0;
         var drawHangers=(bool?)payload["drawHangers"]??true;
-        var mainLayer=((string?)payload["mainLayer"]??"HNL_CEILING_MAIN").Trim();
-        var crossLayer=((string?)payload["crossLayer"]??"HNL_CEILING_CROSS").Trim();
-        var hangerLayer=((string?)payload["hangerLayer"]??"HNL_CEILING_HANGER").Trim();
+        var mainLayer=((string?)payload["mainLayer"]??"HNL-CLG-MAIN").Trim();
+        var crossLayer=((string?)payload["crossLayer"]??"HNL-CLG-CROSS").Trim();
+        var hangerLayer=((string?)payload["hangerLayer"]??"HNL-CLG-HANGER").Trim();
         var mainCount=0; var crossCount=0; var hangerCount=0;
 
         using(doc.LockDocument())
@@ -887,8 +1016,8 @@ public sealed class BridgeCommands : IExtensionApplication
         if (division != 2 && division != 3) throw new InvalidOperationException("HNL wall studDivision must be 2 or 3.");
         var studSpacing = boardWidth / division;
         var height = Math.Max(100.0, (double?)payload["heightMm"] ?? 3000.0);
-        var studLayer = ((string?)payload["studLayer"] ?? "HNL_WALL_STUD").Trim();
-        var trackLayer = ((string?)payload["trackLayer"] ?? "HNL_WALL_TRACK").Trim();
+        var studLayer = ((string?)payload["studLayer"] ?? "HNL-WALL-STUD").Trim();
+        var trackLayer = ((string?)payload["trackLayer"] ?? "HNL-WALL-TRACK").Trim();
         var smartId = ((string?)payload["id"] ?? $"WALL_{Guid.NewGuid():N}").Trim();
 
         var vector = p2 - p1;
@@ -1069,7 +1198,213 @@ public sealed class BridgeCommands : IExtensionApplication
             tr.AddNewlyCreatedDBObject(br, true);
             tr.Commit();
         }
-        return new { inserted=true, blockName, symbolKey, layer, sourceDwg, point=new {x=point.X,y=point.Y}, scale, rotationDeg=rotation*180.0/Math.PI };
+        string handle = "";
+        bool isDynamicBlock = false;
+        object[] dynamicProperties = Array.Empty<object>();
+
+        using (var tr = doc.Database.TransactionManager.StartOpenCloseTransaction())
+        {
+            var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+            var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+            foreach (ObjectId id in ms)
+            {
+                if (!(tr.GetObject(id, OpenMode.ForRead, false) is BlockReference br)) continue;
+                if (!string.Equals(br.Name, blockName, StringComparison.OrdinalIgnoreCase)) continue;
+                handle = br.Handle.ToString();
+            }
+            if (!string.IsNullOrWhiteSpace(handle))
+            {
+                var id = ObjectIdFromHandle(doc.Database, handle);
+                if (!id.IsNull && tr.GetObject(id, OpenMode.ForRead, false) is BlockReference inserted)
+                {
+                    isDynamicBlock = inserted.IsDynamicBlock;
+                    if (isDynamicBlock) dynamicProperties = ReadDynamicProperties(inserted);
+                }
+            }
+        }
+
+        return new {
+            inserted=true, blockName, symbolKey, layer, sourceDwg,
+            point=new {x=point.X,y=point.Y}, scale, rotationDeg=rotation*180.0/Math.PI,
+            handle, isDynamicBlock, dynamicProperties
+        };
+    }
+
+    private static object InspectLibraryDwg(JObject payload)
+    {
+        var filePath = ((string?)payload["filePath"] ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(filePath)) throw new ArgumentException("filePath required");
+        if (!File.Exists(filePath)) throw new FileNotFoundException("Library DWG not found.", filePath);
+
+        using var db = new Database(false, true);
+        db.ReadDwgFile(filePath, FileOpenMode.OpenForReadAndAllShare, true, "");
+        db.CloseInput(true);
+
+        var definitions = new List<object>();
+        int modelEntityCount = 0;
+        int dynamicDefinitionCount = 0;
+
+        using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+        {
+            var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+            foreach (ObjectId id in bt)
+            {
+                if (!(tr.GetObject(id, OpenMode.ForRead, false) is BlockTableRecord btr)) continue;
+                if (btr.IsLayout || btr.IsAnonymous) continue;
+
+                var name = btr.Name ?? "";
+                if (string.IsNullOrWhiteSpace(name) || name.StartsWith("*", StringComparison.Ordinal)) continue;
+
+                int entityCount = 0;
+                int attributeCount = 0;
+                foreach (ObjectId eid in btr)
+                {
+                    entityCount++;
+                    if (tr.GetObject(eid, OpenMode.ForRead, false) is AttributeDefinition) attributeCount++;
+                }
+
+                bool isDynamic = false;
+                try
+                {
+                    // Reflection avoids hard compile dependency if one AutoCAD API version exposes this differently.
+                    var prop = btr.GetType().GetProperty("IsDynamicBlock");
+                    if (prop?.GetValue(btr) is bool dyn) isDynamic = dyn;
+                }
+                catch { }
+
+                if (isDynamic) dynamicDefinitionCount++;
+                definitions.Add(new { name, entityCount, attributeCount, isDynamic });
+            }
+
+            if (bt.Has(BlockTableRecord.ModelSpace))
+            {
+                var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                foreach (ObjectId _ in ms) modelEntityCount++;
+            }
+        }
+
+        return new {
+            filePath,
+            fileName = Path.GetFileName(filePath),
+            modelEntityCount,
+            definitions,
+            definitionCount = definitions.Count,
+            dynamicDefinitionCount,
+            units = db.Insunits.ToString()
+        };
+    }
+
+    private static object ImportLibraryDefinition(JObject payload)
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var filePath = ((string?)payload["filePath"] ?? "").Trim();
+        var definitionName = ((string?)payload["definitionName"] ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            throw new FileNotFoundException("Library DWG not found.", filePath);
+        if (string.IsNullOrWhiteSpace(definitionName))
+            throw new ArgumentException("definitionName required");
+
+        var layer = ((string?)payload["layer"] ?? "HNL-DATA-FIELD").Trim();
+        var replaceDefinition = (bool?)payload["replaceDefinition"] ?? false;
+        var point = payload["point"] is JObject pj
+            ? new Point3d((double?)pj["x"] ?? 0, (double?)pj["y"] ?? 0, 0)
+            : PromptPoint(doc.Editor, $"\nĐiểm chèn {definitionName}: ");
+        var scale = Math.Max(0.001, (double?)payload["scale"] ?? 1.0);
+        var rotationDeg = (double?)payload["rotationDeg"] ?? 0.0;
+        var rotation = rotationDeg * Math.PI / 180.0;
+
+        using var srcDb = new Database(false, true);
+        srcDb.ReadDwgFile(filePath, FileOpenMode.OpenForReadAndAllShare, true, "");
+        srcDb.CloseInput(true);
+
+        ObjectId sourceDefinitionId;
+        using (var srcTr = srcDb.TransactionManager.StartOpenCloseTransaction())
+        {
+            var srcBt = (BlockTable)srcTr.GetObject(srcDb.BlockTableId, OpenMode.ForRead);
+            if (!srcBt.Has(definitionName))
+                throw new InvalidOperationException($"Block definition not found in source DWG: {definitionName}");
+            sourceDefinitionId = srcBt[definitionName];
+        }
+
+        string handle = "";
+        bool isDynamicBlock = false;
+        object[] dynamicProperties = Array.Empty<object>();
+
+        using (doc.LockDocument())
+        {
+            var ids = new ObjectIdCollection(new[] { sourceDefinitionId });
+            var mapping = new IdMapping();
+
+            srcDb.WblockCloneObjects(
+                ids,
+                doc.Database.BlockTableId,
+                mapping,
+                replaceDefinition ? DuplicateRecordCloning.Replace : DuplicateRecordCloning.Ignore,
+                false
+            );
+
+            using var tr = doc.Database.TransactionManager.StartTransaction();
+            EnsureLayer(tr, doc.Database, layer);
+            EnsureHnlRegApp(tr, doc.Database);
+
+            var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+            if (!bt.Has(definitionName))
+                throw new InvalidOperationException($"Imported block definition missing: {definitionName}");
+
+            var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+            var br = new BlockReference(point, bt[definitionName]) {
+                Layer = layer,
+                Rotation = rotation,
+                ScaleFactors = new Scale3d(scale)
+            };
+
+            TagHnlEntity(br, "LIBRARY_BLOCK", definitionName, $"source={filePath};definition={definitionName}");
+            ms.AppendEntity(br);
+            tr.AddNewlyCreatedDBObject(br, true);
+
+            var def = (BlockTableRecord)tr.GetObject(bt[definitionName], OpenMode.ForRead);
+            if (def.HasAttributeDefinitions)
+            {
+                foreach (ObjectId aid in def)
+                {
+                    if (!(tr.GetObject(aid, OpenMode.ForRead, false) is AttributeDefinition ad) || ad.Constant) continue;
+                    var ar = new AttributeReference();
+                    ar.SetAttributeFromBlock(ad, br.BlockTransform);
+                    ar.TextString = ad.TextString;
+                    br.AttributeCollection.AppendAttribute(ar);
+                    tr.AddNewlyCreatedDBObject(ar, true);
+                }
+            }
+
+            tr.Commit();
+            handle = br.Handle.ToString();
+        }
+
+        using (var tr = doc.Database.TransactionManager.StartOpenCloseTransaction())
+        {
+            var id = ObjectIdFromHandle(doc.Database, handle);
+            if (!id.IsNull && tr.GetObject(id, OpenMode.ForRead, false) is BlockReference inserted)
+            {
+                isDynamicBlock = inserted.IsDynamicBlock;
+                if (isDynamicBlock) dynamicProperties = ReadDynamicProperties(inserted);
+            }
+        }
+
+        return new {
+            inserted = true,
+            blockName = definitionName,
+            definitionName,
+            handle,
+            layer,
+            point = new { x = point.X, y = point.Y },
+            scale,
+            rotationDeg,
+            isDynamicBlock,
+            dynamicProperties,
+            sourceDwg = filePath,
+            replaceDefinition
+        };
     }
 
     private static object GetHnlBoq()
@@ -1144,7 +1479,23 @@ public sealed class BridgeCommands : IExtensionApplication
         catch { return ObjectId.Null; }
     }
 
-    private static string CadColorHex(Entity ent) => "#FFFFFF";
+    private static string CadColorHex(Entity ent)
+    {
+        try
+        {
+            var c = ent.Color;
+            if (c.ColorMethod == ColorMethod.ByLayer || c.ColorMethod == ColorMethod.ByBlock) return "";
+            switch (c.ColorIndex)
+            {
+                case 1: return "#FF0000"; case 2: return "#FFFF00"; case 3: return "#00FF00";
+                case 4: return "#00FFFF"; case 5: return "#0000FF"; case 6: return "#FF00FF";
+                case 7: return "#FFFFFF"; case 8: return "#808080"; case 30: return "#FF7F00";
+                case 92: return "#80E680"; case 151: return "#99D9FF";
+                default: return "";
+            }
+        }
+        catch { return ""; }
+    }
 
     private static object? SnapshotEntity(Transaction tr, Entity ent)
     {
@@ -1396,7 +1747,92 @@ public sealed class BridgeCommands : IExtensionApplication
             }
             tr.Commit();handle=br.Handle.ToString();
         }
-        return new {inserted=true,blockName,handle,layer,point=new{x=point.X,y=point.Y}};
+        object[] dynamicProperties = Array.Empty<object>();
+        bool isDynamicBlock = false;
+        using (var tr = doc.Database.TransactionManager.StartOpenCloseTransaction())
+        {
+            var id = ObjectIdFromHandle(doc.Database, handle);
+            if (!id.IsNull && tr.GetObject(id, OpenMode.ForRead, false) is BlockReference inserted)
+            {
+                isDynamicBlock = inserted.IsDynamicBlock;
+                if (isDynamicBlock) dynamicProperties = ReadDynamicProperties(inserted);
+            }
+        }
+        return new {inserted=true,blockName,handle,layer,point=new{x=point.X,y=point.Y},isDynamicBlock,dynamicProperties};
+    }
+
+    private static object NormalizeDynamicValue(object? value)
+    {
+        if (value == null) return "";
+        if (value is double || value is float || value is decimal || value is int || value is long || value is short || value is bool || value is string) return value;
+        return Convert.ToString(value) ?? "";
+    }
+
+    private static object[] ReadDynamicProperties(BlockReference br)
+    {
+        if (!br.IsDynamicBlock) return Array.Empty<object>();
+        var result = new List<object>();
+        foreach (DynamicBlockReferenceProperty prop in br.DynamicBlockReferencePropertyCollection)
+        {
+            object[] allowed = Array.Empty<object>();
+            try { allowed = prop.GetAllowedValues().Select(NormalizeDynamicValue).ToArray(); } catch { }
+            result.Add(new {
+                name = prop.PropertyName,
+                value = NormalizeDynamicValue(prop.Value),
+                readOnly = prop.ReadOnly,
+                unitsType = prop.UnitsType.ToString(),
+                allowedValues = allowed
+            });
+        }
+        return result.ToArray();
+    }
+
+    private static object GetDynamicBlockProperties(JObject payload)
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var handle = ((string?)payload["handle"] ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(handle)) throw new ArgumentException("handle required");
+        using var tr = doc.Database.TransactionManager.StartOpenCloseTransaction();
+        var id = ObjectIdFromHandle(doc.Database, handle);
+        if (id.IsNull || !id.IsValid || id.IsErased) throw new InvalidOperationException("Block handle not found.");
+        var br = tr.GetObject(id, OpenMode.ForRead, false) as BlockReference ?? throw new InvalidOperationException("Handle is not a BlockReference.");
+        return new { handle, blockName = br.Name, isDynamicBlock = br.IsDynamicBlock, properties = ReadDynamicProperties(br) };
+    }
+
+    private static object ConvertDynamicInput(JToken token, object current)
+    {
+        if (current is double || current is float || current is decimal) return token.Value<double>();
+        if (current is int) return token.Value<int>();
+        if (current is short) return token.Value<short>();
+        if (current is long) return token.Value<long>();
+        if (current is bool) return token.Value<bool>();
+        return token.Type == JTokenType.String ? token.Value<string>() ?? "" : token.ToString();
+    }
+
+    private static object SetDynamicBlockProperties(JObject payload)
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument ?? throw new InvalidOperationException("No active drawing.");
+        var handle = ((string?)payload["handle"] ?? "").Trim();
+        var updates = payload["properties"] as JObject ?? throw new ArgumentException("properties required");
+        int changed = 0, skipped = 0;
+        using (doc.LockDocument())
+        using (var tr = doc.Database.TransactionManager.StartTransaction())
+        {
+            var id = ObjectIdFromHandle(doc.Database, handle);
+            if (id.IsNull || !id.IsValid || id.IsErased) throw new InvalidOperationException("Block handle not found.");
+            var br = tr.GetObject(id, OpenMode.ForWrite, false) as BlockReference ?? throw new InvalidOperationException("Handle is not a BlockReference.");
+            if (!br.IsDynamicBlock) throw new InvalidOperationException("Block is not dynamic.");
+            foreach (DynamicBlockReferenceProperty prop in br.DynamicBlockReferencePropertyCollection)
+            {
+                var token = updates[prop.PropertyName];
+                if (token == null) continue;
+                if (prop.ReadOnly) { skipped++; continue; }
+                try { prop.Value = ConvertDynamicInput(token, prop.Value); changed++; }
+                catch { skipped++; }
+            }
+            tr.Commit();
+        }
+        return new { handle, changed, skipped, updated = true };
     }
 
     private static object ConvertDwgToDxfPreview(JObject payload)
@@ -1538,6 +1974,9 @@ public sealed class BridgeCommands : IExtensionApplication
                     isFrozen = layer.IsFrozen,
                     isLocked = layer.IsLocked,
                     colorIndex = layer.Color.ColorIndex,
+                    lineweight = (int)layer.LineWeight,
+                    isPlottable = layer.IsPlottable,
+                    linetype = layer.LinetypeObjectId.IsNull ? "" : ((LinetypeTableRecord)tr.GetObject(layer.LinetypeObjectId, OpenMode.ForRead)).Name,
                     linetypeObjectId = layer.LinetypeObjectId.ToString()
                 });
             }

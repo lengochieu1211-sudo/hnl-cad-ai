@@ -9,6 +9,7 @@ import {
   TranslationMemoryItem,
   DrawingAuditIssue,
 } from "../types/cad";
+import { HNL_CAD_LAYER_STANDARDS } from "./hnlCadStandards";
 
 export const INITIAL_LAYERS: CadLayer[] = [
   { name: "0", color: "#FFFFFF", lineweight: 0.25, linetype: "Continuous", isLocked: false, isVisible: true, isPlottable: true },
@@ -24,6 +25,7 @@ export const INITIAL_LAYERS: CadLayer[] = [
   { name: "KT_TEXT", color: "#FFFFFF", lineweight: 0.2, linetype: "Continuous", isLocked: false, isVisible: true, isPlottable: true },
   { name: "KT_KHUNG_TEN", color: "#651FFF", lineweight: 0.5, linetype: "Continuous", isLocked: false, isVisible: true, isPlottable: true },
   { name: "KT_VIEWPORT", color: "#00E5FF", lineweight: 0.1, linetype: "Continuous", isLocked: false, isVisible: true, isPlottable: false },
+  ...HNL_CAD_LAYER_STANDARDS.map((x) => ({ name:x.name, color:x.color, lineweight:x.lineweight, linetype:x.linetype, isLocked:false, isVisible:true, isPlottable:x.isPlottable })),
 ];
 
 export const INITIAL_ENTITIES: CadEntity[] = [

@@ -1341,9 +1341,9 @@ export const DrywallCeilingStudioModal: React.FC<DrywallCeilingStudioModalProps>
                       offsetY: ceilingOffsetY,
                       drawHangers,
                       avoidMep,
-                      mainLayer: "HNL_CEILING_MAIN",
-                      crossLayer: "HNL_CEILING_CROSS",
-                      hangerLayer: "HNL_CEILING_HANGER",
+                      mainLayer: "HNL-CLG-MAIN",
+                      crossLayer: "HNL-CLG-CROSS",
+                      hangerLayer: "HNL-CLG-HANGER",
                     } : undefined,
                   });
                 }

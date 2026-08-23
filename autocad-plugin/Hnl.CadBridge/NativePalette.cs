@@ -37,7 +37,7 @@ public sealed class NativePaletteCommands
         if (_tabs != null) _tabs.SelectedIndex = safe;
     }
 
-    public static void OpenManagerWindow() => OpenManager();
+    public static void OpenManagerWindow(string? tool = null) => OpenManager(tool);
 
     public static void HidePaletteWindow()
     {
@@ -54,8 +54,8 @@ public sealed class NativePaletteCommands
         _palette = new PaletteSet("HNL CAD AI")
         {
             Style = PaletteSetStyles.ShowAutoHideButton | PaletteSetStyles.ShowCloseButton | PaletteSetStyles.ShowPropertiesMenu,
-            MinimumSize = new Size(300, 420),
-            Size = new Size(380, 680),
+            MinimumSize = new Size(300, 400),
+            Size = new Size(340, 640),
             DockEnabled = DockSides.Left | DockSides.Right
         };
 
@@ -68,11 +68,12 @@ public sealed class NativePaletteCommands
             Padding = new Padding(6)
         };
 
-        var header = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = Color.FromArgb(22, 24, 27) };
+        var header = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = Color.FromArgb(22, 24, 27) };
         var title = new Label { Text = "HNL CAD AI • AutoCAD Native", AutoSize = true, Left = 10, Top = 8, ForeColor = Color.White, Font = new Font("Segoe UI", 10, FontStyle.Bold) };
-        var subtitle = new Label { Text = "DWG / Selection / OSNAP / Command = AutoCAD", AutoSize = true, Left = 10, Top = 32, ForeColor = Color.Silver, Font = new Font("Segoe UI", 8) };
+        var subtitle = new Label { Text = "HNL workflows on native AutoCAD DWG", AutoSize = true, Left = 10, Top = 29, ForeColor = Color.Silver, Font = new Font("Segoe UI", 7.5f) };
         var lang = new Button { Text = "VI | EN", Width = 58, Height = 24, Top = 8, Anchor = AnchorStyles.Top | AnchorStyles.Right };
-        lang.Left = 300;
+        lang.Left = 230;
+        header.Resize += (_, __) => lang.Left = Math.Max(220, header.ClientSize.Width - lang.Width - 8);
         lang.Click += (_, __) => { _english = !_english; RebuildTabs(); };
         header.Controls.Add(title); header.Controls.Add(subtitle); header.Controls.Add(lang);
 
@@ -88,10 +89,8 @@ public sealed class NativePaletteCommands
         if (_tabs == null) return;
         _tabs.TabPages.Clear();
         _tabs.TabPages.Add(BuildAiTab());
-        _tabs.TabPages.Add(BuildHomeTab());
-        _tabs.TabPages.Add(BuildDrawTab());
+        _tabs.TabPages.Add(BuildShopTab());
         _tabs.TabPages.Add(BuildDataTab());
-        _tabs.TabPages.Add(BuildLayoutTab());
         _tabs.TabPages.Add(BuildToolsTab());
     }
 
@@ -101,7 +100,7 @@ public sealed class NativePaletteCommands
         {
             BackColor = Color.FromArgb(37, 39, 44),
             ForeColor = Color.Gainsboro,
-            Padding = new Padding(8)
+            Padding = new Padding(7)
         };
         return page;
     }
@@ -118,12 +117,32 @@ public sealed class NativePaletteCommands
         };
     }
 
+    private static string GlyphFor(string command)
+    {
+        var c = (command ?? "").ToUpperInvariant();
+        if (c.Contains("AI")) return "✦";
+        if (c.Contains("CEILING")) return "▦";
+        if (c.Contains("WALL")) return "▥";
+        if (c.Contains("LIBRARY") || c.Contains("INSERT")) return "▣";
+        if (c.Contains("TEXT")) return "T";
+        if (c.Contains("FIELD")) return "ƒ";
+        if (c.Contains("GEOM")) return "⌁";
+        if (c.Contains("DIM")) return "↔";
+        if (c.Contains("QTY") || c.Contains("BOQ")) return "Σ";
+        if (c.Contains("LAYOUT")) return "▤";
+        if (c.Contains("LISP")) return "λ";
+        if (c.Contains("LAYER")) return "◫";
+        if (c.Contains("AUDIT")) return "✓";
+        if (c.Contains("BRIDGE")) return "⇄";
+        return "•";
+    }
+
     private static Control Section(string title, params (string label, string command)[] items)
     {
         var group = new GroupBox
         {
             Text = title,
-            Width = 320,
+            Width = 292,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ForeColor = Color.Gainsboro,
@@ -131,7 +150,7 @@ public sealed class NativePaletteCommands
         };
         var flow = new FlowLayoutPanel
         {
-            Width = 300,
+            Width = 276,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.LeftToRight,
@@ -141,9 +160,9 @@ public sealed class NativePaletteCommands
         {
             var button = new Button
             {
-                Text = item.label,
-                Width = 88,
-                Height = 32,
+                Text = $"{GlyphFor(item.command)}  {item.label}",
+                Width = 84,
+                Height = 28,
                 Margin = new Padding(3),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(52, 55, 61),
@@ -371,80 +390,115 @@ public sealed class NativePaletteCommands
         }
     }
 
-    private static TabPage BuildHomeTab()
+    private static TabPage BuildShopTab()
     {
-        var page = NewTab("Trang chính", "Home");
+        var page = NewTab("SHOP", "SHOP");
         var f = Flow();
-        f.Controls.Add(Section(_english ? "HNL" : "HNL",
-            (_english ? "HNL Manager" : "Mở HNL", "HNL_OPEN_MANAGER"),
-            (_english ? "Bridge" : "Kết nối", "HNLBRIDGESTATUS"),
-            (_english ? "Palette" : "Palette", "HNLPALETTE")));
-        f.Controls.Add(Section(_english ? "Native CAD" : "CAD Native",
-            ("LINE", "LINE"), ("PLINE", "PLINE"), ("CIRCLE", "CIRCLE"),
-            ("COPY", "COPY"), ("MOVE", "MOVE"), ("TRIM", "TRIM")));
-        page.Controls.Add(f);
-        return page;
-    }
-
-    private static TabPage BuildDrawTab()
-    {
-        var page = NewTab("2D / Vẽ", "2D / Draw");
-        var f = Flow();
-        f.Controls.Add(Section(_english ? "Draw" : "Vẽ",
-            ("L", "LINE"), ("PL", "PLINE"), ("C", "CIRCLE"), ("REC", "RECTANG"),
-            ("ARC", "ARC"), ("HATCH", "HATCH")));
         f.Controls.Add(Section(_english ? "Smart Shopdrawing" : "Shopdrawing thông minh",
             (_english ? "Smart Ceiling" : "Smart Ceiling", "HNLCEILING"),
             (_english ? "Smart Wall" : "Smart Wall", "HNLWALL"),
-            (_english ? "Block Library" : "Thư viện Block", "HNLINSERT"),
-            (_english ? "Native BOQ" : "BOQ DWG", "HNLBOQ"),
-            (_english ? "Shop Audit" : "Audit Shopdrawing", "HNLSHOPAUDIT"),
-            (_english ? "HNL Manager" : "Mở HNL", "HNL_OPEN_MANAGER")));
-        f.Controls.Add(Section(_english ? "Modify" : "Hiệu chỉnh",
-            ("CO", "COPY"), ("M", "MOVE"), ("RO", "ROTATE"), ("SC", "SCALE"),
-            ("TR", "TRIM"), ("EX", "EXTEND"), ("O", "OFFSET"), ("MI", "MIRROR"),
-            ("F", "FILLET")));
+            (_english ? "Library" : "Library", "HNLLIBRARY"),
+            (_english ? "Shop Audit" : "Shop Audit", "HNLSHOPAUDIT")));
+        f.Controls.Add(Section(_english ? "Quick Insert" : "Chèn nhanh",
+            (_english ? "Insert Symbol" : "Chèn ký hiệu", "HNLINSERT")));
         page.Controls.Add(f);
         return page;
     }
 
     private static TabPage BuildDataTab()
     {
-        var page = NewTab("Dữ liệu", "Data");
+        var page = NewTab("DATA", "DATA");
         var f = Flow();
-        f.Controls.Add(Section(_english ? "Text / Dimension" : "Text / Kích thước",
-            ("MTEXT", "MTEXT"), ("DIM", "DIM"), ("DLI", "DIMLINEAR"), ("DI", "DIST")));
-        f.Controls.Add(Section(_english ? "HNL Data / BOQ" : "Dữ liệu HNL / BOQ",
-            (_english ? "Selection" : "Đối tượng chọn", "HNLSELECTION"),
-            (_english ? "Layers" : "Layer", "HNLLAYERS"),
-            (_english ? "Smart BOQ" : "BOQ Smart Object", "HNLBOQ")));
-        page.Controls.Add(f);
-        return page;
-    }
-
-    private static TabPage BuildLayoutTab()
-    {
-        var page = NewTab("Layout / In", "Layout / Publish");
-        var f = Flow();
-        f.Controls.Add(Section("Layout",
-            ("LAYOUT", "LAYOUT"),
-            (_english ? "Rename" : "Đổi tên", "HNLRENLAYOUT"),
-            ("MVIEW", "MVIEW"), ("PAGESETUP", "PAGESETUP"),
-            ("PLOT", "PLOT"), ("PUBLISH", "PUBLISH")));
+        f.Controls.Add(Section(_english ? "2D Pro / Data" : "2D Pro / Dữ liệu",
+            (_english ? "Text / Attribute" : "Text / Attribute", "HNLTEXT"),
+            (_english ? "Field Doctor" : "Field Doctor", "HNLFIELD"),
+            (_english ? "Geometry Doctor" : "Geometry Doctor", "HNLGEOM"),
+            (_english ? "Quick Dimension" : "Quick Dimension", "HNLDIM")));
+        f.Controls.Add(Section(_english ? "BOQ / Layout" : "BOQ / Layout",
+            (_english ? "Quantity / BOQ" : "Quantity / BOQ", "HNLQTY"),
+            (_english ? "Layout+" : "Layout+", "HNLLAYOUTAUTO")));
         page.Controls.Add(f);
         return page;
     }
 
     private static TabPage BuildToolsTab()
     {
-        var page = NewTab("Công cụ", "Tools");
+        var page = NewTab("TOOLS", "TOOLS");
         var f = Flow();
-        f.Controls.Add(Section(_english ? "Bridge / Diagnostics" : "Bridge / Chẩn đoán",
-            (_english ? "Status" : "Trạng thái", "HNLBRIDGESTATUS"),
-            (_english ? "Ping" : "Kiểm tra", "HNLBRIDGEPING"),
-            (_english ? "Layouts" : "Danh sách Layout", "HNLLAYOUTS"),
-            (_english ? "Plot Devices" : "Máy in", "HNLPLOTDEVICES"),
-            (_english ? "Shop Audit" : "Audit Shopdrawing", "HNLSHOPAUDIT")));
+        f.Controls.Add(Section(_english ? "HNL Tools" : "Công cụ HNL",
+            (_english ? "Lisp Center" : "Lisp Center", "HNLLISP"),
+            (_english ? "Layer Standards" : "Chuẩn Layer", "HNLLAYERSYNC"),
+            (_english ? "Manager" : "HNL Manager", "HNL_OPEN_MANAGER")));
+
+        var advanced = new GroupBox
+        {
+            Text = _english ? "Advanced / Diagnostics" : "Nâng cao / Chẩn đoán",
+            Width = 292,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ForeColor = Color.Silver,
+            Padding = new Padding(7)
+        };
+        var toggle = new Button
+        {
+            Text = _english ? "Show advanced" : "Hiện nâng cao",
+            Width = 120,
+            Height = 26,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(45, 47, 52),
+            ForeColor = Color.Gainsboro
+        };
+        var body = new FlowLayoutPanel
+        {
+            Width = 276,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Visible = false
+        };
+        foreach (var item in new[]
+        {
+            (_english ? "Bridge Status" : "Bridge Status", "HNLBRIDGESTATUS"),
+            (_english ? "Bridge Ping" : "Bridge Ping", "HNLBRIDGEPING"),
+            (_english ? "Palette Status" : "Palette Status", "HNLPALETTESTATUS")
+        })
+        {
+            var b = new Button
+            {
+                Text = $"{GlyphFor(item.Item2)}  {item.Item1}",
+                Width = 84,
+                Height = 28,
+                Margin = new Padding(3),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(52, 55, 61),
+                ForeColor = Color.White
+            };
+            b.FlatAppearance.BorderColor = Color.FromArgb(75, 78, 84);
+            var cmd = item.Item2;
+            b.Click += (_, __) => Run(cmd);
+            body.Controls.Add(b);
+        }
+        toggle.Click += (_, __) =>
+        {
+            body.Visible = !body.Visible;
+            toggle.Text = body.Visible
+                ? (_english ? "Hide advanced" : "Ẩn nâng cao")
+                : (_english ? "Show advanced" : "Hiện nâng cao");
+        };
+        var wrap = new FlowLayoutPanel
+        {
+            Width = 276,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false
+        };
+        wrap.Controls.Add(toggle);
+        wrap.Controls.Add(body);
+        advanced.Controls.Add(wrap);
+        f.Controls.Add(advanced);
+
         page.Controls.Add(f);
         return page;
     }
@@ -457,10 +511,11 @@ public sealed class NativePaletteCommands
             return;
         }
         var doc = AcApplication.DocumentManager.MdiActiveDocument;
-        doc?.SendStringToExecute($"_.{command} ", true, false, true);
+        var cadCommand = command.StartsWith("HNL", StringComparison.OrdinalIgnoreCase) ? command : $"_.{command}";
+        doc?.SendStringToExecute($"{cadCommand} ", true, false, true);
     }
 
-    private static void OpenManager()
+    private static void OpenManager(string? tool = null)
     {
         try
         {
@@ -471,7 +526,9 @@ public sealed class NativePaletteCommands
                 var marked = File.ReadAllText(marker).Trim();
                 if (File.Exists(marked))
                 {
-                    Process.Start(new ProcessStartInfo(marked) { UseShellExecute = true });
+                    var psi = new ProcessStartInfo(marked) { UseShellExecute = true };
+                    if (!string.IsNullOrWhiteSpace(tool)) psi.Arguments = $"--hnl-tool={tool}";
+                    Process.Start(psi);
                     return;
                 }
             }
@@ -485,7 +542,9 @@ public sealed class NativePaletteCommands
             foreach (var file in candidates)
             {
                 if (!File.Exists(file)) continue;
-                Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
+                var psi = new ProcessStartInfo(file) { UseShellExecute = true };
+                if (!string.IsNullOrWhiteSpace(tool)) psi.Arguments = $"--hnl-tool={tool}";
+                Process.Start(psi);
                 return;
             }
             AcApplication.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(

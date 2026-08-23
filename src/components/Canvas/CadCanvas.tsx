@@ -678,15 +678,23 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
   ) {
     ctx.save();
 
+    const layerStyle = layers.find((l) => l.name === entity.layer);
     const color = isGhost
       ? "#00E5FF"
       : isSelected
       ? "#00E5FF"
-      : entity.color || "#FFFFFF";
+      : entity.color || layerStyle?.color || "#FFFFFF";
 
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
-    ctx.lineWidth = isSelected ? 3 : (entity.lineweight || 0.25) * 10 * vt.scale + 1;
+    const effectiveLineweight = entity.lineweight ?? layerStyle?.lineweight ?? 0.25;
+    ctx.lineWidth = isSelected ? 3 : effectiveLineweight * 10 * vt.scale + 1;
+
+    const lt = String(layerStyle?.linetype || "Continuous").toUpperCase();
+    if (!isGhost) {
+      if (lt.includes("CENTER")) ctx.setLineDash([12, 4, 2, 4]);
+      else if (lt.includes("HIDDEN") || lt.includes("DASH")) ctx.setLineDash([8, 5]);
+    }
 
     if (isGhost) {
       ctx.setLineDash([6, 3]);
@@ -1186,6 +1194,23 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
     ctx.restore();
   }
 
+  // CAD drafting constraint helpers. ORTHO must use the LAST vertex for multi-segment
+  // PLINE, not the first vertex. This fixes the F8 diagonal-segment regression.
+  const getDraftConstraintOrigin = (): Point2D | null => {
+    if (tempPoints.length === 0) return null;
+    if (currentTool === "POLYLINE") return tempPoints[tempPoints.length - 1];
+    return tempPoints[0];
+  };
+
+  const applyOrthoConstraint = (point: Point2D): Point2D => {
+    if (!isOrtho) return point;
+    const origin = getDraftConstraintOrigin();
+    if (!origin) return point;
+    const dx = Math.abs(point.x - origin.x);
+    const dy = Math.abs(point.y - origin.y);
+    return dx >= dy ? { x: point.x, y: origin.y } : { x: origin.x, y: point.y };
+  };
+
   // Mouse Interaction Handlers
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -1204,8 +1229,10 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
     // Only left mouse creates/selects geometry. Right mouse is reserved for command completion/context.
     if (e.button !== 0) return;
 
-    // Determine final effective world coordinate (prefer precise Osnap lock if active)
-    const effectivePos = activeSnap && osnapSettings.enabled ? activeSnap.point : worldPos;
+    // Determine final coordinate. ORTHO is the final geometric constraint; OSNAP is
+    // accepted only through the constrained cursor state computed by mouse-move.
+    const clickCandidate = activeSnap && osnapSettings.enabled ? activeSnap.point : worldPos;
+    const effectivePos = applyOrthoConstraint(clickCandidate);
 
     // Left Click in Active Drawing Tool mode
     if (currentTool !== "SELECT" && onAddEntity) {
@@ -1366,41 +1393,32 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
 
     const rawWorldPos = screenToWorldRaw(screenX, screenY);
 
-    // 1. Real-time Osnap Candidate Search
+    // 1. Real-time OSNAP candidate search. Do NOT return early: F8/ORTHO must
+    // remain authoritative. In v2.6.3 an early return let OSNAP bypass ORTHO and
+    // PLINE used the first vertex as origin, producing the diagonal segment seen
+    // in the user video.
+    let snapCandidate: any = null;
     if (osnapSettings.enabled && !isPanning && !isBoxSelecting) {
-      const snap = findBestOsnapPoint({
+      snapCandidate = findBestOsnapPoint({
         rawMousePos: rawWorldPos,
         entities,
         viewTransform,
         settings: osnapSettings,
-        activeDrawingOrigin: tempPoints.length > 0 ? tempPoints[0] : null,
+        activeDrawingOrigin: getDraftConstraintOrigin(),
       });
-
-      if (snap) {
-        setActiveSnap(snap);
-        setMousePosCad(snap.point);
-        return;
-      }
     }
 
-    // If no snap detected or Osnap is off:
-    setActiveSnap(null);
+    let targetWorldPos = snapCandidate?.point ?? (isGridSnap ? screenToWorld(screenX, screenY) : rawWorldPos);
+    const constrained = applyOrthoConstraint(targetWorldPos);
 
-    let targetWorldPos = isGridSnap ? screenToWorld(screenX, screenY) : rawWorldPos;
-
-    // Apply Ortho mode constraint if drawing in progress
-    if (isOrtho && tempPoints.length > 0) {
-      const origin = tempPoints[0];
-      const dx = Math.abs(targetWorldPos.x - origin.x);
-      const dy = Math.abs(targetWorldPos.y - origin.y);
-      if (dx > dy) {
-        targetWorldPos = { x: targetWorldPos.x, y: origin.y };
-      } else {
-        targetWorldPos = { x: origin.x, y: targetWorldPos.y };
-      }
+    // Keep the OSNAP marker only when the exact snap point is compatible with the
+    // active ORTHO axis. Otherwise show the constrained cursor without a false snap.
+    if (snapCandidate && (!isOrtho || Math.hypot(snapCandidate.point.x - constrained.x, snapCandidate.point.y - constrained.y) < 1e-6)) {
+      setActiveSnap(snapCandidate);
+    } else {
+      setActiveSnap(null);
     }
-
-    setMousePosCad(targetWorldPos);
+    setMousePosCad(constrained);
   };
 
   const handleMouseUp = () => {
@@ -1623,7 +1641,7 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
           currentSnap={activeSnap}
           settings={osnapSettings}
           onUpdateSettings={setOsnapSettings}
-          activeOriginPoint={tempPoints.length > 0 ? tempPoints[0] : null}
+          activeOriginPoint={getDraftConstraintOrigin()}
           viewportWidth={viewportSize.width}
           viewportHeight={viewportSize.height}
         />
@@ -1634,7 +1652,7 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
         <DynamicInputHUD
           mouseScreenPos={mouseScreenPos}
           worldPos={mousePosCad}
-          startPoint={tempPoints.length > 0 ? tempPoints[0] : null}
+          startPoint={getDraftConstraintOrigin()}
           state={dynInput}
           onChangeLength={(val) => setDynInput((prev) => ({ ...prev, lengthInput: val }))}
           onChangeAngle={(val) => setDynInput((prev) => ({ ...prev, angleInput: val }))}
@@ -1642,12 +1660,13 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
           viewportWidth={viewportSize.width}
           viewportHeight={viewportSize.height}
           onCommit={(targetPos) => {
+            const committedPos = applyOrthoConstraint(targetPos);
             // PLINE keeps accumulating vertices; Dynamic Input must not end it after 2 points.
             if (currentTool === "POLYLINE") {
               setTempPoints((prev) => {
                 const last = prev[prev.length - 1];
-                if (last && Math.hypot(last.x - targetPos.x, last.y - targetPos.y) < 1e-6) return prev;
-                return [...prev, targetPos];
+                if (last && Math.hypot(last.x - committedPos.x, last.y - committedPos.y) < 1e-6) return prev;
+                return [...prev, committedPos];
               });
               return;
             }
@@ -1656,7 +1675,7 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
               setTempPoints([targetPos]);
             } else if (onAddEntity) {
               const p1 = tempPoints[0];
-              const p2 = targetPos;
+              const p2 = committedPos;
               if (currentTool === "WALL_100" || currentTool === "WALL_200") {
                 const thickness = currentTool === "WALL_200" ? 200 : 100;
                 onAddEntity({

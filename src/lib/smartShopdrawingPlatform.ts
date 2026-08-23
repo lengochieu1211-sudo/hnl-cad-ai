@@ -21,7 +21,19 @@ export type LibraryCategory =
   | "WALL"
   | "STEEL"
   | "MEP_REFERENCE"
+  | "DETAIL"
   | "CUSTOM";
+
+export type LibraryScope = "HNL_STANDARD" | "PROJECT" | "MY_LIBRARY";
+export type LibraryStorageMode = "BUILTIN" | "COPY" | "LINK";
+export type DynamicBlockState = "UNKNOWN" | "DYNAMIC" | "STATIC" | "MIXED";
+
+export interface LibraryBlockDefinition {
+  name: string;
+  entityCount: number;
+  attributeCount: number;
+  isDynamic: boolean;
+}
 
 export interface HnlLibraryItem {
   id: string;
@@ -32,24 +44,61 @@ export interface HnlLibraryItem {
   description: string;
   annotative?: boolean;
   dynamic?: boolean;
+  dynamicPreferred?: boolean;
   sourceDwg?: string;
   tags: string[];
+  scope?: LibraryScope;
+  storageMode?: LibraryStorageMode;
+  originalPath?: string;
+  fileName?: string;
+  sizeBytes?: number;
+  sha256?: string;
+  modifiedAt?: string;
+  createdAt?: string;
+  favorite?: boolean;
+  recentAt?: string | null;
+  dynamicState?: DynamicBlockState;
+  definitions?: LibraryBlockDefinition[];
+  selectedDefinition?: string | null;
+  lineweightMm?: number;
+  linetype?: string;
+  colorHex?: string;
 }
 
 export const HNL_BUILTIN_LIBRARY: HnlLibraryItem[] = [
-  { id:"lib_section", name:"Ký hiệu mặt cắt", category:"ANNOTATION", symbolKey:"SECTION_MARK", layer:"HNL-ANNO-SECTION", description:"Mặt cắt A-A/B-B, mũi tên hai đầu.", annotative:true, tags:["section","mặt cắt","ký hiệu"] },
-  { id:"lib_level", name:"Ký hiệu cao độ", category:"ANNOTATION", symbolKey:"LEVEL_MARK", layer:"HNL-ANNO-LEVEL", description:"Cao độ ±0.000 / +3.600.", annotative:true, tags:["level","cao độ","elevation"] },
-  { id:"lib_detail", name:"Ký hiệu chi tiết", category:"ANNOTATION", symbolKey:"DETAIL_MARK", layer:"HNL-ANNO-DETAIL", description:"Detail callout / số chi tiết.", annotative:true, tags:["detail","chi tiết"] },
-  { id:"lib_board_start", name:"Điểm xuất phát tấm trần", category:"CEILING", symbolKey:"BOARD_START", layer:"HNL-CLG-BOARD", description:"Điểm gốc và hướng chạy tấm 1220×2440.", dynamic:true, tags:["tấm","trần","start","1220","2440"] },
-  { id:"lib_clg_main", name:"Xương chính trần", category:"CEILING", symbolKey:"CEILING_MAIN", layer:"HNL-CLG-MAIN", description:"Ký hiệu/đại diện xương chính.", tags:["main","xương chính","trần"] },
-  { id:"lib_clg_cross", name:"Xương phụ trần", category:"CEILING", symbolKey:"CEILING_CROSS", layer:"HNL-CLG-CROSS", description:"Xương phụ theo module tấm; mặc định HNL 1220/3.", tags:["cross","xương phụ","406.67"] },
-  { id:"lib_clg_hanger", name:"Ty treo trần", category:"CEILING", symbolKey:"CEILING_HANGER", layer:"HNL-CLG-HANGER", description:"Ty ren/ty dây + điểm treo.", tags:["ty","hanger","trần"] },
-  { id:"lib_wall_stud", name:"Stud đứng vách", category:"WALL", symbolKey:"WALL_STUD", layer:"HNL-WALL-STUD", description:"Stud đứng; module HNL 1220/3 hoặc 1220/2.", tags:["stud","vách","610","406.67"] },
-  { id:"lib_wall_track", name:"Track ngang vách", category:"WALL", symbolKey:"WALL_TRACK", layer:"HNL-WALL-TRACK", description:"Track trên/dưới.", tags:["track","vách","u track"] },
-  { id:"lib_door_jamb", name:"Gia cường jamb cửa", category:"WALL", symbolKey:"DOOR_JAMB", layer:"HNL-WALL-REINF", description:"Stud kép/khung gia cường cửa.", tags:["door","jamb","cửa","gia cường"] },
-  { id:"lib_rhs", name:"Sắt hộp RHS/SHS", category:"STEEL", symbolKey:"STEEL_RHS", layer:"HNL-STEEL-RHS", description:"Ký hiệu sắt hộp 20x40/30x60/40x80...", dynamic:true, tags:["rhs","shs","sắt hộp","steel"] },
-  { id:"lib_plate", name:"Bản mã", category:"STEEL", symbolKey:"STEEL_PLATE", layer:"HNL-STEEL-PLATE", description:"Bản mã/plate liên kết.", tags:["plate","bản mã"] },
+  { id:"lib_section", name:"Ký hiệu mặt cắt", category:"ANNOTATION", symbolKey:"SECTION_MARK", layer:"HNL-ANNO-SECTION", description:"Mặt cắt A-A/B-B, mũi tên hai đầu.", annotative:true, dynamicPreferred:true, tags:["section","mặt cắt","ký hiệu"] },
+  { id:"lib_level", name:"Ký hiệu cao độ", category:"ANNOTATION", symbolKey:"LEVEL_MARK", layer:"HNL-ANNO-LEVEL", description:"Cao độ ±0.000 / +3.600.", annotative:true, dynamicPreferred:true, tags:["level","cao độ","elevation"] },
+  { id:"lib_detail", name:"Ký hiệu chi tiết", category:"ANNOTATION", symbolKey:"DETAIL_MARK", layer:"HNL-ANNO-DETAIL", description:"Detail callout / số chi tiết.", annotative:true, dynamicPreferred:true, tags:["detail","chi tiết"] },
+  { id:"lib_board_start", name:"Điểm xuất phát tấm trần", category:"CEILING", symbolKey:"BOARD_START", layer:"HNL-CLG-START", description:"Điểm gốc và hướng chạy tấm 1220×2440.", dynamic:true, dynamicPreferred:true, tags:["tấm","trần","start","1220","2440"] },
+  { id:"lib_clg_main", name:"Xương chính trần", category:"CEILING", symbolKey:"CEILING_MAIN", layer:"HNL-CLG-MAIN", description:"Ký hiệu/đại diện xương chính.", dynamicPreferred:true, tags:["main","xương chính","trần"] },
+  { id:"lib_clg_cross", name:"Xương phụ trần", category:"CEILING", symbolKey:"CEILING_CROSS", layer:"HNL-CLG-CROSS", description:"Xương phụ theo module tấm; mặc định HNL 1220/3.", dynamicPreferred:true, tags:["cross","xương phụ","406.67"] },
+  { id:"lib_clg_hanger", name:"Ty treo trần", category:"CEILING", symbolKey:"CEILING_HANGER", layer:"HNL-CLG-HANGER", description:"Ty ren/ty dây + điểm treo.", dynamicPreferred:true, tags:["ty","hanger","trần"] },
+  { id:"lib_wall_stud", name:"Stud đứng vách", category:"WALL", symbolKey:"WALL_STUD", layer:"HNL-WALL-STUD", description:"Stud đứng; module HNL 1220/3 hoặc 1220/2.", dynamicPreferred:true, tags:["stud","vách","610","406.67"] },
+  { id:"lib_wall_track", name:"Track ngang vách", category:"WALL", symbolKey:"WALL_TRACK", layer:"HNL-WALL-TRACK", description:"Track trên/dưới.", dynamicPreferred:true, tags:["track","vách","u track"] },
+  { id:"lib_door_jamb", name:"Gia cường jamb cửa", category:"WALL", symbolKey:"DOOR_JAMB", layer:"HNL-WALL-REINF", description:"Stud kép/khung gia cường cửa.", dynamicPreferred:true, tags:["door","jamb","cửa","gia cường"] },
+  { id:"lib_rhs", name:"Sắt hộp RHS/SHS", category:"STEEL", symbolKey:"STEEL_RHS", layer:"HNL-STEEL-RHS", description:"Ký hiệu sắt hộp 20x40/30x60/40x80...", dynamic:true, dynamicPreferred:true, tags:["rhs","shs","sắt hộp","steel"] },
+  { id:"lib_plate", name:"Bản mã", category:"STEEL", symbolKey:"STEEL_PLATE", layer:"HNL-STEEL-PLATE", description:"Bản mã/plate liên kết.", dynamicPreferred:true, tags:["plate","bản mã"] },
 ];
+
+export const HNL_LIBRARY_SCOPES = [
+  { id:"HNL_STANDARD", label:"HNL Standard" },
+  { id:"PROJECT", label:"Project Library" },
+  { id:"MY_LIBRARY", label:"My Library" },
+] as const;
+
+export const HNL_LIBRARY_CATEGORIES = [
+  { id:"ANNOTATION", label:"Ký hiệu / Annotation", defaultLayer:"HNL-ANNO-DETAIL" },
+  { id:"CEILING", label:"Trần", defaultLayer:"HNL-CLG-BOARD" },
+  { id:"WALL", label:"Vách", defaultLayer:"HNL-WALL-BOARD" },
+  { id:"STEEL", label:"Sắt hộp / Steel", defaultLayer:"HNL-STEEL-RHS" },
+  { id:"MEP_REFERENCE", label:"MEP tham chiếu", defaultLayer:"HNL-NOPLOT-HELPER" },
+  { id:"DETAIL", label:"Chi tiết", defaultLayer:"HNL-ANNO-DETAIL" },
+  { id:"CUSTOM", label:"Khác", defaultLayer:"HNL-DATA-FIELD" },
+] as const;
+
+export function getDefaultLibraryLayer(category: string) {
+  return HNL_LIBRARY_CATEGORIES.find((x) => x.id === category)?.defaultLayer || "HNL-DATA-FIELD";
+}
 
 export type ApprovalStatus = "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "SUPERSEDED";
 

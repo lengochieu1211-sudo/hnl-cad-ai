@@ -62,6 +62,7 @@ import {
 import { INITIAL_HNL_MODULES } from "./lib/moduleManagerEngine";
 import { HNL_APP_VERSION, HNL_DISPLAY_VERSION, HNL_PROJECT_SCHEMA_VERSION } from "./lib/version";
 import { detectAutoCadBridge, executeAutoCadAction, AutoCadBridgeStatus } from "./lib/autoCadBridge";
+import { aciToHex, cadLineweightEnumToMm } from "./lib/hnlCadStandards";
 import { loadProjectSnapshot, saveProjectSnapshot, clearProjectSnapshot } from "./lib/projectPersistence";
 import { DiagnosticEvent, errorToDetails, loadDiagnostics, makeDiagnostic, saveDiagnostics } from "./lib/diagnostics";
 import { markCommandHealth } from "./lib/commandHealth";
@@ -212,6 +213,7 @@ export default function App() {
   const [isBuildingCodeOpen, setIsBuildingCodeOpen] = useState(false);
   const [isPileStudioOpen, setIsPileStudioOpen] = useState(false);
   const [isSmartShopdrawingOpen, setIsSmartShopdrawingOpen] = useState(false);
+  const [smartShopdrawingInitialTab, setSmartShopdrawingInitialTab] = useState<"OVERVIEW"|"LIBRARY">("OVERVIEW");
   const [autoCadBridgeStatus, setAutoCadBridgeStatus] = useState<AutoCadBridgeStatus>({ connected: false, source: "standalone", lastCheckedAt: Date.now() });
   const [lastAutosaveAt, setLastAutosaveAt] = useState<string | null>(null);
   const [recoveryLoaded, setRecoveryLoaded] = useState(false);
@@ -273,6 +275,19 @@ export default function App() {
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  }, []);
+
+  const waitForAutoCadBridge = useCallback(async (timeoutMs = 30000) => {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const status = await detectAutoCadBridge();
+      if (status.connected) {
+        setAutoCadBridgeStatus(status);
+        return status;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+    }
+    return null;
   }, []);
 
   const refreshDraftingStatus = useCallback(async () => {
@@ -1085,7 +1100,11 @@ export default function App() {
         const layerResult:any=await executeAutoCadAction("GET_LAYERS",{});
         if(layerResult?.ok && Array.isArray(layerResult?.result?.layers)){
           setLayers(layerResult.result.layers.map((l:any)=>({
-            name:String(l.name||"0"), color:"#FFFFFF",
+            name:String(l.name||"0"),
+            color:aciToHex(Number(l.colorIndex)||7),
+            lineweight:cadLineweightEnumToMm(Number(l.lineweight)),
+            linetype:String(l.linetype||"Continuous"),
+            isPlottable:l.isPlottable !== false,
             isVisible:!Boolean(l.isOff||l.isFrozen), isLocked:Boolean(l.isLocked),
           })) as any);
         }
@@ -1342,10 +1361,16 @@ export default function App() {
         break;
 
       case "SMART_SHOPDRAWING":
-      case "SMART_LIBRARY":
       case "SMART_WALL_SYSTEM":
+        setSmartShopdrawingInitialTab("OVERVIEW");
         setIsSmartShopdrawingOpen(true);
         showToast("HNL Smart Shopdrawing Platform: Library • Ceiling • Wall • Approved • BOQ • Audit.");
+        break;
+
+      case "SMART_LIBRARY":
+        setSmartShopdrawingInitialTab("LIBRARY");
+        setIsSmartShopdrawingOpen(true);
+        showToast("HNL Library Manager: DWG / Dynamic Block / Layer standards.");
         break;
 
       case "SMART_CEILING": {
@@ -1596,8 +1621,10 @@ export default function App() {
       }
 
       case "OPEN_BLOCK_LIBRARY":
+      case "OPEN_SMART_LIBRARY":
+        setSmartShopdrawingInitialTab("LIBRARY");
         setIsSmartShopdrawingOpen(true);
-        showToast("Đã mở HNL Smart Library trong Smart Shopdrawing Platform.");
+        showToast("Đã mở HNL Library Manager.");
         break;
 
       case "OPEN_TABLE_BUILDER":
@@ -1970,6 +1997,14 @@ export default function App() {
         case "OPEN_AUDIT": setIsAuditModalOpen(true); break;
         case "OPEN_PILE_STUDIO": setIsPileStudioOpen(true); break;
         case "OPEN_TRANSLATE": setIsAiPaletteOpen(true); break;
+        case "OPEN_2D_PRO_TEXT": setPro2DInitialTab("TEXT"); setIs2DProfessionalOpen(true); break;
+        case "OPEN_2D_PRO_FIELD": setPro2DInitialTab("FIELD"); setIs2DProfessionalOpen(true); break;
+        case "OPEN_2D_PRO_GEOMETRY": setPro2DInitialTab("GEOMETRY"); setIs2DProfessionalOpen(true); break;
+        case "OPEN_2D_PRO_DIMENSION": setPro2DInitialTab("DIMENSION"); setIs2DProfessionalOpen(true); break;
+        case "OPEN_2D_PRO_QUANTITY": setPro2DInitialTab("QUANTITY"); setIs2DProfessionalOpen(true); break;
+        case "OPEN_2D_PRO_LAYOUT": setPro2DInitialTab("LAYOUT"); setIs2DProfessionalOpen(true); break;
+        case "OPEN_2D_PRO_TOOLS": setPro2DInitialTab("TOOLS"); setIs2DProfessionalOpen(true); break;
+        case "OPEN_2D_PRO_SOURCES": setPro2DInitialTab("SOURCES"); setIs2DProfessionalOpen(true); break;
         default: handleExecuteCommand(command); break;
       }
     });
@@ -1981,7 +2016,38 @@ export default function App() {
         if (lower.endsWith(".dwg")) {
           const openMode = String(data?.openMode || "AUTO").toUpperCase();
           if (!autoCadBridgeStatus.connected) {
-            showToast("DWG native/full preview hiện cần AutoCAD Bridge. Không có Bridge: hãy mở DXF trực tiếp trong HNL.");
+            if ((openMode === "DIRECT_DWG" || openMode === "AUTOCAD_NATIVE") && nativeApi?.launchAutoCadWithDwg) {
+              void (async () => {
+                const filePath = String(data?.filePath || "");
+                showToast("Đang mở AutoCAD và chờ HNL Bridge kết nối...");
+                const launched = await nativeApi.launchAutoCadWithDwg(filePath);
+                if (!launched?.success) {
+                  showToast(`Không mở được AutoCAD: ${launched?.error || launched?.reason || "Không tìm thấy AutoCAD 2023-2026"}`);
+                  return;
+                }
+                const status = await waitForAutoCadBridge(30000);
+                if (!status?.connected) {
+                  showToast("AutoCAD đã mở nhưng HNL Bridge chưa kết nối. Kiểm tra HNL.CadBridge.bundle rồi thử HNLBRIDGEPING.");
+                  return;
+                }
+                setCurrentFileName(fileName);
+                setCurrentFilePath(filePath || null);
+                setShowStartCenter(false);
+                if (openMode === "DIRECT_DWG") {
+                  setDirectDwgMode(true);
+                  setDrawingWorkspaceMode("DIRECT_DWG");
+                  setDirectDwgLiveSync(true);
+                  showToast(`DIRECT DWG đã kết nối: ${fileName}`);
+                  window.setTimeout(() => void refreshDirectDwgSnapshot(false), 500);
+                } else {
+                  setDirectDwgMode(false);
+                  setDrawingWorkspaceMode("AUTOCAD_NATIVE");
+                  showToast(`AutoCAD Native đã mở: ${fileName}`);
+                }
+              })();
+              return;
+            }
+            showToast("DWG native/full preview cần AutoCAD Bridge. HNL không ghi đè DWG khi Bridge chưa kết nối.");
             return;
           }
 
@@ -2082,7 +2148,7 @@ export default function App() {
       if (typeof offMenu === "function") offMenu();
       if (typeof offFile === "function") offFile();
     };
-  }, [entities, layers, layouts, viewports, smartObjects, selectedEntityIds, historyIndex, savePrimaryDrawing, saveAsPrimaryDrawing, saveCadDxf, saveProjectJson, saveDwgViaAutoCad, autoCadBridgeStatus.connected, isNativeDwgWorkspace, refreshDirectDwgSnapshot]);
+  }, [entities, layers, layouts, viewports, smartObjects, selectedEntityIds, historyIndex, savePrimaryDrawing, saveAsPrimaryDrawing, saveCadDxf, saveProjectJson, saveDwgViaAutoCad, autoCadBridgeStatus.connected, isNativeDwgWorkspace, refreshDirectDwgSnapshot, waitForAutoCadBridge]);
 
   const handleApplyComposer = (
     newLayouts: CadLayout[],
@@ -2677,6 +2743,7 @@ export default function App() {
 
       <HnlSmartShopdrawingPlatformModal
         isOpen={isSmartShopdrawingOpen}
+        initialTab={smartShopdrawingInitialTab}
         onClose={() => setIsSmartShopdrawingOpen(false)}
         autoCadConnected={autoCadBridgeStatus.connected}
         onBridgeAction={(action, payload) => executeAutoCadAction(action, payload)}
@@ -2736,7 +2803,7 @@ export default function App() {
               id: `ceil_${Date.now()}`,
               handle: Math.random().toString(16).substring(2, 8).toUpperCase(),
               type: "CEILING_GRID",
-              layer: cfg.mainLayer || "HNL_CEILING_MAIN",
+              layer: cfg.mainLayer || "HNL-CLG-MAIN",
               color: "#FF9100",
               boundary,
               gridType: preset?.ceilingSystem?.type || cfg.systemType,

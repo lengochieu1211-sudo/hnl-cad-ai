@@ -3,23 +3,77 @@ const { app, BrowserWindow, dialog, ipcMain, Menu, shell, safeStorage } = requir
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 
 let mainWindow = null;
 let isRendererDirty = false;
 let forceQuit = false;
 process.env.HNL_API_TOKEN = process.env.HNL_API_TOKEN || crypto.randomBytes(32).toString('hex');
 
+function getHnlToolArg(argv = []) {
+  const item = (argv || []).find((x) => /^--hnl-tool=/i.test(String(x || '')));
+  return item ? String(item).split('=', 2)[1].trim().toUpperCase() : '';
+}
+
+function dispatchHnlToolArg(argv = process.argv) {
+  if (!mainWindow) return;
+  const tool = getHnlToolArg(argv);
+  if (!tool) return;
+  const allowed = new Set(['TEXT','FIELD','GEOMETRY','DIMENSION','QUANTITY','LAYOUT','TOOLS','SOURCES','LIBRARY']);
+  if (!allowed.has(tool)) return;
+  mainWindow.webContents.send('menu-command', tool === 'LIBRARY' ? 'OPEN_SMART_LIBRARY' : `OPEN_2D_PRO_${tool}`);
+}
+
 // Prevent two app instances from competing for the same local API port.
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
+    dispatchHnlToolArg(argv);
   });
+}
+
+function findAutoCadExe() {
+  if (process.platform !== 'win32') return null;
+  const roots = [...new Set([
+    process.env.ProgramW6432,
+    process.env.ProgramFiles,
+    'C:\\Program Files',
+  ].filter(Boolean))];
+  for (const year of ['2026','2025','2024','2023']) {
+    for (const root of roots) {
+      const candidate = path.join(root, 'Autodesk', `AutoCAD ${year}`, 'acad.exe');
+      if (fs.existsSync(candidate)) return { exePath: candidate, year };
+    }
+  }
+  return null;
+}
+
+async function launchAutoCadWithDwg(filePath) {
+  try {
+    const target = String(filePath || '');
+    if (!target || !fs.existsSync(target) || path.extname(target).toLowerCase() !== '.dwg') {
+      return { success: false, reason: 'DWG_NOT_FOUND', filePath: target };
+    }
+    const found = findAutoCadExe();
+    if (found) {
+      const child = spawn(found.exePath, [target], { detached: true, stdio: 'ignore', windowsHide: false });
+      child.unref();
+      return { success: true, method: 'acad.exe', ...found, filePath: target };
+    }
+    // Fallback to the Windows DWG file association. This still uses the installed
+    // Autodesk application if the machine has a valid association.
+    const errorText = await shell.openPath(target);
+    if (!errorText) return { success: true, method: 'shell-association', filePath: target };
+    return { success: false, reason: 'AUTOCAD_NOT_FOUND', error: errorText, filePath: target };
+  } catch (error) {
+    return { success: false, reason: 'AUTOCAD_LAUNCH_FAILED', error: String(error?.message || error), filePath };
+  }
 }
 
 function getAutoCadBundlePaths() {
@@ -155,6 +209,7 @@ function createWindow() {
       forceQuit = true;
     }
   });
+  mainWindow.webContents.once('did-finish-load', () => dispatchHnlToolArg(process.argv));
   mainWindow.on('closed', () => { mainWindow = null; });
 
   buildAppMenu();
@@ -373,8 +428,132 @@ function buildAppMenu() {
   Menu.setApplicationMenu(menu);
 }
 
+
+function getLibraryRoot() {
+  const dir = path.join(app.getPath('userData'), 'library');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function getLibraryIndexPath() {
+  return path.join(getLibraryRoot(), 'library-index-v2.json');
+}
+
+function readLibraryIndex() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(getLibraryIndexPath(), 'utf8'));
+    return Array.isArray(parsed?.items) ? parsed.items : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLibraryIndex(items) {
+  const payload = { schemaVersion: 2, updatedAt: new Date().toISOString(), items };
+  fs.writeFileSync(getLibraryIndexPath(), JSON.stringify(payload, null, 2), 'utf8');
+  return payload;
+}
+
+function safeLibrarySegment(value, fallback = 'CUSTOM') {
+  const cleaned = String(value || fallback)
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/\.+$/g, '')
+    .slice(0, 80);
+  return cleaned || fallback;
+}
+
+async function sha256File(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+function collectDwgFiles(folder, depth = 0, out = []) {
+  if (depth > 8 || out.length >= 2000) return out;
+  let entries = [];
+  try { entries = fs.readdirSync(folder, { withFileTypes: true }); } catch { return out; }
+  for (const entry of entries) {
+    if (out.length >= 2000) break;
+    const full = path.join(folder, entry.name);
+    if (entry.isDirectory()) collectDwgFiles(full, depth + 1, out);
+    else if (entry.isFile() && path.extname(entry.name).toLowerCase() === '.dwg') out.push(full);
+  }
+  return out;
+}
+
+function defaultLibraryLayer(category) {
+  const map = {
+    ANNOTATION: 'HNL-ANNO-DETAIL',
+    CEILING: 'HNL-CLG-BOARD',
+    WALL: 'HNL-WALL-BOARD',
+    STEEL: 'HNL-STEEL-RHS',
+    MEP_REFERENCE: 'HNL-NOPLOT-HELPER',
+    DETAIL: 'HNL-ANNO-DETAIL',
+    CUSTOM: 'HNL-DATA-FIELD',
+  };
+  return map[String(category || 'CUSTOM').toUpperCase()] || map.CUSTOM;
+}
+
+async function importLibraryFile(sourcePath, options, index) {
+  const stat = fs.statSync(sourcePath);
+  const sha256 = await sha256File(sourcePath);
+  const scope = ['HNL_STANDARD','PROJECT','MY_LIBRARY'].includes(String(options.scope))
+    ? String(options.scope) : 'MY_LIBRARY';
+  const category = String(options.category || 'CUSTOM').toUpperCase();
+  const storageMode = String(options.storageMode || 'COPY').toUpperCase() === 'LINK' ? 'LINK' : 'COPY';
+
+  const duplicate = index.find((x) => x.sha256 === sha256 && x.scope === scope && x.category === category);
+  if (duplicate) return { item: duplicate, duplicate: true };
+
+  let storedPath = sourcePath;
+  if (storageMode === 'COPY') {
+    const targetDir = path.join(getLibraryRoot(), safeLibrarySegment(scope), safeLibrarySegment(category));
+    fs.mkdirSync(targetDir, { recursive: true });
+    const ext = path.extname(sourcePath) || '.dwg';
+    const base = safeLibrarySegment(path.basename(sourcePath, ext), 'BLOCK');
+    let target = path.join(targetDir, `${base}${ext}`);
+    if (fs.existsSync(target)) {
+      const existingHash = await sha256File(target).catch(() => '');
+      if (existingHash !== sha256) target = path.join(targetDir, `${base}_${sha256.slice(0,8)}${ext}`);
+    }
+    if (!fs.existsSync(target)) fs.copyFileSync(sourcePath, target);
+    storedPath = target;
+  }
+
+  const idSeed = `${scope}|${category}|${sha256}|${storedPath}`;
+  const item = {
+    id: `lib_${crypto.createHash('sha1').update(idSeed).digest('hex').slice(0,18)}`,
+    name: path.basename(sourcePath, path.extname(sourcePath)),
+    fileName: path.basename(sourcePath),
+    category,
+    scope,
+    storageMode,
+    sourceDwg: storedPath,
+    originalPath: sourcePath,
+    layer: defaultLibraryLayer(category),
+    description: `DWG library • ${storageMode === 'COPY' ? 'Managed copy' : 'Linked file'}`,
+    tags: [category.toLowerCase(), 'dwg'],
+    sizeBytes: stat.size,
+    sha256,
+    modifiedAt: stat.mtime.toISOString(),
+    createdAt: new Date().toISOString(),
+    favorite: false,
+    recentAt: null,
+    dynamicState: 'UNKNOWN',
+    definitions: [],
+    selectedDefinition: null,
+  };
+  return { item, duplicate: false };
+}
+
 // IPC Handlers for Native OS Dialogs
 ipcMain.handle('open-file-dialog', async (_event, mode) => openProjectFileDialog(mode));
+ipcMain.handle('launch-autocad-with-dwg', async (_event, filePath) => launchAutoCadWithDwg(filePath));
 ipcMain.handle('select-approved-document', async () => {
   if (!mainWindow) return { success: false };
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -388,6 +567,110 @@ ipcMain.handle('select-approved-document', async () => {
   if (result.canceled || !result.filePaths.length) return { success: false };
   const filePath = result.filePaths[0];
   return { success: true, filePath, fileName: path.basename(filePath) };
+});
+
+
+ipcMain.handle('get-library-index', async () => ({
+  success: true,
+  root: getLibraryRoot(),
+  items: readLibraryIndex()
+}));
+
+ipcMain.handle('import-library-items', async (_event, options = {}) => {
+  if (!mainWindow) return { success: false, items: [] };
+  const sourceType = String(options.sourceType || 'FILES').toUpperCase();
+  let filePaths = [];
+
+  if (sourceType === 'FOLDER') {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Nạp cả thư mục DWG vào HNL Library',
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths.length) return { success: false, canceled: true, items: [] };
+    filePaths = collectDwgFiles(result.filePaths[0]);
+  } else {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Nạp Block DWG vào HNL Library',
+      filters: [{ name: 'AutoCAD DWG', extensions: ['dwg'] }],
+      properties: ['openFile', 'multiSelections'],
+    });
+    if (result.canceled || !result.filePaths.length) return { success: false, canceled: true, items: [] };
+    filePaths = result.filePaths.filter((p) => path.extname(p).toLowerCase() === '.dwg');
+  }
+
+  const index = readLibraryIndex();
+  const imported = [];
+  let duplicates = 0;
+
+  for (const filePath of filePaths.slice(0, 2000)) {
+    try {
+      const r = await importLibraryFile(filePath, options, index);
+      if (r.duplicate) duplicates++;
+      else index.unshift(r.item);
+      imported.push(r.item);
+    } catch (error) {
+      imported.push({ error: String(error?.message || error), originalPath: filePath });
+    }
+  }
+
+  writeLibraryIndex(index);
+  return {
+    success: true,
+    root: getLibraryRoot(),
+    imported: imported.filter((x) => !x.error),
+    errors: imported.filter((x) => x.error),
+    duplicates,
+    totalSelected: filePaths.length,
+  };
+});
+
+ipcMain.handle('update-library-item', async (_event, { id, patch } = {}) => {
+  const index = readLibraryIndex();
+  const i = index.findIndex((x) => x.id === id);
+  if (i < 0) return { success: false, error: 'Library item not found.' };
+
+  const allowed = new Set([
+    'name','category','scope','layer','description','tags','favorite','recentAt',
+    'dynamicState','definitions','selectedDefinition','lineweightMm','linetype','colorHex'
+  ]);
+  const safePatch = {};
+  for (const [k,v] of Object.entries(patch || {})) if (allowed.has(k)) safePatch[k] = v;
+
+  index[i] = { ...index[i], ...safePatch, updatedAt: new Date().toISOString() };
+  writeLibraryIndex(index);
+  return { success: true, item: index[i] };
+});
+
+ipcMain.handle('remove-library-item', async (_event, { id, deleteManagedFile = false } = {}) => {
+  const index = readLibraryIndex();
+  const item = index.find((x) => x.id === id);
+  if (!item) return { success: false, error: 'Library item not found.' };
+  const next = index.filter((x) => x.id !== id);
+
+  if (deleteManagedFile && item.storageMode === 'COPY' && item.sourceDwg) {
+    const root = path.resolve(getLibraryRoot()) + path.sep;
+    const target = path.resolve(String(item.sourceDwg));
+    const stillUsed = next.some((x) => x.sourceDwg && path.resolve(String(x.sourceDwg)) === target);
+    if (!stillUsed && target.startsWith(root) && fs.existsSync(target)) {
+      try { fs.unlinkSync(target); } catch {}
+    }
+  }
+
+  writeLibraryIndex(next);
+  return { success: true };
+});
+
+ipcMain.handle('reveal-library-item', async (_event, filePath) => {
+  const target = String(filePath || '');
+  if (!target || !fs.existsSync(target)) return { success: false, error: 'File không tồn tại.' };
+  shell.showItemInFolder(target);
+  return { success: true };
+});
+
+ipcMain.handle('open-library-root', async () => {
+  const root = getLibraryRoot();
+  const error = await shell.openPath(root);
+  return { success: !error, root, error: error || null };
 });
 
 ipcMain.handle('select-library-dwg', async () => {

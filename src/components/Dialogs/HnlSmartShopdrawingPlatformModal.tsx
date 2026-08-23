@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, Boxes, Building2, Calculator, CheckCircle2, FileCheck2,
-  FileSearch, FolderOpen, Layers3, Library, PackagePlus, Ruler, ShieldCheck,
-  Sparkles, Star, Table2, Wand2, X
+  AlertTriangle, Boxes, Building2, Calculator, CheckCircle2, Database,
+  ExternalLink, FileCheck2, FilePlus2, FolderInput, FolderOpen, Layers3,
+  Library, RefreshCw, Ruler, Search, ShieldCheck, SlidersHorizontal,
+  Sparkles, Star, Trash2, X
 } from "lucide-react";
 import {
   ApprovedMaterialRecord,
@@ -10,6 +11,9 @@ import {
   HNL_BUILTIN_LIBRARY,
   HNL_DETAIL_TEMPLATES,
   HNL_PROJECT_TEMPLATES,
+  HNL_LIBRARY_CATEGORIES,
+  HNL_LIBRARY_SCOPES,
+  getDefaultLibraryLayer,
   SmartCeilingConfig,
   SmartWallConfig,
   applyWallDivision,
@@ -22,11 +26,13 @@ import {
   createDefaultWallConfig,
 } from "../../lib/smartShopdrawingPlatform";
 import { MANUFACTURER_CEILING_KNOWLEDGE } from "../../lib/manufacturerCeilingKnowledge";
+import { getHnlLayerStandard, HNL_CAD_LAYER_STANDARDS } from "../../lib/hnlCadStandards";
 
 type Tab = "OVERVIEW"|"LIBRARY"|"CEILING"|"WALL"|"APPROVED"|"BOQ"|"AUDIT"|"DETAIL"|"TEMPLATE"|"DWG";
 
 interface Props {
   isOpen:boolean;
+  initialTab?:"OVERVIEW"|"LIBRARY";
   onClose:()=>void;
   autoCadConnected:boolean;
   onBridgeAction?:(action:string,payload:any)=>Promise<any>;
@@ -39,15 +45,28 @@ const loadJson=<T,>(key:string,fallback:T):T=>{
 };
 
 export const HnlSmartShopdrawingPlatformModal:React.FC<Props>=({
-  isOpen,onClose,autoCadConnected,onBridgeAction,onOpenDwg,onOpenSectionGenerator
+  isOpen,initialTab="OVERVIEW",onClose,autoCadConnected,onBridgeAction,onOpenDwg,onOpenSectionGenerator
 })=>{
-  const [tab,setTab]=useState<Tab>("OVERVIEW");
+  const [tab,setTab]=useState<Tab>(initialTab);
   const [ceiling,setCeiling]=useState<SmartCeilingConfig>(()=>createDefaultCeilingConfig());
   const [wall,setWall]=useState<SmartWallConfig>(()=>createDefaultWallConfig());
   const [approved,setApproved]=useState<ApprovedMaterialRecord[]>(()=>loadJson("hnl.approvedMaterials.v1",[]));
   const [customLibrary,setCustomLibrary]=useState<any[]>(()=>loadJson("hnl.smartLibrary.custom.v1",[]));
   const [favoriteIds,setFavoriteIds]=useState<string[]>(()=>loadJson("hnl.smartLibrary.favorites.v1",[]));
   const [recentIds,setRecentIds]=useState<string[]>(()=>loadJson("hnl.smartLibrary.recent.v1",[]));
+  const [managedLibrary,setManagedLibrary]=useState<any[]>([]);
+  const [libraryRoot,setLibraryRoot]=useState("");
+  const [librarySearch,setLibrarySearch]=useState("");
+  const [libraryScope,setLibraryScope]=useState("ALL");
+  const [libraryCategory,setLibraryCategory]=useState("ALL");
+  const [libraryOnlyFavorites,setLibraryOnlyFavorites]=useState(false);
+  const [importScope,setImportScope]=useState("MY_LIBRARY");
+  const [importCategory,setImportCategory]=useState("CUSTOM");
+  const [importStorageMode,setImportStorageMode]=useState<"COPY"|"LINK">("COPY");
+  const [selectedLibraryId,setSelectedLibraryId]=useState<string|null>(null);
+  const [insertScale,setInsertScale]=useState(1);
+  const [insertRotation,setInsertRotation]=useState(0);
+  const [lastDynamic,setLastDynamic]=useState<any|null>(null);
   const [templateId,setTemplateId]=useState("AIRPORT");
   const [message,setMessage]=useState("");
   const [areaM2,setAreaM2]=useState(100);
@@ -57,9 +76,108 @@ export const HnlSmartShopdrawingPlatformModal:React.FC<Props>=({
   useEffect(()=>{localStorage.setItem("hnl.smartLibrary.custom.v1",JSON.stringify(customLibrary))},[customLibrary]);
   useEffect(()=>{localStorage.setItem("hnl.smartLibrary.favorites.v1",JSON.stringify(favoriteIds))},[favoriteIds]);
   useEffect(()=>{localStorage.setItem("hnl.smartLibrary.recent.v1",JSON.stringify(recentIds))},[recentIds]);
+  useEffect(()=>{ if(isOpen) setTab(initialTab); },[isOpen,initialTab]);
+
+  const reloadLibrary=async()=>{
+    const native=(window as any).electronNative;
+    const r=await native?.getLibraryIndex?.();
+    if(r?.success){
+      setManagedLibrary(Array.isArray(r.items)?r.items:[]);
+      setLibraryRoot(String(r.root||""));
+    }
+  };
+  useEffect(()=>{ if(isOpen) void reloadLibrary(); },[isOpen]);
 
   const auditIssues=useMemo(()=>[...auditCeilingConfig(ceiling),...auditWallConfig(wall)],[ceiling,wall]);
   const boq=useMemo(()=>[...calculateCeilingBoq(areaM2,ceiling),...calculateWallBoq(wallLengthMm,wall)],[areaM2,wallLengthMm,ceiling,wall]);
+
+  const normalizedBuiltins = HNL_BUILTIN_LIBRARY.map((it:any)=>({
+    ...it, scope:"HNL_STANDARD", storageMode:"BUILTIN",
+    dynamicState:"STATIC",
+    favorite:favoriteIds.includes(it.id),
+  }));
+  const normalizedLegacy = customLibrary.map((it:any)=>({
+    ...it, scope:it.scope||"MY_LIBRARY", storageMode:it.storageMode||"LINK",
+    dynamicState:it.dynamicState||"UNKNOWN", favorite:favoriteIds.includes(it.id),
+  }));
+  const allLibraryItems:any[]=[...normalizedBuiltins,...managedLibrary,...normalizedLegacy];
+  const filteredLibraryItems=allLibraryItems.filter((it:any)=>{
+    if(libraryScope!=="ALL" && it.scope!==libraryScope)return false;
+    if(libraryCategory!=="ALL" && it.category!==libraryCategory)return false;
+    if(libraryOnlyFavorites && !(it.favorite||favoriteIds.includes(it.id)))return false;
+    const q=librarySearch.trim().toLowerCase();
+    if(!q)return true;
+    return [it.name,it.fileName,it.category,it.scope,it.layer,it.description,...(it.tags||[])]
+      .filter(Boolean).join(" ").toLowerCase().includes(q);
+  });
+  const selectedLibrary=allLibraryItems.find((x:any)=>x.id===selectedLibraryId)||null;
+
+  const importLibrary=async(sourceType:"FILES"|"FOLDER")=>{
+    const native=(window as any).electronNative;
+    const r=await native?.importLibraryItems?.({
+      sourceType,scope:importScope,category:importCategory,storageMode:importStorageMode
+    });
+    if(!r?.success){ if(!r?.canceled)setMessage(r?.error||"Không nạp được thư viện."); return; }
+    await reloadLibrary();
+    setMessage(`Library: nạp ${r.imported?.length||0} DWG • trùng ${r.duplicates||0}${r.errors?.length?` • lỗi ${r.errors.length}`:""}.`);
+  };
+
+  const updateManagedItem=async(id:string,patch:any)=>{
+    const native=(window as any).electronNative;
+    const r=await native?.updateLibraryItem?.({id,patch});
+    if(r?.success)await reloadLibrary();
+    return r;
+  };
+
+  const inspectLibraryItem=async(it:any)=>{
+    if(!it?.sourceDwg){setMessage("Block built-in không cần đọc file DWG.");return;}
+    if(!autoCadConnected){setMessage("Cần AutoCAD Connected để đọc block definition/Dynamic Block.");return;}
+    const r=await bridge("INSPECT_LIBRARY_DWG",{filePath:it.sourceDwg});
+    const data=r?.result||r;
+    if(!r?.ok && !Array.isArray(data?.definitions))return;
+    const defs=Array.isArray(data?.definitions)?data.definitions:[];
+    const dynamicCount=defs.filter((d:any)=>d.isDynamic).length;
+    const state=defs.length===0?"STATIC":dynamicCount===0?"STATIC":dynamicCount===defs.length?"DYNAMIC":"MIXED";
+    if(managedLibrary.some((x:any)=>x.id===it.id)){
+      await updateManagedItem(it.id,{
+        definitions:defs,dynamicState:state,
+        selectedDefinition:it.selectedDefinition||(defs.length===1?defs[0].name:null)
+      });
+    }
+    setMessage(`Đã đọc ${defs.length} definitions • Dynamic ${dynamicCount} • Model ${data?.modelEntityCount??0} entities.`);
+  };
+
+  const insertLibraryItem=async(it:any)=>{
+    if(!autoCadConnected){setMessage("Cần AutoCAD Connected để chèn block native.");return;}
+    await bridge("ENSURE_HNL_STANDARDS",{});
+    const def=it.selectedDefinition||(Array.isArray(it.definitions)&&it.definitions.length===1?it.definitions[0].name:null);
+    const action=it.sourceDwg&&def?"IMPORT_LIBRARY_DEFINITION":"INSERT_LIBRARY_BLOCK";
+    const payload=action==="IMPORT_LIBRARY_DEFINITION"
+      ? {filePath:it.sourceDwg,definitionName:def,layer:it.layer||getDefaultLibraryLayer(it.category),scale:insertScale,rotationDeg:insertRotation}
+      : {symbolKey:it.symbolKey||"CUSTOM_DWG",name:it.name,layer:it.layer||getDefaultLibraryLayer(it.category),sourceDwg:it.sourceDwg||null,scale:insertScale,rotationDeg:insertRotation};
+    const r=await bridge(action,payload);
+    if(!r?.ok)return;
+    const data=r.result||r;
+    setRecentIds(v=>[it.id,...v.filter(x=>x!==it.id)].slice(0,30));
+    if(managedLibrary.some((x:any)=>x.id===it.id)){
+      await updateManagedItem(it.id,{
+        recentAt:new Date().toISOString(),
+        dynamicState:data?.isDynamicBlock?"DYNAMIC":it.dynamicState
+      });
+    }
+    setLastDynamic(data?.isDynamicBlock?{
+      handle:data.handle,blockName:data.blockName,properties:data.dynamicProperties||[]
+    }:null);
+    setMessage(data?.isDynamicBlock
+      ? `Đã chèn Dynamic Block ${data.blockName} • ${data.dynamicProperties?.length||0} properties.`
+      : `Đã chèn block ${data.blockName||it.name}.`);
+  };
+
+  const toggleFavorite=async(it:any)=>{
+    const active=Boolean(it.favorite||favoriteIds.includes(it.id));
+    setFavoriteIds(v=>active?v.filter(x=>x!==it.id):[...v,it.id]);
+    if(managedLibrary.some((x:any)=>x.id===it.id))await updateManagedItem(it.id,{favorite:!active});
+  };
 
   if(!isOpen)return null;
 
@@ -170,24 +288,161 @@ export const HnlSmartShopdrawingPlatformModal:React.FC<Props>=({
         </div>}
 
         {tab==="LIBRARY"&&<div className="space-y-4">
-          <div className="flex items-center gap-3 text-[10px] text-neutral-400">
-            <span>Built-in: {HNL_BUILTIN_LIBRARY.length}</span><span>Custom: {customLibrary.length}</span><span className="text-amber-300">Favorites: {favoriteIds.length}</span><span>Recent: {recentIds.length}</span>
-          </div>
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2">
-            {[...HNL_BUILTIN_LIBRARY,...customLibrary].map((it:any)=><div key={it.id} className="p-3 bg-neutral-900 border border-neutral-800 rounded-lg">
-              <div className="flex justify-between gap-2"><div><b className="text-xs text-white">{it.name}</b><div className="text-[9px] text-neutral-500">{it.category} • {it.layer}</div></div><PackagePlus className="w-4 h-4 text-cyan-400"/></div>
-              <div className="text-[10px] text-neutral-400 mt-2">{it.description}</div>
-              <div className="mt-2 flex items-center gap-1.5">
-                <button onClick={()=>{setRecentIds(v=>[it.id,...v.filter(x=>x!==it.id)].slice(0,20));void bridge("INSERT_LIBRARY_BLOCK",{symbolKey:it.symbolKey||"CUSTOM_DWG",name:it.name,layer:it.layer,sourceDwg:it.sourceDwg||null})}} className="px-2 py-1.5 rounded bg-cyan-700/30 border border-cyan-700 text-cyan-200 text-[10px]">Chèn vào AutoCAD</button>
-                <button title="Favorite" onClick={()=>setFavoriteIds(v=>v.includes(it.id)?v.filter(x=>x!==it.id):[...v,it.id])} className={`p-1.5 rounded border ${favoriteIds.includes(it.id)?"border-amber-600 text-amber-300 bg-amber-950/30":"border-neutral-700 text-neutral-500"}`}><Star className="w-3.5 h-3.5" fill={favoriteIds.includes(it.id)?"currentColor":"none"}/></button>
-                {recentIds.includes(it.id)&&<span className="text-[9px] text-neutral-500">Recent</span>}
+          <div className="rounded-xl border border-cyan-800/60 bg-cyan-950/15 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-white flex items-center gap-2"><Library className="w-4 h-4 text-cyan-400"/>HNL Library Manager</div>
+                <div className="text-[10px] text-neutral-400 mt-1">DWG • Dynamic Block native • COPY/LINK • Layer/Color/Linetype/Lineweight • Favorite/Recent.</div>
+                {libraryRoot&&<div className="text-[9px] text-neutral-600 font-mono truncate mt-1">{libraryRoot}</div>}
               </div>
-            </div>)}
+              <div className="flex gap-1.5 shrink-0">
+                <button onClick={()=>void (window as any).electronNative?.openLibraryRoot?.()} className="p-2 rounded bg-neutral-800" title="Mở kho"><FolderOpen className="w-3.5 h-3.5"/></button>
+                <button onClick={()=>void reloadLibrary()} className="p-2 rounded bg-neutral-800" title="Refresh"><RefreshCw className="w-3.5 h-3.5"/></button>
+              </div>
+            </div>
           </div>
-          <button onClick={async()=>{
-            const native=(window as any).electronNative; const r=await native?.selectLibraryDwg?.();
-            if(r?.success&&r.filePath)setCustomLibrary(v=>[{id:`custom_${Date.now()}`,name:r.fileName||"Custom DWG Block",category:"CUSTOM",symbolKey:"CUSTOM_DWG",layer:"HNL-CUSTOM-BLOCK",description:"Block DWG do người dùng thêm.",sourceDwg:r.filePath,tags:["custom"]},...v])
-          }} className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-xs">+ Nạp block DWG riêng</button>
+
+          <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-3 space-y-2">
+            <div className="grid md:grid-cols-4 gap-2">
+              <label className="text-[9px] text-neutral-500">Kho
+                <select value={importScope} onChange={e=>setImportScope(e.target.value)} className="mt-1 w-full bg-neutral-950 border border-neutral-700 rounded p-2 text-[10px]">
+                  {HNL_LIBRARY_SCOPES.filter(x=>x.id!=="HNL_STANDARD").map(x=><option key={x.id} value={x.id}>{x.label}</option>)}
+                </select>
+              </label>
+              <label className="text-[9px] text-neutral-500">Nhóm
+                <select value={importCategory} onChange={e=>setImportCategory(e.target.value)} className="mt-1 w-full bg-neutral-950 border border-neutral-700 rounded p-2 text-[10px]">
+                  {HNL_LIBRARY_CATEGORIES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}
+                </select>
+              </label>
+              <label className="text-[9px] text-neutral-500">Lưu file
+                <select value={importStorageMode} onChange={e=>setImportStorageMode(e.target.value as "COPY"|"LINK")} className="mt-1 w-full bg-neutral-950 border border-neutral-700 rounded p-2 text-[10px]">
+                  <option value="COPY">COPY vào kho HNL</option><option value="LINK">LINK file gốc</option>
+                </select>
+              </label>
+              <div className="flex items-end gap-1.5">
+                <button onClick={()=>void importLibrary("FILES")} className="flex-1 px-2 py-2 rounded bg-cyan-700 text-[10px] flex items-center justify-center gap-1"><FilePlus2 className="w-3.5 h-3.5"/>Nạp DWG</button>
+                <button onClick={()=>void importLibrary("FOLDER")} className="flex-1 px-2 py-2 rounded bg-cyan-950 border border-cyan-700 text-[10px] flex items-center justify-center gap-1"><FolderInput className="w-3.5 h-3.5"/>Thư mục</button>
+              </div>
+            </div>
+            <div className="text-[9px] text-neutral-500">Mặc định COPY để thư viện không mất liên kết khi file gốc bị di chuyển. LINK dành cho project/network library.</div>
+          </div>
+
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_330px] gap-4">
+            <div className="space-y-3 min-w-0">
+              <div className="grid md:grid-cols-[1fr_145px_155px_auto] gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-neutral-600"/>
+                  <input value={librarySearch} onChange={e=>setLibrarySearch(e.target.value)} placeholder="Tìm block / tag / layer..."
+                    className="w-full bg-neutral-950 border border-neutral-700 rounded pl-8 pr-2 py-2 text-[10px]"/>
+                </div>
+                <select value={libraryScope} onChange={e=>setLibraryScope(e.target.value)} className="bg-neutral-950 border border-neutral-700 rounded p-2 text-[10px]">
+                  <option value="ALL">Tất cả kho</option>{HNL_LIBRARY_SCOPES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}
+                </select>
+                <select value={libraryCategory} onChange={e=>setLibraryCategory(e.target.value)} className="bg-neutral-950 border border-neutral-700 rounded p-2 text-[10px]">
+                  <option value="ALL">Tất cả nhóm</option>{HNL_LIBRARY_CATEGORIES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}
+                </select>
+                <button onClick={()=>setLibraryOnlyFavorites(v=>!v)} className={`px-2 py-2 rounded border text-[10px] flex items-center gap-1 ${libraryOnlyFavorites?"border-amber-600 bg-amber-950/30 text-amber-300":"border-neutral-700 text-neutral-500"}`}><Star className="w-3 h-3"/>Fav</button>
+              </div>
+
+              <div className="flex flex-wrap gap-3 text-[9px] text-neutral-500">
+                <span>Hiện <b className="text-neutral-200">{filteredLibraryItems.length}</b></span>
+                <span>Managed <b className="text-neutral-200">{managedLibrary.length}</b></span>
+                <span>Built-in <b className="text-neutral-200">{HNL_BUILTIN_LIBRARY.length}</b></span>
+                <span>Dynamic <b className="text-emerald-300">{allLibraryItems.filter((x:any)=>x.dynamicState==="DYNAMIC").length}</b></span>
+              </div>
+
+              <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2">
+                {filteredLibraryItems.map((it:any)=>{
+                  const std=getHnlLayerStandard(it.layer||getDefaultLibraryLayer(it.category));
+                  const selected=selectedLibraryId===it.id;
+                  return <button key={it.id} onClick={()=>setSelectedLibraryId(it.id)}
+                    className={`text-left p-3 rounded-lg border ${selected?"border-cyan-500 bg-cyan-950/20":"border-neutral-800 bg-neutral-900 hover:border-neutral-600"}`}>
+                    <div className="flex gap-2">
+                      <div className="w-11 h-11 rounded border border-neutral-700 bg-neutral-950 flex items-center justify-center shrink-0"
+                        style={{boxShadow:`inset 0 -3px 0 ${std?.color||"#4b5563"}`}}>
+                        {it.dynamicState==="DYNAMIC"?<SlidersHorizontal className="w-5 h-5 text-emerald-400"/>:<Database className="w-5 h-5 text-cyan-400"/>}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-1"><b className="text-[11px] text-white truncate">{it.name}</b><Star className={`w-3 h-3 shrink-0 ${it.favorite||favoriteIds.includes(it.id)?"text-amber-300 fill-amber-300":"text-neutral-700"}`}/></div>
+                        <div className="text-[9px] text-neutral-500 truncate">{it.scope||"MY_LIBRARY"} • {it.category}</div>
+                        <div className="text-[9px] font-mono truncate mt-1" style={{color:std?.color||"#a3a3a3"}}>{it.layer||"—"} • {std?.linetype||"ByLayer"} • {std?.lineweight?.toFixed(2)||"—"}mm</div>
+                        <div className={`text-[9px] mt-1 ${it.dynamicState==="DYNAMIC"?"text-emerald-300":it.dynamicState==="MIXED"?"text-amber-300":"text-neutral-600"}`}>{it.dynamicState||"UNKNOWN"}{it.definitions?.length?` • ${it.definitions.length} defs`:""}</div>
+                      </div>
+                    </div>
+                  </button>
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-neutral-800 bg-[#121417] p-3 h-fit">
+              {!selectedLibrary?<div className="py-12 text-center text-[10px] text-neutral-600">Chọn block để quản lý/chèn.</div>:<>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0"><div className="text-sm font-bold text-white truncate">{selectedLibrary.name}</div><div className="text-[9px] text-neutral-500">{selectedLibrary.scope} • {selectedLibrary.storageMode}</div></div>
+                  <button onClick={()=>void toggleFavorite(selectedLibrary)} className="p-1.5 rounded border border-neutral-700"><Star className={`w-4 h-4 ${selectedLibrary.favorite||favoriteIds.includes(selectedLibrary.id)?"text-amber-300 fill-amber-300":"text-neutral-500"}`}/></button>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  <label className="block text-[9px] text-neutral-500">Layer khi chèn
+                    <select value={selectedLibrary.layer||getDefaultLibraryLayer(selectedLibrary.category)}
+                      onChange={e=>managedLibrary.some((x:any)=>x.id===selectedLibrary.id)&&void updateManagedItem(selectedLibrary.id,{layer:e.target.value})}
+                      className="mt-1 w-full bg-neutral-950 border border-neutral-700 rounded p-2 text-[10px]">
+                      {HNL_CAD_LAYER_STANDARDS.map(x=><option key={x.name} value={x.name}>{x.name} • {x.linetype} • {x.lineweight.toFixed(2)}mm</option>)}
+                    </select>
+                  </label>
+
+                  {(()=>{
+                    const std=getHnlLayerStandard(selectedLibrary.layer||getDefaultLibraryLayer(selectedLibrary.category));
+                    return <div className="grid grid-cols-3 gap-1 text-[9px]">
+                      <div className="p-2 bg-neutral-900 rounded"><span className="text-neutral-600">Color</span><br/><b style={{color:std?.color||"#fff"}}>ACI {std?.aci??"—"}</b></div>
+                      <div className="p-2 bg-neutral-900 rounded"><span className="text-neutral-600">Linetype</span><br/><b>{std?.linetype||"—"}</b></div>
+                      <div className="p-2 bg-neutral-900 rounded"><span className="text-neutral-600">Weight</span><br/><b>{std?.lineweight?.toFixed(2)||"—"} mm</b></div>
+                    </div>
+                  })()}
+
+                  <div className="grid grid-cols-2 gap-2 text-[9px]">
+                    <label className="text-neutral-500">Scale<input type="number" step="0.1" min="0.001" value={insertScale} onChange={e=>setInsertScale(Math.max(.001,+e.target.value||1))} className="mt-1 w-full bg-neutral-950 border border-neutral-700 rounded p-2"/></label>
+                    <label className="text-neutral-500">Rotation °<input type="number" value={insertRotation} onChange={e=>setInsertRotation(+e.target.value||0)} className="mt-1 w-full bg-neutral-950 border border-neutral-700 rounded p-2"/></label>
+                  </div>
+
+                  {selectedLibrary.sourceDwg&&<>
+                    <div className="p-2 bg-neutral-900 rounded break-all text-[9px] text-neutral-600">{selectedLibrary.sourceDwg}</div>
+                    <div className="flex gap-1.5">
+                      <button onClick={()=>void inspectLibraryItem(selectedLibrary)} className="flex-1 px-2 py-1.5 rounded bg-neutral-800 text-[9px] flex items-center justify-center gap-1"><RefreshCw className="w-3 h-3"/>Đọc DWG / Dynamic</button>
+                      <button onClick={()=>void (window as any).electronNative?.revealLibraryItem?.(selectedLibrary.sourceDwg)} className="px-2 py-1.5 rounded bg-neutral-800" title="Hiện trong Explorer"><ExternalLink className="w-3 h-3"/></button>
+                    </div>
+                  </>}
+
+                  {Array.isArray(selectedLibrary.definitions)&&selectedLibrary.definitions.length>0&&<label className="block text-[9px] text-neutral-500">Block definition
+                    <select value={selectedLibrary.selectedDefinition||""}
+                      onChange={e=>managedLibrary.some((x:any)=>x.id===selectedLibrary.id)&&void updateManagedItem(selectedLibrary.id,{selectedDefinition:e.target.value||null})}
+                      className="mt-1 w-full bg-neutral-950 border border-neutral-700 rounded p-2 text-[10px]">
+                      <option value="">Whole drawing fallback</option>
+                      {selectedLibrary.definitions.map((d:any)=><option key={d.name} value={d.name}>{d.isDynamic?"◆ Dynamic":"□ Static"} • {d.name} • {d.entityCount} ent</option>)}
+                    </select>
+                  </label>}
+
+                  <button onClick={()=>void insertLibraryItem(selectedLibrary)} className="w-full px-3 py-2.5 rounded bg-cyan-600 text-white text-[10px] font-bold">Chèn vào AutoCAD</button>
+
+                  {selectedLibrary.storageMode==="COPY"&&managedLibrary.some((x:any)=>x.id===selectedLibrary.id)&&<button onClick={async()=>{
+                    if(!window.confirm("Xóa mục khỏi HNL Library và xóa managed copy nếu không còn nơi khác dùng?"))return;
+                    await (window as any).electronNative?.removeLibraryItem?.({id:selectedLibrary.id,deleteManagedFile:true});
+                    setSelectedLibraryId(null);await reloadLibrary();
+                  }} className="w-full px-2 py-1.5 rounded border border-red-900 text-red-400 text-[9px] flex items-center justify-center gap-1"><Trash2 className="w-3 h-3"/>Xóa khỏi Library</button>}
+                </div>
+              </>}
+            </div>
+          </div>
+
+          {lastDynamic&&<div className="rounded-xl border border-emerald-800/60 bg-emerald-950/15 p-3">
+            <div className="flex justify-between gap-3"><div><b className="text-xs text-emerald-300">Dynamic Block: {lastDynamic.blockName}</b><div className="text-[9px] text-neutral-500">Handle {lastDynamic.handle} • chỉnh property native.</div></div><button onClick={()=>setLastDynamic(null)}><X className="w-3 h-3"/></button></div>
+            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-2 mt-2">
+              {(lastDynamic.properties||[]).map((prop:any)=><label key={prop.name} className="text-[9px] text-neutral-500">{prop.name}
+                {Array.isArray(prop.allowedValues)&&prop.allowedValues.length>0?
+                  <select defaultValue={String(prop.value)} disabled={prop.readOnly} onChange={async e=>{await bridge("SET_DYNAMIC_BLOCK_PROPERTIES",{handle:lastDynamic.handle,properties:{[prop.name]:e.target.value}})}} className="mt-1 w-full bg-neutral-950 border border-neutral-700 rounded p-1.5 text-[10px]">{prop.allowedValues.map((v:any)=><option key={String(v)} value={String(v)}>{String(v)}</option>)}</select>
+                  :<input defaultValue={String(prop.value??"")} disabled={prop.readOnly} onBlur={async e=>{if(prop.readOnly)return;const raw=e.target.value,n=Number(raw);await bridge("SET_DYNAMIC_BLOCK_PROPERTIES",{handle:lastDynamic.handle,properties:{[prop.name]:Number.isFinite(n)&&raw.trim()!==""?n:raw}})}} className="mt-1 w-full bg-neutral-950 border border-neutral-700 rounded p-1.5 text-[10px]"/>}
+              </label>)}
+            </div>
+          </div>}
         </div>}
 
         {tab==="CEILING"&&<div className="grid lg:grid-cols-[1fr_360px] gap-4">

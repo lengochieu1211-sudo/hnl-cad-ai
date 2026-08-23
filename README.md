@@ -1,4 +1,4 @@
-# HNL CAD AI v2.6.3
+# HNL CAD AI v2.7.2
 
 HNL CAD AI là ứng dụng CAD/Shopdrawing dạng Windows Desktop (Electron) có hai chế độ kiến trúc:
 
@@ -24,7 +24,7 @@ npm install
 npm run lint
 npm run dist:win
 ```
-Output: `dist_electron/HNL_CAD_AI_Setup_2.6.3.exe`
+Output: `dist_electron/HNL_CAD_AI_Setup_2.7.2.exe`
 
 Có thể dùng `.github/workflows/build-windows.yml` trên GitHub Actions Windows runner.
 
@@ -85,10 +85,28 @@ AutoCAD .NET compilation/runtime still requires GitHub Actions Windows and insta
 
 
 
-## v2.6.3 — Version Sync Hardening
+## v2.7.2 — Version Sync Hardening
 
 - Canonical renderer/server version constants.
-- package.json / metadata / AutoCAD bundle / DLL AssemblyVersion / SketchUp Bridge synchronized to 2.6.3.
+- package.json / metadata / AutoCAD bundle / DLL AssemblyVersion / SketchUp Bridge synchronized to 2.7.2.
 - GitHub artifact names derive from package.json instead of hard-coded version strings.
 - `node scripts/check-version-sync.mjs` is a required GitHub build gate.
 - Historical release documents keep their original version labels intentionally.
+
+
+## v2.7.2 — Managed Dynamic Block Library
+- Multi-DWG / folder import.
+- COPY-to-HNL or LINK-source library.
+- Project / My Library scopes, search, Favorite, Recent.
+- HNL Layer / Color / Linetype / Lineweight management.
+- Native AutoCAD definition inspect/import for Dynamic Blocks.
+- Dynamic Properties editable after insertion.
+- AutoCAD Ribbon Library opens HNL Library Manager directly.
+
+
+## v2.7.2 — Compact Professional AutoCAD UI
+- HNL Ribbon chỉ còn chức năng riêng HNL, bỏ lệnh AutoCAD native trùng.
+- 6 primary Large buttons; utilities dùng Standard size.
+- Native Palette giảm từ 6 xuống 4 tab: AI / SHOP / DATA / TOOLS.
+- Bridge diagnostics ẩn trong Advanced.
+- Library Ribbon mở HNL Library Manager trực tiếp.
