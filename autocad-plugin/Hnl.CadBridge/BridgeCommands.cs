@@ -23,12 +23,15 @@ public sealed class BridgeCommands : IExtensionApplication
     internal const string PluginVersion = "2.8.1";
     private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
     private static readonly ConcurrentQueue<JObject> UiActions = new ConcurrentQueue<JObject>();
+    private static readonly ConcurrentDictionary<string, byte> CancelledActionIds = new ConcurrentDictionary<string, byte>();
     private static Timer? _pollTimer;
     private static string? _baseUrl;
     private static string? _token;
     private static bool _registered;
     private static int _pollBusy;
     private static readonly string BridgeInstanceId = Guid.NewGuid().ToString("N");
+    private static string _autoCadVersion = "";
+    private static string _activeDrawingName = "";
     private static string _lastBridgeError = "";
     private static DateTime _lastHeartbeatUtc = DateTime.MinValue;
     private static DateTime _lastPollUtc = DateTime.MinValue;
@@ -51,6 +54,10 @@ public sealed class BridgeCommands : IExtensionApplication
 
     public void Initialize()
     {
+        // Cache AutoCAD UI state on AutoCAD's own thread. The timer callback below is
+        // a ThreadPool thread and must not walk DocumentManager/Editor directly.
+        _autoCadVersion = Application.Version.ToString();
+        _activeDrawingName = Application.DocumentManager.MdiActiveDocument?.Name ?? "";
         TryLoadPairing();
         Application.Idle += OnIdle;
         _pollTimer = new Timer(_ => PollServer(), null, 500, 750);
@@ -512,6 +519,11 @@ public sealed class BridgeCommands : IExtensionApplication
                 !string.Equals(_baseUrl, nextBaseUrl, StringComparison.OrdinalIgnoreCase))
             {
                 _registered = false;
+                // Never let work fetched from an old HNL process execute after the
+                // pairing marker switches to another HNL instance/port/token.
+                while (UiActions.TryDequeue(out _)) { }
+                while (PendingLibraryInserts.TryDequeue(out _)) { }
+                CancelledActionIds.Clear();
             }
             _token = nextToken;
             _baseUrl = nextBaseUrl;
@@ -523,6 +535,7 @@ public sealed class BridgeCommands : IExtensionApplication
     {
         var req = new HttpRequestMessage(method, (_baseUrl ?? "") + path);
         if (!string.IsNullOrWhiteSpace(_token)) req.Headers.TryAddWithoutValidation("x-hnl-token", _token);
+        req.Headers.TryAddWithoutValidation("x-hnl-bridge-instance", BridgeInstanceId);
         if (body != null) req.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
         return req;
     }
@@ -535,49 +548,62 @@ public sealed class BridgeCommands : IExtensionApplication
             // Re-read pairing every cycle so HNL can start/restart after AutoCAD without NETLOAD/restart.
             TryLoadPairing();
             if (string.IsNullOrWhiteSpace(_baseUrl)) return;
-            var doc = Application.DocumentManager.MdiActiveDocument;
             if (!_registered)
             {
                 using var req = MakeRequest(HttpMethod.Post, "/api/autocad/register", new {
-                    version = Application.Version.ToString(),
-                    drawingName = doc?.Name ?? "",
+                    version = _autoCadVersion,
+                    drawingName = _activeDrawingName,
                     pluginVersion = PluginVersion,
                     bridgeInstanceId = BridgeInstanceId,
                     processId = System.Diagnostics.Process.GetCurrentProcess().Id,
                     capabilities = new[] { "GET_STATUS","GET_DRAFTING_STATUS","SET_DRAFTING_MODE","GET_PLOT_DEVICES","GET_LAYOUTS","SET_CURRENT_LAYOUT","RENAME_LAYOUT","EXECUTE_COMMAND","LOAD_LISP_FILE","AUTOLOAD_LISP_PACK","GET_LISP_AUTOLOAD_STATUS","CANCEL_COMMAND","OPEN_DWG","CONVERT_DWG_TO_DXF_PREVIEW","GET_MODELSPACE_SNAPSHOT","SELECT_HANDLES","CREATE_NATIVE_ENTITY","APPLY_ENTITY_TRANSFORM","ERASE_HANDLES","SET_ENTITY_LAYER","UPDATE_TEXT_CONTENTS","INSERT_EXISTING_BLOCK","GET_DYNAMIC_BLOCK_PROPERTIES","SET_DYNAMIC_BLOCK_PROPERTIES","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","ENSURE_HNL_STANDARDS","CREATE_CEILING_GRID","CREATE_CEILING_SMART","CREATE_WALL_SYSTEM","INSERT_LIBRARY_BLOCK","INSPECT_LIBRARY_DWG","IMPORT_LIBRARY_DEFINITION","GET_LIBRARY_INSERT_STATUS","GET_HNL_BOQ","AUDIT_HNL_SHOPDRAWING","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
                 });
-                var res = await Http.SendAsync(req);
+                using var res = await Http.SendAsync(req);
                 _registered = res.IsSuccessStatusCode;
                 if (!_registered)
                 {
-                    _lastBridgeError = $"REGISTER HTTP {(int)res.StatusCode}";
+                    var detail = await res.Content.ReadAsStringAsync();
+                    if (detail.Length > 240) detail = detail.Substring(0, 240);
+                    _lastBridgeError = $"REGISTER HTTP {(int)res.StatusCode}: {detail}";
                     return;
                 }
                 _lastBridgeError = "";
             }
             else
             {
-                using var hb = MakeRequest(HttpMethod.Post, "/api/autocad/heartbeat", new { drawingName = doc?.Name ?? "", bridgeInstanceId = BridgeInstanceId });
-                var hbRes = await Http.SendAsync(hb);
+                using var hb = MakeRequest(HttpMethod.Post, "/api/autocad/heartbeat", new { drawingName = _activeDrawingName, bridgeInstanceId = BridgeInstanceId });
+                using var hbRes = await Http.SendAsync(hb);
                 if (!hbRes.IsSuccessStatusCode)
                 {
                     _registered = false;
-                    _lastBridgeError = $"HEARTBEAT HTTP {(int)hbRes.StatusCode}";
+                    var detail = await hbRes.Content.ReadAsStringAsync();
+                    if (detail.Length > 240) detail = detail.Substring(0, 240);
+                    _lastBridgeError = $"HEARTBEAT HTTP {(int)hbRes.StatusCode}: {detail}";
                     return;
                 }
                 _lastHeartbeatUtc = DateTime.UtcNow;
             }
 
             using var poll = MakeRequest(HttpMethod.Get, "/api/autocad/poll");
-            var pollRes = await Http.SendAsync(poll);
+            using var pollRes = await Http.SendAsync(poll);
             _lastPollUtc = DateTime.UtcNow;
             if (!pollRes.IsSuccessStatusCode)
             {
-                _lastBridgeError = $"POLL HTTP {(int)pollRes.StatusCode}";
+                var detail = await pollRes.Content.ReadAsStringAsync();
+                if (detail.Length > 240) detail = detail.Substring(0, 240);
+                _lastBridgeError = $"POLL HTTP {(int)pollRes.StatusCode}: {detail}";
                 return;
             }
             var text = await pollRes.Content.ReadAsStringAsync();
             var root = JObject.Parse(text);
+            if (root["cancelledActionIds"] is JArray cancelledIds)
+            {
+                foreach (var token in cancelledIds)
+                {
+                    var cancelledId = (string?)token ?? "";
+                    if (!string.IsNullOrWhiteSpace(cancelledId)) CancelledActionIds[cancelledId] = 1;
+                }
+            }
             if (root["item"] is JObject item)
             {
                 var expiresAt = (long?)item["expiresAt"] ?? 0L;
@@ -604,14 +630,42 @@ public sealed class BridgeCommands : IExtensionApplication
 
     private static void OnIdle(object? sender, EventArgs e)
     {
+        // All AutoCAD API reads/writes stay on AutoCAD's thread.
+        _activeDrawingName = Application.DocumentManager.MdiActiveDocument?.Name ?? "";
         if (!HnlNativeRibbon.IsInstalled) HnlNativeRibbon.TryInstall();
 
-        // Load the bundled 44 Lisp sources once for each AutoCAD document.
-        // Idle is used so AutoCAD is not in the middle of another command.
-        TryAutoLoadBundledLispForActiveDocument();
+        var isBusy = IsAutoCadBusy();
 
+        // Default remains ON_DEMAND. This only runs after an explicit session-level
+        // opt-in to preload the bundle, and never while another AutoCAD command is active.
+        if (!isBusy) TryAutoLoadBundledLispForActiveDocument();
+
+        // Most bridge work must wait until AutoCAD is idle. CANCEL_COMMAND is the one
+        // deliberate exception: it exists specifically so HNL can send ESC while a
+        // native command is in progress.
+        if (isBusy)
+        {
+            if (!UiActions.TryPeek(out var pendingBusyAction) ||
+                !string.Equals((string?)pendingBusyAction["action"], "CANCEL_COMMAND", StringComparison.OrdinalIgnoreCase))
+                return;
+        }
         if (!UiActions.TryDequeue(out var item)) return;
         ExecuteQueuedAction(item);
+    }
+
+    private static bool IsAutoCadBusy()
+    {
+        try
+        {
+            var cmdNames = Convert.ToString(Application.GetSystemVariable("CMDNAMES")) ?? "";
+            return !string.IsNullOrWhiteSpace(cmdNames);
+        }
+        catch
+        {
+            // If AutoCAD cannot report command state, fail safe and leave the action
+            // queued for a later Idle tick rather than mutating a drawing blindly.
+            return true;
+        }
     }
 
     private static async void SendResult(string id, bool ok, object? result = null, string? error = null)
@@ -620,7 +674,7 @@ public sealed class BridgeCommands : IExtensionApplication
         {
             if (string.IsNullOrWhiteSpace(_baseUrl)) return;
             using var req = MakeRequest(HttpMethod.Post, "/api/autocad/result", new { id, ok, result, error });
-            await Http.SendAsync(req);
+            using var res = await Http.SendAsync(req);
         }
         catch { }
     }
@@ -630,11 +684,30 @@ public sealed class BridgeCommands : IExtensionApplication
         var id = (string?)item["id"] ?? "";
         var action = ((string?)item["action"] ?? "").ToUpperInvariant();
         var payload = item["payload"] as JObject ?? new JObject();
+        if (!string.IsNullOrWhiteSpace(id) && CancelledActionIds.TryRemove(id, out _)) return;
+        var ownerInstanceId = (string?)item["bridgeInstanceId"] ?? "";
+        if (!string.IsNullOrWhiteSpace(ownerInstanceId) &&
+            !string.Equals(ownerInstanceId, BridgeInstanceId, StringComparison.Ordinal))
+        {
+            SendResult(id, false, null, "AUTOCAD_BRIDGE_OWNER_MISMATCH_BEFORE_EXECUTION");
+            return;
+        }
         var expiresAt = (long?)item["expiresAt"] ?? 0L;
         if (expiresAt > 0L && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() >= expiresAt)
         {
             SendResult(id, false, null, "AUTOCAD_ACTION_EXPIRED_BEFORE_EXECUTION");
             return;
+        }
+        var targetDrawingName = (string?)item["targetDrawingName"] ?? "";
+        if (RequiresStableActiveDocument(action) && !string.IsNullOrWhiteSpace(targetDrawingName))
+        {
+            var currentDrawingName = Application.DocumentManager.MdiActiveDocument?.Name ?? "";
+            if (!string.Equals(currentDrawingName, targetDrawingName, StringComparison.OrdinalIgnoreCase))
+            {
+                SendResult(id, false, null,
+                    $"AUTOCAD_ACTIVE_DOCUMENT_CHANGED: expected={targetDrawingName}; actual={currentDrawingName}");
+                return;
+            }
         }
         try
         {
@@ -691,6 +764,31 @@ public sealed class BridgeCommands : IExtensionApplication
         catch (System.Exception ex)
         {
             SendResult(id, false, null, ex.ToString());
+        }
+    }
+
+    private static bool RequiresStableActiveDocument(string action)
+    {
+        switch (action)
+        {
+            case "GET_STATUS":
+            case "GET_DRAFTING_STATUS":
+            case "GET_PLOT_DEVICES":
+            case "GET_LAYOUTS":
+            case "GET_LISP_AUTOLOAD_STATUS":
+            case "GET_MODELSPACE_SNAPSHOT":
+            case "GET_SELECTION":
+            case "GET_LAYERS":
+            case "GET_LIBRARY_INSERT_STATUS":
+            case "GET_HNL_BOQ":
+            case "AUDIT_HNL_SHOPDRAWING":
+            case "GET_SHEETSET_INFO":
+            case "GET_DYNAMIC_BLOCK_PROPERTIES":
+            case "OPEN_DWG":
+            case "CANCEL_COMMAND":
+                return false;
+            default:
+                return true;
         }
     }
 
@@ -1720,7 +1818,7 @@ public sealed class BridgeCommands : IExtensionApplication
     }
 
 
-    private static ObjectId ObjectIdFromHandle(Database db, string handleText)
+    private static ObjectId ObjectIdFromHandle(Database db, string? handleText)
     {
         if (string.IsNullOrWhiteSpace(handleText)) return ObjectId.Null;
         if (!long.TryParse(handleText, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var value))

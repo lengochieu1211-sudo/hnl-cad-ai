@@ -78,11 +78,19 @@ jobs:
               $failed += "$($item.Year):restore"
               continue
             }
-            dotnet build $item.Project -c Release --no-restore -o $out
-            if ($LASTEXITCODE -ne 0) {
+            $buildOutput = & dotnet build $item.Project -c Release --no-restore -o $out 2>&1
+            $buildExit = $LASTEXITCODE
+            $buildOutput | ForEach-Object { Write-Host $_ }
+            if ($buildExit -ne 0) {
               $failed += "$($item.Year):build"
               continue
             }
+            $cs8604 = @($buildOutput | Where-Object { "$_" -match '\bCS8604\b' })
+            if ($cs8604.Count -gt 0) {
+              $failed += "$($item.Year):CS8604=$($cs8604.Count)"
+              continue
+            }
+            Write-Host "AutoCAD $($item.Year) nullable gate PASS: 0 CS8604"
             Get-ChildItem $out -File | Where-Object {
               $_.Name -match '^(Ac|AutoCAD).*\.dll$'
             } | Remove-Item -Force -ErrorAction SilentlyContinue
@@ -114,7 +122,7 @@ jobs:
           if ($bundledLisp.Count -ne 44) {
             throw "AutoCAD bundle must contain exactly 44 Lisp files, found $($bundledLisp.Count)"
           }
-          Write-Host "AutoCAD bundle Lisp AutoLoad pack PASS: $($bundledLisp.Count)/44"
+          Write-Host "AutoCAD bundle Lisp On-Demand pack PASS: $($bundledLisp.Count)/44"
 
           Write-Host "AutoCAD bundle contents:"
           Get-ChildItem "autocad-plugin/HNL.CadBridge.bundle" -Recurse -File | Select-Object FullName,Length

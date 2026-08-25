@@ -337,15 +337,32 @@ type AutoCadQueuedAction = {
   createdAt:number;
   timeoutMs:number;
   expiresAt:number;
+  bridgeInstanceId:string;
+  targetDrawingName:string;
 };
 let autoCadBridge: AutoCadBridgeRegistration = { connected:false, lastSeen:0, capabilities:[] };
 const autoCadActionQueue: AutoCadQueuedAction[] = [];
+const autoCadInFlightActions = new Map<string, AutoCadQueuedAction>();
 const autoCadActionResults = new Map<string, any>();
+const autoCadCancelledActions = new Map<string, number>();
 const AUTOCAD_RESULT_TTL_MS = 10 * 60_000;
 const AUTOCAD_QUEUE_MAX = 200;
 const AUTOCAD_TIMEOUT_MIN_MS = 1_000;
 const AUTOCAD_TIMEOUT_MAX_MS = 5 * 60_000;
-const bridgeAlive=()=>autoCadBridge.connected && Date.now()-autoCadBridge.lastSeen<5000;
+// Must be comfortably longer than one 5s plugin HTTP timeout. Otherwise a transient
+// localhost stall can make the renderer declare the bridge dead while the plugin is
+// still recovering from the same request.
+const AUTOCAD_BRIDGE_ALIVE_MS = 15_000;
+const bridgeAlive=()=>autoCadBridge.connected && Date.now()-autoCadBridge.lastSeen<AUTOCAD_BRIDGE_ALIVE_MS;
+const requestBridgeInstanceId=(req:any)=>String(req.get?.("x-hnl-bridge-instance")||req.body?.bridgeInstanceId||req.query?.bridgeInstanceId||"").trim();
+const currentBridgeInstanceId=()=>String(autoCadBridge.bridgeInstanceId||"").trim();
+const bridgeOwnerMatches=(req:any)=>Boolean(currentBridgeInstanceId()) && requestBridgeInstanceId(req)===currentBridgeInstanceId();
+function clearAutoCadActionState(){
+  autoCadActionQueue.splice(0,autoCadActionQueue.length);
+  autoCadInFlightActions.clear();
+  autoCadActionResults.clear();
+  autoCadCancelledActions.clear();
+}
 const clampAutoCadTimeout=(value:unknown,fallback=20_000)=>{
   const n=Number(value);
   if(!Number.isFinite(n))return fallback;
@@ -357,8 +374,14 @@ function pruneAutoCadBridgeBuffers() {
     if(autoCadActionQueue[i].expiresAt<=now)autoCadActionQueue.splice(i,1);
   }
   if (autoCadActionQueue.length > AUTOCAD_QUEUE_MAX) autoCadActionQueue.splice(0, autoCadActionQueue.length - AUTOCAD_QUEUE_MAX);
+  for (const [id, action] of autoCadInFlightActions.entries()) {
+    if (action.expiresAt <= now) autoCadInFlightActions.delete(id);
+  }
   for (const [id, value] of autoCadActionResults.entries()) {
     if (now - Number(value?.receivedAt || now) > AUTOCAD_RESULT_TTL_MS) autoCadActionResults.delete(id);
+  }
+  for (const [id, cancelledAt] of autoCadCancelledActions.entries()) {
+    if (now - cancelledAt > AUTOCAD_RESULT_TTL_MS) autoCadCancelledActions.delete(id);
   }
 }
 function enqueueAutoCadAction(actionValue:unknown,payload:any,timeoutValue:unknown){
@@ -367,12 +390,17 @@ function enqueueAutoCadAction(actionValue:unknown,payload:any,timeoutValue:unkno
   const action=String(actionValue||"").trim().toUpperCase();
   if(!action)return{ok:false as const,status:400,reason:"AUTOCAD_ACTION_EMPTY"};
   const caps=Array.isArray(autoCadBridge.capabilities)?autoCadBridge.capabilities:[];
-  if(caps.length && !caps.includes(action))return{ok:false as const,status:422,reason:"AUTOCAD_ACTION_NOT_SUPPORTED",action};
-  if(autoCadActionQueue.length>=AUTOCAD_QUEUE_MAX)return{ok:false as const,status:429,reason:"AUTOCAD_ACTION_QUEUE_FULL",queueDepth:autoCadActionQueue.length};
+  if(!caps.includes(action))return{ok:false as const,status:422,reason:"AUTOCAD_ACTION_NOT_SUPPORTED",action};
+  const outstandingCount=autoCadActionQueue.length+autoCadInFlightActions.size;
+  if(outstandingCount>=AUTOCAD_QUEUE_MAX)return{ok:false as const,status:429,reason:"AUTOCAD_ACTION_QUEUE_FULL",queueDepth:autoCadActionQueue.length,inFlightCount:autoCadInFlightActions.size,outstandingCount};
   const timeoutMs=clampAutoCadTimeout(timeoutValue);
   const createdAt=Date.now();
   const id=`act_${createdAt}_${Math.random().toString(36).slice(2,8)}`;
-  autoCadActionQueue.push({id,action,payload:payload??{},createdAt,timeoutMs,expiresAt:createdAt+timeoutMs});
+  autoCadActionQueue.push({
+    id,action,payload:payload??{},createdAt,timeoutMs,expiresAt:createdAt+timeoutMs,
+    bridgeInstanceId:currentBridgeInstanceId(),
+    targetDrawingName:String(autoCadBridge.drawingName||"")
+  });
   return{ok:true as const,id,action,timeoutMs,expiresAt:createdAt+timeoutMs};
 }
 async function waitForAutoCadResult(id:string,timeoutMs:number){
@@ -384,30 +412,52 @@ async function waitForAutoCadResult(id:string,timeoutMs:number){
     await new Promise(resolve=>setTimeout(resolve,75));
   }
   const i=autoCadActionQueue.findIndex(x=>x.id===id);
-  if(i>=0)autoCadActionQueue.splice(i,1);
+  if(i>=0){
+    autoCadActionQueue.splice(i,1);
+    autoCadCancelledActions.set(id,Date.now());
+  }else if(autoCadInFlightActions.has(id)){
+    // Golden smoke is read-only, but still tombstone a dispatched action so a
+    // response arriving after the caller timed out cannot become a ghost result.
+    autoCadCancelledActions.set(id,Date.now());
+  }
   return{ok:false,reason:"AUTOCAD_BRIDGE_GOLDEN_TIMEOUT",id,timeoutMs};
 }
 
 app.post("/api/autocad/register", (req,res)=>{
+  const bridgeInstanceId=String(req.body?.bridgeInstanceId||"").trim();
+  const pluginVersion=String(req.body?.pluginVersion||"").trim();
+  if(!bridgeInstanceId)return res.status(400).json({ok:false,reason:"AUTOCAD_BRIDGE_INSTANCE_REQUIRED"});
+  if(pluginVersion!==HNL_APP_VERSION){
+    return res.status(409).json({ok:false,reason:"AUTOCAD_BRIDGE_VERSION_MISMATCH",pluginVersion,serverVersion:HNL_APP_VERSION});
+  }
+  if(bridgeAlive() && currentBridgeInstanceId() && currentBridgeInstanceId()!==bridgeInstanceId){
+    return res.status(409).json({
+      ok:false,reason:"AUTOCAD_BRIDGE_ALREADY_OWNED",
+      ownerBridgeInstanceId:currentBridgeInstanceId(),ownerProcessId:autoCadBridge.processId||0,
+      ownerDrawingName:autoCadBridge.drawingName||""
+    });
+  }
+  if(currentBridgeInstanceId() && currentBridgeInstanceId()!==bridgeInstanceId)clearAutoCadActionState();
   autoCadBridge={
     connected:true,
     version:String(req.body?.version||""),
     drawingName:String(req.body?.drawingName||""),
-    pluginVersion:String(req.body?.pluginVersion||""),
-    bridgeInstanceId:String(req.body?.bridgeInstanceId||""),
+    pluginVersion,
+    bridgeInstanceId,
     processId:Number(req.body?.processId||0)||undefined,
     lastSeen:Date.now(),
-    capabilities:Array.isArray(req.body?.capabilities)?req.body.capabilities.map(String):[]
+    capabilities:Array.isArray(req.body?.capabilities)?Array.from(new Set(req.body.capabilities.map((x:any)=>String(x||"").trim().toUpperCase()).filter(Boolean))):[]
   };
   res.json({ok:true,serverVersion:HNL_APP_VERSION});
 });
 app.post("/api/autocad/heartbeat", (req,res)=>{
+  if(!bridgeOwnerMatches(req))return res.status(409).json({ok:false,reason:"AUTOCAD_BRIDGE_OWNER_MISMATCH",ownerBridgeInstanceId:currentBridgeInstanceId()});
   autoCadBridge={...autoCadBridge,connected:true,lastSeen:Date.now(),drawingName:String(req.body?.drawingName||autoCadBridge.drawingName||"")};
-  res.json({ok:true,serverTime:Date.now()});
+  res.json({ok:true,serverTime:Date.now(),bridgeInstanceId:currentBridgeInstanceId()});
 });
 app.get("/api/autocad/status", (_req,res)=>{
   pruneAutoCadBridgeBuffers();
-  res.json({...autoCadBridge,connected:bridgeAlive(),queueDepth:autoCadActionQueue.length,resultCount:autoCadActionResults.size});
+  res.json({...autoCadBridge,connected:bridgeAlive(),queueDepth:autoCadActionQueue.length,inFlightCount:autoCadInFlightActions.size,resultCount:autoCadActionResults.size});
 });
 app.post("/api/autocad/action", (req,res)=>{
   const queued=enqueueAutoCadAction(req.body?.action,req.body?.payload,req.body?.timeoutMs);
@@ -417,20 +467,34 @@ app.post("/api/autocad/action", (req,res)=>{
 app.post("/api/autocad/action/:id/cancel", (req,res)=>{
   const id=String(req.params.id||"");
   const i=autoCadActionQueue.findIndex(x=>x.id===id);
-  if(i>=0){autoCadActionQueue.splice(i,1);return res.json({ok:true,id,cancelled:true,state:"QUEUED"});}
-  if(autoCadActionResults.has(id)){autoCadActionResults.delete(id);return res.json({ok:true,id,cancelled:true,state:"RESULT"});}
-  res.json({ok:true,id,cancelled:false,state:"DISPATCHED_OR_UNKNOWN"});
+  if(i>=0){autoCadActionQueue.splice(i,1);autoCadCancelledActions.set(id,Date.now());return res.json({ok:true,id,cancelled:true,state:"QUEUED"});}
+  if(autoCadInFlightActions.has(id)){autoCadCancelledActions.set(id,Date.now());return res.json({ok:true,id,cancelled:true,state:"DISPATCHED"});}
+  if(autoCadActionResults.has(id)){autoCadActionResults.delete(id);autoCadCancelledActions.set(id,Date.now());return res.json({ok:true,id,cancelled:true,state:"RESULT"});}
+  res.json({ok:true,id,cancelled:false,state:"UNKNOWN"});
 });
-app.get("/api/autocad/poll", (_req,res)=>{
+app.get("/api/autocad/poll", (req,res)=>{
   pruneAutoCadBridgeBuffers();
+  if(!bridgeOwnerMatches(req))return res.status(409).json({ok:false,reason:"AUTOCAD_BRIDGE_OWNER_MISMATCH",ownerBridgeInstanceId:currentBridgeInstanceId()});
   const item=autoCadActionQueue.shift()||null;
-  res.json({item});
+  if(item)autoCadInFlightActions.set(item.id,item);
+  res.json({item,cancelledActionIds:Array.from(autoCadCancelledActions.keys())});
 });
 app.post("/api/autocad/result", (req,res)=>{
   pruneAutoCadBridgeBuffers();
+  if(!bridgeOwnerMatches(req))return res.status(409).json({ok:false,accepted:false,reason:"AUTOCAD_BRIDGE_OWNER_MISMATCH",ownerBridgeInstanceId:currentBridgeInstanceId()});
   const id=String(req.body?.id||"");
-  if(id)autoCadActionResults.set(id,{...req.body,receivedAt:Date.now()});
-  res.json({ok:true});
+  if(!id)return res.status(400).json({ok:false,accepted:false,reason:"AUTOCAD_RESULT_ID_REQUIRED"});
+  const action=autoCadInFlightActions.get(id);
+  if(!action)return res.json({ok:true,accepted:false,reason:autoCadCancelledActions.has(id)?"AUTOCAD_ACTION_CANCELLED":"AUTOCAD_ACTION_UNKNOWN_OR_EXPIRED"});
+  autoCadInFlightActions.delete(id);
+  const wasCancelled=autoCadCancelledActions.has(id);
+  const wasExpired=action.expiresAt<=Date.now();
+  if(wasCancelled || wasExpired){
+    autoCadCancelledActions.set(id,Date.now());
+    return res.json({ok:true,accepted:false,reason:wasCancelled?"AUTOCAD_ACTION_CANCELLED":"AUTOCAD_ACTION_EXPIRED"});
+  }
+  autoCadActionResults.set(id,{...req.body,receivedAt:Date.now()});
+  res.json({ok:true,accepted:true});
 });
 app.get("/api/autocad/result/:id", (req,res)=>{
   pruneAutoCadBridgeBuffers();
