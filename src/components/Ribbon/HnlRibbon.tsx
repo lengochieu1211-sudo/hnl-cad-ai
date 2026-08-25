@@ -143,7 +143,7 @@ export const HnlRibbon: React.FC<HnlRibbonProps> = ({
     { id: "HOME", label: "Home", tabs: [["VE_NHANH", "Draw"], ["CHINH_SUA", "Modify"]] },
     { id: "PRO2D", label: "2D Professional", tabs: [
       ["PRO_2D_CENTER", "Tool Center"],
-      ["TEXT_NOTE", "Text & Attribute"],
+      ["TEXT_NOTE", "Text"],
       ["FIELD", "Field"],
       ["BLOCK", "Block"],
       ["THONG_KE", "Quantity"],
@@ -256,7 +256,6 @@ export const HnlRibbon: React.FC<HnlRibbonProps> = ({
             {toolsOpen && (
               <div className="absolute right-0 top-8 z-[80] w-56 rounded-lg border border-neutral-700 bg-[#1b1d20] shadow-2xl p-1 text-xs">
                 {onToggleSpreadsheet && <button onClick={() => { onToggleSpreadsheet(); setToolsOpen(false); }} className="w-full text-left px-3 py-2 rounded hover:bg-neutral-700">Spreadsheet tham số</button>}
-                <button onClick={() => { onExecuteCommand("SMART_SHOPDRAWING"); setToolsOpen(false); }} className="w-full text-left px-3 py-2 rounded hover:bg-cyan-900/30 text-cyan-200">Smart Shopdrawing Platform</button>
                 <button onClick={() => { onExecuteCommand("SMART_SHOPDRAWING"); setToolsOpen(false); }} className="w-full text-left px-3 py-2 rounded hover:bg-cyan-900/30 text-cyan-200">Smart Shopdrawing Platform</button>
                 {onOpenShopCheck && <button onClick={() => { onOpenShopCheck(); setToolsOpen(false); }} className="w-full text-left px-3 py-2 rounded hover:bg-neutral-700">HNL Shop Check</button>}
                 {onOpenDrywallCeilingStudio && <button onClick={() => { onOpenDrywallCeilingStudio(); setToolsOpen(false); }} className="w-full text-left px-3 py-2 rounded hover:bg-neutral-700">Thạch cao & PCCC</button>}

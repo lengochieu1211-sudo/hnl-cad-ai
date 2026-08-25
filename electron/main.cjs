@@ -20,7 +20,7 @@ function dispatchHnlToolArg(argv = process.argv) {
   if (!mainWindow) return;
   const tool = getHnlToolArg(argv);
   if (!tool) return;
-  const allowed = new Set(['TEXT','FIELD','GEOMETRY','DIMENSION','QUANTITY','LAYOUT','TOOLS','SOURCES','LIBRARY']);
+  const allowed = new Set(['TEXT','BLOCK','FIELD','GEOMETRY','DIMENSION','LAYER','QUANTITY','SHOPDRAWING','LAYOUT','TOOLS','SOURCES','LIBRARY']);
   if (!allowed.has(tool)) return;
   mainWindow.webContents.send('menu-command', tool === 'LIBRARY' ? 'OPEN_SMART_LIBRARY' : `OPEN_2D_PRO_${tool}`);
 }
@@ -1050,7 +1050,7 @@ const getAiProviderSecretPath = () => path.join(app.getPath('userData'), 'ai-pro
 function readAiProviderConfig() {
   const defaults = {
     activeProvider: 'GEMINI',
-    autoFallbackOffline: true,
+    autoFallbackOffline: false,
     contextOnly: true,
     previewBeforeExecute: true,
     providers: Object.fromEntries(AI_PROVIDER_IDS.map(id => [id, {...AI_PROVIDER_DEFAULTS[id]}])),
@@ -1096,7 +1096,7 @@ function applyAiProviderStateToEnv(config = readAiProviderConfig(), secrets = re
     ? String(config.activeProvider).toUpperCase()
     : 'OFFLINE';
   process.env.HNL_AI_ACTIVE_PROVIDER = active;
-  process.env.HNL_AI_AUTO_FALLBACK_OFFLINE = config.autoFallbackOffline === false ? 'false' : 'true';
+  process.env.HNL_AI_AUTO_FALLBACK_OFFLINE = config.autoFallbackOffline === true ? 'true' : 'false';
 
   for (const id of AI_PROVIDER_IDS) {
     const p = { ...AI_PROVIDER_DEFAULTS[id], ...(config.providers?.[id] || {}) };

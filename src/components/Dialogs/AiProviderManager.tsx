@@ -25,7 +25,7 @@ const PROVIDERS: ProviderEntry[] = [
 
 const DEFAULT_CFG:any = {
   activeProvider:"GEMINI",
-  autoFallbackOffline:true,
+  autoFallbackOffline:false,
   contextOnly:true,
   previewBeforeExecute:true,
   providers:Object.fromEntries(PROVIDERS.map((p)=>[p.id,{model:p.defaultModel,baseUrl:p.defaultBaseUrl}])),
@@ -165,7 +165,7 @@ export const AiProviderManager:React.FC = () => {
       <div className="grid md:grid-cols-3 gap-2 text-[10px]">
         <label className="flex items-center gap-2 bg-neutral-900/60 border border-neutral-800 rounded p-2"><input type="checkbox" checked={cfg.contextOnly!==false} onChange={(e)=>setCfg((v:any)=>({...v,contextOnly:e.target.checked}))}/>Chỉ gửi CAD Context cần thiết</label>
         <label className="flex items-center gap-2 bg-neutral-900/60 border border-neutral-800 rounded p-2"><input type="checkbox" checked={cfg.previewBeforeExecute!==false} onChange={(e)=>setCfg((v:any)=>({...v,previewBeforeExecute:e.target.checked}))}/>Preview trước khi thực thi</label>
-        <label className="flex items-center gap-2 bg-neutral-900/60 border border-neutral-800 rounded p-2"><input type="checkbox" checked={cfg.autoFallbackOffline!==false} onChange={(e)=>setCfg((v:any)=>({...v,autoFallbackOffline:e.target.checked}))}/>Fallback Offline khi lỗi mạng</label>
+        <label className="flex items-center gap-2 bg-neutral-900/60 border border-neutral-800 rounded p-2"><input type="checkbox" checked={cfg.autoFallbackOffline===true} onChange={(e)=>setCfg((v:any)=>({...v,autoFallbackOffline:e.target.checked}))}/>Cho phép chuyển Offline khi AI lỗi</label>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

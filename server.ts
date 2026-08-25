@@ -87,6 +87,10 @@ function getSafeProviderStatus() {
   };
 }
 
+function isOfflineFallbackAllowed() {
+  return String(process.env.HNL_AI_AUTO_FALLBACK_OFFLINE || "false").toLowerCase() === "true";
+}
+
 function hasOnlineProvider(idValue?: unknown) {
   const cfg = getProviderConfig(idValue);
   return cfg.id !== "OFFLINE" && cfg.configured;
@@ -316,55 +320,155 @@ app.get("/api/health", (req, res) => {
 
 // AutoCAD native bridge registry/action queue.
 // Localhost only + HNL session token. AutoCAD plugin reads pairing info from %TEMP%/HNL_CAD_AI/bridge.json.
-type AutoCadBridgeRegistration = { connected:boolean; version?:string; drawingName?:string; pluginVersion?:string; lastSeen:number; capabilities?:string[] };
+type AutoCadBridgeRegistration = {
+  connected:boolean;
+  version?:string;
+  drawingName?:string;
+  pluginVersion?:string;
+  bridgeInstanceId?:string;
+  processId?:number;
+  lastSeen:number;
+  capabilities?:string[];
+};
+type AutoCadQueuedAction = {
+  id:string;
+  action:string;
+  payload:any;
+  createdAt:number;
+  timeoutMs:number;
+  expiresAt:number;
+};
 let autoCadBridge: AutoCadBridgeRegistration = { connected:false, lastSeen:0, capabilities:[] };
-const autoCadActionQueue: Array<{id:string;action:string;payload:any;createdAt:number}> = [];
+const autoCadActionQueue: AutoCadQueuedAction[] = [];
 const autoCadActionResults = new Map<string, any>();
-const AUTOCAD_ACTION_TTL_MS = 30_000;
-const AUTOCAD_RESULT_TTL_MS = 60_000;
+const AUTOCAD_RESULT_TTL_MS = 10 * 60_000;
 const AUTOCAD_QUEUE_MAX = 200;
+const AUTOCAD_TIMEOUT_MIN_MS = 1_000;
+const AUTOCAD_TIMEOUT_MAX_MS = 5 * 60_000;
+const bridgeAlive=()=>autoCadBridge.connected && Date.now()-autoCadBridge.lastSeen<5000;
+const clampAutoCadTimeout=(value:unknown,fallback=20_000)=>{
+  const n=Number(value);
+  if(!Number.isFinite(n))return fallback;
+  return Math.max(AUTOCAD_TIMEOUT_MIN_MS,Math.min(AUTOCAD_TIMEOUT_MAX_MS,Math.round(n)));
+};
 function pruneAutoCadBridgeBuffers() {
   const now = Date.now();
-  while (autoCadActionQueue.length && now - autoCadActionQueue[0].createdAt > AUTOCAD_ACTION_TTL_MS) autoCadActionQueue.shift();
+  for(let i=autoCadActionQueue.length-1;i>=0;i--){
+    if(autoCadActionQueue[i].expiresAt<=now)autoCadActionQueue.splice(i,1);
+  }
   if (autoCadActionQueue.length > AUTOCAD_QUEUE_MAX) autoCadActionQueue.splice(0, autoCadActionQueue.length - AUTOCAD_QUEUE_MAX);
   for (const [id, value] of autoCadActionResults.entries()) {
     if (now - Number(value?.receivedAt || now) > AUTOCAD_RESULT_TTL_MS) autoCadActionResults.delete(id);
   }
 }
+function enqueueAutoCadAction(actionValue:unknown,payload:any,timeoutValue:unknown){
+  pruneAutoCadBridgeBuffers();
+  if(!bridgeAlive())return{ok:false as const,status:409,reason:"AUTOCAD_BRIDGE_NOT_CONNECTED"};
+  const action=String(actionValue||"").trim().toUpperCase();
+  if(!action)return{ok:false as const,status:400,reason:"AUTOCAD_ACTION_EMPTY"};
+  const caps=Array.isArray(autoCadBridge.capabilities)?autoCadBridge.capabilities:[];
+  if(caps.length && !caps.includes(action))return{ok:false as const,status:422,reason:"AUTOCAD_ACTION_NOT_SUPPORTED",action};
+  if(autoCadActionQueue.length>=AUTOCAD_QUEUE_MAX)return{ok:false as const,status:429,reason:"AUTOCAD_ACTION_QUEUE_FULL",queueDepth:autoCadActionQueue.length};
+  const timeoutMs=clampAutoCadTimeout(timeoutValue);
+  const createdAt=Date.now();
+  const id=`act_${createdAt}_${Math.random().toString(36).slice(2,8)}`;
+  autoCadActionQueue.push({id,action,payload:payload??{},createdAt,timeoutMs,expiresAt:createdAt+timeoutMs});
+  return{ok:true as const,id,action,timeoutMs,expiresAt:createdAt+timeoutMs};
+}
+async function waitForAutoCadResult(id:string,timeoutMs:number){
+  const started=Date.now();
+  while(Date.now()-started<timeoutMs){
+    pruneAutoCadBridgeBuffers();
+    const value=autoCadActionResults.get(id);
+    if(value){autoCadActionResults.delete(id);return value;}
+    await new Promise(resolve=>setTimeout(resolve,75));
+  }
+  const i=autoCadActionQueue.findIndex(x=>x.id===id);
+  if(i>=0)autoCadActionQueue.splice(i,1);
+  return{ok:false,reason:"AUTOCAD_BRIDGE_GOLDEN_TIMEOUT",id,timeoutMs};
+}
 
 app.post("/api/autocad/register", (req,res)=>{
-  autoCadBridge={connected:true,version:String(req.body?.version||""),drawingName:String(req.body?.drawingName||""),pluginVersion:String(req.body?.pluginVersion||""),lastSeen:Date.now(),capabilities:Array.isArray(req.body?.capabilities)?req.body.capabilities.map(String):[]};
-  res.json({ok:true});
+  autoCadBridge={
+    connected:true,
+    version:String(req.body?.version||""),
+    drawingName:String(req.body?.drawingName||""),
+    pluginVersion:String(req.body?.pluginVersion||""),
+    bridgeInstanceId:String(req.body?.bridgeInstanceId||""),
+    processId:Number(req.body?.processId||0)||undefined,
+    lastSeen:Date.now(),
+    capabilities:Array.isArray(req.body?.capabilities)?req.body.capabilities.map(String):[]
+  };
+  res.json({ok:true,serverVersion:HNL_APP_VERSION});
 });
 app.post("/api/autocad/heartbeat", (req,res)=>{
   autoCadBridge={...autoCadBridge,connected:true,lastSeen:Date.now(),drawingName:String(req.body?.drawingName||autoCadBridge.drawingName||"")};
-  res.json({ok:true});
+  res.json({ok:true,serverTime:Date.now()});
 });
 app.get("/api/autocad/status", (_req,res)=>{
-  const alive=autoCadBridge.connected && Date.now()-autoCadBridge.lastSeen<5000;
-  res.json({...autoCadBridge,connected:alive});
+  pruneAutoCadBridgeBuffers();
+  res.json({...autoCadBridge,connected:bridgeAlive(),queueDepth:autoCadActionQueue.length,resultCount:autoCadActionResults.size});
 });
 app.post("/api/autocad/action", (req,res)=>{
-  pruneAutoCadBridgeBuffers();
-  const alive=autoCadBridge.connected && Date.now()-autoCadBridge.lastSeen<5000;
-  if(!alive)return res.status(409).json({ok:false,reason:"AUTOCAD_BRIDGE_NOT_CONNECTED"});
-  const id=`act_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-  autoCadActionQueue.push({id,action:String(req.body?.action||""),payload:req.body?.payload??{},createdAt:Date.now()});
-  res.json({ok:true,id});
+  const queued=enqueueAutoCadAction(req.body?.action,req.body?.payload,req.body?.timeoutMs);
+  if(!queued.ok)return res.status(queued.status).json(queued);
+  res.json(queued);
+});
+app.post("/api/autocad/action/:id/cancel", (req,res)=>{
+  const id=String(req.params.id||"");
+  const i=autoCadActionQueue.findIndex(x=>x.id===id);
+  if(i>=0){autoCadActionQueue.splice(i,1);return res.json({ok:true,id,cancelled:true,state:"QUEUED"});}
+  if(autoCadActionResults.has(id)){autoCadActionResults.delete(id);return res.json({ok:true,id,cancelled:true,state:"RESULT"});}
+  res.json({ok:true,id,cancelled:false,state:"DISPATCHED_OR_UNKNOWN"});
 });
 app.get("/api/autocad/poll", (_req,res)=>{
   pruneAutoCadBridgeBuffers();
-  const item=autoCadActionQueue.shift()||null;res.json({item});
+  const item=autoCadActionQueue.shift()||null;
+  res.json({item});
 });
 app.post("/api/autocad/result", (req,res)=>{
   pruneAutoCadBridgeBuffers();
-  const id=String(req.body?.id||"");if(id)autoCadActionResults.set(id,{...req.body,receivedAt:Date.now()});res.json({ok:true});
+  const id=String(req.body?.id||"");
+  if(id)autoCadActionResults.set(id,{...req.body,receivedAt:Date.now()});
+  res.json({ok:true});
 });
 app.get("/api/autocad/result/:id", (req,res)=>{
   pruneAutoCadBridgeBuffers();
-  const x=autoCadActionResults.get(req.params.id);if(!x)return res.status(404).json({ok:false,pending:true});
+  const x=autoCadActionResults.get(req.params.id);
+  if(!x)return res.status(404).json({ok:false,pending:true});
   autoCadActionResults.delete(req.params.id);
   res.json(x);
+});
+
+// Read-only Golden Smoke: proves a real round trip Server -> AutoCAD -> Server.
+// It deliberately avoids any drawing mutation.
+app.post("/api/autocad/golden-smoke", async (_req,res)=>{
+  pruneAutoCadBridgeBuffers();
+  if(!bridgeAlive())return res.status(409).json({ok:false,reason:"AUTOCAD_BRIDGE_NOT_CONNECTED"});
+  const required=["GET_STATUS","GET_DRAFTING_STATUS","GET_LAYOUTS","GET_LAYERS"];
+  const missing=required.filter(x=>!(autoCadBridge.capabilities||[]).includes(x));
+  if(missing.length)return res.status(422).json({ok:false,reason:"AUTOCAD_REQUIRED_CAPABILITY_MISSING",missing});
+  const evidence:any[]=[];
+  for(const action of required){
+    const queued=enqueueAutoCadAction(action,{},8_000);
+    if(!queued.ok)return res.status(queued.status).json({...queued,evidence});
+    const t0=Date.now();
+    const result=await waitForAutoCadResult(queued.id,8_500);
+    evidence.push({action,ok:Boolean(result?.ok),latencyMs:Date.now()-t0,result:result?.result??null,error:result?.error??result?.reason??null});
+    if(!result?.ok)return res.status(502).json({ok:false,reason:"AUTOCAD_GOLDEN_ACTION_FAILED",failedAction:action,evidence});
+  }
+  res.json({
+    ok:true,
+    gate:"BRIDGE_GOLDEN_READ_ONLY",
+    serverVersion:HNL_APP_VERSION,
+    pluginVersion:autoCadBridge.pluginVersion||"",
+    autoCadVersion:autoCadBridge.version||"",
+    drawingName:autoCadBridge.drawingName||"",
+    bridgeInstanceId:autoCadBridge.bridgeInstanceId||"",
+    processId:autoCadBridge.processId||0,
+    checkedAt:new Date().toISOString(),
+    evidence
+  });
 });
 
 // API: Unified AI Provider Manager / CAD Command Planner
@@ -452,8 +556,7 @@ ${JSON.stringify(cadContext || {}, null, 2)}`,
         isOfflineFallback: false,
       });
     } catch (providerError:any) {
-      const autoFallback = String(process.env.HNL_AI_AUTO_FALLBACK_OFFLINE || "true").toLowerCase() !== "false";
-      if (!autoFallback) throw providerError;
+      if (!isOfflineFallbackAllowed()) throw providerError;
       return res.json({
         plan: generateOfflinePlan(prompt, cadContext),
         provider: "OFFLINE",
@@ -480,12 +583,12 @@ app.post("/api/gemini/lisp", async (req, res) => {
     }
 
     const selectedProvider = normalizeProviderId(req.body?.provider);
-    if (selectedProvider === "OFFLINE" || !hasOnlineProvider(selectedProvider)) {
-      return res.json({
-        lisp: generateOfflineLisp(prompt, commandName),
-        provider: "OFFLINE",
-        isOfflineFallback: true,
-      });
+    if (selectedProvider === "OFFLINE") {
+      return res.json({ lisp: generateOfflineLisp(prompt, commandName), provider: "OFFLINE", isOfflineFallback: false });
+    }
+    if (!hasOnlineProvider(selectedProvider)) {
+      if (!isOfflineFallbackAllowed()) return res.status(400).json({ error: `${selectedProvider} chưa được cấu hình. HNL không tự chuyển provider.` });
+      return res.json({ lisp: generateOfflineLisp(prompt, commandName), provider: "OFFLINE", isOfflineFallback: true, fallbackReason: "PROVIDER_NOT_CONFIGURED" });
     }
 
     const systemInstruction = `Bạn là Chuyên gia AutoLISP & Visual LISP hàng đầu cho AutoCAD 2023-2026 thuộc HNL CAD AI TOOL.
@@ -513,15 +616,13 @@ Trả về JSON:
       const parsed = JSON.parse(answer.text || "{}");
       res.json({ ...parsed, provider: answer.provider, model: answer.model, isOfflineFallback: false });
     } catch {
-      res.json({ lisp: generateOfflineLisp(prompt, commandName), isOfflineFallback: true });
+      if (!isOfflineFallbackAllowed()) return res.status(502).json({ error: "AI trả về Lisp không đúng JSON; HNL không tự chuyển Offline." });
+      res.json({ lisp: generateOfflineLisp(prompt, commandName), provider:"OFFLINE", isOfflineFallback: true, fallbackReason:"INVALID_AI_JSON" });
     }
   } catch (err: any) {
-    console.error("Gemini Lisp error:", err);
-    res.json({
-      lisp: generateOfflineLisp(req.body.prompt || "", req.body.commandName || "AP_CMD"),
-      isOfflineFallback: true,
-      error: err.message,
-    });
+    console.error("AI Lisp error:", err);
+    if (!isOfflineFallbackAllowed()) return res.status(502).json({ error: err.message || String(err) });
+    res.json({ lisp: generateOfflineLisp(req.body.prompt || "", req.body.commandName || "AP_CMD"), provider:"OFFLINE", isOfflineFallback: true, error: err.message });
   }
 });
 
@@ -1059,8 +1160,11 @@ app.post("/api/gemini/sketchup-map", async (req, res) => {
       return { tag, layer: `SU-${tag.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 40) || "UNTAGGED"}`, color: "#BFBFBF", lineweight: 0.13, reason: "safe fallback" };
     });
     const selectedProvider = normalizeProviderId(req.body?.provider);
-    if (selectedProvider === "OFFLINE" || !hasOnlineProvider(selectedProvider))
-      return res.json({ mappings: fallback, provider: "OFFLINE", isOfflineFallback: true });
+    if (selectedProvider === "OFFLINE") return res.json({ mappings: fallback, provider: "OFFLINE", isOfflineFallback: false });
+    if (!hasOnlineProvider(selectedProvider)) {
+      if (!isOfflineFallbackAllowed()) return res.status(400).json({ error: `${selectedProvider} chưa được cấu hình. HNL không tự chuyển provider.` });
+      return res.json({ mappings: fallback, provider: "OFFLINE", isOfflineFallback: true, fallbackReason:"PROVIDER_NOT_CONFIGURED" });
+    }
 
     const answer = await callAiText({
       provider: selectedProvider,
@@ -1077,7 +1181,8 @@ Trả JSON array: [{"tag":"...","layer":"...","color":"#RRGGBB","lineweight":0.1
     } catch {}
     res.json({ mappings, provider: answer.provider, model: answer.model, isOfflineFallback: false });
   } catch (err:any) {
-    res.status(200).json({ mappings: [], isOfflineFallback: true, error: err?.message || String(err) });
+    if (!isOfflineFallbackAllowed()) return res.status(502).json({ error: err?.message || String(err) });
+    res.status(200).json({ mappings: [], provider:"OFFLINE", isOfflineFallback: true, error: err?.message || String(err) });
   }
 });
 

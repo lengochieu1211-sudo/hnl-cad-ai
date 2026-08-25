@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { AlertTriangle, Bug, CheckCircle2, Clipboard, Download, Trash2, X } from "lucide-react";
+import { Activity, AlertTriangle, Bug, CheckCircle2, Clipboard, Download, Trash2, X } from "lucide-react";
 import { DiagnosticEvent, diagnosticsToText } from "../../lib/diagnostics";
+import { requestHnlInput } from "../../lib/uiPrompt";
+import { runAutoCadBridgeGoldenSmoke } from "../../lib/autoCadBridge";
 
 interface Props {
   isOpen: boolean;
@@ -11,6 +13,8 @@ interface Props {
 
 export const DiagnosticsModal: React.FC<Props> = ({ isOpen, events, onClose, onClear }) => {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [bridgeGoldenBusy,setBridgeGoldenBusy]=useState(false);
+  const [bridgeGolden,setBridgeGolden]=useState<any>(null);
   const counts = useMemo(() => ({
     critical: events.filter(e => e.severity === "CRITICAL").length,
     error: events.filter(e => e.severity === "ERROR").length,
@@ -21,11 +25,16 @@ export const DiagnosticsModal: React.FC<Props> = ({ isOpen, events, onClose, onC
   const copy = async () => {
     const text = diagnosticsToText(events);
     try { await navigator.clipboard.writeText(text); alert("Đã copy báo cáo chẩn đoán. Có thể dán trực tiếp để gửi kiểm tra."); }
-    catch { window.prompt("Copy báo cáo chẩn đoán:", text); }
+    catch { void requestHnlInput({title:"Copy báo cáo chẩn đoán",label:"Clipboard không khả dụng. Chọn nội dung bên dưới và Ctrl+C.",defaultValue:text,multiline:true,readOnly:true,okText:"Đóng"}); }
   };
   const download = () => {
     const blob = new Blob([diagnosticsToText(events)], { type: "text/plain;charset=utf-8" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `HNL_Diagnostic_${new Date().toISOString().replace(/[:.]/g,"-")}.txt`; a.click(); URL.revokeObjectURL(a.href);
+  };
+  const runBridgeGolden=async()=>{
+    setBridgeGoldenBusy(true);
+    try{setBridgeGolden(await runAutoCadBridgeGoldenSmoke());}
+    finally{setBridgeGoldenBusy(false);}
   };
 
   return <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
@@ -39,11 +48,17 @@ export const DiagnosticsModal: React.FC<Props> = ({ isOpen, events, onClose, onC
         <span className="px-2 py-1 rounded bg-rose-950/40 border border-rose-800 text-rose-300">Error: {counts.error}</span>
         <span className="px-2 py-1 rounded bg-amber-950/40 border border-amber-800 text-amber-300">Warning: {counts.warning}</span>
         <span className="ml-auto text-neutral-500">Tổng {events.length} sự kiện</span>
+        <button disabled={bridgeGoldenBusy} onClick={()=>void runBridgeGolden()} className="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold flex items-center gap-1"><Activity className="w-3.5 h-3.5"/> {bridgeGoldenBusy?"Đang test Bridge...":"Golden Test Bridge"}</button>
         <button onClick={copy} className="px-3 py-1.5 rounded bg-cyan-600 hover:bg-cyan-500 text-black font-semibold flex items-center gap-1"><Clipboard className="w-3.5 h-3.5"/> Copy báo cáo</button>
         <button onClick={download} className="px-3 py-1.5 rounded bg-neutral-700 hover:bg-neutral-600 flex items-center gap-1"><Download className="w-3.5 h-3.5"/> Xuất TXT</button>
         <button onClick={onClear} className="px-3 py-1.5 rounded bg-neutral-800 hover:bg-red-950/50 text-neutral-300 flex items-center gap-1"><Trash2 className="w-3.5 h-3.5"/> Xóa log</button>
       </div>
       <div className="overflow-auto p-4 space-y-2">
+        {bridgeGolden&&<div className={`rounded-lg border p-3 ${bridgeGolden.ok?"border-emerald-700 bg-emerald-950/20":"border-red-800 bg-red-950/20"}`}>
+          <div className={`font-bold text-sm ${bridgeGolden.ok?"text-emerald-300":"text-red-300"}`}>{bridgeGolden.ok?"BRIDGE GOLDEN PASS":"BRIDGE GOLDEN FAIL"}</div>
+          <div className="text-[11px] text-neutral-400 mt-1">Plugin {bridgeGolden.pluginVersion||"?"} • AutoCAD {bridgeGolden.autoCadVersion||"?"} • {bridgeGolden.drawingName||"(no drawing)"}</div>
+          <pre className="mt-2 max-h-48 overflow-auto rounded bg-black/40 p-2 text-[10px] text-neutral-400">{JSON.stringify(bridgeGolden,null,2)}</pre>
+        </div>}
         {events.length === 0 ? <div className="py-16 text-center text-neutral-500"><CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-emerald-500"/>Chưa ghi nhận lỗi trong phiên làm việc.</div> : events.map(e => <div key={e.id} className="rounded-lg border border-neutral-800 bg-[#1d1f24] overflow-hidden">
           <button className="w-full px-4 py-3 text-left flex items-start gap-3 hover:bg-neutral-800/60" onClick={() => setExpanded(expanded === e.id ? null : e.id)}>
             <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${e.severity === "CRITICAL" || e.severity === "ERROR" ? "text-red-400" : e.severity === "WARNING" ? "text-amber-400" : "text-sky-400"}`}/>

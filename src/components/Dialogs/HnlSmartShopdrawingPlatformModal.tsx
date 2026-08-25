@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { HNL_DISPLAY_VERSION } from "../../lib/version";
 import {
   AlertTriangle, Boxes, Building2, Calculator, CheckCircle2, Database,
   ExternalLink, FileCheck2, FilePlus2, FolderInput, FolderOpen, Layers3,
@@ -306,7 +307,7 @@ export const HnlSmartShopdrawingPlatformModal:React.FC<Props>=({
     <div className="w-full max-w-7xl max-h-[94vh] bg-[#17191d] border border-neutral-700 rounded-xl shadow-2xl overflow-hidden flex flex-col">
       <div className="h-14 px-4 border-b border-neutral-800 bg-[#111317] flex items-center justify-between shrink-0">
         <div>
-          <div className="text-sm font-bold text-white">HNL Smart Shopdrawing Platform <span className="text-cyan-400">v2.6</span></div>
+          <div className="text-sm font-bold text-white">HNL Smart Shopdrawing Platform <span className="text-cyan-400">{HNL_DISPLAY_VERSION}</span></div>
           <div className="text-[10px] text-neutral-500">Library • Ceiling • Wall • Approved Material • BOQ • Audit • Detail • Template • DWG</div>
         </div>
         <div className="flex items-center gap-2">

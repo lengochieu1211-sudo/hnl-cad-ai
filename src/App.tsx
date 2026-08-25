@@ -71,6 +71,7 @@ import { saveRecoveryGeneration } from "./lib/recoveryGenerations";
 import { resolveCadAlias } from "./lib/cadCommandAliases";
 import { translateSelected, rotateSelected, scaleSelected, mirrorSelected } from "./lib/cadTransformEngine";
 import { cloneEntityForPaste, parseEntityClipboard, serializeEntityClipboard } from "./lib/entityClipboard";
+import { requestHnlInput } from "./lib/uiPrompt";
 
 import {
   CadEntity,
@@ -535,7 +536,7 @@ export default function App() {
     void syncNativeLayouts();
     const id = window.setInterval(syncNativeLayouts, 8000);
     return () => { cancelled = true; window.clearInterval(id); };
-  }, [autoCadBridgeStatus.connected]);
+  }, [isNativeDwgWorkspace]);
 
   const handleActivateLayout = useCallback(async (layout: CadLayout | null) => {
     if (isNativeDwgWorkspace) {
@@ -1317,7 +1318,7 @@ export default function App() {
   }, [layouts]);
 
   const handleRenameLayout = useCallback(async (layout: CadLayout) => {
-    const entered = window.prompt("Đổi tên Layout:", layout.name);
+    const entered = await requestHnlInput({ title: "Đổi tên Layout", label: "Tên Layout mới", defaultValue: layout.name });
     if (entered == null) return;
     const checked = validateLayoutName(entered, layout.id);
     if (!checked.ok || !checked.name) { showToast(checked.error || "Tên Layout không hợp lệ."); return; }
@@ -1680,18 +1681,21 @@ export default function App() {
 
       case "DRAW_POLYLINE":
         setCurrentTool("POLYLINE");
-        showToast("Polyline Standalone hiện tạo đoạn 2 điểm. Multi-segment/Arc sẽ được mở rộng ở CAD Engine tiếp theo.");
+        showToast("Polyline Standalone hỗ trợ multi-segment liên tục; Enter/Space kết thúc, C đóng kín, ESC hủy. Polyline Arc vẫn cần AutoCAD native.");
         break;
 
       case "DRAW_OFFSET": {
         const line = entities.find((e: any) => selectedEntityIds.includes(e.id) && e.type === "LINE") as any;
         if (!line) { showToast("Offset Standalone hiện hỗ trợ LINE: hãy chọn 1 Line trước."); break; }
-        const raw = window.prompt("Khoảng Offset (mm):", "100"); const d = Number(raw);
-        if (!Number.isFinite(d) || d === 0) { showToast("Khoảng Offset không hợp lệ."); break; }
-        const dx = line.end.x-line.start.x, dy = line.end.y-line.start.y, len = Math.hypot(dx,dy) || 1;
-        const ox = -dy/len*d, oy = dx/len*d;
-        const copy = { ...line, id:`line_${Date.now()}`, handle:Math.random().toString(16).substring(2,6).toUpperCase(), start:{x:line.start.x+ox,y:line.start.y+oy}, end:{x:line.end.x+ox,y:line.end.y+oy} };
-        updateEntitiesWithHistory([...entities, copy]); showToast(`Đã Offset Line ${d} mm.`); break;
+        void (async()=>{
+          const raw = await requestHnlInput({title:"OFFSET",label:"Khoảng Offset (mm)",defaultValue:"100"});
+          if(raw==null)return; const d=Number(raw);
+          if(!Number.isFinite(d)||d===0){showToast("Khoảng Offset không hợp lệ.");return;}
+          const dx=line.end.x-line.start.x,dy=line.end.y-line.start.y,len=Math.hypot(dx,dy)||1;
+          const ox=-dy/len*d,oy=dx/len*d;
+          const copy={...line,id:`line_${Date.now()}`,handle:Math.random().toString(16).substring(2,6).toUpperCase(),start:{x:line.start.x+ox,y:line.start.y+oy},end:{x:line.end.x+ox,y:line.end.y+oy}};
+          updateEntitiesWithHistory([...entities,copy]);showToast(`Đã Offset Line ${d} mm.`);
+        })(); break;
       }
 
       case "EDIT_JOIN": {
@@ -1714,24 +1718,24 @@ export default function App() {
       }
       case "EDIT_MOVE": {
         if(!selectedEntityIds.length){showToast("MOVE: Hãy chọn đối tượng trước.");break;}
-        const dx=Number(window.prompt("MOVE — ΔX (mm):","0"));const dy=Number(window.prompt("MOVE — ΔY (mm):","0"));
-        if(!Number.isFinite(dx)||!Number.isFinite(dy)){showToast("MOVE: Giá trị không hợp lệ.");break;}
-        updateEntitiesWithHistory(translateSelected(entities,selectedEntityIds,dx,dy));showToast(`MOVE: ΔX=${dx}, ΔY=${dy} mm.`);break;
+        void (async()=>{
+          const x=await requestHnlInput({title:"MOVE",label:"ΔX (mm)",defaultValue:"0"});if(x==null)return;
+          const y=await requestHnlInput({title:"MOVE",label:"ΔY (mm)",defaultValue:"0"});if(y==null)return;
+          const dx=Number(x),dy=Number(y);if(!Number.isFinite(dx)||!Number.isFinite(dy)){showToast("MOVE: Giá trị không hợp lệ.");return;}
+          updateEntitiesWithHistory(translateSelected(entities,selectedEntityIds,dx,dy));showToast(`MOVE: ΔX=${dx}, ΔY=${dy} mm.`);
+        })();break;
       }
       case "EDIT_ROTATE": {
         if(!selectedEntityIds.length){showToast("ROTATE: Hãy chọn đối tượng trước.");break;}
-        const a=Number(window.prompt("ROTATE — Góc xoay (độ):","90"));if(!Number.isFinite(a)){showToast("ROTATE: Góc không hợp lệ.");break;}
-        updateEntitiesWithHistory(rotateSelected(entities,selectedEntityIds,a));showToast(`ROTATE: ${a}° quanh tâm selection.`);break;
+        void (async()=>{const raw=await requestHnlInput({title:"ROTATE",label:"Góc xoay (độ)",defaultValue:"90"});if(raw==null)return;const a=Number(raw);if(!Number.isFinite(a)){showToast("ROTATE: Góc không hợp lệ.");return;}updateEntitiesWithHistory(rotateSelected(entities,selectedEntityIds,a));showToast(`ROTATE: ${a}° quanh tâm selection.`);})();break;
       }
       case "EDIT_SCALE": {
         if(!selectedEntityIds.length){showToast("SCALE: Hãy chọn đối tượng trước.");break;}
-        const f=Number(window.prompt("SCALE — Hệ số:","1"));if(!Number.isFinite(f)||f<=0){showToast("SCALE: Hệ số phải > 0.");break;}
-        updateEntitiesWithHistory(scaleSelected(entities,selectedEntityIds,f));showToast(`SCALE: x${f} quanh tâm selection.`);break;
+        void (async()=>{const raw=await requestHnlInput({title:"SCALE",label:"Hệ số",defaultValue:"1"});if(raw==null)return;const f=Number(raw);if(!Number.isFinite(f)||f<=0){showToast("SCALE: Hệ số phải > 0.");return;}updateEntitiesWithHistory(scaleSelected(entities,selectedEntityIds,f));showToast(`SCALE: x${f} quanh tâm selection.`);})();break;
       }
       case "EDIT_MIRROR": {
         if(!selectedEntityIds.length){showToast("MIRROR: Hãy chọn đối tượng trước.");break;}
-        const axis=String(window.prompt("MIRROR — Trục qua tâm selection (X/Y):","Y")||"Y").toUpperCase()==="X"?"X":"Y";
-        updateEntitiesWithHistory(mirrorSelected(entities,selectedEntityIds,axis));showToast(`MIRROR: qua trục ${axis}.`);break;
+        void (async()=>{const raw=await requestHnlInput({title:"MIRROR",label:"Trục qua tâm selection (X/Y)",defaultValue:"Y"});if(raw==null)return;const axis=String(raw||"Y").toUpperCase()==="X"?"X":"Y";updateEntitiesWithHistory(mirrorSelected(entities,selectedEntityIds,axis));showToast(`MIRROR: qua trục ${axis}.`);})();break;
       }
       case "DELETE_SELECTION": {
         if(!selectedEntityIds.length){showToast("ERASE: Chưa có đối tượng được chọn.");break;}
@@ -1761,9 +1765,7 @@ export default function App() {
         if(n) updateEntitiesWithHistory(updated); showToast(n?`Đã dọn khoảng trắng ${n} Text/MText.`:"Không có Text/MText phù hợp."); break;
       }
       case "TEXT_FIND_REPLACE": {
-        const find=window.prompt("Tìm chuỗi:",""); if(!find) break; const repl=window.prompt("Thay bằng:","") ?? ""; let n=0;
-        const updated=entities.map((e:any)=>{if((e.type==="TEXT"||e.type==="MTEXT")&&String(e.text||"").includes(find)){n++;return{...e,text:String(e.text).split(find).join(repl)}} return e;});
-        if(n) updateEntitiesWithHistory(updated); showToast(n?`Đã thay ${n} đối tượng Text/MText.`:"Không tìm thấy nội dung cần thay."); break;
+        void (async()=>{const find=await requestHnlInput({title:"Find / Replace",label:"Tìm chuỗi",defaultValue:""});if(!find)return;const repl=await requestHnlInput({title:"Find / Replace",label:"Thay bằng",defaultValue:""});if(repl==null)return;let n=0;const updated=entities.map((e:any)=>{if((e.type==="TEXT"||e.type==="MTEXT")&&String(e.text||"").includes(find)){n++;return{...e,text:String(e.text).split(find).join(repl)}}return e;});if(n)updateEntitiesWithHistory(updated);showToast(n?`Đã thay ${n} đối tượng Text/MText.`:"Không tìm thấy nội dung cần thay.");})();break;
       }
 
       case "CALC_PERIMETER": {
@@ -1886,9 +1888,7 @@ export default function App() {
         void executeAutoCadAction("ERASE_HANDLES",{handles}).then((r:any)=>{showToast(r?.ok?`Direct DWG: đã xóa ${r?.result?.erased||handles.length} đối tượng.`:`Erase lỗi: ${r?.error||r?.reason}`);void refreshDirectDwgSnapshot(true)});return;
       }
       if(cmdKey==="EDIT_MOVE"){
-        const dx=Number(window.prompt("Direct DWG MOVE — ΔX (mm):","0"));const dy=Number(window.prompt("Direct DWG MOVE — ΔY (mm):","0"));
-        if(!Number.isFinite(dx)||!Number.isFinite(dy))return;
-        void executeAutoCadAction("APPLY_ENTITY_TRANSFORM",{handles,operation:"MOVE",dx,dy}).then(()=>void refreshDirectDwgSnapshot(true));return;
+        void (async()=>{const x=await requestHnlInput({title:"Direct DWG MOVE",label:"ΔX (mm)",defaultValue:"0"});if(x==null)return;const y=await requestHnlInput({title:"Direct DWG MOVE",label:"ΔY (mm)",defaultValue:"0"});if(y==null)return;const dx=Number(x),dy=Number(y);if(!Number.isFinite(dx)||!Number.isFinite(dy))return;await executeAutoCadAction("APPLY_ENTITY_TRANSFORM",{handles,operation:"MOVE",dx,dy});await refreshDirectDwgSnapshot(true);})();return;
       }
       const picked=entities.filter((e:any)=>selectedEntityIds.includes(e.id));
       const pts:any[]=[];
@@ -1898,12 +1898,10 @@ export default function App() {
       }
       const basePoint=pts.length?{x:(Math.min(...pts.map(p=>Number(p.x||0)))+Math.max(...pts.map(p=>Number(p.x||0))))/2,y:(Math.min(...pts.map(p=>Number(p.y||0)))+Math.max(...pts.map(p=>Number(p.y||0))))/2}:{x:0,y:0};
       if(cmdKey==="EDIT_ROTATE"){
-        const angleDeg=Number(window.prompt(`Direct DWG ROTATE — góc (độ), quanh tâm chọn ${basePoint.x.toFixed(1)},${basePoint.y.toFixed(1)}:`,"90"));if(!Number.isFinite(angleDeg))return;
-        void executeAutoCadAction("APPLY_ENTITY_TRANSFORM",{handles,operation:"ROTATE",angleDeg,basePoint}).then(()=>void refreshDirectDwgSnapshot(true));return;
+        void (async()=>{const raw=await requestHnlInput({title:"Direct DWG ROTATE",label:`Góc (độ) quanh tâm ${basePoint.x.toFixed(1)}, ${basePoint.y.toFixed(1)}`,defaultValue:"90"});if(raw==null)return;const angleDeg=Number(raw);if(!Number.isFinite(angleDeg))return;await executeAutoCadAction("APPLY_ENTITY_TRANSFORM",{handles,operation:"ROTATE",angleDeg,basePoint});await refreshDirectDwgSnapshot(true);})();return;
       }
       if(cmdKey==="EDIT_SCALE"){
-        const factor=Number(window.prompt(`Direct DWG SCALE — hệ số, quanh tâm chọn ${basePoint.x.toFixed(1)},${basePoint.y.toFixed(1)}:`,"1"));if(!Number.isFinite(factor)||factor<=0)return;
-        void executeAutoCadAction("APPLY_ENTITY_TRANSFORM",{handles,operation:"SCALE",factor,basePoint}).then(()=>void refreshDirectDwgSnapshot(true));return;
+        void (async()=>{const raw=await requestHnlInput({title:"Direct DWG SCALE",label:`Hệ số quanh tâm ${basePoint.x.toFixed(1)}, ${basePoint.y.toFixed(1)}`,defaultValue:"1"});if(raw==null)return;const factor=Number(raw);if(!Number.isFinite(factor)||factor<=0)return;await executeAutoCadAction("APPLY_ENTITY_TRANSFORM",{handles,operation:"SCALE",factor,basePoint});await refreshDirectDwgSnapshot(true);})();return;
       }
     }
 

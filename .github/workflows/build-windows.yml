@@ -48,7 +48,7 @@ jobs:
         run: |
           $ribbon = Get-Content "autocad-plugin/Hnl.CadBridge/NativeRibbon.cs" -Raw
           $bridge = Get-Content "autocad-plugin/Hnl.CadBridge/BridgeCommands.cs" -Raw
-          foreach ($token in @("AI Copilot","Field Doctor","Quick Dim","Data / BOQ","Layout+","HNLLIBRARY")) {
+          foreach ($token in @("AI Copilot","Block / Attr","Field","Dim+","Layer","Data / BOQ","Layout+","HNLLIBRARY")) {
             if (-not $ribbon.Contains($token)) { throw "NativeRibbon missing current UI token: $token" }
           }
           foreach ($legacy in @("AI Settings","Selection","Polyline","Data / Field","Properties","Plot Publish")) {
@@ -136,6 +136,11 @@ jobs:
       - name: Audit 44 Lisp taxonomy
         run: npm run audit:lisp-taxonomy
 
+      - name: Full Application Master Audit (static gate)
+        run: npm run audit:master
+      - name: Bridge P0 audit
+        run: npm run audit:bridge
+
       - name: TypeScript audit
         run: npm run lint
       - name: Verify AutoCAD bundle
@@ -152,7 +157,7 @@ jobs:
           if (Get-ChildItem "autocad-plugin/HNL.CadBridge.bundle/Contents/Lisp" -File -Filter *.arx) {
             throw "Legacy ARX must not be included in AutoCAD 2023-2026 plugin bundle."
           }
-          Write-Host "Plugin bundle Lisp: $($bundleLisp.Count)/44 • AutoLoad ready"
+          Write-Host "Plugin bundle Lisp: $($bundleLisp.Count)/44 • On-Demand ready"
 
       - name: Upload AutoCAD plugin bundle
         uses: actions/upload-artifact@v6

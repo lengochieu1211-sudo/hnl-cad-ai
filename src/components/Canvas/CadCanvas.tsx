@@ -19,6 +19,7 @@ import {
 } from "../../lib/osnapEngine";
 import { OsnapIndicator } from "./OsnapIndicator";
 import { DynamicInputHUD } from "./DynamicInputHUD";
+import { requestHnlInput } from "../../lib/uiPrompt";
 import {
   Maximize2,
   ZoomIn,
@@ -1237,21 +1238,10 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
     // Left Click in Active Drawing Tool mode
     if (currentTool !== "SELECT" && onAddEntity) {
       if (currentTool === "MTEXT") {
-        const text = window.prompt("MTEXT — Nội dung:", "");
-        if (text && text.trim()) {
-          onAddEntity({
-            id: `mtext_${Date.now()}`,
-            handle: Math.random().toString(16).substring(2, 8).toUpperCase(),
-            type: "MTEXT",
-            layer: "0",
-            color: "#FFFFFF",
-            position: effectivePos,
-            text: text.trim(),
-            height: 250,
-          } as any);
-        }
-        setTempPoints([]);
-        if (onToolComplete) onToolComplete();
+        void requestHnlInput({title:"MTEXT",label:"Nội dung",defaultValue:"",multiline:true}).then((text)=>{
+          if(text&&text.trim())onAddEntity({id:`mtext_${Date.now()}`,handle:Math.random().toString(16).substring(2,8).toUpperCase(),type:"MTEXT",layer:"0",color:"#FFFFFF",position:effectivePos,text:text.trim(),height:250} as any);
+          setTempPoints([]);if(onToolComplete)onToolComplete();
+        });
         return;
       }
 

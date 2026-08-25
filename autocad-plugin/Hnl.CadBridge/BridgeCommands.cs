@@ -20,13 +20,18 @@ namespace Hnl.CadBridge;
 
 public sealed class BridgeCommands : IExtensionApplication
 {
-    internal const string PluginVersion = "2.7.12";
-    private static readonly HttpClient Http = new HttpClient();
+    internal const string PluginVersion = "2.8.1";
+    private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
     private static readonly ConcurrentQueue<JObject> UiActions = new ConcurrentQueue<JObject>();
     private static Timer? _pollTimer;
     private static string? _baseUrl;
     private static string? _token;
     private static bool _registered;
+    private static int _pollBusy;
+    private static readonly string BridgeInstanceId = Guid.NewGuid().ToString("N");
+    private static string _lastBridgeError = "";
+    private static DateTime _lastHeartbeatUtc = DateTime.MinValue;
+    private static DateTime _lastPollUtc = DateTime.MinValue;
 
     private sealed class PendingLibraryInsert
     {
@@ -67,7 +72,7 @@ public sealed class BridgeCommands : IExtensionApplication
         var doc = Application.DocumentManager.MdiActiveDocument;
         var ed = doc?.Editor;
         TryLoadPairing();
-        ed?.WriteMessage($"\nHNL Bridge • Pairing: {(string.IsNullOrWhiteSpace(_baseUrl) ? "NOT FOUND" : _baseUrl)} • Registered: {_registered} • Drawing: {doc?.Name ?? "(none)"}");
+        ed?.WriteMessage($"\nHNL Bridge • Pairing: {(string.IsNullOrWhiteSpace(_baseUrl) ? "NOT FOUND" : _baseUrl)} • Registered: {_registered} • Instance: {BridgeInstanceId.Substring(0, 8)} • Drawing: {doc?.Name ?? "(none)"} • Last HB: {(_lastHeartbeatUtc == DateTime.MinValue ? "never" : _lastHeartbeatUtc.ToString("HH:mm:ss"))} • Last Poll: {(_lastPollUtc == DateTime.MinValue ? "never" : _lastPollUtc.ToString("HH:mm:ss"))} • Error: {(_lastBridgeError.Length == 0 ? "none" : _lastBridgeError)}");
     }
 
     [CommandMethod("HNLBRIDGEPING")]
@@ -524,6 +529,7 @@ public sealed class BridgeCommands : IExtensionApplication
 
     private static async void PollServer()
     {
+        if (Interlocked.Exchange(ref _pollBusy, 1) == 1) return;
         try
         {
             // Re-read pairing every cycle so HNL can start/restart after AutoCAD without NETLOAD/restart.
@@ -536,26 +542,64 @@ public sealed class BridgeCommands : IExtensionApplication
                     version = Application.Version.ToString(),
                     drawingName = doc?.Name ?? "",
                     pluginVersion = PluginVersion,
+                    bridgeInstanceId = BridgeInstanceId,
+                    processId = System.Diagnostics.Process.GetCurrentProcess().Id,
                     capabilities = new[] { "GET_STATUS","GET_DRAFTING_STATUS","SET_DRAFTING_MODE","GET_PLOT_DEVICES","GET_LAYOUTS","SET_CURRENT_LAYOUT","RENAME_LAYOUT","EXECUTE_COMMAND","LOAD_LISP_FILE","AUTOLOAD_LISP_PACK","GET_LISP_AUTOLOAD_STATUS","CANCEL_COMMAND","OPEN_DWG","CONVERT_DWG_TO_DXF_PREVIEW","GET_MODELSPACE_SNAPSHOT","SELECT_HANDLES","CREATE_NATIVE_ENTITY","APPLY_ENTITY_TRANSFORM","ERASE_HANDLES","SET_ENTITY_LAYER","UPDATE_TEXT_CONTENTS","INSERT_EXISTING_BLOCK","GET_DYNAMIC_BLOCK_PROPERTIES","SET_DYNAMIC_BLOCK_PROPERTIES","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","ENSURE_HNL_STANDARDS","CREATE_CEILING_GRID","CREATE_CEILING_SMART","CREATE_WALL_SYSTEM","INSERT_LIBRARY_BLOCK","INSPECT_LIBRARY_DWG","IMPORT_LIBRARY_DEFINITION","GET_LIBRARY_INSERT_STATUS","GET_HNL_BOQ","AUDIT_HNL_SHOPDRAWING","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
                 });
                 var res = await Http.SendAsync(req);
                 _registered = res.IsSuccessStatusCode;
-                if (!_registered) return;
+                if (!_registered)
+                {
+                    _lastBridgeError = $"REGISTER HTTP {(int)res.StatusCode}";
+                    return;
+                }
+                _lastBridgeError = "";
             }
             else
             {
-                using var hb = MakeRequest(HttpMethod.Post, "/api/autocad/heartbeat", new { drawingName = doc?.Name ?? "" });
-                await Http.SendAsync(hb);
+                using var hb = MakeRequest(HttpMethod.Post, "/api/autocad/heartbeat", new { drawingName = doc?.Name ?? "", bridgeInstanceId = BridgeInstanceId });
+                var hbRes = await Http.SendAsync(hb);
+                if (!hbRes.IsSuccessStatusCode)
+                {
+                    _registered = false;
+                    _lastBridgeError = $"HEARTBEAT HTTP {(int)hbRes.StatusCode}";
+                    return;
+                }
+                _lastHeartbeatUtc = DateTime.UtcNow;
             }
 
             using var poll = MakeRequest(HttpMethod.Get, "/api/autocad/poll");
             var pollRes = await Http.SendAsync(poll);
-            if (!pollRes.IsSuccessStatusCode) return;
+            _lastPollUtc = DateTime.UtcNow;
+            if (!pollRes.IsSuccessStatusCode)
+            {
+                _lastBridgeError = $"POLL HTTP {(int)pollRes.StatusCode}";
+                return;
+            }
             var text = await pollRes.Content.ReadAsStringAsync();
             var root = JObject.Parse(text);
-            if (root["item"] is JObject item) UiActions.Enqueue(item);
+            if (root["item"] is JObject item)
+            {
+                var expiresAt = (long?)item["expiresAt"] ?? 0L;
+                if (expiresAt > 0L && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() >= expiresAt)
+                {
+                    var expiredId = (string?)item["id"] ?? "";
+                    if (!string.IsNullOrWhiteSpace(expiredId))
+                        SendResult(expiredId, false, null, "AUTOCAD_ACTION_EXPIRED_BEFORE_QUEUE");
+                }
+                else UiActions.Enqueue(item);
+            }
+            _lastBridgeError = "";
         }
-        catch { _registered = false; }
+        catch (System.Exception ex)
+        {
+            _registered = false;
+            _lastBridgeError = ex.GetType().Name + ": " + ex.Message;
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _pollBusy, 0);
+        }
     }
 
     private static void OnIdle(object? sender, EventArgs e)
@@ -586,6 +630,12 @@ public sealed class BridgeCommands : IExtensionApplication
         var id = (string?)item["id"] ?? "";
         var action = ((string?)item["action"] ?? "").ToUpperInvariant();
         var payload = item["payload"] as JObject ?? new JObject();
+        var expiresAt = (long?)item["expiresAt"] ?? 0L;
+        if (expiresAt > 0L && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() >= expiresAt)
+        {
+            SendResult(id, false, null, "AUTOCAD_ACTION_EXPIRED_BEFORE_EXECUTION");
+            return;
+        }
         try
         {
             object result = action switch

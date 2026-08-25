@@ -39,9 +39,10 @@ export const LispBuilderModal: React.FC<LispBuilderModalProps> = ({
         body: JSON.stringify({ prompt }),
       });
       const data = await res.json();
-      if (data.lisp) {
-        setGeneratedLisp(data.lisp);
-      }
+      if(!res.ok) throw new Error(data?.error || "AI Lisp Builder không phản hồi.");
+      const generated = data?.lisp || (data?.code ? data : null);
+      if(generated) setGeneratedLisp(generated);
+      else throw new Error("AI không trả về mã Lisp hợp lệ.");
     } catch (err: any) {
       alert("Lỗi tạo Lisp: " + err.message);
     } finally {

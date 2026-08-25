@@ -1,7 +1,7 @@
 {
   "name": "hnl-cad-ai",
   "private": true,
-  "version": "2.7.12",
+  "version": "2.8.1",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -11,7 +11,9 @@
     "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:3000 && cross-env ELECTRON_START_URL=http://127.0.0.1:3000 electron .\"",
     "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never",
     "prepare:lisp": "node scripts/prepare-legacy-lisp.mjs",
-    "audit:lisp-taxonomy": "node scripts/audit-lisp-taxonomy.mjs"
+    "audit:lisp-taxonomy": "node scripts/audit-lisp-taxonomy.mjs",
+    "audit:master": "node scripts/master-audit.mjs",
+    "audit:bridge": "node scripts/audit-bridge-p0.mjs"
   },
   "dependencies": {
     "@google/genai": "2.4.0",
@@ -41,7 +43,7 @@
     "cross-env": "10.0.0"
   },
   "productName": "HNL CAD AI",
-  "description": "HNL CAD AI v2.7.12 - strict 44-Lisp taxonomy cleanup with exact source-file matching",
+  "description": "HNL CAD AI v2.8.1 - Bridge P0 Golden Verification and queue safety hardening",
   "main": "electron/main.cjs",
   "build": {
     "appId": "vn.hnl.cadai",

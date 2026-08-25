@@ -409,13 +409,16 @@ public sealed class NativePaletteCommands
     {
         var page = NewTab("DATA", "DATA");
         var f = Flow();
-        f.Controls.Add(Section(_english ? "2D Pro / Data" : "2D Pro / Dữ liệu",
-            (_english ? "Text / Attribute" : "Text / Attribute", "HNLTEXT"),
-            (_english ? "Field Doctor" : "Field Doctor", "HNLFIELD"),
-            (_english ? "Geometry Doctor" : "Geometry Doctor", "HNLGEOM"),
-            (_english ? "Quick Dimension" : "Quick Dimension", "HNLDIM")));
-        f.Controls.Add(Section(_english ? "BOQ / Layout" : "BOQ / Layout",
+        f.Controls.Add(Section(_english ? "2D Professional" : "2D Professional",
+            (_english ? "Text" : "Text", "HNLTEXT"),
+            (_english ? "Block / Attribute" : "Block / Attribute", "HNLBLOCK"),
+            (_english ? "Field / Links" : "Field / Links", "HNLFIELD"),
+            (_english ? "Geometry / Polyline" : "Geometry / Polyline", "HNLGEOM"),
+            (_english ? "Dimension+" : "Dimension+", "HNLDIM"),
+            (_english ? "Layer / Properties" : "Layer / Properties", "HNLLAYER")));
+        f.Controls.Add(Section(_english ? "Data / Shop / Layout" : "Dữ liệu / Shop / Layout",
             (_english ? "Quantity / BOQ" : "Quantity / BOQ", "HNLQTY"),
+            (_english ? "Shopdrawing 2D" : "Shopdrawing 2D", "HNLSHOP2D"),
             (_english ? "Layout+" : "Layout+", "HNLLAYOUTAUTO")));
         page.Controls.Add(f);
         return page;
