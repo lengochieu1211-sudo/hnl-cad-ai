@@ -20,13 +20,29 @@ namespace Hnl.CadBridge;
 
 public sealed class BridgeCommands : IExtensionApplication
 {
-    internal const string PluginVersion = "2.7.8";
+    internal const string PluginVersion = "2.7.12";
     private static readonly HttpClient Http = new HttpClient();
     private static readonly ConcurrentQueue<JObject> UiActions = new ConcurrentQueue<JObject>();
     private static Timer? _pollTimer;
     private static string? _baseUrl;
     private static string? _token;
     private static bool _registered;
+
+    private sealed class PendingLibraryInsert
+    {
+        public string Action { get; set; } = "";
+        public JObject Payload { get; set; } = new JObject();
+    }
+
+    private static readonly ConcurrentQueue<PendingLibraryInsert> PendingLibraryInserts =
+        new ConcurrentQueue<PendingLibraryInsert>();
+    private static string _lastLibraryInsertStatus = "Idle";
+
+    // Bundled legacy Lisp auto-load.
+    // AutoLISP definitions are document-scoped, so we track each active document separately.
+    private static readonly HashSet<int> LispAutoLoadedDocuments = new HashSet<int>();
+    private static bool _lispAutoLoadEnabled = false;
+    private static string _lispAutoLoadSummary = "Not checked";
 
     public void Initialize()
     {
@@ -35,7 +51,7 @@ public sealed class BridgeCommands : IExtensionApplication
         _pollTimer = new Timer(_ => PollServer(), null, 500, 750);
         HnlNativeRibbon.TryInstall();
         Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
-            $"\nHNL CAD AI Bridge v{PluginVersion} loaded. Commands: HNLBRIDGESTATUS, HNLBRIDGEPING, HNLPLOTDEVICES, HNLLAYOUTS");
+            $"\nHNL CAD AI Bridge v{PluginVersion} loaded. Lisp mode=ON_DEMAND. Commands: HNLBRIDGESTATUS, HNLLISPSTATUS, HNLLISPRELOAD");
     }
 
     public void Terminate()
@@ -151,6 +167,10 @@ public sealed class BridgeCommands : IExtensionApplication
     [CommandMethod("HNLTEXT", CommandFlags.Session)]
     public void HnlTextCommand() => NativePaletteCommands.OpenManagerWindow("TEXT");
 
+    [CommandMethod("HNLBLOCK", CommandFlags.Session)]
+    public void HnlBlockCommand() => NativePaletteCommands.OpenManagerWindow("BLOCK");
+
+
     [CommandMethod("HNLFIELD", CommandFlags.Session)]
     public void HnlFieldCommand() => NativePaletteCommands.OpenManagerWindow("FIELD");
 
@@ -160,8 +180,14 @@ public sealed class BridgeCommands : IExtensionApplication
     [CommandMethod("HNLDIM", CommandFlags.Session)]
     public void HnlDimensionCommand() => NativePaletteCommands.OpenManagerWindow("DIMENSION");
 
+    [CommandMethod("HNLLAYER", CommandFlags.Session)]
+    public void HnlLayerDataCommand() => NativePaletteCommands.OpenManagerWindow("LAYER");
+
     [CommandMethod("HNLQTY", CommandFlags.Session)]
     public void HnlQuantityCommand() => NativePaletteCommands.OpenManagerWindow("QUANTITY");
+
+    [CommandMethod("HNLSHOP2D", CommandFlags.Session)]
+    public void HnlShopdrawing2DCommand() => NativePaletteCommands.OpenManagerWindow("SHOPDRAWING");
 
     [CommandMethod("HNLLAYOUTAUTO", CommandFlags.Session)]
     public void HnlLayoutAutomationCommand() => NativePaletteCommands.OpenManagerWindow("LAYOUT");
@@ -183,10 +209,102 @@ public sealed class BridgeCommands : IExtensionApplication
         }
     }
 
+    [CommandMethod("HNLLISPSTATUS", CommandFlags.Session)]
+    public void HnlLispStatusCommand()
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument;
+        doc?.Editor.WriteMessage(
+            "\nHNL Lisp AutoLoad Status: " + JsonConvert.SerializeObject(GetBundledLispAutoLoadStatus()));
+    }
+
+    [CommandMethod("HNLLISPRELOAD", CommandFlags.Session)]
+    public void HnlLispReloadCommand()
+    {
+        try
+        {
+            var result = AutoLoadBundledLisp(new JObject { ["force"] = true });
+            Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+                "\nHNL Lisp Reload: " + JsonConvert.SerializeObject(result));
+        }
+        catch (System.Exception ex)
+        {
+            Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+                "\nHNL Lisp Reload ERROR: " + ex.Message);
+        }
+    }
+
+    [CommandMethod("HNLLISPAUTOON", CommandFlags.Session)]
+    public void HnlLispAutoOnCommand()
+    {
+        _lispAutoLoadEnabled = true;
+        _lispAutoLoadSummary = "AutoLoad-all enabled for this session";
+        TryAutoLoadBundledLispForActiveDocument();
+        Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+            "\nHNL Lisp: AUTOLOAD ALL enabled for this session. On-demand is the recommended default.");
+    }
+
+    [CommandMethod("HNLLISPAUTOOFF", CommandFlags.Session)]
+    public void HnlLispAutoOffCommand()
+    {
+        _lispAutoLoadEnabled = false;
+        _lispAutoLoadSummary = "On-demand mode";
+        Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+            "\nHNL Lisp mode: ON_DEMAND. Only the Lisp you use will be loaded.");
+    }
+
     [CommandMethod("HNLLIBRARY", CommandFlags.Session)]
     public void HnlLibraryManagerCommand()
     {
         NativePaletteCommands.OpenManagerWindow("LIBRARY");
+    }
+
+    [CommandMethod("HNLINSERTPENDING", CommandFlags.Session)]
+    public void HnlInsertPendingLibraryCommand()
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc == null) return;
+
+        if (!PendingLibraryInserts.TryDequeue(out var pending))
+        {
+            doc.Editor.WriteMessage("\nHNL Library: không có block nào đang chờ chèn.");
+            _lastLibraryInsertStatus = "No pending insert";
+            return;
+        }
+
+        try
+        {
+            var title = (string?)pending.Payload["name"]
+                ?? (string?)pending.Payload["definitionName"]
+                ?? "HNL Block";
+
+            var pointResult = doc.Editor.GetPoint(new PromptPointOptions($"\nHNL Library - chọn điểm chèn [{title}]: "));
+            if (pointResult.Status != PromptStatus.OK)
+            {
+                _lastLibraryInsertStatus = "Insertion point cancelled";
+                doc.Editor.WriteMessage("\nHNL Library: đã hủy chọn điểm chèn.");
+                return;
+            }
+
+            pending.Payload["point"] = JObject.FromObject(new
+            {
+                x = pointResult.Value.X,
+                y = pointResult.Value.Y
+            });
+
+            object result;
+            if (string.Equals(pending.Action, "IMPORT_LIBRARY_DEFINITION", StringComparison.OrdinalIgnoreCase))
+                result = ImportLibraryDefinition(pending.Payload);
+            else
+                result = InsertLibraryBlock(pending.Payload);
+
+            _lastLibraryInsertStatus = "Inserted: " + JsonConvert.SerializeObject(result);
+            doc.Editor.WriteMessage("\nHNL Library: chèn block thành công.");
+        }
+        catch (System.Exception ex)
+        {
+            _lastLibraryInsertStatus = "Insert ERROR: " + ex.Message;
+            doc.Editor.WriteMessage($"\nHNL Library INSERT ERROR: {ex.Message}");
+        }
     }
 
     [CommandMethod("HNLINSERT", CommandFlags.Session)]
@@ -418,7 +536,7 @@ public sealed class BridgeCommands : IExtensionApplication
                     version = Application.Version.ToString(),
                     drawingName = doc?.Name ?? "",
                     pluginVersion = PluginVersion,
-                    capabilities = new[] { "GET_STATUS","GET_DRAFTING_STATUS","SET_DRAFTING_MODE","GET_PLOT_DEVICES","GET_LAYOUTS","SET_CURRENT_LAYOUT","RENAME_LAYOUT","EXECUTE_COMMAND","LOAD_LISP_FILE","CANCEL_COMMAND","OPEN_DWG","CONVERT_DWG_TO_DXF_PREVIEW","GET_MODELSPACE_SNAPSHOT","SELECT_HANDLES","CREATE_NATIVE_ENTITY","APPLY_ENTITY_TRANSFORM","ERASE_HANDLES","SET_ENTITY_LAYER","UPDATE_TEXT_CONTENTS","INSERT_EXISTING_BLOCK","GET_DYNAMIC_BLOCK_PROPERTIES","SET_DYNAMIC_BLOCK_PROPERTIES","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","ENSURE_HNL_STANDARDS","CREATE_CEILING_GRID","CREATE_CEILING_SMART","CREATE_WALL_SYSTEM","INSERT_LIBRARY_BLOCK","INSPECT_LIBRARY_DWG","IMPORT_LIBRARY_DEFINITION","GET_HNL_BOQ","AUDIT_HNL_SHOPDRAWING","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
+                    capabilities = new[] { "GET_STATUS","GET_DRAFTING_STATUS","SET_DRAFTING_MODE","GET_PLOT_DEVICES","GET_LAYOUTS","SET_CURRENT_LAYOUT","RENAME_LAYOUT","EXECUTE_COMMAND","LOAD_LISP_FILE","AUTOLOAD_LISP_PACK","GET_LISP_AUTOLOAD_STATUS","CANCEL_COMMAND","OPEN_DWG","CONVERT_DWG_TO_DXF_PREVIEW","GET_MODELSPACE_SNAPSHOT","SELECT_HANDLES","CREATE_NATIVE_ENTITY","APPLY_ENTITY_TRANSFORM","ERASE_HANDLES","SET_ENTITY_LAYER","UPDATE_TEXT_CONTENTS","INSERT_EXISTING_BLOCK","GET_DYNAMIC_BLOCK_PROPERTIES","SET_DYNAMIC_BLOCK_PROPERTIES","SAVE_CURRENT_DWG","SAVE_AS_DWG","GET_SELECTION","SELECT_ALL","GET_LAYERS","ENSURE_HNL_STANDARDS","CREATE_CEILING_GRID","CREATE_CEILING_SMART","CREATE_WALL_SYSTEM","INSERT_LIBRARY_BLOCK","INSPECT_LIBRARY_DWG","IMPORT_LIBRARY_DEFINITION","GET_LIBRARY_INSERT_STATUS","GET_HNL_BOQ","AUDIT_HNL_SHOPDRAWING","PUBLISH_LAYOUTS_PDF","PLOT_CURRENT_PDF","SAVE_DXF_AS_DWG","GET_SHEETSET_INFO","UPDATE_SHEET" }
                 });
                 var res = await Http.SendAsync(req);
                 _registered = res.IsSuccessStatusCode;
@@ -443,6 +561,11 @@ public sealed class BridgeCommands : IExtensionApplication
     private static void OnIdle(object? sender, EventArgs e)
     {
         if (!HnlNativeRibbon.IsInstalled) HnlNativeRibbon.TryInstall();
+
+        // Load the bundled 44 Lisp sources once for each AutoCAD document.
+        // Idle is used so AutoCAD is not in the middle of another command.
+        TryAutoLoadBundledLispForActiveDocument();
+
         if (!UiActions.TryDequeue(out var item)) return;
         ExecuteQueuedAction(item);
     }
@@ -476,6 +599,8 @@ public sealed class BridgeCommands : IExtensionApplication
                 "RENAME_LAYOUT" => RenameLayout(payload),
                 "EXECUTE_COMMAND" => ExecuteNativeCommand(payload),
                 "LOAD_LISP_FILE" => LoadLispFile(payload),
+                "AUTOLOAD_LISP_PACK" => AutoLoadBundledLisp(payload),
+                "GET_LISP_AUTOLOAD_STATUS" => GetBundledLispAutoLoadStatus(),
                 "CANCEL_COMMAND" => CancelNativeCommand(),
                 "OPEN_DWG" => OpenDwg(payload),
                 "CONVERT_DWG_TO_DXF_PREVIEW" => ConvertDwgToDxfPreview(payload),
@@ -498,9 +623,10 @@ public sealed class BridgeCommands : IExtensionApplication
                 "CREATE_CEILING_GRID" => CreateCeilingGrid(payload),
                 "CREATE_CEILING_SMART" => CreateCeilingSmart(payload),
                 "CREATE_WALL_SYSTEM" => CreateWallSystem(payload),
-                "INSERT_LIBRARY_BLOCK" => InsertLibraryBlock(payload),
+                "INSERT_LIBRARY_BLOCK" => QueueOrInsertLibraryBlock(payload),
                 "INSPECT_LIBRARY_DWG" => InspectLibraryDwg(payload),
-                "IMPORT_LIBRARY_DEFINITION" => ImportLibraryDefinition(payload),
+                "IMPORT_LIBRARY_DEFINITION" => QueueOrImportLibraryDefinition(payload),
+                "GET_LIBRARY_INSERT_STATUS" => GetLibraryInsertStatus(),
                 "GET_HNL_BOQ" => GetHnlBoq(),
                 "AUDIT_HNL_SHOPDRAWING" => AuditHnlShopdrawing(),
                 "PUBLISH_LAYOUTS_PDF" => PublishLayoutsPdf(payload),
@@ -716,26 +842,27 @@ public sealed class BridgeCommands : IExtensionApplication
         public bool Plottable = true;
     }
 
-    private static HnlLayerProfile? GetHnlLayerProfile(string name)
+    private static HnlLayerProfile? GetHnlLayerProfile(string? name)
     {
-        switch ((name ?? "").Trim().ToUpperInvariant())
+        var normalizedName = (name ?? "").Trim();
+        switch (normalizedName.ToUpperInvariant())
         {
-            case "HNL-CLG-BOARD": return new HnlLayerProfile { Name=name, Aci=151, Weight=LineWeight.LineWeight018, Linetype="Continuous" };
-            case "HNL-CLG-MAIN": return new HnlLayerProfile { Name=name, Aci=30, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
-            case "HNL-CLG-CROSS": return new HnlLayerProfile { Name=name, Aci=2, Weight=LineWeight.LineWeight025, Linetype="Continuous" };
-            case "HNL-CLG-HANGER": return new HnlLayerProfile { Name=name, Aci=3, Weight=LineWeight.LineWeight018, Linetype="HIDDEN2" };
-            case "HNL-CLG-START": return new HnlLayerProfile { Name=name, Aci=4, Weight=LineWeight.LineWeight025, Linetype="CENTER2" };
-            case "HNL-WALL-BOARD": return new HnlLayerProfile { Name=name, Aci=7, Weight=LineWeight.LineWeight018, Linetype="Continuous" };
-            case "HNL-WALL-STUD": return new HnlLayerProfile { Name=name, Aci=6, Weight=LineWeight.LineWeight025, Linetype="Continuous" };
-            case "HNL-WALL-TRACK": return new HnlLayerProfile { Name=name, Aci=5, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
-            case "HNL-WALL-REINF": return new HnlLayerProfile { Name=name, Aci=1, Weight=LineWeight.LineWeight040, Linetype="Continuous" };
-            case "HNL-STEEL-RHS": return new HnlLayerProfile { Name=name, Aci=1, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
-            case "HNL-STEEL-PLATE": return new HnlLayerProfile { Name=name, Aci=30, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
-            case "HNL-ANNO-SECTION": return new HnlLayerProfile { Name=name, Aci=7, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
-            case "HNL-ANNO-LEVEL": return new HnlLayerProfile { Name=name, Aci=4, Weight=LineWeight.LineWeight025, Linetype="Continuous" };
-            case "HNL-ANNO-DETAIL": return new HnlLayerProfile { Name=name, Aci=2, Weight=LineWeight.LineWeight025, Linetype="Continuous" };
-            case "HNL-DATA-FIELD": return new HnlLayerProfile { Name=name, Aci=92, Weight=LineWeight.LineWeight018, Linetype="Continuous" };
-            case "HNL-NOPLOT-HELPER": return new HnlLayerProfile { Name=name, Aci=8, Weight=LineWeight.LineWeight005, Linetype="DASHED", Plottable=false };
+            case "HNL-CLG-BOARD": return new HnlLayerProfile { Name=normalizedName, Aci=151, Weight=LineWeight.LineWeight018, Linetype="Continuous" };
+            case "HNL-CLG-MAIN": return new HnlLayerProfile { Name=normalizedName, Aci=30, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
+            case "HNL-CLG-CROSS": return new HnlLayerProfile { Name=normalizedName, Aci=2, Weight=LineWeight.LineWeight025, Linetype="Continuous" };
+            case "HNL-CLG-HANGER": return new HnlLayerProfile { Name=normalizedName, Aci=3, Weight=LineWeight.LineWeight018, Linetype="HIDDEN2" };
+            case "HNL-CLG-START": return new HnlLayerProfile { Name=normalizedName, Aci=4, Weight=LineWeight.LineWeight025, Linetype="CENTER2" };
+            case "HNL-WALL-BOARD": return new HnlLayerProfile { Name=normalizedName, Aci=7, Weight=LineWeight.LineWeight018, Linetype="Continuous" };
+            case "HNL-WALL-STUD": return new HnlLayerProfile { Name=normalizedName, Aci=6, Weight=LineWeight.LineWeight025, Linetype="Continuous" };
+            case "HNL-WALL-TRACK": return new HnlLayerProfile { Name=normalizedName, Aci=5, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
+            case "HNL-WALL-REINF": return new HnlLayerProfile { Name=normalizedName, Aci=1, Weight=LineWeight.LineWeight040, Linetype="Continuous" };
+            case "HNL-STEEL-RHS": return new HnlLayerProfile { Name=normalizedName, Aci=1, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
+            case "HNL-STEEL-PLATE": return new HnlLayerProfile { Name=normalizedName, Aci=30, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
+            case "HNL-ANNO-SECTION": return new HnlLayerProfile { Name=normalizedName, Aci=7, Weight=LineWeight.LineWeight035, Linetype="Continuous" };
+            case "HNL-ANNO-LEVEL": return new HnlLayerProfile { Name=normalizedName, Aci=4, Weight=LineWeight.LineWeight025, Linetype="Continuous" };
+            case "HNL-ANNO-DETAIL": return new HnlLayerProfile { Name=normalizedName, Aci=2, Weight=LineWeight.LineWeight025, Linetype="Continuous" };
+            case "HNL-DATA-FIELD": return new HnlLayerProfile { Name=normalizedName, Aci=92, Weight=LineWeight.LineWeight018, Linetype="Continuous" };
+            case "HNL-NOPLOT-HELPER": return new HnlLayerProfile { Name=normalizedName, Aci=8, Weight=LineWeight.LineWeight005, Linetype="DASHED", Plottable=false };
             default: return null;
         }
     }
@@ -1167,6 +1294,60 @@ public sealed class BridgeCommands : IExtensionApplication
                 break;
         }
         return id;
+    }
+
+    private static bool HasExplicitPoint(JObject payload)
+    {
+        return payload["point"] is JObject;
+    }
+
+    private static object GetLibraryInsertStatus()
+    {
+        return new
+        {
+            pendingCount = PendingLibraryInserts.Count,
+            status = _lastLibraryInsertStatus,
+            drawingName = Application.DocumentManager.MdiActiveDocument?.Name
+        };
+    }
+
+    private static object QueueLibraryInsert(string action, JObject payload)
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument
+            ?? throw new InvalidOperationException("No active drawing.");
+
+        PendingLibraryInserts.Enqueue(new PendingLibraryInsert
+        {
+            Action = action,
+            Payload = (JObject)payload.DeepClone()
+        });
+
+        _lastLibraryInsertStatus = $"Queued {action}; waiting for insertion point";
+        doc.SendStringToExecute("HNLINSERTPENDING ", true, false, true);
+
+        return new
+        {
+            queued = true,
+            awaitingPoint = true,
+            action,
+            pendingCount = PendingLibraryInserts.Count,
+            drawingName = doc.Name,
+            message = "Switch to AutoCAD and pick the insertion point."
+        };
+    }
+
+    private static object QueueOrInsertLibraryBlock(JObject payload)
+    {
+        return HasExplicitPoint(payload)
+            ? InsertLibraryBlock(payload)
+            : QueueLibraryInsert("INSERT_LIBRARY_BLOCK", payload);
+    }
+
+    private static object QueueOrImportLibraryDefinition(JObject payload)
+    {
+        return HasExplicitPoint(payload)
+            ? ImportLibraryDefinition(payload)
+            : QueueLibraryInsert("IMPORT_LIBRARY_DEFINITION", payload);
     }
 
     private static object InsertLibraryBlock(JObject payload)
@@ -1887,6 +2068,126 @@ public sealed class BridgeCommands : IExtensionApplication
             throw new InvalidOperationException("Unsafe characters in command name.");
         doc.SendStringToExecute($"_.{command} ", true, false, true);
         return new { queued = true, command, drawingName = doc.Name };
+    }
+
+    private static string GetBundledLispFolder()
+    {
+        try
+        {
+            var assemblyPath = typeof(BridgeCommands).Assembly.Location;
+            var yearFolder = Path.GetDirectoryName(assemblyPath);
+            var contentsFolder = string.IsNullOrWhiteSpace(yearFolder)
+                ? null
+                : Directory.GetParent(yearFolder)?.FullName;
+            return string.IsNullOrWhiteSpace(contentsFolder)
+                ? ""
+                : Path.Combine(contentsFolder, "Lisp");
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static string[] GetBundledLispFiles()
+    {
+        var folder = GetBundledLispFolder();
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+            return Array.Empty<string>();
+
+        return Directory.GetFiles(folder, "*.lsp", SearchOption.AllDirectories)
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static object GetBundledLispAutoLoadStatus()
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument;
+        var files = GetBundledLispFiles();
+        var docKey = doc?.GetHashCode() ?? 0;
+        return new
+        {
+            enabled = _lispAutoLoadEnabled,
+            mode = _lispAutoLoadEnabled ? "AUTOLOAD_ALL_SESSION" : "ON_DEMAND",
+            folder = GetBundledLispFolder(),
+            fileCount = files.Length,
+            expectedCount = 44,
+            complete = files.Length == 44,
+            activeDocument = doc?.Name,
+            activeDocumentLoaded = doc != null && LispAutoLoadedDocuments.Contains(docKey),
+            loadedDocumentCount = LispAutoLoadedDocuments.Count,
+            summary = _lispAutoLoadSummary,
+            legacyArxAutoLoad = false
+        };
+    }
+
+    private static void TryAutoLoadBundledLispForActiveDocument()
+    {
+        if (!_lispAutoLoadEnabled) return;
+
+        var doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc == null) return;
+
+        var key = doc.GetHashCode();
+        if (LispAutoLoadedDocuments.Contains(key)) return;
+
+        try
+        {
+            var result = AutoLoadBundledLisp(new JObject());
+            var queuedProp = result.GetType().GetProperty("queued");
+            var queued = queuedProp?.GetValue(result) as bool?;
+            if (queued == true)
+                LispAutoLoadedDocuments.Add(key);
+        }
+        catch (System.Exception ex)
+        {
+            _lispAutoLoadSummary = "AutoLoad error: " + ex.Message;
+        }
+    }
+
+    private static object AutoLoadBundledLisp(JObject payload)
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument
+            ?? throw new InvalidOperationException("No active drawing.");
+
+        var force = (bool?)payload["force"] ?? false;
+        if (!_lispAutoLoadEnabled && !force)
+        {
+            _lispAutoLoadSummary = "AutoLoad disabled";
+            return new { queued = false, skipped = true, reason = "DISABLED", count = 0 };
+        }
+
+        var files = GetBundledLispFiles();
+        if (files.Length == 0)
+            throw new DirectoryNotFoundException(
+                "Bundled Lisp folder not found or empty: " + GetBundledLispFolder());
+
+        if (files.Length != 44)
+            _lispAutoLoadSummary = $"Warning: bundled Lisp count {files.Length}/44";
+
+        // Queue each LOAD separately and catch Lisp-level errors per file so one bad source
+        // does not prevent the remaining sources from loading.
+        foreach (var filePath in files)
+        {
+            var safePath = filePath.Replace("\\", "/").Replace("\"", "\\\"");
+            var expression = $"(vl-catch-all-apply 'load (list \\\"{safePath}\\\")) ";
+            doc.SendStringToExecute(expression, true, false, false);
+        }
+
+        LispAutoLoadedDocuments.Add(doc.GetHashCode());
+        _lispAutoLoadSummary = $"Queued {files.Length} Lisp files for {Path.GetFileName(doc.Name)}";
+
+        return new
+        {
+            queued = true,
+            count = files.Length,
+            expectedCount = 44,
+            complete = files.Length == 44,
+            force,
+            drawingName = doc.Name,
+            folder = GetBundledLispFolder(),
+            note = "LOAD only; HNL does not auto-run the Lisp commands. AutoCAD Command Line is authoritative for individual source errors."
+        };
     }
 
     private static object LoadLispFile(JObject payload)

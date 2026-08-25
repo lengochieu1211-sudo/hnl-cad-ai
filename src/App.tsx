@@ -243,7 +243,7 @@ export default function App() {
   const [isProfessionalAuditOpen, setIsProfessionalAuditOpen] = useState(false);
   const [isPlotPublishOpen, setIsPlotPublishOpen] = useState(false);
   const [is2DProfessionalOpen, setIs2DProfessionalOpen] = useState(false);
-  const [pro2DInitialTab, setPro2DInitialTab] = useState<"TEXT"|"FIELD"|"GEOMETRY"|"DIMENSION"|"QUANTITY"|"LAYOUT"|"TOOLS"|"SOURCES">("TOOLS");
+  const [pro2DInitialTab, setPro2DInitialTab] = useState<"TEXT"|"BLOCK"|"FIELD"|"GEOMETRY"|"DIMENSION"|"LAYER"|"QUANTITY"|"SHOPDRAWING"|"LAYOUT"|"TOOLS"|"SOURCES">("TOOLS");
   const [diagnosticEvents, setDiagnosticEvents] = useState<DiagnosticEvent[]>(() => loadDiagnostics());
 
   // FreeCAD Architecture State: Smart Objects, Workbenches, Modules & DAG
@@ -1837,14 +1837,20 @@ export default function App() {
         setPro2DInitialTab("TOOLS"); setIs2DProfessionalOpen(true); break;
       case "SMART_TEXT_CENTER":
         setPro2DInitialTab("TEXT"); setIs2DProfessionalOpen(true); break;
+      case "BLOCK_ATTRIBUTE_CENTER":
+        setPro2DInitialTab("BLOCK"); setIs2DProfessionalOpen(true); break;
       case "FIELD_DOCTOR_CENTER":
         setPro2DInitialTab("FIELD"); setIs2DProfessionalOpen(true); break;
       case "GEOMETRY_TOOL_CENTER":
         setPro2DInitialTab("GEOMETRY"); setIs2DProfessionalOpen(true); break;
       case "QUICK_DIM_CENTER":
         setPro2DInitialTab("DIMENSION"); setIs2DProfessionalOpen(true); break;
+      case "LAYER_DATA_CENTER":
+        setPro2DInitialTab("LAYER"); setIs2DProfessionalOpen(true); break;
       case "QUANTITY_CENTER":
         setPro2DInitialTab("QUANTITY"); setIs2DProfessionalOpen(true); break;
+      case "SHOPDRAWING_2D_CENTER":
+        setPro2DInitialTab("SHOPDRAWING"); setIs2DProfessionalOpen(true); break;
       case "LAYOUT_AUTOMATION_CENTER":
         setPro2DInitialTab("LAYOUT"); setIs2DProfessionalOpen(true); break;
 
@@ -2005,10 +2011,13 @@ export default function App() {
         case "OPEN_PILE_STUDIO": setIsPileStudioOpen(true); break;
         case "OPEN_TRANSLATE": setIsAiPaletteOpen(true); break;
         case "OPEN_2D_PRO_TEXT": setPro2DInitialTab("TEXT"); setIs2DProfessionalOpen(true); break;
+        case "OPEN_2D_PRO_BLOCK": setPro2DInitialTab("BLOCK"); setIs2DProfessionalOpen(true); break;
         case "OPEN_2D_PRO_FIELD": setPro2DInitialTab("FIELD"); setIs2DProfessionalOpen(true); break;
         case "OPEN_2D_PRO_GEOMETRY": setPro2DInitialTab("GEOMETRY"); setIs2DProfessionalOpen(true); break;
         case "OPEN_2D_PRO_DIMENSION": setPro2DInitialTab("DIMENSION"); setIs2DProfessionalOpen(true); break;
+        case "OPEN_2D_PRO_LAYER": setPro2DInitialTab("LAYER"); setIs2DProfessionalOpen(true); break;
         case "OPEN_2D_PRO_QUANTITY": setPro2DInitialTab("QUANTITY"); setIs2DProfessionalOpen(true); break;
+        case "OPEN_2D_PRO_SHOPDRAWING": setPro2DInitialTab("SHOPDRAWING"); setIs2DProfessionalOpen(true); break;
         case "OPEN_2D_PRO_LAYOUT": setPro2DInitialTab("LAYOUT"); setIs2DProfessionalOpen(true); break;
         case "OPEN_2D_PRO_TOOLS": setPro2DInitialTab("TOOLS"); setIs2DProfessionalOpen(true); break;
         case "OPEN_2D_PRO_SOURCES": setPro2DInitialTab("SOURCES"); setIs2DProfessionalOpen(true); break;

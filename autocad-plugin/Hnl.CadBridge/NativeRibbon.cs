@@ -48,43 +48,59 @@ internal static class HnlNativeRibbon
             // which are already available in native AutoCAD tabs.
             // Compact professional HNL-only ribbon.
             // Large = primary workflows. Standard = secondary utilities.
-            AddPanel(tab, "AI", new[]
+            AddCompactPanel(tab, "AI", new[]
             {
-                new ButtonSpec("AI Copilot", "HNLAI ", "AI", true),
+                new[] { new ButtonSpec("AI Copilot", "HNLAI ", "AI", false) },
             });
 
-            AddPanel(tab, "Shopdrawing", new[]
+            AddCompactPanel(tab, "Shopdrawing", new[]
             {
-                new ButtonSpec("Ceiling", "HNLCEILING ", "CEILING", true),
-                new ButtonSpec("Wall", "HNLWALL ", "WALL", true),
-                new ButtonSpec("Library", "HNLLIBRARY ", "LIBRARY", true),
-                new ButtonSpec("Audit", "HNLSHOPAUDIT ", "AUDIT", false),
+                new[] {
+                    new ButtonSpec("Ceiling", "HNLCEILING ", "CEILING", false),
+                    new ButtonSpec("Wall", "HNLWALL ", "WALL", false),
+                },
+                new[] {
+                    new ButtonSpec("Library", "HNLLIBRARY ", "LIBRARY", false),
+                    new ButtonSpec("Audit", "HNLSHOPAUDIT ", "AUDIT", false),
+                },
             });
 
-            AddPanel(tab, "2D Pro", new[]
+            AddCompactPanel(tab, "2D Pro", new[]
             {
-                new ButtonSpec("Text / Attr", "HNLTEXT ", "TEXT", false),
-                new ButtonSpec("Field Doctor", "HNLFIELD ", "FIELD", false),
-                new ButtonSpec("Geometry", "HNLGEOM ", "GEOMETRY", false),
-                new ButtonSpec("Quick Dim", "HNLDIM ", "DIM", false),
+                new[] {
+                    new ButtonSpec("Text", "HNLTEXT ", "TEXT", false),
+                    new ButtonSpec("Block / Attr", "HNLBLOCK ", "BLOCK", false),
+                    new ButtonSpec("Field", "HNLFIELD ", "FIELD", false),
+                },
+                new[] {
+                    new ButtonSpec("Geometry", "HNLGEOM ", "GEOMETRY", false),
+                    new ButtonSpec("Dim+", "HNLDIM ", "DIM", false),
+                    new ButtonSpec("Layer", "HNLLAYER ", "TOOLS", false),
+                },
             });
 
-            AddPanel(tab, "Data / BOQ", new[]
+            AddCompactPanel(tab, "Data / BOQ", new[]
             {
-                new ButtonSpec("BOQ", "HNLQTY ", "BOQ", true),
-                new ButtonSpec("Standards", "HNLLAYERSYNC ", "TOOLS", false),
+                new[] {
+                    new ButtonSpec("BOQ", "HNLQTY ", "BOQ", false),
+                    new ButtonSpec("Standards", "HNLLAYERSYNC ", "TOOLS", false),
+                },
             });
 
-            AddPanel(tab, "Layout", new[]
+            AddCompactPanel(tab, "Layout", new[]
             {
-                new ButtonSpec("Layout+", "HNLLAYOUTAUTO ", "LAYOUT", true),
+                new[] { new ButtonSpec("Layout+", "HNLLAYOUTAUTO ", "LAYOUT", false) },
             });
 
-            AddPanel(tab, "Tools", new[]
+            AddCompactPanel(tab, "Tools", new[]
             {
-                new ButtonSpec("Lisp Center", "HNLLISP ", "LISP", false),
-                new ButtonSpec("Manager", "HNLMANAGER ", "MANAGER", false),
-                new ButtonSpec("Bridge", "HNLBRIDGESTATUS ", "BRIDGE", false),
+                new[] {
+                    new ButtonSpec("Lisp Center", "HNLLISP ", "LISP", false),
+                    new ButtonSpec("Manager", "HNLMANAGER ", "MANAGER", false),
+                },
+                new[] {
+                    new ButtonSpec("Bridge", "HNLBRIDGESTATUS ", "BRIDGE", false),
+                },
             });
 
             AddCollection(tabs, tab);
@@ -175,6 +191,53 @@ internal static class HnlNativeRibbon
         Set(button, "CommandParameter", spec.Command);
         Set(button, "CommandHandler", new HnlRibbonCommandHandler());
         return button;
+    }
+
+    private static object? TryNewRibbon(string shortName)
+    {
+        try { return NewRibbon(shortName); }
+        catch { return null; }
+    }
+
+    private static void AddCompactPanel(object tab, string title, ButtonSpec[][] rows)
+    {
+        var source = NewRibbon("RibbonPanelSource");
+        Set(source, "Title", title);
+        var items = source.GetType().GetProperty("Items")?.GetValue(source)
+            ?? throw new InvalidOperationException("RibbonPanelSource.Items unavailable.");
+
+        // AutoCAD supports RibbonRowPanel/RowBreak. If a version/theme does not,
+        // fall back to ordinary sequential buttons rather than losing the HNL panel.
+        var rowPanel = TryNewRibbon("RibbonRowPanel");
+        var rowItems = rowPanel?.GetType().GetProperty("Items")?.GetValue(rowPanel);
+
+        if (rowPanel != null && rowItems != null)
+        {
+            for (var r = 0; r < rows.Length; r++)
+            {
+                foreach (var spec in rows[r])
+                    AddCollection(rowItems, CreateRibbonButton(spec));
+
+                if (r < rows.Length - 1)
+                {
+                    var br = TryNewRibbon("RibbonRowBreak");
+                    if (br != null) AddCollection(rowItems, br);
+                }
+            }
+            AddCollection(items, rowPanel);
+        }
+        else
+        {
+            foreach (var row in rows)
+                foreach (var spec in row)
+                    AddCollection(items, CreateRibbonButton(spec));
+        }
+
+        var panel = NewRibbon("RibbonPanel");
+        Set(panel, "Source", source);
+        var panels = tab.GetType().GetProperty("Panels")?.GetValue(tab)
+            ?? throw new InvalidOperationException("RibbonTab.Panels unavailable.");
+        AddCollection(panels, panel);
     }
 
     private static void AddPanel(object tab, string title, ButtonSpec[] buttons)
@@ -332,9 +395,18 @@ internal static class HnlNativeRibbon
         {
             dynamic acad = Autodesk.AutoCAD.ApplicationServices.Application.AcadApplication;
             dynamic menus = acad.MenuGroups.Item(0).Menus;
-            dynamic hnl = null;
-            for (int i=0;i<menus.Count;i++) { dynamic m=menus.Item(i); if(string.Equals(Convert.ToString(m.Name),"HNL",StringComparison.OrdinalIgnoreCase)){hnl=m;break;} }
-            if (hnl == null) hnl = menus.Add("HNL");
+            object? hnlObject = null;
+            for (int i=0;i<menus.Count;i++)
+            {
+                dynamic m = menus.Item(i);
+                if (string.Equals(Convert.ToString(m.Name), "HNL", StringComparison.OrdinalIgnoreCase))
+                {
+                    hnlObject = (object?)m;
+                    break;
+                }
+            }
+            if (hnlObject == null) hnlObject = (object?)menus.Add("HNL");
+            dynamic hnl = hnlObject ?? throw new InvalidOperationException("Unable to create/find HNL classic menu.");
             if (hnl.Count == 0)
             {
                 hnl.AddMenuItem(0, "AI Copilot", "^C^CHNLAI ");

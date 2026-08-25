@@ -148,29 +148,75 @@ export const HnlSmartShopdrawingPlatformModal:React.FC<Props>=({
   };
 
   const insertLibraryItem=async(it:any)=>{
-    if(!autoCadConnected){setMessage("Cần AutoCAD Connected để chèn block native.");return;}
-    await bridge("ENSURE_HNL_STANDARDS",{});
-    const def=it.selectedDefinition||(Array.isArray(it.definitions)&&it.definitions.length===1?it.definitions[0].name:null);
-    const action=it.sourceDwg&&def?"IMPORT_LIBRARY_DEFINITION":"INSERT_LIBRARY_BLOCK";
-    const payload=action==="IMPORT_LIBRARY_DEFINITION"
-      ? {filePath:it.sourceDwg,definitionName:def,layer:it.layer||getDefaultLibraryLayer(it.category),scale:insertScale,rotationDeg:insertRotation}
-      : {symbolKey:it.symbolKey||"CUSTOM_DWG",name:it.name,layer:it.layer||getDefaultLibraryLayer(it.category),sourceDwg:it.sourceDwg||null,scale:insertScale,rotationDeg:insertRotation};
-    const r=await bridge(action,payload);
-    if(!r?.ok)return;
-    const data=r.result||r;
-    setRecentIds(v=>[it.id,...v.filter(x=>x!==it.id)].slice(0,30));
-    if(managedLibrary.some((x:any)=>x.id===it.id)){
-      await updateManagedItem(it.id,{
-        recentAt:new Date().toISOString(),
-        dynamicState:data?.isDynamicBlock?"DYNAMIC":it.dynamicState
-      });
+    if(!autoCadConnected){setMessage("Cần AutoCAD + HNL Bridge Connected để chèn block.");return;}
+    try{
+      const std=await bridge("ENSURE_HNL_STANDARDS",{});
+      if(std && std.ok===false)return;
+
+      let definitions=Array.isArray(it.definitions)?it.definitions:[];
+      let modelEntityCount:number|undefined=undefined;
+
+      // Imported DWG: inspect automatically so we never silently insert an empty whole-drawing block.
+      if(it.sourceDwg && definitions.length===0){
+        setMessage("Đang đọc DWG thư viện để xác định block definition...");
+        const inspect=await bridge("INSPECT_LIBRARY_DWG",{filePath:it.sourceDwg});
+        if(!inspect?.ok)return;
+        const info=inspect.result||inspect;
+        definitions=Array.isArray(info?.definitions)?info.definitions:[];
+        modelEntityCount=Number(info?.modelEntityCount||0);
+
+        if(managedLibrary.some((x:any)=>x.id===it.id)){
+          const dyn=definitions.filter((d:any)=>d.isDynamic).length;
+          await updateManagedItem(it.id,{
+            definitions,
+            dynamicState:definitions.length===0?"STATIC":dyn===0?"STATIC":dyn===definitions.length?"DYNAMIC":"MIXED",
+            selectedDefinition:definitions.length===1?definitions[0].name:null
+          });
+        }
+      }
+
+      let def=it.selectedDefinition||(definitions.length===1?definitions[0].name:null);
+
+      if(it.sourceDwg && definitions.length>1 && !def){
+        setMessage(`DWG có ${definitions.length} block definitions. Hãy chọn đúng "Block definition" ở panel bên phải rồi bấm Chèn.`);
+        return;
+      }
+
+      if(it.sourceDwg && definitions.length===0 && modelEntityCount===0){
+        setMessage("DWG thư viện không có geometry Model Space và không có block definition để chèn.");
+        return;
+      }
+
+      const action=it.sourceDwg&&def?"IMPORT_LIBRARY_DEFINITION":"INSERT_LIBRARY_BLOCK";
+      const payload=action==="IMPORT_LIBRARY_DEFINITION"
+        ? {filePath:it.sourceDwg,definitionName:def,layer:it.layer||getDefaultLibraryLayer(it.category),scale:insertScale,rotationDeg:insertRotation}
+        : {symbolKey:it.symbolKey||"CUSTOM_DWG",name:it.name,layer:it.layer||getDefaultLibraryLayer(it.category),sourceDwg:it.sourceDwg||null,scale:insertScale,rotationDeg:insertRotation};
+
+      setMessage("Đang gửi block sang AutoCAD...");
+      const r=await bridge(action,payload);
+      if(!r?.ok)return;
+      const data=r.result||r;
+
+      setRecentIds(v=>[it.id,...v.filter(x=>x!==it.id)].slice(0,30));
+      if(managedLibrary.some((x:any)=>x.id===it.id)){
+        await updateManagedItem(it.id,{recentAt:new Date().toISOString()});
+      }
+
+      if(data?.awaitingPoint||data?.queued){
+        setLastDynamic(null);
+        setMessage(`✓ Đã gửi ${it.name} sang AutoCAD. Chuyển sang AutoCAD và chọn điểm chèn trên bản vẽ. Nếu không thấy prompt, gõ HNLINSERTPENDING.`);
+        return;
+      }
+
+      setLastDynamic(data?.isDynamicBlock?{
+        handle:data.handle,blockName:data.blockName,properties:data.dynamicProperties||[]
+      }:null);
+      setMessage(data?.isDynamicBlock
+        ? `Đã chèn Dynamic Block ${data.blockName} • ${data.dynamicProperties?.length||0} properties.`
+        : `Đã chèn block ${data.blockName||it.name}.`);
+    }catch(e:any){
+      setMessage(`Chèn Library lỗi: ${e?.message||String(e)}`);
     }
-    setLastDynamic(data?.isDynamicBlock?{
-      handle:data.handle,blockName:data.blockName,properties:data.dynamicProperties||[]
-    }:null);
-    setMessage(data?.isDynamicBlock
-      ? `Đã chèn Dynamic Block ${data.blockName} • ${data.dynamicProperties?.length||0} properties.`
-      : `Đã chèn block ${data.blockName||it.name}.`);
   };
 
   const toggleFavorite=async(it:any)=>{
@@ -416,12 +462,13 @@ export const HnlSmartShopdrawingPlatformModal:React.FC<Props>=({
                     <select value={selectedLibrary.selectedDefinition||""}
                       onChange={e=>managedLibrary.some((x:any)=>x.id===selectedLibrary.id)&&void updateManagedItem(selectedLibrary.id,{selectedDefinition:e.target.value||null})}
                       className="mt-1 w-full bg-neutral-950 border border-neutral-700 rounded p-2 text-[10px]">
-                      <option value="">Whole drawing fallback</option>
+                      <option value="">— Chọn block definition —</option>
                       {selectedLibrary.definitions.map((d:any)=><option key={d.name} value={d.name}>{d.isDynamic?"◆ Dynamic":"□ Static"} • {d.name} • {d.entityCount} ent</option>)}
                     </select>
                   </label>}
 
                   <button onClick={()=>void insertLibraryItem(selectedLibrary)} className="w-full px-3 py-2.5 rounded bg-cyan-600 text-white text-[10px] font-bold">Chèn vào AutoCAD</button>
+                  <div className="text-[9px] text-neutral-600 leading-4">Sau khi bấm Chèn, AutoCAD sẽ yêu cầu chọn điểm chèn. HNL không giữ request chờ điểm nên không còn timeout 12 giây.</div>
 
                   {selectedLibrary.storageMode==="COPY"&&managedLibrary.some((x:any)=>x.id===selectedLibrary.id)&&<button onClick={async()=>{
                     if(!window.confirm("Xóa mục khỏi HNL Library và xóa managed copy nếu không còn nơi khác dùng?"))return;

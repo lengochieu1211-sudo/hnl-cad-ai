@@ -10,7 +10,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Resolve HNL version
         id: hnl_version
         shell: pwsh
@@ -18,18 +18,31 @@ jobs:
           $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
           "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "HNL version: $v"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Verify release version sync
         run: node scripts/check-version-sync.mjs
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
       - name: Toolchain versions
         run: |
           node --version
           npm --version
+      - name: Prepare bundled 44 Lisp source
+        shell: pwsh
+        run: |
+          node scripts/prepare-legacy-lisp.mjs
+          if ($LASTEXITCODE -ne 0) { throw "prepare:lisp failed" }
+          $lsp = Get-ChildItem "resources/legacy-lisp/extracted" -Recurse -File -Filter *.lsp
+          $arx = Get-ChildItem "resources/legacy-lisp/extracted" -Recurse -File -Filter *.arx
+          if ($lsp.Count -ne 44) { throw "Expected 44 Lisp files, found $($lsp.Count)" }
+          if ($arx.Count -ne 1) { throw "Expected 1 legacy ARX, found $($arx.Count)" }
+          $index = Get-Content "resources/legacy-lisp/extracted/legacy-lisp-index.json" -Raw | ConvertFrom-Json
+          if ($index.lispCount -ne 44) { throw "Runtime Lisp index count mismatch: $($index.lispCount)" }
+          Write-Host "Bundled Lisp source PASS: $($lsp.Count) Lisp + $($arx.Count) legacy ARX"
+
       - name: Verify current HNL AutoCAD Ribbon source
         shell: pwsh
         run: |
@@ -88,6 +101,21 @@ jobs:
           if ($failed.Count -gt 0) {
             throw "AutoCAD plugin failures: $($failed -join ', ')"
           }
+
+          # Bundle the user's 44 Lisp sources directly with the AutoCAD plugin.
+          # Do NOT copy GeomProps2021x64.arx: it is a legacy AutoCAD 2021 binary.
+          $lispOut = "autocad-plugin/HNL.CadBridge.bundle/Contents/Lisp"
+          if (Test-Path $lispOut) { Remove-Item $lispOut -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $lispOut | Out-Null
+          Get-ChildItem "resources/legacy-lisp/extracted" -Recurse -File -Filter *.lsp | ForEach-Object {
+            Copy-Item $_.FullName -Destination (Join-Path $lispOut $_.Name) -Force
+          }
+          $bundledLisp = Get-ChildItem $lispOut -File -Filter *.lsp
+          if ($bundledLisp.Count -ne 44) {
+            throw "AutoCAD bundle must contain exactly 44 Lisp files, found $($bundledLisp.Count)"
+          }
+          Write-Host "AutoCAD bundle Lisp AutoLoad pack PASS: $($bundledLisp.Count)/44"
+
           Write-Host "AutoCAD bundle contents:"
           Get-ChildItem "autocad-plugin/HNL.CadBridge.bundle" -Recurse -File | Select-Object FullName,Length
 
@@ -105,18 +133,8 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Prepare bundled 44 Lisp source
-        shell: pwsh
-        run: |
-          npm run prepare:lisp
-          if ($LASTEXITCODE -ne 0) { throw "prepare:lisp failed" }
-          $lsp = Get-ChildItem "resources/legacy-lisp/extracted" -Recurse -File -Filter *.lsp
-          $arx = Get-ChildItem "resources/legacy-lisp/extracted" -Recurse -File -Filter *.arx
-          if ($lsp.Count -ne 44) { throw "Expected 44 Lisp files, found $($lsp.Count)" }
-          if ($arx.Count -ne 1) { throw "Expected 1 legacy ARX, found $($arx.Count)" }
-          $index = Get-Content "resources/legacy-lisp/extracted/legacy-lisp-index.json" -Raw | ConvertFrom-Json
-          if ($index.lispCount -ne 44) { throw "Runtime Lisp index count mismatch: $($index.lispCount)" }
-          Write-Host "Bundled Lisp PASS: $($lsp.Count) Lisp + $($arx.Count) legacy ARX"
+      - name: Audit 44 Lisp taxonomy
+        run: npm run audit:lisp-taxonomy
 
       - name: TypeScript audit
         run: npm run lint
@@ -129,9 +147,15 @@ jobs:
             if (-not (Test-Path $dll)) { throw "Missing plugin DLL: $dll" }
             Write-Host "$year plugin: $((Get-Item $dll).Length) bytes"
           }
+          $bundleLisp = Get-ChildItem "autocad-plugin/HNL.CadBridge.bundle/Contents/Lisp" -File -Filter *.lsp
+          if ($bundleLisp.Count -ne 44) { throw "Plugin bundle Lisp count mismatch: $($bundleLisp.Count)/44" }
+          if (Get-ChildItem "autocad-plugin/HNL.CadBridge.bundle/Contents/Lisp" -File -Filter *.arx) {
+            throw "Legacy ARX must not be included in AutoCAD 2023-2026 plugin bundle."
+          }
+          Write-Host "Plugin bundle Lisp: $($bundleLisp.Count)/44 • AutoLoad ready"
 
       - name: Upload AutoCAD plugin bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: HNL-CAD-AI-v${{ steps.hnl_version.outputs.version }}-AutoCAD-Plugin-Bundle
           path: autocad-plugin/HNL.CadBridge.bundle/**
@@ -155,7 +179,7 @@ jobs:
             Write-Host "SHA256: $($hash.Hash)"
           }
       - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: HNL-CAD-AI-v${{ steps.hnl_version.outputs.version }}-Windows-Installer
           path: dist_electron/HNL_CAD_AI_Setup_*.exe
