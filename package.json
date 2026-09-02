@@ -9,7 +9,9 @@
     "start": "node dist/server.cjs",
     "lint": "tsc --noEmit",
     "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:3000 && cross-env ELECTRON_START_URL=http://127.0.0.1:3000 electron .\"",
-    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "build:autocad": "node scripts/build-autocad-bundle.mjs",
+    "pack:win": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis --x64 --publish never",
+    "dist:win": "npm run build && npm run build:autocad && npm run pack:win",
     "prepare:lisp": "node scripts/prepare-legacy-lisp.mjs",
     "audit:lisp-taxonomy": "node scripts/audit-lisp-taxonomy.mjs",
     "audit:master": "node scripts/master-audit.mjs",
@@ -62,6 +64,7 @@
       "main": "electron/main.cjs"
     },
     "win": {
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "nsis",
@@ -74,6 +77,9 @@
       "artifactName": "HNL_CAD_AI_Setup_${version}.${ext}"
     },
     "nsis": {
+      "include": "build/installer.nsh",
+      "installerIcon": "electron/icon.ico",
+      "uninstallerIcon": "electron/icon.ico",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
@@ -85,6 +91,10 @@
       "allowElevation": true
     },
     "extraResources": [
+      {
+        "from": "electron/icon.ico",
+        "to": "icon.ico"
+      },
       {
         "from": "autocad-plugin/HNL.CadBridge.bundle",
         "to": "autocad/HNL.CadBridge.bundle",

@@ -51,17 +51,21 @@ function executableCandidates() {
     ...(chocolatey ? [{ type: "7z", exe: path.join(chocolatey, "bin", "7z.exe") }] : []),
     { type: "7z", exe: "7z.exe" },
     { type: "7z", exe: "7zz.exe" },
-    { type: "winrar", exe: path.join(pf, "WinRAR", "WinRAR.exe") },
-    { type: "winrar", exe: path.join(pfx86, "WinRAR", "WinRAR.exe") },
+    { type: "unrar", exe: path.join(pf, "WinRAR", "UnRAR.exe") },
+    { type: "unrar", exe: path.join(pfx86, "WinRAR", "UnRAR.exe") },
+    { type: "rar", exe: path.join(pf, "WinRAR", "Rar.exe") },
+    { type: "rar", exe: path.join(pfx86, "WinRAR", "Rar.exe") },
+    { type: "unrar", exe: "UnRAR.exe" },
+    { type: "rar", exe: "Rar.exe" },
   ];
 }
 
 function testExecutable(candidate) {
   try {
     if (path.isAbsolute(candidate.exe) && !fs.existsSync(candidate.exe)) return false;
-    const args = candidate.type === "7z" ? ["i"] : ["?"];
+    const args = candidate.type === "7z" ? ["i"] : ["lb", archive];
     const r = spawnSync(candidate.exe, args, { windowsHide: true, stdio: "ignore", timeout: 5000 });
-    return !r.error;
+    return !r.error && r.status === 0;
   } catch {
     return false;
   }
@@ -73,7 +77,7 @@ function extract(candidate) {
 
   const args = candidate.type === "7z"
     ? ["x", archive, `-o${outDir}`, "-y"]
-    : ["x", "-ibck", "-y", archive, outDir + path.sep];
+    : ["x", "-y", archive, outDir + path.sep];
 
   const r = spawnSync(candidate.exe, args, {
     windowsHide: true,
@@ -129,7 +133,7 @@ function validateAndIndex() {
       relativePath: path.relative(outDir, filePath).split(path.sep).join("/"),
       sizeBytes: fs.statSync(filePath).size,
       autoLoad: false,
-      compatibility: "LEGACY_AUTOCAD_2021_X64_UNVERIFIED_FOR_2023_2026",
+      compatibility: "LEGACY_AUTOCAD_2021_X64_UNVERIFIED_FOR_2023_2027",
     })),
   };
   fs.writeFileSync(runtimeIndexPath, JSON.stringify(index, null, 2), "utf8");

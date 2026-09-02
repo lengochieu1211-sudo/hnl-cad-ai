@@ -11,8 +11,9 @@ Plugin đọc file này, đăng ký với HNL, gửi heartbeat và poll action q
 ## Phiên bản AutoCAD / .NET
 Không dùng một DLL cho tất cả version:
 
-- **AutoCAD 2023–2024:** build `Hnl.CadBridge.AutoCAD2023-2024.csproj` → `net48`.
-- **AutoCAD 2025–2026:** build `Hnl.CadBridge.AutoCAD2025-2026.csproj` → `net8.0-windows`.
+- **AutoCAD 2023–2024:** build project theo đúng năm (`Hnl.CadBridge.AutoCAD2023.csproj`, `Hnl.CadBridge.AutoCAD2024.csproj`) → `net48`.
+- **AutoCAD 2025–2026:** build project theo đúng năm (`Hnl.CadBridge.AutoCAD2025.csproj`, `Hnl.CadBridge.AutoCAD2026.csproj`) → `net8.0-windows`.
+- **AutoCAD 2027:** build `Hnl.CadBridge.AutoCAD2027.csproj` → `net10.0-windows`.
 
 Đặt biến `AUTOCAD_SDK` trỏ tới thư mục chứa `AcMgd.dll`, `AcDbMgd.dll`, `AcCoreMgd.dll` của đúng AutoCAD đang target.
 

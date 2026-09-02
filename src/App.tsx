@@ -2036,7 +2036,7 @@ export default function App() {
                 showToast("Đang mở AutoCAD và chờ HNL Bridge kết nối...");
                 const launched = await nativeApi.launchAutoCadWithDwg(filePath);
                 if (!launched?.success) {
-                  showToast(`Không mở được AutoCAD: ${launched?.error || launched?.reason || "Không tìm thấy AutoCAD 2023-2026"}`);
+                  showToast(`Không mở được AutoCAD: ${launched?.error || launched?.reason || "Không tìm thấy AutoCAD 2023-2027"}`);
                   return;
                 }
                 const status = await waitForAutoCadBridge(30000);

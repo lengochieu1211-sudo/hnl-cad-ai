@@ -10,6 +10,7 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -52,6 +53,26 @@ public sealed class BridgeCommands : IExtensionApplication
     private static bool _lispAutoLoadEnabled = false;
     private static string _lispAutoLoadSummary = "Not checked";
 
+    private static bool IsCoreConsoleProcess()
+    {
+        try
+        {
+            return string.Equals(Process.GetCurrentProcess().ProcessName, "accoreconsole", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool HasInteractiveAutoCadUi(string feature)
+    {
+        if (!IsCoreConsoleProcess()) return true;
+        Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+            $"\nHNL {feature}: full AutoCAD UI is required; Core Console has no Ribbon/Palette.");
+        return false;
+    }
+
     public void Initialize()
     {
         // Cache AutoCAD UI state on AutoCAD's own thread. The timer callback below is
@@ -61,7 +82,7 @@ public sealed class BridgeCommands : IExtensionApplication
         TryLoadPairing();
         Application.Idle += OnIdle;
         _pollTimer = new Timer(_ => PollServer(), null, 500, 750);
-        HnlNativeRibbon.TryInstall();
+        if (!IsCoreConsoleProcess()) HnlNativeRibbon.TryInstall();
         Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
             $"\nHNL CAD AI Bridge v{PluginVersion} loaded. Lisp mode=ON_DEMAND. Commands: HNLBRIDGESTATUS, HNLLISPSTATUS, HNLLISPRELOAD");
     }
@@ -96,6 +117,7 @@ public sealed class BridgeCommands : IExtensionApplication
     [CommandMethod("HNLPALETTE", CommandFlags.Session)]
     public void ShowHnlPaletteCommand()
     {
+        if (!HasInteractiveAutoCadUi("Palette")) return;
         try
         {
             NativePaletteCommands.ShowPaletteWindow();
@@ -112,6 +134,7 @@ public sealed class BridgeCommands : IExtensionApplication
     [CommandMethod("HNLHIDE", CommandFlags.Session)]
     public void HideHnlPaletteCommand()
     {
+        if (!HasInteractiveAutoCadUi("Palette")) return;
         try
         {
             NativePaletteCommands.HidePaletteWindow();
@@ -128,6 +151,7 @@ public sealed class BridgeCommands : IExtensionApplication
     [CommandMethod("HNLPALETTESTATUS", CommandFlags.Session)]
     public void HnlPaletteStatusCommand()
     {
+        if (!HasInteractiveAutoCadUi("Palette")) return;
         Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
             $"\nHNL Palette visible: {NativePaletteCommands.IsPaletteVisible}");
     }
@@ -145,6 +169,7 @@ public sealed class BridgeCommands : IExtensionApplication
     [CommandMethod("HNLRIBBONRESET", CommandFlags.Session)]
     public void HnlRibbonResetCommand()
     {
+        if (!HasInteractiveAutoCadUi("Ribbon")) return;
         var ok = HnlNativeRibbon.Rebuild();
         Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
             ok ? $"\nHNL Ribbon v{PluginVersion}: REBUILT." : $"\nHNL Ribbon v{PluginVersion}: rebuild failed.");
@@ -153,59 +178,88 @@ public sealed class BridgeCommands : IExtensionApplication
     [CommandMethod("HNLRIBBON", CommandFlags.Session)]
     public void HnlRibbonCommand()
     {
+        if (!HasInteractiveAutoCadUi("Ribbon")) return;
         var ok = HnlNativeRibbon.Activate();
         Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
             ok ? "\nHNL Ribbon: READY." : "\nHNL Ribbon chưa sẵn sàng. Palette HNL vẫn dùng được; thử lại HNLRIBBON sau khi Ribbon AutoCAD load.");
     }
 
+    private static void ShowPaletteTabCommand(int index)
+    {
+        if (!HasInteractiveAutoCadUi("Palette")) return;
+        try
+        {
+            NativePaletteCommands.ShowPaletteTab(index);
+        }
+        catch (System.Exception ex)
+        {
+            Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+                $"\nHNL Palette error: {ex.Message}");
+        }
+    }
+
+    private static void OpenManagerWindowCommand(string? tool = null)
+    {
+        if (!HasInteractiveAutoCadUi("Manager")) return;
+        try
+        {
+            NativePaletteCommands.OpenManagerWindow(tool);
+        }
+        catch (System.Exception ex)
+        {
+            Application.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+                $"\nHNL Manager error: {ex.Message}");
+        }
+    }
+
     [CommandMethod("HNLAI", CommandFlags.Session)]
-    public void HnlAiCommand() => NativePaletteCommands.ShowPaletteTab(0);
+    public void HnlAiCommand() => ShowPaletteTabCommand(0);
 
     [CommandMethod("HNL2D", CommandFlags.Session)]
-    public void Hnl2DCommand() => NativePaletteCommands.ShowPaletteTab(2);
+    public void Hnl2DCommand() => ShowPaletteTabCommand(2);
 
     [CommandMethod("HNLDATA", CommandFlags.Session)]
-    public void HnlDataCommand() => NativePaletteCommands.ShowPaletteTab(2);
+    public void HnlDataCommand() => ShowPaletteTabCommand(2);
 
     [CommandMethod("HNLLAYOUT", CommandFlags.Session)]
-    public void HnlLayoutCommand() => NativePaletteCommands.ShowPaletteTab(2);
+    public void HnlLayoutCommand() => ShowPaletteTabCommand(2);
 
     [CommandMethod("HNLTOOLS", CommandFlags.Session)]
-    public void HnlToolsCommand() => NativePaletteCommands.ShowPaletteTab(3);
+    public void HnlToolsCommand() => ShowPaletteTabCommand(3);
 
     [CommandMethod("HNLMANAGER", CommandFlags.Session)]
-    public void HnlManagerCommand() => NativePaletteCommands.OpenManagerWindow();
+    public void HnlManagerCommand() => OpenManagerWindowCommand();
 
     [CommandMethod("HNLTEXT", CommandFlags.Session)]
-    public void HnlTextCommand() => NativePaletteCommands.OpenManagerWindow("TEXT");
+    public void HnlTextCommand() => OpenManagerWindowCommand("TEXT");
 
     [CommandMethod("HNLBLOCK", CommandFlags.Session)]
-    public void HnlBlockCommand() => NativePaletteCommands.OpenManagerWindow("BLOCK");
+    public void HnlBlockCommand() => OpenManagerWindowCommand("BLOCK");
 
 
     [CommandMethod("HNLFIELD", CommandFlags.Session)]
-    public void HnlFieldCommand() => NativePaletteCommands.OpenManagerWindow("FIELD");
+    public void HnlFieldCommand() => OpenManagerWindowCommand("FIELD");
 
     [CommandMethod("HNLGEOM", CommandFlags.Session)]
-    public void HnlGeometryCommand() => NativePaletteCommands.OpenManagerWindow("GEOMETRY");
+    public void HnlGeometryCommand() => OpenManagerWindowCommand("GEOMETRY");
 
     [CommandMethod("HNLDIM", CommandFlags.Session)]
-    public void HnlDimensionCommand() => NativePaletteCommands.OpenManagerWindow("DIMENSION");
+    public void HnlDimensionCommand() => OpenManagerWindowCommand("DIMENSION");
 
     [CommandMethod("HNLLAYER", CommandFlags.Session)]
-    public void HnlLayerDataCommand() => NativePaletteCommands.OpenManagerWindow("LAYER");
+    public void HnlLayerDataCommand() => OpenManagerWindowCommand("LAYER");
 
     [CommandMethod("HNLQTY", CommandFlags.Session)]
-    public void HnlQuantityCommand() => NativePaletteCommands.OpenManagerWindow("QUANTITY");
+    public void HnlQuantityCommand() => OpenManagerWindowCommand("QUANTITY");
 
     [CommandMethod("HNLSHOP2D", CommandFlags.Session)]
-    public void HnlShopdrawing2DCommand() => NativePaletteCommands.OpenManagerWindow("SHOPDRAWING");
+    public void HnlShopdrawing2DCommand() => OpenManagerWindowCommand("SHOPDRAWING");
 
     [CommandMethod("HNLLAYOUTAUTO", CommandFlags.Session)]
-    public void HnlLayoutAutomationCommand() => NativePaletteCommands.OpenManagerWindow("LAYOUT");
+    public void HnlLayoutAutomationCommand() => OpenManagerWindowCommand("LAYOUT");
 
     [CommandMethod("HNLLISP", CommandFlags.Session)]
-    public void HnlLispCenterCommand() => NativePaletteCommands.OpenManagerWindow("SOURCES");
+    public void HnlLispCenterCommand() => OpenManagerWindowCommand("SOURCES");
 
     [CommandMethod("HNLWALL", CommandFlags.Session)]
     public void HnlWallCommand()
@@ -267,7 +321,7 @@ public sealed class BridgeCommands : IExtensionApplication
     [CommandMethod("HNLLIBRARY", CommandFlags.Session)]
     public void HnlLibraryManagerCommand()
     {
-        NativePaletteCommands.OpenManagerWindow("LIBRARY");
+        OpenManagerWindowCommand("LIBRARY");
     }
 
     [CommandMethod("HNLINSERTPENDING", CommandFlags.Session)]
@@ -632,7 +686,7 @@ public sealed class BridgeCommands : IExtensionApplication
     {
         // All AutoCAD API reads/writes stay on AutoCAD's thread.
         _activeDrawingName = Application.DocumentManager.MdiActiveDocument?.Name ?? "";
-        if (!HnlNativeRibbon.IsInstalled) HnlNativeRibbon.TryInstall();
+        if (!IsCoreConsoleProcess() && !HnlNativeRibbon.IsInstalled) HnlNativeRibbon.TryInstall();
 
         var isBusy = IsAutoCadBusy();
 
@@ -2248,6 +2302,64 @@ public sealed class BridgeCommands : IExtensionApplication
             .ToArray();
     }
 
+    private static bool IsPathInsideFolder(string filePath, string folderPath)
+    {
+        try
+        {
+            var folder = Path.GetFullPath(folderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            var file = Path.GetFullPath(filePath);
+            return file.StartsWith(folder, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string? TryResolveBundledLisp(string? requestedName)
+    {
+        if (string.IsNullOrWhiteSpace(requestedName)) return null;
+
+        var folder = GetBundledLispFolder();
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return null;
+
+        var safeName = Path.GetFileName(requestedName);
+        if (string.IsNullOrWhiteSpace(safeName)) return null;
+
+        var direct = Path.Combine(folder, safeName);
+        if (File.Exists(direct) && IsPathInsideFolder(direct, folder)) return direct;
+
+        return GetBundledLispFiles().FirstOrDefault(file =>
+            string.Equals(Path.GetFileName(file), safeName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string ResolveLoadLispPath(JObject payload)
+    {
+        var requestedFilePath = ((string?)payload["filePath"] ?? "").Trim();
+        var sourceFile = ((string?)payload["sourceFile"] ?? "").Trim();
+        var fileName = ((string?)payload["fileName"] ?? "").Trim();
+        var bundled = (bool?)payload["bundled"] ?? false;
+
+        if (bundled)
+        {
+            var bundledPath =
+                TryResolveBundledLisp(sourceFile) ??
+                TryResolveBundledLisp(fileName) ??
+                TryResolveBundledLisp(requestedFilePath);
+            if (!string.IsNullOrWhiteSpace(bundledPath)) return bundledPath;
+        }
+
+        if (!string.IsNullOrWhiteSpace(requestedFilePath) && File.Exists(requestedFilePath))
+            return requestedFilePath;
+
+        return
+            TryResolveBundledLisp(sourceFile) ??
+            TryResolveBundledLisp(fileName) ??
+            TryResolveBundledLisp(requestedFilePath) ??
+            requestedFilePath;
+    }
+
     private static object GetBundledLispAutoLoadStatus()
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
@@ -2343,7 +2455,8 @@ public sealed class BridgeCommands : IExtensionApplication
         var doc = Application.DocumentManager.MdiActiveDocument
             ?? throw new InvalidOperationException("No active drawing.");
 
-        var filePath = ((string?)payload["filePath"] ?? "").Trim();
+        var requestedFilePath = ((string?)payload["filePath"] ?? "").Trim();
+        var filePath = ResolveLoadLispPath(payload);
         var runCommand = ((string?)payload["runCommand"] ?? "").Trim().ToUpperInvariant();
 
         if (string.IsNullOrWhiteSpace(filePath))
@@ -2368,6 +2481,8 @@ public sealed class BridgeCommands : IExtensionApplication
         {
             queued = true,
             filePath,
+            requestedFilePath,
+            resolvedFromBundle = IsPathInsideFolder(filePath, GetBundledLispFolder()),
             runCommand = string.IsNullOrWhiteSpace(runCommand) ? null : runCommand,
             note = "AutoCAD Command Line is authoritative for LOAD/SECURELOAD/DCL/dependency errors."
         };

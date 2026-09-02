@@ -47,7 +47,7 @@ export const HnlWindowsCompatibilityModal: React.FC<HnlWindowsCompatibilityModal
     {
       os: "Windows 11 64-bit (21H2, 22H2, 23H2, 24H2)",
       status: "PASS",
-      autocadSupport: "AutoCAD 2023, 2024, 2025, 2026 (plugin cần build đúng runtime)",
+      autocadSupport: "AutoCAD 2023, 2024, 2025, 2026, 2027 (plugin cần build đúng runtime)",
       dotnetRuntime: ".NET 8.0 (AutoCAD 2025-26) & .NET 4.8 (2022-24)",
       dpiSupport: "Per-Monitor DPI / High-DPI (cần kiểm thử thực tế theo máy)",
       exeStatus: "Mục tiêu hỗ trợ Standalone .EXE / NSIS Installer",
@@ -56,7 +56,7 @@ export const HnlWindowsCompatibilityModal: React.FC<HnlWindowsCompatibilityModal
     {
       os: "Windows 10 64-bit (Version 19041 - 22H2)",
       status: "PASS",
-      autocadSupport: "AutoCAD 2023, 2024, 2025, 2026 (plugin cần build đúng runtime)",
+      autocadSupport: "AutoCAD 2023, 2024, 2025, 2026, 2027 (plugin cần build đúng runtime)",
       dotnetRuntime: ".NET Framework 4.8 / .NET Core 8",
       dpiSupport: "Per-Monitor DPI v1/v2 (Hỗ trợ màn hình 4K/2K)",
       exeStatus: "Mục tiêu hỗ trợ Standalone .EXE; Portable là tùy chọn build",
@@ -84,14 +84,14 @@ export const HnlWindowsCompatibilityModal: React.FC<HnlWindowsCompatibilityModal
 
   const checkItems = [
     {
-      title: "Hỗ trợ .NET Multi-Targeting (.NET Framework 4.8 & .NET 8.0)",
-      description: "AutoCAD 2025/2026 chuyển sang .NET 8.0 Core, trong khi 2020-2024 dùng .NET 4.8. HNL Plugin tự động nhận diện runtime và nạp DLL phù hợp.",
+      title: "Hỗ trợ .NET Multi-Targeting (.NET Framework 4.8, .NET 8.0 & .NET 10.0)",
+      description: "AutoCAD 2025/2026 dùng .NET 8.0; AutoCAD 2027 dùng .NET 10.0. HNL Plugin tự động nhận diện runtime và nạp DLL phù hợp.",
       status: "PLANNED",
       badge: "Cần build/test",
     },
     {
       title: "AutoCAD Autoload Bundle Architecture (PackageContents.xml)",
-      description: "Tự động tích hợp vào thư mục %ProgramData%\\Autodesk\\ApplicationPlugins\\HNL_AI.bundle mà không cần can thiệp quyền Administrator phức tạp.",
+      description: "Tự động tích hợp vào thư mục %APPDATA%\\Autodesk\\ApplicationPlugins\\HNL.CadBridge.bundle mà không cần can thiệp quyền Administrator phức tạp.",
       status: "PLANNED",
       badge: "Cần plugin thật",
     },
@@ -199,7 +199,7 @@ export const HnlWindowsCompatibilityModal: React.FC<HnlWindowsCompatibilityModal
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-neutral-400 font-medium">AutoCAD ObjectARX SDK:</span>
-                    <span className="font-semibold text-emerald-400">2020, 2021, 2022, 2023, 2024, 2025, 2026</span>
+                    <span className="font-semibold text-emerald-400">2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027</span>
                   </div>
                 </div>
 
@@ -309,14 +309,14 @@ export const HnlWindowsCompatibilityModal: React.FC<HnlWindowsCompatibilityModal
                     <strong className="text-white">Cách 1 - Ứng dụng độc lập (Standalone .EXE):</strong> Sau khi build phát hành, dùng <code className="text-cyan-300 bg-neutral-800 px-1 py-0.5 rounded">HNL_CAD_AI_Setup_x.x.x.exe</code>. Máy người dùng cuối không cần cài Node.js.
                   </li>
                   <li>
-                    <strong className="text-white">Cách 2 - Plugin tích hợp AutoCAD (.bundle):</strong> Sau khi build plugin AutoCAD riêng, copy thư mục <code className="text-cyan-300 bg-neutral-800 px-1 py-0.5 rounded">HNL_AI.bundle</code> vào đường dẫn:
+                    <strong className="text-white">Cách 2 - Plugin tích hợp AutoCAD (.bundle):</strong> Sau khi build plugin AutoCAD riêng, copy thư mục <code className="text-cyan-300 bg-neutral-800 px-1 py-0.5 rounded">HNL.CadBridge.bundle</code> vào đường dẫn:
                     <div className="mt-1 p-2 rounded bg-black/60 font-mono text-emerald-300 select-all text-[11px]">
-                      C:\ProgramData\Autodesk\ApplicationPlugins\HNL_AI.bundle
+                      %APPDATA%\Autodesk\ApplicationPlugins\HNL.CadBridge.bundle
                     </div>
                     Khởi động AutoCAD, Ribbon tab <strong className="text-amber-300">"HNL CAD AI"</strong> sẽ tự động xuất hiện.
                   </li>
                   <li>
-                    <strong className="text-white">Cách 3 - Nạp nhanh qua lệnh NETLOAD / APPLOAD:</strong> Gõ lệnh <code className="text-cyan-300 bg-neutral-800 px-1 py-0.5 rounded">NETLOAD</code> và chọn file <code className="text-cyan-300 bg-neutral-800 px-1 py-0.5 rounded">HNL.CadPlugin.dll</code>.
+                    <strong className="text-white">Cách 3 - Nạp nhanh qua lệnh NETLOAD / APPLOAD:</strong> Gõ lệnh <code className="text-cyan-300 bg-neutral-800 px-1 py-0.5 rounded">NETLOAD</code> và chọn file <code className="text-cyan-300 bg-neutral-800 px-1 py-0.5 rounded">Hnl.CadBridge.dll</code>.
                   </li>
                 </ol>
               </div>
@@ -358,9 +358,9 @@ export const HnlWindowsCompatibilityModal: React.FC<HnlWindowsCompatibilityModal
               </div>
 
               <div className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 space-y-2">
-                <h5 className="font-bold text-xs text-white">3. AutoCAD 2025/2026 không nhận NETLOAD DLL</h5>
+                <h5 className="font-bold text-xs text-white">3. AutoCAD 2025/2026/2027 không nhận NETLOAD DLL</h5>
                 <p className="text-[11px] text-neutral-400 leading-relaxed">
-                  Từ AutoCAD 2025, Autodesk chuyển sang .NET 8.0. Hãy chắc chắn sử dụng DLL build từ mục <strong>HNL .NET Plugin Exporter</strong> chọn target <strong>.NET 8 (AutoCAD 2025-2026)</strong>.
+                  AutoCAD 2025/2026 dùng DLL .NET 8, còn AutoCAD 2027 dùng DLL .NET 10. Hãy chọn đúng file <strong>Hnl.CadBridge.dll</strong> trong thư mục <strong>Contents\2025</strong>, <strong>Contents\2026</strong> hoặc <strong>Contents\2027</strong>.
                 </p>
               </div>
             </div>

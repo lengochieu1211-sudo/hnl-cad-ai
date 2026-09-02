@@ -40,4 +40,12 @@
       AppDescription="HNL CAD AI Bridge for AutoCAD 2026"
       LoadOnAutoCADStartup="True" />
   </Components>
+
+  <Components Description="AutoCAD 2027">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R26.0" SeriesMax="R26.0" />
+    <ComponentEntry AppName="HNL CAD AI Bridge 2027" Version="2.8.1"
+      ModuleName="./Contents/2027/Hnl.CadBridge.dll"
+      AppDescription="HNL CAD AI Bridge for AutoCAD 2027"
+      LoadOnAutoCADStartup="True" />
+  </Components>
 </ApplicationPackage>

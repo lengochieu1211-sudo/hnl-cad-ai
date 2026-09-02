@@ -38,7 +38,7 @@ check("BOQ_NATIVE",bridge.includes('"GET_HNL_BOQ" => GetHnlBoq()'),"native tagge
 check("SHOP_AUDIT_NATIVE",bridge.includes('"AUDIT_HNL_SHOPDRAWING" => AuditHnlShopdrawing()'),"native shop audit endpoint");
 check("AI_NO_SILENT_FALLBACK",ai.includes("autoFallbackOffline:false")&&electron.includes("autoFallbackOffline: false")&&server.includes('HNL_AI_AUTO_FALLBACK_OFFLINE || "false"'),"fallback requires explicit opt-in");
 check("AI_LISP_ONLINE_PAYLOAD",lispBuilder.includes("data?.lisp || (data?.code ? data : null)"),"online/offline payload normalized");
-check("INSTALLER_PLUGIN",electron.includes("ApplicationPlugins")&&workflow.includes("Build AutoCAD plugins 2023-2026"),"one-click plugin path + build");
+check("INSTALLER_PLUGIN",electron.includes("ApplicationPlugins")&&workflow.includes("Build AutoCAD plugins 2023-2027"),"one-click plugin path + build");
 check("WORKFLOW_CURRENT_RIBBON",workflow.includes('"Block / Attr"')&&workflow.includes('"Dim+"')&&!workflow.includes('"Field Doctor","Quick Dim"'),"workflow gate matches current ribbon");
 check("GENAI_PIN",JSON.parse(read("package.json")).dependencies?.["@google/genai"]==="2.4.0","@google/genai 2.4.0 pinned");
 const failed=checks.filter(x=>!x.ok);

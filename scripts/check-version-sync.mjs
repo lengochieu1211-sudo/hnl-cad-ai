@@ -16,12 +16,12 @@ ok(versionTs.includes(`HNL_APP_VERSION = "${version}"`), "src/lib/version.ts doe
 
 const xml = read("autocad-plugin/HNL.CadBridge.bundle/PackageContents.xml");
 const xmlVersions = [...xml.matchAll(/(?:\sAppVersion|\sVersion)="([0-9.]+)"/g)].map(m => m[1]);
-ok(xmlVersions.length === 5 && xmlVersions.every(v => v === version), `PackageContents versions=${xmlVersions.join(",")}`);
+ok(xmlVersions.length === 6 && xmlVersions.every(v => v === version), `PackageContents versions=${xmlVersions.join(",")}`);
 
 const bridge = read("autocad-plugin/Hnl.CadBridge/BridgeCommands.cs");
 ok(bridge.includes(`PluginVersion = "${version}"`), "BridgeCommands.PluginVersion mismatch");
 
-for (const year of [2023,2024,2025,2026]) {
+for (const year of [2023,2024,2025,2026,2027]) {
   const cs = read(`autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD${year}.csproj`);
   ok(cs.includes(`<Version>${version}</Version>`), `AutoCAD ${year} <Version> mismatch`);
   ok(cs.includes(`<AssemblyVersion>${version}.0</AssemblyVersion>`), `AutoCAD ${year} AssemblyVersion mismatch`);

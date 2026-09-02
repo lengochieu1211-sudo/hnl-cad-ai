@@ -3,7 +3,7 @@ name: Build HNL CAD AI Windows EXE
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build-windows:
@@ -11,6 +11,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+
       - name: Resolve HNL version
         id: hnl_version
         shell: pwsh
@@ -18,18 +19,26 @@ jobs:
           $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
           "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "HNL version: $v"
+
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - name: Verify release version sync
-        run: node scripts/check-version-sync.mjs
+
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
       - name: Toolchain versions
         run: |
           node --version
           npm --version
+          dotnet --list-sdks
+
+      - name: Verify release version sync
+        run: node scripts/check-version-sync.mjs
+
       - name: Prepare bundled 44 Lisp source
         shell: pwsh
         run: |
@@ -58,74 +67,9 @@ jobs:
           if (-not $bridge.Contains('CommandMethod("HNLRIBBONRESET"')) { throw "Missing HNLRIBBONRESET command" }
           Write-Host "HNL Ribbon source PASS"
 
-      - name: Build AutoCAD plugins 2023-2026
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $projects = @(
-            @{ Year = "2023"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2023.csproj" },
-            @{ Year = "2024"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2024.csproj" },
-            @{ Year = "2025"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2025.csproj" },
-            @{ Year = "2026"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2026.csproj" }
-          )
-          $failed = @()
-          foreach ($item in $projects) {
-            $out = "autocad-plugin/HNL.CadBridge.bundle/Contents/$($item.Year)"
-            New-Item -ItemType Directory -Force -Path $out | Out-Null
-            Write-Host "===== AutoCAD $($item.Year) ====="
-            dotnet restore $item.Project
-            if ($LASTEXITCODE -ne 0) {
-              $failed += "$($item.Year):restore"
-              continue
-            }
-            $buildOutput = & dotnet build $item.Project -c Release --no-restore -o $out 2>&1
-            $buildExit = $LASTEXITCODE
-            $buildOutput | ForEach-Object { Write-Host $_ }
-            if ($buildExit -ne 0) {
-              $failed += "$($item.Year):build"
-              continue
-            }
-            $cs8604 = @($buildOutput | Where-Object { "$_" -match '\bCS8604\b' })
-            if ($cs8604.Count -gt 0) {
-              $failed += "$($item.Year):CS8604=$($cs8604.Count)"
-              continue
-            }
-            Write-Host "AutoCAD $($item.Year) nullable gate PASS: 0 CS8604"
-            Get-ChildItem $out -File | Where-Object {
-              $_.Name -match '^(Ac|AutoCAD).*\.dll$'
-            } | Remove-Item -Force -ErrorAction SilentlyContinue
-            if (-not (Test-Path "$out/Hnl.CadBridge.dll")) {
-              $failed += "$($item.Year):missing-dll"
-              continue
-            }
-            $expectedVersion = "${{ steps.hnl_version.outputs.version }}"
-            $fileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path "$out/Hnl.CadBridge.dll")).FileVersion
-            if (-not $fileVersion.StartsWith($expectedVersion)) {
-              $failed += "$($item.Year):dll-version=$fileVersion expected=$expectedVersion"
-              continue
-            }
-            Write-Host "AutoCAD $($item.Year) plugin PASS: $((Get-Item "$out/Hnl.CadBridge.dll").Length) bytes • FileVersion $fileVersion"
-          }
-          if ($failed.Count -gt 0) {
-            throw "AutoCAD plugin failures: $($failed -join ', ')"
-          }
-
-          # Bundle the user's 44 Lisp sources directly with the AutoCAD plugin.
-          # Do NOT copy GeomProps2021x64.arx: it is a legacy AutoCAD 2021 binary.
-          $lispOut = "autocad-plugin/HNL.CadBridge.bundle/Contents/Lisp"
-          if (Test-Path $lispOut) { Remove-Item $lispOut -Recurse -Force }
-          New-Item -ItemType Directory -Force -Path $lispOut | Out-Null
-          Get-ChildItem "resources/legacy-lisp/extracted" -Recurse -File -Filter *.lsp | ForEach-Object {
-            Copy-Item $_.FullName -Destination (Join-Path $lispOut $_.Name) -Force
-          }
-          $bundledLisp = Get-ChildItem $lispOut -File -Filter *.lsp
-          if ($bundledLisp.Count -ne 44) {
-            throw "AutoCAD bundle must contain exactly 44 Lisp files, found $($bundledLisp.Count)"
-          }
-          Write-Host "AutoCAD bundle Lisp On-Demand pack PASS: $($bundledLisp.Count)/44"
-
-          Write-Host "AutoCAD bundle contents:"
-          Get-ChildItem "autocad-plugin/HNL.CadBridge.bundle" -Recurse -File | Select-Object FullName,Length
+      - name: Build AutoCAD plugins 2023-2027
+        # scripts/build-autocad-bundle.mjs emits "AutoCAD bundle Lisp On-Demand pack PASS".
+        run: npm run build:autocad
 
       - name: Validate npm dependency pins
         shell: pwsh
@@ -144,28 +88,34 @@ jobs:
       - name: Audit 44 Lisp taxonomy
         run: npm run audit:lisp-taxonomy
 
-      - name: Full Application Master Audit (static gate)
+      - name: Full Application Master Audit
         run: npm run audit:master
+
       - name: Bridge P0 audit
         run: npm run audit:bridge
 
       - name: TypeScript audit
         run: npm run lint
+
       - name: Verify AutoCAD bundle
         shell: pwsh
         run: |
           if (-not (Test-Path "autocad-plugin/HNL.CadBridge.bundle/PackageContents.xml")) { throw "Missing PackageContents.xml" }
-          foreach ($year in @("2023","2024","2025","2026")) {
+          foreach ($year in @("2023","2024","2025","2026","2027")) {
             $dll = "autocad-plugin/HNL.CadBridge.bundle/Contents/$year/Hnl.CadBridge.dll"
             if (-not (Test-Path $dll)) { throw "Missing plugin DLL: $dll" }
-            Write-Host "$year plugin: $((Get-Item $dll).Length) bytes"
+            $fileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $dll)).FileVersion
+            if (-not $fileVersion.StartsWith("${{ steps.hnl_version.outputs.version }}")) {
+              throw "$year DLL version mismatch: $fileVersion"
+            }
+            Write-Host "$year plugin: $((Get-Item $dll).Length) bytes | FileVersion $fileVersion"
           }
           $bundleLisp = Get-ChildItem "autocad-plugin/HNL.CadBridge.bundle/Contents/Lisp" -File -Filter *.lsp
           if ($bundleLisp.Count -ne 44) { throw "Plugin bundle Lisp count mismatch: $($bundleLisp.Count)/44" }
           if (Get-ChildItem "autocad-plugin/HNL.CadBridge.bundle/Contents/Lisp" -File -Filter *.arx) {
-            throw "Legacy ARX must not be included in AutoCAD 2023-2026 plugin bundle."
+            throw "Legacy ARX must not be included in AutoCAD 2023-2027 plugin bundle."
           }
-          Write-Host "Plugin bundle Lisp: $($bundleLisp.Count)/44 • On-Demand ready"
+          Write-Host "Plugin bundle Lisp: $($bundleLisp.Count)/44 | On-Demand ready"
 
       - name: Upload AutoCAD plugin bundle
         uses: actions/upload-artifact@v6
@@ -175,22 +125,26 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Build installer
-        run: npm run dist:win
+      - name: Build app and installer
+        run: |
+          npm run build
+          npm run pack:win
+
       - name: Verify installer exists
         shell: pwsh
         run: |
           $expectedVersion = "${{ steps.hnl_version.outputs.version }}"
           $expectedName = "HNL_CAD_AI_Setup_$expectedVersion.exe"
           $files = Get-ChildItem -Path dist_electron -Filter $expectedName -Recurse
-          if (-not $files) { throw "Không tìm thấy installer đúng version: $expectedName" }
+          if (-not $files) { throw "Missing installer for version: $expectedName" }
           $files | ForEach-Object {
-            if ($_.Length -lt 5MB) { throw "Installer quá nhỏ, nghi build lỗi: $($_.FullName)" }
+            if ($_.Length -lt 5MB) { throw "Installer too small, build may be broken: $($_.FullName)" }
             $hash = Get-FileHash $_.FullName -Algorithm SHA256
             Write-Host "Installer: $($_.FullName)"
             Write-Host "Size: $($_.Length) bytes"
             Write-Host "SHA256: $($hash.Hash)"
           }
+
       - name: Upload Windows installer
         uses: actions/upload-artifact@v6
         with:

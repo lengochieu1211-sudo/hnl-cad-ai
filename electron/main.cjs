@@ -9,6 +9,7 @@ const { spawn, execFileSync } = require('child_process');
 let mainWindow = null;
 let isRendererDirty = false;
 let forceQuit = false;
+const SUPPORTED_AUTOCAD_YEARS = ['2027','2026','2025','2024','2023'];
 process.env.HNL_API_TOKEN = process.env.HNL_API_TOKEN || crypto.randomBytes(32).toString('hex');
 
 function getHnlToolArg(argv = []) {
@@ -46,7 +47,7 @@ function findAutoCadExe() {
     process.env.ProgramFiles,
     'C:\\Program Files',
   ].filter(Boolean))];
-  for (const year of ['2026','2025','2024','2023']) {
+  for (const year of SUPPORTED_AUTOCAD_YEARS) {
     for (const root of roots) {
       const candidate = path.join(root, 'Autodesk', `AutoCAD ${year}`, 'acad.exe');
       if (fs.existsSync(candidate)) return { exePath: candidate, year };
@@ -149,9 +150,9 @@ function removeWritableLegacyHnlBundles() {
 
 function bundleHasDll(bundlePath) {
   try {
-    for (const year of ['2023','2024','2025','2026']) {
-      if (fs.existsSync(path.join(bundlePath, 'Contents', year, 'Hnl.CadBridge.dll'))) return true;
-    }
+    return SUPPORTED_AUTOCAD_YEARS.every((year) =>
+      fs.existsSync(path.join(bundlePath, 'Contents', year, 'Hnl.CadBridge.dll'))
+    );
   } catch (_) {}
   return false;
 }
@@ -748,7 +749,7 @@ function getBundledLispIndex() {
         path: filePath,
         sizeBytes: stat.size,
         autoLoad: false,
-        compatibility: 'LEGACY_AUTOCAD_2021_X64_UNVERIFIED_FOR_2023_2026'
+        compatibility: 'LEGACY_AUTOCAD_2021_X64_UNVERIFIED_FOR_2023_2027'
       });
     }
   } catch {}

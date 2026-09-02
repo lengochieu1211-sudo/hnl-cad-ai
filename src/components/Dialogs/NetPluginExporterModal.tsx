@@ -33,7 +33,7 @@ export const NetPluginExporterModal: React.FC<NetPluginExporterModalProps> = ({
   UpgradeCode="{F2B1E4A3-6D5C-4F81-8B9A-0D12E34F5678}">
   <CompanyDetails Name="HNL Architecture &amp; CAD AI Solutions" Url="https://hnlcad.vn" />
   <Components Description="AutoCAD 2023+ .NET Module">
-    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R23.0" SeriesMax="R25.1" />
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R23.0" SeriesMax="R26.0" />
     <ComponentEntry 
       AppName="HnlCadTool" 
       Version="${HNL_APP_VERSION}" 

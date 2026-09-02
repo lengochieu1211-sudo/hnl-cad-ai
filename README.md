@@ -153,7 +153,7 @@ AutoCAD .NET compilation/runtime still requires GitHub Actions Windows and insta
 - Windows/GitHub build extracts and verifies exactly 44 Lisp files.
 - Installed HNL auto-indexes the bundled Lisp resource; no manual AI.rar folder selection is required.
 - LOAD / LOAD+RUN operates through AutoCAD Bridge.
-- Legacy GeomProps2021x64.arx is packaged for reference but is never auto-loaded on AutoCAD 2023-2026.
+- Legacy GeomProps2021x64.arx is packaged for reference but is never auto-loaded on AutoCAD 2023-2027.
 
 
 ## v2.8.1 — Auto Load 44 Lisp
@@ -161,7 +161,7 @@ AutoCAD .NET compilation/runtime still requires GitHub Actions Windows and insta
 - AutoLoad is ON by default and runs once for each drawing document.
 - HNL only loads definitions; it does not auto-run Lisp commands.
 - Commands: `HNLLISPSTATUS`, `HNLLISPRELOAD`, `HNLLISPAUTOON`, `HNLLISPAUTOOFF`.
-- Legacy `GeomProps2021x64.arx` remains excluded from AutoCAD 2023–2026 autoload.
+- Legacy `GeomProps2021x64.arx` remains excluded from AutoCAD 2023–2027 autoload.
 
 
 ## v2.8.1 — On-Demand Lisp + Warning Cleanup

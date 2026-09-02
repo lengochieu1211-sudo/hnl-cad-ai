@@ -1,6 +1,7 @@
 using Autodesk.AutoCAD.ApplicationServices;
 using System;
 using System.Collections;
+using System.Diagnostics;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
@@ -19,6 +20,7 @@ internal static class HnlNativeRibbon
 
     public static bool TryInstall()
     {
+        if (IsCoreConsoleProcess()) return false;
         if (_installed) return true;
         try
         {
@@ -117,6 +119,7 @@ internal static class HnlNativeRibbon
 
     public static bool Rebuild()
     {
+        if (IsCoreConsoleProcess()) return false;
         try
         {
             _installed = false;
@@ -141,6 +144,7 @@ internal static class HnlNativeRibbon
 
     public static bool Activate()
     {
+        if (IsCoreConsoleProcess()) return false;
         if (!TryInstall()) return false;
         try
         {
@@ -389,6 +393,7 @@ internal static class HnlNativeRibbon
 
     private static void TryInstallClassicMenu()
     {
+        if (IsCoreConsoleProcess()) return;
         if (_classicMenuAttempted) return;
         _classicMenuAttempted = true;
         try
@@ -426,6 +431,18 @@ internal static class HnlNativeRibbon
             try { hnl.InsertInMenuBar(acad.MenuBar.Count + 1); } catch { }
         }
         catch { }
+    }
+
+    private static bool IsCoreConsoleProcess()
+    {
+        try
+        {
+            return string.Equals(Process.GetCurrentProcess().ProcessName, "accoreconsole", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 }
 

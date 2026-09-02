@@ -81,15 +81,21 @@ export const LispInspiredToolCenterModal:React.FC<{
    const file=files[0];
    const cmd=run?primaryLispCommand(f.commands):"";
    try{
-     const r=await onBridgeAction("LOAD_LISP_FILE",{filePath:file.path,runCommand:cmd});
-     if(r?.ok===false)throw new Error(r?.error||"Bridge LOAD_LISP_FILE failed");
+     const payload={filePath:file.path,sourceFile:f.sourceFile,fileName:file.name,bundled:Boolean(file.bundled),runCommand:cmd};
+     const r=await onBridgeAction("LOAD_LISP_FILE",payload);
+     if(r?.ok===false){
+       const msg=String(r?.error||r?.reason||r?.detail?.reason||"Bridge LOAD_LISP_FILE failed");
+       throw new Error(msg==="AUTOCAD_BRIDGE_TIMEOUT"
+         ? "AutoCAD đang bận hoặc đang chờ lệnh. Nhấn Esc trong AutoCAD rồi Nạp lại Lisp."
+         : msg);
+     }
      setLispMessage(run
        ? `Đã gửi LOAD + ${cmd}. Xem AutoCAD Command Line để xác nhận kết quả.`
        : `Đã gửi LOAD ${file.name}. Xem AutoCAD Command Line để xác nhận.`);
-     onDiagnostic({code:"HNL-LISP-LOAD",severity:"INFO",title:"Legacy Lisp",message:`${run?"LOAD+RUN":"LOAD"} ${file.name}${cmd?` → ${cmd}`:""}`,command:"LOAD_LISP_FILE"});
+     onDiagnostic({code:"HNL-LISP-LOAD",severity:"INFO",title:"Legacy Lisp",message:`${run?"LOAD+RUN":"LOAD"} ${file.name}${cmd?` → ${cmd}`:""}`,command:"LOAD_LISP_FILE",context:{file:file.name,bundled:Boolean(file.bundled),path:file.path,bridgeResult:r?.result||r}});
    }catch(e:any){
      setLispMessage(e?.message||String(e));
-     onDiagnostic({code:"HNL-LISP-LOAD-ERR",severity:"ERROR",title:"Nạp Lisp thất bại",message:e?.message||String(e),command:"LOAD_LISP_FILE"});
+     onDiagnostic({code:"HNL-LISP-LOAD-ERR",severity:"ERROR",title:"Nạp Lisp thất bại",message:e?.message||String(e),command:"LOAD_LISP_FILE",context:{file:file.name,bundled:Boolean(file.bundled),path:file.path,commands:f.commands}});
    }
  };
  if(!isOpen)return null;
@@ -143,7 +149,7 @@ export const LispInspiredToolCenterModal:React.FC<{
       <div className="mt-1 text-neutral-500">
         Installer và AutoCAD plugin bundle lấy đúng <code>AI.rar</code> người dùng cung cấp. 44 Lisp được đóng sẵn nhưng mặc định KHÔNG tự LOAD. Khi bạn bấm Nạp + Chạy, HNL chỉ LOAD đúng Lisp cần dùng rồi chạy command. Nạp file/thư mục bên dưới chỉ dành cho Lisp bổ sung ngoài bộ 44.
       </div>
-      {bundledLispStatus?.legacyArx?.length?<div className="mt-1 text-amber-500">GeomProps2021x64.arx được giữ làm nguồn legacy nhưng không auto-load trên AutoCAD 2023–2026.</div>:null}
+      {bundledLispStatus?.legacyArx?.length?<div className="mt-1 text-amber-500">GeomProps2021x64.arx được giữ làm nguồn legacy nhưng không auto-load trên AutoCAD 2023–2027.</div>:null}
       <div className="mt-1 text-cyan-400">Chế độ mặc định: ON-DEMAND (nhẹ máy) • HNLLISPSTATUS / HNLLISPRELOAD / HNLLISPAUTOON / HNLLISPAUTOOFF</div>
     </div>
 
