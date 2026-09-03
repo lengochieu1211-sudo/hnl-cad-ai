@@ -1,0 +1,111 @@
+name: HNL VXT Pro Universal 2023-2027 Matrix
+
+on:
+  push:
+    branches:
+      - research/vxt-pro-v7-bootstrap
+    paths:
+      - "incubator/hnl-vxt-pro/**"
+      - ".github/workflows/vxt-pro-universal-matrix.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "incubator/hnl-vxt-pro/**"
+      - ".github/workflows/vxt-pro-universal-matrix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-tests:
+    name: Core / Geometry / DIM Tests
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Run golden core tests
+        shell: pwsh
+        run: dotnet test "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj" -c Release
+
+  cad-bridge-matrix:
+    name: AutoCAD ${{ matrix.cad }} / ${{ matrix.runtime }}
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cad: "2023"
+            runtime: "NET48"
+            project: "src/HNL.VXT.AutoCAD/HNL.VXT.AutoCAD.csproj"
+            tfm: "net48"
+          - cad: "2024"
+            runtime: "NET48"
+            project: "src/Bridges/AutoCAD2024/HNL.VXT.AutoCAD.2024.csproj"
+            tfm: "net48"
+          - cad: "2025"
+            runtime: "NET8"
+            project: "src/Bridges/AutoCAD2025/HNL.VXT.AutoCAD.2025.csproj"
+            tfm: "net8.0-windows"
+          - cad: "2026-pre-1.2"
+            runtime: "NET8"
+            project: "src/Bridges/AutoCAD2026Net8/HNL.VXT.AutoCAD.2026.Net8.csproj"
+            tfm: "net8.0-windows"
+          - cad: "2026-1.2-plus"
+            runtime: "NET10"
+            project: "src/Bridges/AutoCAD2026Net10/HNL.VXT.AutoCAD.2026.Net10.csproj"
+            tfm: "net10.0-windows"
+          - cad: "2027"
+            runtime: "NET10"
+            project: "src/Bridges/AutoCAD2027/HNL.VXT.AutoCAD.2027.csproj"
+            tfm: "net10.0-windows"
+    env:
+      VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Restore bridge
+        shell: pwsh
+        run: dotnet restore (Join-Path $env:VXT_ROOT '${{ matrix.project }}')
+      - name: Build bridge
+        shell: pwsh
+        run: dotnet build (Join-Path $env:VXT_ROOT '${{ matrix.project }}') -c Release --no-restore
+      - name: Stage and validate bridge
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $project = Join-Path $env:VXT_ROOT '${{ matrix.project }}'
+          $projectDir = Split-Path $project -Parent
+          $out = Join-Path $projectDir 'bin\Release\${{ matrix.tfm }}'
+          $stage = Join-Path $env:VXT_ROOT 'artifacts\matrix\${{ matrix.cad }}-${{ matrix.runtime }}'
+          if (-not (Test-Path $out)) { throw "Missing output: $out" }
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Get-ChildItem $out -File | Where-Object {
+            $_.Extension -in @('.dll', '.config', '.json') -and $_.Name -notmatch '^(Ac|AutoCAD).*\.dll$'
+          } | Copy-Item -Destination $stage -Force
+          foreach ($dll in @('HNL.VXT.AutoCAD.dll','HNL.VXT.Core.dll','HNL.VXT.UI.dll')) {
+            if (-not (Test-Path (Join-Path $stage $dll))) { throw "Missing staged DLL: $dll" }
+          }
+          $bad = Get-ChildItem $stage -File | Where-Object { $_.Name -match '^(Ac|AutoCAD).*\.dll$' }
+          if ($bad) { throw 'Autodesk runtime DLL must not be redistributed.' }
+          $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $stage 'HNL.VXT.AutoCAD.dll'))
+          Write-Host "AutoCAD ${{ matrix.cad }} / ${{ matrix.runtime }} => $($info.FileVersion)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HNL-VXT-Bridge-${{ matrix.cad }}-${{ matrix.runtime }}
+          path: ${{ env.VXT_ROOT }}/artifacts/matrix/${{ matrix.cad }}-${{ matrix.runtime }}
+          retention-days: 7
+          if-no-files-found: error
