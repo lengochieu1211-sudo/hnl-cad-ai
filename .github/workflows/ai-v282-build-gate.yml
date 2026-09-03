@@ -1,0 +1,265 @@
+name: HNL CAD AI v2.8.2 AI Agent Build Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ai/v2.8.2-cad-agent-preview
+
+permissions:
+  contents: read
+
+jobs:
+  build-v282:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout CI branch
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 22 for patch verification
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Reconstruct canonical v2.8.2 patch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $parts = 1..6 | ForEach-Object { ".ci/v2.8.2.combined.br.b64.{0:D2}" -f $_ }
+          foreach ($part in $parts) {
+            if (-not (Test-Path $part)) { throw "Missing combined patch payload: $part" }
+          }
+          $b64 = ($parts | ForEach-Object { (Get-Content $_ -Raw).Trim() }) -join ""
+          $br = Join-Path $env:RUNNER_TEMP "v282-combined.br"
+          $patch = Join-Path $env:RUNNER_TEMP "v282-combined.patch"
+          [IO.File]::WriteAllBytes($br, [Convert]::FromBase64String($b64))
+          $env:HNL_BR = $br
+          $env:HNL_PATCH = $patch
+          node -e "const fs=require('fs'),z=require('zlib');fs.writeFileSync(process.env.HNL_PATCH,z.brotliDecompressSync(fs.readFileSync(process.env.HNL_BR)))"
+          $hash = (Get-FileHash $patch -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = "a69cfb1be96515dffd3c02d94892ca1439c991255cec204a5c0f702e2148d000"
+          Write-Host "Combined patch SHA256: $hash"
+          if ($hash -ne $expected) { throw "Combined patch SHA256 mismatch: $hash" }
+
+      - name: Reset working tree to canonical v2.8.1 baseline
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          git cat-file -e "fc4f90867fc656230043f277aa46affd1ebdcb17^{commit}"
+          if ($LASTEXITCODE -ne 0) { throw "Canonical baseline commit fc4f908 is not available" }
+          git reset --hard fc4f90867fc656230043f277aa46affd1ebdcb17
+          git clean -fdx
+          $head = (git rev-parse HEAD).Trim()
+          if ($head -ne "fc4f90867fc656230043f277aa46affd1ebdcb17") { throw "Baseline reset mismatch: $head" }
+          Write-Host "Canonical baseline PASS: $head"
+
+      - name: Apply exact v2.8.2 combined patch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $patch = Join-Path $env:RUNNER_TEMP "v282-combined.patch"
+          git apply --check $patch
+          if ($LASTEXITCODE -ne 0) { throw "git apply --check failed" }
+          git apply $patch
+          if ($LASTEXITCODE -ne 0) { throw "git apply failed" }
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($version -ne "2.8.2") { throw "Expected patched version 2.8.2, got $version" }
+          Write-Host "Patch apply PASS: v$version"
+
+      - name: Verify critical source fingerprints
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $expected = @{
+            "package.json" = "98562edc47e8049d1173f8074b6e6c3a179ffe56c778a093599a0120bc94671f"
+            "server.ts" = "88b4217534e1e78e7883b9ec8bd60e6301b0842077717a61f90d13447ef6c553"
+            "autocad-plugin/Hnl.CadBridge/BridgeCommands.cs" = "c82118491b8bde698493dfe28342a18f48dfd029150a69a44a3d113e9c86b13f"
+            "src/components/Palette/HnlPalette.tsx" = "eabdb781eaff8c10339fa6d2cca55d59f5323b5f421c90e0fbaf495c94293ce8"
+            "src/lib/aiCadAgent.ts" = "34b5f9de0898ac762ff75a78e84d305702cf43277ea1eccb09a767eb634281fa"
+            "src/lib/aiProviderCatalog.ts" = "af37edaa4229c2d13fd93cb956c5ce75bee37ac65543d0a8acf1d807fff16078"
+            "src/lib/autoCadBridge.ts" = "98b58df65df11cc1bc62ebf99ee1faeac0fc9913ad60c2705faf31fcbf0b8967"
+            "scripts/audit-ai-agent.mjs" = "32fbf15cecef39a260a1dbe078b7ce2782480173d21920577a0b883f530a7198"
+            "scripts/audit-bridge-p0.mjs" = "116388dee0ccc5037411b5b906f2f9f20d0dfa8e8080e457a4593bb9995ddbc7"
+          }
+          foreach ($path in $expected.Keys) {
+            if (-not (Test-Path $path)) { throw "Missing critical source file: $path" }
+            $actual = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $expected[$path]) { throw "Source fingerprint mismatch: $path => $actual" }
+            Write-Host "Fingerprint PASS: $path"
+          }
+
+      - name: Resolve HNL version
+        id: hnl_version
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "HNL version: $v"
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Toolchain versions
+        shell: pwsh
+        run: |
+          node --version
+          npm --version
+          dotnet --version
+
+      - name: Verify release version sync
+        run: node scripts/check-version-sync.mjs
+
+      - name: Prepare bundled 44 Lisp source
+        shell: pwsh
+        run: |
+          node scripts/prepare-legacy-lisp.mjs
+          if ($LASTEXITCODE -ne 0) { throw "prepare:lisp failed" }
+          $lsp = Get-ChildItem "resources/legacy-lisp/extracted" -Recurse -File -Filter *.lsp
+          $arx = Get-ChildItem "resources/legacy-lisp/extracted" -Recurse -File -Filter *.arx
+          if ($lsp.Count -ne 44) { throw "Expected 44 Lisp files, found $($lsp.Count)" }
+          if ($arx.Count -ne 1) { throw "Expected 1 legacy ARX source, found $($arx.Count)" }
+          $index = Get-Content "resources/legacy-lisp/extracted/legacy-lisp-index.json" -Raw | ConvertFrom-Json
+          if ($index.lispCount -ne 44) { throw "Runtime Lisp index mismatch: $($index.lispCount)" }
+          Write-Host "Bundled Lisp source PASS: 44 Lisp + 1 legacy ARX source"
+
+      - name: Verify current HNL AutoCAD Ribbon source
+        shell: pwsh
+        run: |
+          $ribbon = Get-Content "autocad-plugin/Hnl.CadBridge/NativeRibbon.cs" -Raw
+          $bridge = Get-Content "autocad-plugin/Hnl.CadBridge/BridgeCommands.cs" -Raw
+          foreach ($token in @("AI Copilot","Block / Attr","Field","Dim+","Layer","Data / BOQ","Layout+","HNLLIBRARY")) {
+            if (-not $ribbon.Contains($token)) { throw "NativeRibbon missing current UI token: $token" }
+          }
+          foreach ($legacy in @("AI Settings","Selection","Polyline","Data / Field","Properties","Plot Publish")) {
+            if ($ribbon.Contains("new ButtonSpec(`"$legacy`"")) { throw "Legacy Ribbon button still present: $legacy" }
+          }
+          if (-not $bridge.Contains('CommandMethod("HNLVERSION"')) { throw "Missing HNLVERSION command" }
+          if (-not $bridge.Contains('CommandMethod("HNLRIBBONRESET"')) { throw "Missing HNLRIBBONRESET command" }
+          Write-Host "HNL Ribbon source PASS"
+
+      - name: Build AutoCAD plugins 2023-2026 and enforce zero CS8604
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $projects = @(
+            @{ Year = "2023"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2023.csproj" },
+            @{ Year = "2024"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2024.csproj" },
+            @{ Year = "2025"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2025.csproj" },
+            @{ Year = "2026"; Project = "autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD2026.csproj" }
+          )
+          $failed = @()
+          foreach ($item in $projects) {
+            $out = "autocad-plugin/HNL.CadBridge.bundle/Contents/$($item.Year)"
+            New-Item -ItemType Directory -Force -Path $out | Out-Null
+            Write-Host "===== AutoCAD $($item.Year) ====="
+            dotnet restore $item.Project
+            if ($LASTEXITCODE -ne 0) { $failed += "$($item.Year):restore"; continue }
+            $buildOutput = & dotnet build $item.Project -c Release --no-restore -o $out 2>&1
+            $buildExit = $LASTEXITCODE
+            $buildOutput | ForEach-Object { Write-Host $_ }
+            if ($buildExit -ne 0) { $failed += "$($item.Year):build"; continue }
+            $cs8604 = @($buildOutput | Where-Object { "$_" -match '\bCS8604\b' })
+            if ($cs8604.Count -gt 0) { $failed += "$($item.Year):CS8604=$($cs8604.Count)"; continue }
+            Write-Host "AutoCAD $($item.Year) nullable gate PASS: 0 CS8604"
+            Get-ChildItem $out -File | Where-Object { $_.Name -match '^(Ac|AutoCAD).*\.dll$' } | Remove-Item -Force -ErrorAction SilentlyContinue
+            $dll = "$out/Hnl.CadBridge.dll"
+            if (-not (Test-Path $dll)) { $failed += "$($item.Year):missing-dll"; continue }
+            $expectedVersion = "${{ steps.hnl_version.outputs.version }}"
+            $fileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $dll)).FileVersion
+            if (-not $fileVersion.StartsWith($expectedVersion)) { $failed += "$($item.Year):dll-version=$fileVersion"; continue }
+            Write-Host "AutoCAD $($item.Year) plugin PASS: $((Get-Item $dll).Length) bytes • FileVersion $fileVersion"
+          }
+          if ($failed.Count -gt 0) { throw "AutoCAD plugin failures: $($failed -join ', ')" }
+
+          $lispOut = "autocad-plugin/HNL.CadBridge.bundle/Contents/Lisp"
+          if (Test-Path $lispOut) { Remove-Item $lispOut -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $lispOut | Out-Null
+          Get-ChildItem "resources/legacy-lisp/extracted" -Recurse -File -Filter *.lsp | ForEach-Object {
+            Copy-Item $_.FullName -Destination (Join-Path $lispOut $_.Name) -Force
+          }
+          $bundledLisp = Get-ChildItem $lispOut -File -Filter *.lsp
+          if ($bundledLisp.Count -ne 44) { throw "AutoCAD bundle must contain exactly 44 Lisp files, found $($bundledLisp.Count)" }
+          if (Get-ChildItem $lispOut -File -Filter *.arx) { throw "Legacy ARX must not be bundled for AutoCAD 2023-2026" }
+          Write-Host "AutoCAD bundle Lisp On-Demand pack PASS: 44/44"
+
+      - name: Validate npm dependency pins
+        shell: pwsh
+        run: |
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $genai = $pkg.dependencies.'@google/genai'
+          if ($genai -ne '2.4.0') { throw "Unexpected @google/genai pin: $genai" }
+          npm view @google/genai@2.4.0 version
+          if ($LASTEXITCODE -ne 0) { throw "@google/genai@2.4.0 unavailable" }
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Audit 44 Lisp taxonomy
+        run: npm run audit:lisp-taxonomy
+
+      - name: Full Application Master Audit
+        run: npm run audit:master
+
+      - name: Bridge P0 audit
+        run: npm run audit:bridge
+
+      - name: AI CAD Agent audit
+        run: npm run audit:ai-agent
+
+      - name: TypeScript audit
+        run: npm run lint
+
+      - name: Verify AutoCAD bundle
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "autocad-plugin/HNL.CadBridge.bundle/PackageContents.xml")) { throw "Missing PackageContents.xml" }
+          foreach ($year in @("2023","2024","2025","2026")) {
+            $dll = "autocad-plugin/HNL.CadBridge.bundle/Contents/$year/Hnl.CadBridge.dll"
+            if (-not (Test-Path $dll)) { throw "Missing plugin DLL: $dll" }
+            $fileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $dll)).FileVersion
+            if (-not $fileVersion.StartsWith("${{ steps.hnl_version.outputs.version }}")) { throw "$year DLL version mismatch: $fileVersion" }
+            Write-Host "$year plugin: $((Get-Item $dll).Length) bytes • FileVersion $fileVersion"
+          }
+          $bundleLisp = Get-ChildItem "autocad-plugin/HNL.CadBridge.bundle/Contents/Lisp" -File -Filter *.lsp
+          if ($bundleLisp.Count -ne 44) { throw "Plugin bundle Lisp mismatch: $($bundleLisp.Count)/44" }
+          if (Get-ChildItem "autocad-plugin/HNL.CadBridge.bundle/Contents/Lisp" -File -Filter *.arx) { throw "Legacy ARX present in bundle" }
+          Write-Host "Plugin bundle Lisp: 44/44 • On-Demand ready"
+
+      - name: Upload AutoCAD plugin bundle
+        uses: actions/upload-artifact@v6
+        with:
+          name: HNL-CAD-AI-v${{ steps.hnl_version.outputs.version }}-AutoCAD-Plugin-Bundle-CI
+          path: autocad-plugin/HNL.CadBridge.bundle/**
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Build Windows installer
+        run: npm run dist:win
+
+      - name: Verify installer exists
+        shell: pwsh
+        run: |
+          $expectedVersion = "${{ steps.hnl_version.outputs.version }}"
+          $expectedName = "HNL_CAD_AI_Setup_$expectedVersion.exe"
+          $files = Get-ChildItem -Path dist_electron -Filter $expectedName -Recurse
+          if (-not $files) { throw "Missing installer: $expectedName" }
+          $files | ForEach-Object {
+            if ($_.Length -lt 5MB) { throw "Installer too small: $($_.FullName)" }
+            $hash = Get-FileHash $_.FullName -Algorithm SHA256
+            Write-Host "Installer: $($_.FullName)"
+            Write-Host "Size: $($_.Length) bytes"
+            Write-Host "SHA256: $($hash.Hash)"
+          }
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v6
+        with:
+          name: HNL-CAD-AI-v${{ steps.hnl_version.outputs.version }}-Windows-Installer-CI
+          path: dist_electron/HNL_CAD_AI_Setup_*.exe
+          if-no-files-found: error
+          retention-days: 14
