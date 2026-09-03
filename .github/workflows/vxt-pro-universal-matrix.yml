@@ -109,3 +109,69 @@ jobs:
           path: ${{ env.VXT_ROOT }}/artifacts/matrix/${{ matrix.cad }}-${{ matrix.runtime }}
           retention-days: 7
           if-no-files-found: error
+
+  universal-setup:
+    name: Universal Setup EXE / AutoCAD 2023-2027
+    needs:
+      - core-tests
+      - cad-bridge-matrix
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
+      DOWNLOAD_ROOT: ${{ github.workspace }}\universal-downloads
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all certified bridge artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: HNL-VXT-Bridge-*
+          path: ${{ env.DOWNLOAD_ROOT }}
+      - name: Assemble Universal bridge tree
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $universal = Join-Path $env:VXT_ROOT 'artifacts\universal'
+          if (Test-Path $universal) { Remove-Item $universal -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $universal | Out-Null
+          $map = @{
+            'HNL-VXT-Bridge-2023-NET48' = '2023'
+            'HNL-VXT-Bridge-2024-NET48' = '2024'
+            'HNL-VXT-Bridge-2025-NET8' = '2025'
+            'HNL-VXT-Bridge-2026-pre-1.2-NET8' = '2026-net8'
+            'HNL-VXT-Bridge-2026-1.2-plus-NET10' = '2026-net10'
+            'HNL-VXT-Bridge-2027-NET10' = '2027'
+          }
+          foreach ($artifact in $map.Keys) {
+            $src = Join-Path $env:DOWNLOAD_ROOT $artifact
+            $dst = Join-Path $universal $map[$artifact]
+            if (-not (Test-Path $src)) { throw "Missing matrix artifact directory: $src" }
+            New-Item -ItemType Directory -Force -Path $dst | Out-Null
+            Copy-Item (Join-Path $src '*') $dst -Recurse -Force
+          }
+      - name: Install Inno Setup 6
+        shell: pwsh
+        run: choco install innosetup -y --no-progress --limit-output
+      - name: Build HNL Universal Setup EXE
+        shell: pwsh
+        run: '& "$env:VXT_ROOT\scripts\build-universal-installer.ps1" -Root $env:VXT_ROOT'
+      - name: Verify Universal installer gate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $env:VXT_ROOT 'artifacts\universal-installer\HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.1.exe'
+          $sha = "$exe.sha256.txt"
+          if (-not (Test-Path $exe)) { throw "Universal setup missing: $exe" }
+          if (-not (Test-Path $sha)) { throw "Universal SHA256 file missing: $sha" }
+          $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
+          if (-not $info.FileVersion.StartsWith('7.0.0')) { throw "Unexpected installer FileVersion: $($info.FileVersion)" }
+          Write-Host "Universal setup gate PASS: $($info.FileVersion)"
+          Get-Content $sha
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HNL-VXT-Pro-v7.0.0-alpha.1-Universal-Setup-AutoCAD2023-2027
+          path: |
+            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.1.exe
+            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.1.exe.sha256.txt
+          retention-days: 14
+          if-no-files-found: error
