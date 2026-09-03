@@ -214,14 +214,17 @@ jobs:
           if(-not $at.Contains('const buildAutoCad=read("scripts/build-autocad-bundle.mjs");')){
             $at=$at.Replace($workflowLine,$workflowLine+"`n"+'const buildAutoCad=read("scripts/build-autocad-bundle.mjs");')
           }
-          $oldBridgeGate=@'
-check("BRIDGE_GATE_RETAINED",workflow.includes('npm run audit:bridge')&&workflow.includes('CS8604'));
-'@.Trim()
-          $newBridgeGate=@'
-check("BRIDGE_GATE_RETAINED",workflow.includes('npm run audit:bridge')&&(workflow.includes('CS8604')||buildAutoCad.includes('CS8604')));
-'@.Trim()
-          if(-not $at.Contains($oldBridgeGate)){throw 'AI audit BRIDGE_GATE_RETAINED anchor missing'}
-          $at=$at.Replace($oldBridgeGate,$newBridgeGate)
+          $replacement='check("BRIDGE_GATE_RETAINED",workflow.includes(''npm run audit:bridge'')&&(workflow.includes(''CS8604'')||buildAutoCad.includes(''CS8604'')));'
+          $found=$false
+          $lines=$at -split "`n"
+          for($i=0;$i -lt $lines.Count;$i++){
+            if($lines[$i].StartsWith('check("BRIDGE_GATE_RETAINED"')){
+              $lines[$i]=$replacement
+              $found=$true
+            }
+          }
+          if(-not $found){throw 'AI audit BRIDGE_GATE_RETAINED line missing'}
+          $at=$lines -join "`n"
           Set-Content $a $at -NoNewline -Encoding utf8
 
           $wf='.github/workflows/build-windows.yml'
