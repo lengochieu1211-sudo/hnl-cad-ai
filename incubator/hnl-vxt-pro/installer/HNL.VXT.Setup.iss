@@ -50,7 +50,7 @@ Name: "{app}\Assets"
 Source: "..\artifacts\HNL.VXT.bundle\PackageContents.xml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\artifacts\HNL.VXT.bundle\Contents\Windows\*.dll"; DestDir: "{app}\Contents\Windows"; Flags: ignoreversion
 Source: "..\artifacts\HNL.VXT.bundle\Contents\Windows\*.config"; DestDir: "{app}\Contents\Windows"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "..\legacy\HNL-VXT-V6.7.4-Golden.lsp"; DestDir: "{app}\Contents\Legacy"; Flags: ignoreversion
+Source: "..\legacy\HNL-VXT-V6.7.4-Golden.lsp"; DestDir: "{app}\Contents\Legacy"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\artifacts\installer-assets\HNL-VXT.ico"; DestDir: "{app}\Assets"; Flags: ignoreversion
 
 [Code]
@@ -111,8 +111,7 @@ begin
   begin
     MsgBox(
       'Cài đặt HNL Tool - VXT Pro v{#MyAppVersion} hoàn tất.' + #13#10 + #13#10 +
-      'Mở AutoCAD 2023 và gõ VXT để mở giao diện Pro.' + #13#10 +
-      'Trong giai đoạn Golden, có thể gõ VXTCLASSIC để chạy engine V6.7.4 ổn định.',
+      'Mở AutoCAD 2023 và gõ VXT để mở giao diện HNL VXT Pro.',
       mbInformation, MB_OK);
   end;
 end;
