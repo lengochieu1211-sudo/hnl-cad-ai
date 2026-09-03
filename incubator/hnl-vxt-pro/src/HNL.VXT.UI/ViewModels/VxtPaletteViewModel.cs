@@ -32,7 +32,7 @@ namespace HNL.VXT.UI.ViewModels
         }
 
         public string VersionLabel => "HNL Tool - VXT Pro v7.0.0-alpha.1";
-        public string Subtitle => "Vẽ Xương Trần • AutoCAD 2023";
+        public string Subtitle => "Vẽ Xương Trần • Universal AutoCAD 2023–2027";
 
         public ICommand SelectBoundaryCommand { get; }
         public ICommand PickDirectionCommand { get; }
