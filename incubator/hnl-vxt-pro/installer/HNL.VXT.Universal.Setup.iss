@@ -173,8 +173,7 @@ begin
   begin
     BuildPart := ThirdVersionPart(VersionText);
     Cad2026Net10Cached := BuildPart >= 179;
-    Log(Format('HNL VXT: AutoCAD 2026 acad.exe=%s, version=%s, buildPart=%d, NET10=%d',
-      [ExePath, VersionText, BuildPart, Ord(Cad2026Net10Cached)]));
+    Log(Format('HNL VXT: AutoCAD 2026 acad.exe=%s, version=%s, buildPart=%d, NET10=%d', [ExePath, VersionText, BuildPart, Ord(Cad2026Net10Cached)]));
   end
   else
   begin
