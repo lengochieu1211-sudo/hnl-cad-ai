@@ -19,14 +19,29 @@ if (-not (Test-Path $iss)) { throw "Missing Inno Setup script: $iss" }
 & $branding -Root $Root
 
 if ([string]::IsNullOrWhiteSpace($IsccPath)) {
+  $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+  if ($cmd) {
+    $IsccPath = $cmd.Source
+  }
+}
+
+if ([string]::IsNullOrWhiteSpace($IsccPath)) {
+  $pf86 = ${env:ProgramFiles(x86)}
   $candidates = @(
-    "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
-    "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-  )
+    $(if ($pf86) { Join-Path $pf86 'Inno Setup 6\ISCC.exe' }),
+    $(if ($env:ProgramFiles) { Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe' }),
+    'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+    'C:\Program Files\Inno Setup 6\ISCC.exe',
+    'C:\ProgramData\chocolatey\bin\ISCC.exe'
+  ) | Where-Object { $_ }
+
   $IsccPath = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 }
+
 if (-not $IsccPath -or -not (Test-Path $IsccPath)) {
-  throw 'ISCC.exe not found. Install Inno Setup 6 before building the installer.'
+  Write-Host 'Searched for ISCC.exe in:'
+  Get-ChildItem 'C:\Program Files*' -Directory -ErrorAction SilentlyContinue | Where-Object Name -Match 'Inno' | ForEach-Object FullName
+  throw 'ISCC.exe not found although Inno Setup was installed.'
 }
 
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
