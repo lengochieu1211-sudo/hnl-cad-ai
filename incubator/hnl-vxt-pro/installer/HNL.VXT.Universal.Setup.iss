@@ -15,7 +15,7 @@ VersionInfoCompany={#MyPublisher}
 VersionInfoDescription=HNL Tool - VXT Pro Universal AutoCAD 2023-2027 Installer
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyNumericVersion}
-DefaultDirName={pf}\Autodesk\ApplicationPlugins\HNL.VXT.bundle
+DefaultDirName={commonpf}\Autodesk\ApplicationPlugins\HNL.VXT.bundle
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
@@ -167,7 +167,7 @@ begin
   end;
 
   if not FindAcadExeFromRegistry('R25.1', ExePath) then
-    ExePath := ExpandConstant('{pf}\Autodesk\AutoCAD 2026\acad.exe');
+    ExePath := ExpandConstant('{commonpf}\Autodesk\AutoCAD 2026\acad.exe');
 
   if FileExists(ExePath) and GetVersionNumbersString(ExePath, VersionText) then
   begin
