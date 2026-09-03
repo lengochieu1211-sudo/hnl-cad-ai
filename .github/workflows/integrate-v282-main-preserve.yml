@@ -214,8 +214,12 @@ jobs:
           if(-not $at.Contains('const buildAutoCad=read("scripts/build-autocad-bundle.mjs");')){
             $at=$at.Replace($workflowLine,$workflowLine+"`n"+'const buildAutoCad=read("scripts/build-autocad-bundle.mjs");')
           }
-          $oldBridgeGate="check(\"BRIDGE_GATE_RETAINED\",workflow.includes('npm run audit:bridge')&&workflow.includes('CS8604'));"
-          $newBridgeGate="check(\"BRIDGE_GATE_RETAINED\",workflow.includes('npm run audit:bridge')&&(workflow.includes('CS8604')||buildAutoCad.includes('CS8604')));"
+          $oldBridgeGate=@'
+check("BRIDGE_GATE_RETAINED",workflow.includes('npm run audit:bridge')&&workflow.includes('CS8604'));
+'@.Trim()
+          $newBridgeGate=@'
+check("BRIDGE_GATE_RETAINED",workflow.includes('npm run audit:bridge')&&(workflow.includes('CS8604')||buildAutoCad.includes('CS8604')));
+'@.Trim()
           if(-not $at.Contains($oldBridgeGate)){throw 'AI audit BRIDGE_GATE_RETAINED anchor missing'}
           $at=$at.Replace($oldBridgeGate,$newBridgeGate)
           Set-Content $a $at -NoNewline -Encoding utf8
