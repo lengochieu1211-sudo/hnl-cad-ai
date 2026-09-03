@@ -1,0 +1,266 @@
+name: HNL CAD AI v2.8.2 Main-Preserve Integration
+
+on:
+  push:
+    branches:
+      - integration/v2.8.2-ai-agent-main-preserve
+    paths:
+      - .ci/integrate-v2.8.2.trigger
+
+permissions:
+  contents: write
+
+env:
+  BASE_MAIN_SHA: 7dab0482ddd4bf6f0a967aa0f377f9d72845e972
+  V282_BASE_SHA: fc4f90867fc656230043f277aa46affd1ebdcb17
+  V282_SOURCE_BRANCH: ai/v2.8.2-cad-agent-preview
+  V282_PATCH_SHA256: a69cfb1be96515dffd3c02d94892ca1439c991255cec204a5c0f702e2148d000
+
+jobs:
+  integrate-and-certify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Verify branch ancestry and reconstruct canonical v2.8.2
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git merge-base --is-ancestor $env:BASE_MAIN_SHA HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Integration branch no longer descends from protected main baseline.' }
+          git fetch origin $env:V282_SOURCE_BRANCH
+          $tmp = Join-Path $env:RUNNER_TEMP 'hnl-v282-canonical'
+          if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
+          git worktree add --detach $tmp $env:V282_BASE_SHA
+          $parts = 1..6 | ForEach-Object { '.ci/v2.8.2.combined.br.b64.{0:D2}' -f $_ }
+          $b64 = ''
+          foreach ($part in $parts) {
+            $text = git show "origin/$env:V282_SOURCE_BRANCH`:$part"
+            if ($LASTEXITCODE -ne 0) { throw "Missing canonical payload $part" }
+            $b64 += ($text -join "`n").Trim()
+          }
+          $br = Join-Path $env:RUNNER_TEMP 'v282-combined.br'
+          $patch = Join-Path $env:RUNNER_TEMP 'v282-combined.patch'
+          [IO.File]::WriteAllBytes($br,[Convert]::FromBase64String($b64))
+          $env:HNL_BR = $br
+          $env:HNL_PATCH = $patch
+          node -e "const fs=require('fs'),z=require('zlib');fs.writeFileSync(process.env.HNL_PATCH,z.brotliDecompressSync(fs.readFileSync(process.env.HNL_BR)))"
+          $hash=(Get-FileHash $patch -Algorithm SHA256).Hash.ToLowerInvariant()
+          if($hash -ne $env:V282_PATCH_SHA256){throw "Canonical v2.8.2 patch hash mismatch: $hash"}
+          Push-Location $tmp
+          git apply --check $patch
+          if($LASTEXITCODE -ne 0){throw 'Canonical patch apply-check failed'}
+          git apply $patch
+          if($LASTEXITCODE -ne 0){throw 'Canonical patch apply failed'}
+          $audit='scripts/audit-ai-agent.mjs'
+          $auditText=[IO.File]::ReadAllText((Resolve-Path $audit))
+          $old='const read=(p)=>fs.readFileSync(p,"utf8");'
+          $new='const read=(p)=>fs.readFileSync(p,"utf8").replace(/\r\n?/g,"\n");'
+          if($auditText.Contains($old)){
+            $auditText=$auditText.Replace($old,$new)
+            [IO.File]::WriteAllText((Resolve-Path $audit),$auditText,[Text.UTF8Encoding]::new($false))
+          }
+          Pop-Location
+          "HNL_V282_CANONICAL=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Canonical v2.8.2 reconstructed: $tmp"
+
+      - name: Port AI Agent files without rolling back main drift
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $src=$env:HNL_V282_CANONICAL
+          $copy=@(
+            'server.ts',
+            'src/App.tsx',
+            'src/components/Palette/HnlPalette.tsx',
+            'src/components/Dialogs/AiProviderManager.tsx',
+            'src/lib/aiCadAgent.ts',
+            'src/lib/aiProviderCatalog.ts',
+            'scripts/audit-ai-agent.mjs'
+          )
+          foreach($rel in $copy){
+            $from=Join-Path $src $rel
+            if(-not(Test-Path $from)){throw "Missing canonical AI source: $rel"}
+            $to=Join-Path (Get-Location) $rel
+            New-Item -ItemType Directory -Force -Path (Split-Path $to -Parent) | Out-Null
+            Copy-Item $from $to -Force
+          }
+          $app='src/App.tsx'
+          $appText=Get-Content $app -Raw
+          $appText=$appText.Replace('AutoCAD 2023-2026','AutoCAD 2023-2027')
+          Set-Content $app $appText -NoNewline -Encoding utf8
+          Write-Host 'Canonical AI files ported; AutoCAD 2027 label preserved.'
+
+      - name: Merge AI provider additions into current Electron main
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $p='electron/main.cjs'
+          $t=Get-Content $p -Raw
+          $old="const AI_PROVIDER_IDS = ['OFFLINE','GEMINI','OPENAI','CLAUDE','GROK','OLLAMA','CUSTOM_OPENAI'];"
+          $new="const AI_PROVIDER_IDS = ['OFFLINE','GEMINI','OPENAI','CLAUDE','GROK','GROQ','OPENROUTER','MISTRAL','HUGGINGFACE','OLLAMA','CUSTOM_OPENAI'];"
+          if(-not $t.Contains($old)){throw 'AI_PROVIDER_IDS baseline not found'}
+          $t=$t.Replace($old,$new)
+          $anchor="  GROK: { model:'grok-4.6', baseUrl:'https://api.x.ai/v1' },"
+          if(-not $t.Contains($anchor)){throw 'GROK provider anchor not found'}
+          $extra=@(
+            "  GROQ: { model:'openai/gpt-oss-120b', baseUrl:'https://api.groq.com/openai/v1' },",
+            "  OPENROUTER: { model:'openai/gpt-oss-20b:free', baseUrl:'https://openrouter.ai/api/v1' },",
+            "  MISTRAL: { model:'mistral-small-latest', baseUrl:'https://api.mistral.ai/v1' },",
+            "  HUGGINGFACE: { model:'openai/gpt-oss-120b:fastest', baseUrl:'https://router.huggingface.co/v1' },"
+          ) -join "`r`n"
+          $t=$t.Replace($anchor,"$anchor`r`n$extra")
+          $envAnchor="  process.env.XAI_API_KEY = String(secrets.GROK || process.env.XAI_API_KEY || '');"
+          if(-not $t.Contains($envAnchor)){throw 'xAI env anchor not found'}
+          $envExtra=@(
+            "  process.env.GROQ_API_KEY = String(secrets.GROQ || process.env.GROQ_API_KEY || '');",
+            "  process.env.OPENROUTER_API_KEY = String(secrets.OPENROUTER || process.env.OPENROUTER_API_KEY || '');",
+            "  process.env.MISTRAL_API_KEY = String(secrets.MISTRAL || process.env.MISTRAL_API_KEY || '');",
+            "  process.env.HF_TOKEN = String(secrets.HUGGINGFACE || process.env.HF_TOKEN || '');"
+          ) -join "`r`n"
+          $t=$t.Replace($envAnchor,"$envAnchor`r`n$envExtra")
+          $oldCfg="id === 'OFFLINE' || id === 'OLLAMA' || Boolean(secrets[id])"
+          $newCfg="id === 'OFFLINE' || id === 'OLLAMA' || id === 'CUSTOM_OPENAI' || Boolean(secrets[id])"
+          if(-not $t.Contains($oldCfg)){throw 'Configured provider expression not found'}
+          $t=$t.Replace($oldCfg,$newCfg)
+          Set-Content $p $t -NoNewline -Encoding utf8
+          if(-not $t.Contains("const SUPPORTED_AUTOCAD_YEARS = ['2027','2026','2025','2024','2023'];")){throw 'AutoCAD 2027 support was lost'}
+          Write-Host 'Electron AI providers merged; 2027 support retained.'
+
+      - name: Synchronize v2.8.2 while retaining AutoCAD 2027 build architecture
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version='2.8.2';p.description='HNL CAD AI v2.8.2 - AI CAD Agent Preview + Bridge P0 hardening + AutoCAD 2023-2027';p.scripts['audit:ai-agent']='node scripts/audit-ai-agent.mjs';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n')"
+          $v='src/lib/version.ts'
+          $vt=Get-Content $v -Raw
+          $vt=$vt.Replace('HNL_APP_VERSION = "2.8.1"','HNL_APP_VERSION = "2.8.2"')
+          Set-Content $v $vt -NoNewline -Encoding utf8
+          if(Test-Path 'metadata.json'){
+            $m=Get-Content metadata.json -Raw | ConvertFrom-Json
+            $m.version='2.8.2'
+            $m | ConvertTo-Json -Depth 20 | Set-Content metadata.json -Encoding utf8
+          }
+          $xml='autocad-plugin/HNL.CadBridge.bundle/PackageContents.xml'
+          $x=Get-Content $xml -Raw
+          $x=$x.Replace('2.8.1','2.8.2')
+          Set-Content $xml $x -NoNewline -Encoding utf8
+          $bridge='autocad-plugin/Hnl.CadBridge/BridgeCommands.cs'
+          $b=Get-Content $bridge -Raw
+          $b=$b.Replace('PluginVersion = "2.8.1"','PluginVersion = "2.8.2"')
+          Set-Content $bridge $b -NoNewline -Encoding utf8
+          foreach($year in 2023,2024,2025,2026,2027){
+            $cs="autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD$year.csproj"
+            if(-not(Test-Path $cs)){throw "Missing AutoCAD $year project"}
+            $c=Get-Content $cs -Raw
+            $c=$c.Replace('<Version>2.8.1</Version>','<Version>2.8.2</Version>')
+            $c=$c.Replace('<AssemblyVersion>2.8.1.0</AssemblyVersion>','<AssemblyVersion>2.8.2.0</AssemblyVersion>')
+            $c=$c.Replace('<FileVersion>2.8.1.0</FileVersion>','<FileVersion>2.8.2.0</FileVersion>')
+            Set-Content $cs $c -NoNewline -Encoding utf8
+          }
+          foreach($f in @('sketchup-extension/hnl_cad_ai_bridge.rb','sketchup-extension/hnl_cad_ai_bridge/main.rb','src/components/Dialogs/SketchUp2DBridgeModal.tsx','src/components/Dialogs/UsageGuideModal.tsx')){
+            if(Test-Path $f){
+              $z=Get-Content $f -Raw
+              $z=$z.Replace('2.8.1','2.8.2')
+              Set-Content $f $z -NoNewline -Encoding utf8
+            }
+          }
+          Write-Host 'Version sync patched across 2023-2027 without removing 2027.'
+
+      - name: Update audits and environment examples
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $m='scripts/master-audit.mjs'
+          $t=Get-Content $m -Raw
+          $anchor='const ai=read("src/components/Dialogs/AiProviderManager.tsx");'
+          if(-not $t.Contains($anchor)){throw 'master-audit AI anchor missing'}
+          if(-not $t.Contains('const aiProviderCatalog=read("src/lib/aiProviderCatalog.ts");')){
+            $t=$t.Replace($anchor,$anchor+"`n"+'const aiProviderCatalog=read("src/lib/aiProviderCatalog.ts");')
+          }
+          $t=$t.Replace('ai.includes("autoFallbackOffline:false")','aiProviderCatalog.includes("autoFallbackOffline:false")')
+          Set-Content $m $t -NoNewline -Encoding utf8
+          if(-not $t.Contains('Build AutoCAD plugins 2023-2027')){throw 'Master audit lost 2023-2027 build gate'}
+          $wf='.github/workflows/build-windows.yml'
+          $w=Get-Content $wf -Raw
+          if(-not $w.Contains('audit:ai-agent')){
+            $needle='npm run audit:bridge'
+            if(-not $w.Contains($needle)){throw 'build-windows bridge audit anchor missing'}
+            $w=$w.Replace($needle,$needle+"`r`n          npm run audit:ai-agent")
+            Set-Content $wf $w -NoNewline -Encoding utf8
+          }
+          $envFile='.env.example'
+          $e=if(Test-Path $envFile){Get-Content $envFile -Raw}else{''}
+          foreach($line in @('OPENAI_API_KEY=""','ANTHROPIC_API_KEY=""','XAI_API_KEY=""','GROQ_API_KEY=""','OPENROUTER_API_KEY=""','MISTRAL_API_KEY=""','HF_TOKEN=""','CUSTOM_OPENAI_API_KEY=""')){
+            if(-not $e.Contains($line)){$e += "`r`n$line"}
+          }
+          $e=$e.Trim()+"`r`n"
+          Set-Content $envFile $e -NoNewline -Encoding utf8
+
+      - name: Install dependencies and run full source gates
+        shell: pwsh
+        run: |
+          npm install --no-audit --no-fund
+          npm run audit:lisp-taxonomy
+          npm run audit:master
+          npm run audit:bridge
+          npm run audit:ai-agent
+          npm run lint
+          node scripts/check-version-sync.mjs
+
+      - name: Build AutoCAD 2023-2027 and Windows installer
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: |
+          npm run dist:win
+          if(-not(Test-Path 'dist_electron/HNL_CAD_AI_Setup_2.8.2.exe')){throw 'Missing v2.8.2 installer'}
+          $hash=(Get-FileHash 'dist_electron/HNL_CAD_AI_Setup_2.8.2.exe' -Algorithm SHA256).Hash
+          Write-Host "Installer SHA256: $hash"
+
+      - name: Commit integrated source back to branch
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git status --short
+          git diff --cached --quiet
+          if($LASTEXITCODE -eq 0){throw 'Integration produced no source changes'}
+          git commit -m 'HNL CAD AI v2.8.2 integrate AI Agent while preserving main AutoCAD 2027'
+          git push origin HEAD:integration/v2.8.2-ai-agent-main-preserve
+
+      - name: Upload certified Windows installer
+        uses: actions/upload-artifact@v6
+        with:
+          name: HNL-CAD-AI-v2.8.2-Main-Preserve-Windows-Installer
+          path: dist_electron/HNL_CAD_AI_Setup_2.8.2.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload integrated AutoCAD plugin bundle
+        uses: actions/upload-artifact@v6
+        with:
+          name: HNL-CAD-AI-v2.8.2-Main-Preserve-AutoCAD-Plugin-Bundle
+          path: autocad-plugin/HNL.CadBridge.bundle/**
+          if-no-files-found: error
+          retention-days: 14
