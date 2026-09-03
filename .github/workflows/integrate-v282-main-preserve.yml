@@ -206,6 +206,20 @@ jobs:
           $t=$t.Replace('ai.includes("autoFallbackOffline:false")','aiProviderCatalog.includes("autoFallbackOffline:false")')
           Set-Content $m $t -NoNewline -Encoding utf8
           if(-not $t.Contains('Build AutoCAD plugins 2023-2027')){throw 'Master audit lost 2023-2027 build gate'}
+
+          $a='scripts/audit-ai-agent.mjs'
+          $at=Get-Content $a -Raw
+          $workflowLine='const workflow=read(".github/workflows/build-windows.yml");'
+          if(-not $at.Contains($workflowLine)){throw 'AI audit workflow anchor missing'}
+          if(-not $at.Contains('const buildAutoCad=read("scripts/build-autocad-bundle.mjs");')){
+            $at=$at.Replace($workflowLine,$workflowLine+"`n"+'const buildAutoCad=read("scripts/build-autocad-bundle.mjs");')
+          }
+          $oldBridgeGate="check(\"BRIDGE_GATE_RETAINED\",workflow.includes('npm run audit:bridge')&&workflow.includes('CS8604'));"
+          $newBridgeGate="check(\"BRIDGE_GATE_RETAINED\",workflow.includes('npm run audit:bridge')&&(workflow.includes('CS8604')||buildAutoCad.includes('CS8604')));"
+          if(-not $at.Contains($oldBridgeGate)){throw 'AI audit BRIDGE_GATE_RETAINED anchor missing'}
+          $at=$at.Replace($oldBridgeGate,$newBridgeGate)
+          Set-Content $a $at -NoNewline -Encoding utf8
+
           $wf='.github/workflows/build-windows.yml'
           $w=Get-Content $wf -Raw
           if(-not $w.Contains('audit:ai-agent')){
@@ -214,6 +228,11 @@ jobs:
             $w=$w.Replace($needle,$needle+"`r`n          npm run audit:ai-agent")
             Set-Content $wf $w -NoNewline -Encoding utf8
           }
+          if(-not $w.Contains('npm run build:autocad')){throw 'Current AutoCAD build architecture lost'}
+          $buildScript=Get-Content 'scripts/build-autocad-bundle.mjs' -Raw
+          if(-not $buildScript.Contains('CS8604')){throw 'CS8604 hard gate missing from AutoCAD build script'}
+          if(-not $buildScript.Contains('2027')){throw 'AutoCAD 2027 build target missing'}
+
           $envFile='.env.example'
           $e=if(Test-Path $envFile){Get-Content $envFile -Raw}else{''}
           foreach($line in @('OPENAI_API_KEY=""','ANTHROPIC_API_KEY=""','XAI_API_KEY=""','GROQ_API_KEY=""','OPENROUTER_API_KEY=""','MISTRAL_API_KEY=""','HF_TOKEN=""','CUSTOM_OPENAI_API_KEY=""')){
