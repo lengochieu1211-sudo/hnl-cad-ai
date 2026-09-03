@@ -48,9 +48,11 @@ jobs:
           git merge-base --is-ancestor $env:BASE_MAIN_SHA HEAD
           if ($LASTEXITCODE -ne 0) { throw 'Integration branch no longer descends from protected main baseline.' }
           git fetch origin $env:V282_SOURCE_BRANCH
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch canonical v2.8.2 branch.' }
           $tmp = Join-Path $env:RUNNER_TEMP 'hnl-v282-canonical'
           if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
           git worktree add --detach $tmp $env:V282_BASE_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to create canonical v2.8.2 worktree.' }
           $parts = 1..6 | ForEach-Object { '.ci/v2.8.2.combined.br.b64.{0:D2}' -f $_ }
           $b64 = ''
           foreach ($part in $parts) {
@@ -64,6 +66,7 @@ jobs:
           $env:HNL_BR = $br
           $env:HNL_PATCH = $patch
           node -e "const fs=require('fs'),z=require('zlib');fs.writeFileSync(process.env.HNL_PATCH,z.brotliDecompressSync(fs.readFileSync(process.env.HNL_BR)))"
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to reconstruct canonical patch.' }
           $hash=(Get-FileHash $patch -Algorithm SHA256).Hash.ToLowerInvariant()
           if($hash -ne $env:V282_PATCH_SHA256){throw "Canonical v2.8.2 patch hash mismatch: $hash"}
           Push-Location $tmp
@@ -150,7 +153,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version='2.8.2';p.description='HNL CAD AI v2.8.2 - AI CAD Agent Preview + Bridge P0 hardening + AutoCAD 2023-2027';p.scripts['audit:ai-agent']='node scripts/audit-ai-agent.mjs';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n')"
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version='2.8.2';p.description='HNL CAD AI v2.8.2 - AI CAD Agent Preview + Bridge P0 hardening + AutoCAD 2023-2027';p.scripts['audit:ai-agent']='node scripts/audit-ai-agent.mjs';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+String.fromCharCode(10))"
+          if($LASTEXITCODE -ne 0){throw 'package.json version integration failed'}
+          node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'));console.log('package.json JSON PASS')"
+          if($LASTEXITCODE -ne 0){throw 'package.json JSON validation failed'}
           $v='src/lib/version.ts'
           $vt=Get-Content $v -Raw
           $vt=$vt.Replace('HNL_APP_VERSION = "2.8.1"','HNL_APP_VERSION = "2.8.2"')
@@ -219,20 +225,30 @@ jobs:
       - name: Install dependencies and run full source gates
         shell: pwsh
         run: |
+          $ErrorActionPreference='Stop'
           npm install --no-audit --no-fund
+          if($LASTEXITCODE -ne 0){throw 'npm install failed'}
           npm run audit:lisp-taxonomy
+          if($LASTEXITCODE -ne 0){throw 'Lisp taxonomy audit failed'}
           npm run audit:master
+          if($LASTEXITCODE -ne 0){throw 'Master audit failed'}
           npm run audit:bridge
+          if($LASTEXITCODE -ne 0){throw 'Bridge audit failed'}
           npm run audit:ai-agent
+          if($LASTEXITCODE -ne 0){throw 'AI Agent audit failed'}
           npm run lint
+          if($LASTEXITCODE -ne 0){throw 'TypeScript audit failed'}
           node scripts/check-version-sync.mjs
+          if($LASTEXITCODE -ne 0){throw 'Version sync audit failed'}
 
       - name: Build AutoCAD 2023-2027 and Windows installer
         shell: pwsh
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: |
+          $ErrorActionPreference='Stop'
           npm run dist:win
+          if($LASTEXITCODE -ne 0){throw 'Windows/AutoCAD build failed'}
           if(-not(Test-Path 'dist_electron/HNL_CAD_AI_Setup_2.8.2.exe')){throw 'Missing v2.8.2 installer'}
           $hash=(Get-FileHash 'dist_electron/HNL_CAD_AI_Setup_2.8.2.exe' -Algorithm SHA256).Hash
           Write-Host "Installer SHA256: $hash"
@@ -240,6 +256,7 @@ jobs:
       - name: Commit integrated source back to branch
         shell: pwsh
         run: |
+          $ErrorActionPreference='Stop'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
@@ -247,7 +264,9 @@ jobs:
           git diff --cached --quiet
           if($LASTEXITCODE -eq 0){throw 'Integration produced no source changes'}
           git commit -m 'HNL CAD AI v2.8.2 integrate AI Agent while preserving main AutoCAD 2027'
+          if($LASTEXITCODE -ne 0){throw 'Integration commit failed'}
           git push origin HEAD:integration/v2.8.2-ai-agent-main-preserve
+          if($LASTEXITCODE -ne 0){throw 'Integration push failed'}
 
       - name: Upload certified Windows installer
         uses: actions/upload-artifact@v6
