@@ -1,11 +1,18 @@
 <UserControl x:Class="HNL.VXT.UI.Controls.HnlLogo"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Width="34" Height="34" SnapsToDevicePixels="True">
-    <Grid>
+             Width="38" Height="38"
+             ClipToBounds="False"
+             SnapsToDevicePixels="True"
+             UseLayoutRounding="True">
+    <Grid Width="38" Height="38" ClipToBounds="False">
         <Image x:Name="LogoImage"
-               Width="34" Height="34"
+               Width="36" Height="36"
+               Margin="1"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
                Stretch="Uniform"
+               SnapsToDevicePixels="True"
                RenderOptions.BitmapScalingMode="HighQuality"/>
     </Grid>
 </UserControl>
