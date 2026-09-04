@@ -9,7 +9,7 @@ $universal = Join-Path $Root 'artifacts\universal'
 $iss = Join-Path $Root 'installer\HNL.VXT.Universal.Setup.iss'
 $branding = Join-Path $Root 'scripts\generate-installer-branding.ps1'
 $outDir = Join-Path $Root 'artifacts\universal-installer'
-$expected = Join-Path $outDir 'HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.5.exe'
+$expected = Join-Path $outDir 'HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe'
 
 $requiredStages = @('2023','2024','2025','2026-net8','2026-net10','2027')
 foreach ($stageName in $requiredStages) {
@@ -65,7 +65,7 @@ $hashFile = "$expected.sha256.txt"
 "$hash  $([IO.Path]::GetFileName($expected))" | Set-Content -Path $hashFile -Encoding ascii
 $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $expected))
 
-if (-not $info.FileVersion.StartsWith('7.0.0.5')) { throw "Unexpected Universal installer FileVersion: $($info.FileVersion)" }
+if (-not $info.FileVersion.StartsWith('7.0.0.6')) { throw "Unexpected Universal installer FileVersion: $($info.FileVersion)" }
 
 Write-Host "Universal installer: $expected"
 Write-Host "Size: $length bytes"
