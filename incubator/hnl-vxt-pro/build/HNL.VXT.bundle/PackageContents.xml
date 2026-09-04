@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ApplicationPackage SchemaVersion="1.0"
-                    AppVersion="7.0.0.2"
+                    AppVersion="7.0.0.3"
                     ProductCode="{2DDE9CB2-6746-4DC2-8D1D-F562B96E2AB8}"
                     UpgradeCode="{C511DB88-A5A5-4AA6-929D-2C6E961AB6A6}"
                     Name="HNL Tool - VXT Pro">
   <CompanyDetails Name="HNL Tool" />
   <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.2" SeriesMax="R24.2" />
-  <Components Description="HNL Tool - Vẽ Xương Trần | VXT Pro v7.0.0-alpha.2">
+  <Components Description="HNL Tool - Vẽ Xương Trần | VXT Pro v7.0.0-alpha.3">
     <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.2" SeriesMax="R24.2" />
     <ComponentEntry AppName="HNL VXT Pro"
-                    Version="7.0.0.2"
+                    Version="7.0.0.3"
                     ModuleName="./Contents/Windows/HNL.VXT.AutoCAD.dll"
                     AppDescription="HNL Tool - Vẽ Xương Trần | VXT Pro"
                     LoadOnAutoCADStartup="True">
