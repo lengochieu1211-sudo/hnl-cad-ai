@@ -19,14 +19,14 @@ namespace HNL.VXT.AutoCAD
                 _view = new VxtPaletteView(bridge);
                 VxtSession.Current.ViewModel = _view.ViewModel;
 
-                _palette = new PaletteSet("HNL Tool - VXT Pro v7.0.0-alpha.1", PaletteGuid)
+                _palette = new PaletteSet("HNL Tool - VXT Pro v7.0.0-alpha.2", PaletteGuid)
                 {
                     Style = PaletteSetStyles.ShowAutoHideButton |
                             PaletteSetStyles.ShowCloseButton |
                             PaletteSetStyles.ShowPropertiesMenu,
                     DockEnabled = DockSides.Left | DockSides.Right,
-                    MinimumSize = new Size(360, 580),
-                    Size = new Size(430, 760),
+                    MinimumSize = new Size(360, 600),
+                    Size = new Size(440, 780),
                     KeepFocus = false
                 };
 
