@@ -1,12 +1,12 @@
-name: HNL VXT Universal Package-Only Gate
+name: HNL VXT Universal Package-Only Beta Gate
 
 on:
-  push:
-    branches:
-      - research/vxt-pro-v7-bootstrap
-    paths:
-      - ".github/workflows/vxt-pro-universal-package-only.yml"
   workflow_dispatch:
+    inputs:
+      certified_run_id:
+        description: "Successful Universal Matrix run ID containing beta.1 bridge artifacts"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,15 +14,23 @@ permissions:
 
 jobs:
   package-certified-bridges:
-    name: Package certified 2023-2027 bridges into Universal EXE
+    name: Package certified beta.1 2023-2027 bridges into Universal EXE
     runs-on: windows-latest
     timeout-minutes: 20
     env:
       VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
       DOWNLOAD_ROOT: ${{ github.workspace }}\universal-downloads
-      CERTIFIED_RUN_ID: "33771587572"
+      CERTIFIED_RUN_ID: ${{ inputs.certified_run_id }}
     steps:
       - uses: actions/checkout@v4
+      - name: Validate requested certified run ID
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:CERTIFIED_RUN_ID) -or $env:CERTIFIED_RUN_ID -notmatch '^\d+$') {
+            throw 'certified_run_id must be a numeric successful Universal Matrix run ID.'
+          }
+          Write-Host "Certified matrix run requested: $env:CERTIFIED_RUN_ID"
       - name: Download certified bridge artifacts from matrix run
         uses: actions/download-artifact@v4
         with:
@@ -31,7 +39,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           run-id: ${{ env.CERTIFIED_RUN_ID }}
-      - name: Assemble Universal bridge tree
+      - name: Assemble and verify Universal bridge tree
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -52,6 +60,15 @@ jobs:
             if (-not (Test-Path $src)) { throw "Missing certified artifact: $src" }
             New-Item -ItemType Directory -Force -Path $dst | Out-Null
             Copy-Item (Join-Path $src '*') $dst -Recurse -Force
+            foreach ($dllName in @('HNL.VXT.AutoCAD.dll','HNL.VXT.Core.dll','HNL.VXT.UI.dll')) {
+              $dll = Join-Path $dst $dllName
+              if (-not (Test-Path $dll)) { throw "Missing $dllName in $artifact" }
+            }
+            $bridge = Join-Path $dst 'HNL.VXT.AutoCAD.dll'
+            $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $bridge))
+            if (-not $info.FileVersion.StartsWith('7.0.0.6')) {
+              throw "Stale/non-beta bridge in $artifact: $($info.FileVersion)"
+            }
           }
       - name: Install Inno Setup 6
         shell: pwsh
@@ -59,24 +76,27 @@ jobs:
       - name: Build Universal Setup EXE
         shell: pwsh
         run: '& "$env:VXT_ROOT\scripts\build-universal-installer.ps1" -Root $env:VXT_ROOT'
-      - name: Verify Universal EXE
+      - name: Verify Universal beta.1 EXE and SHA256
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $exe = Join-Path $env:VXT_ROOT 'artifacts\universal-installer\HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.1.exe'
+          $exe = Join-Path $env:VXT_ROOT 'artifacts\universal-installer\HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe'
           $sha = "$exe.sha256.txt"
           if (-not (Test-Path $exe)) { throw "Missing Universal EXE: $exe" }
           if (-not (Test-Path $sha)) { throw "Missing SHA256: $sha" }
           $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
-          if (-not $info.FileVersion.StartsWith('7.0.0')) { throw "Bad FileVersion: $($info.FileVersion)" }
+          if (-not $info.FileVersion.StartsWith('7.0.0.6')) { throw "Bad FileVersion: $($info.FileVersion)" }
+          $expected = ((Get-Content $sha -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          $actual = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "SHA256 mismatch: expected=$expected actual=$actual" }
           Write-Host "Certified source matrix run: $env:CERTIFIED_RUN_ID"
           Write-Host "Universal EXE FileVersion: $($info.FileVersion)"
-          Get-Content $sha
+          Write-Host "Universal EXE SHA256: $actual"
       - uses: actions/upload-artifact@v4
         with:
-          name: HNL-VXT-Pro-v7.0.0-alpha.1-Universal-Setup-CERTIFIED
+          name: HNL-VXT-Pro-v7.0.0-beta.1-Universal-Setup-CERTIFIED
           path: |
-            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.1.exe
-            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.1.exe.sha256.txt
+            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe
+            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe.sha256.txt
           retention-days: 14
           if-no-files-found: error
