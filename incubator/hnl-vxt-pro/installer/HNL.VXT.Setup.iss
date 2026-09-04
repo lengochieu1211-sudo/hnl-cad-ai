@@ -1,8 +1,8 @@
 #define MyAppName "HNL Tool - VXT Pro"
-#define MyAppVersion "7.0.0-alpha.5"
-#define MyNumericVersion "7.0.0.5"
+#define MyAppVersion "7.0.0-beta.1"
+#define MyNumericVersion "7.0.0.6"
 #define MyPublisher "HNL Tool"
-#define MySetupBaseName "HNL_VXT_Pro_Setup_7.0.0-alpha.5"
+#define MySetupBaseName "HNL_VXT_Pro_Setup_7.0.0-beta.1"
 
 [Setup]
 AppId={{A71F4558-7412-4B35-9EB8-6A2E2F2F6D44}
