@@ -43,16 +43,13 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void MainSkipLimit_RemovesShortConcaveFragments()
+        public void MainSkipLimit_SkipsWholeShortRegionLikeV674()
         {
-            var boundary = new Boundary2(new[]
-            {
-                new Point2(0,0), new Point2(6000,0), new Point2(6000,1000),
-                new Point2(500,1000), new Point2(500,4000), new Point2(0,4000)
-            });
-            var settings = new VxtSettings { MainSkipLimit = 600.0 };
-            var plan = new VxtPreviewPlanBuilder().Build(boundary, settings);
-            Assert.IsFalse(plan.Lines.Where(x => x.Kind == PreviewLineKind.Main).Any(x => x.A.DistanceTo(x.B) < 600.0 - 1e-6));
+            var settings = new VxtSettings { MainSkipLimit = 500.0 };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 450), settings);
+            Assert.AreEqual(0, plan.MainSegmentCount);
+            Assert.AreEqual(0, plan.HangerCount, "Ty depends on generated main members.");
+            Assert.IsTrue(plan.FurringSegmentCount > 0, "XP remains independently available.");
         }
 
         [TestMethod]
@@ -72,6 +69,29 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void FurringDefault_StartsOneStepFromNearEdge()
+        {
+            var settings = new VxtSettings { DrawMain = false, DrawHangers = false, FurringSpacing = 400.0 };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(2100, 1200), settings, new VxtLayoutContext());
+            var xs = plan.Lines.Where(x => x.Kind == PreviewLineKind.Furring).Select(x => x.A.X).Distinct().OrderBy(x => x).ToList();
+            Assert.IsTrue(xs.Count > 0);
+            Assert.AreEqual(400.0, xs.First(), 1e-6);
+        }
+
+        [TestMethod]
+        public void FurringFarEdge_UsesGoldenRemainderOffset()
+        {
+            var settings = new VxtSettings { DrawMain = false, DrawHangers = false, FurringSpacing = 400.0 };
+            var context = new VxtLayoutContext { GlobalFurringFromFarEdge = true };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(2100, 1200), settings, context);
+            var xs = plan.Lines.Where(x => x.Kind == PreviewLineKind.Furring).Select(x => x.A.X).Distinct().OrderBy(x => x).ToList();
+            Assert.IsTrue(xs.Count > 0);
+            Assert.AreEqual(100.0, xs.First(), 1e-6);
+            Assert.AreEqual(2000.0 - 300.0, 1700.0, 1e-6); // readability guard; far grid is 100,500,...,1700.
+            Assert.AreEqual(1700.0, xs.Last(), 1e-6);
+        }
+
+        [TestMethod]
         public void Hangers_RespectEdgeLimitsAlongMainMembers()
         {
             var settings = new VxtSettings { DrawFurring = false };
@@ -84,6 +104,24 @@ namespace HNL.VXT.Core.Tests
                 Assert.IsTrue(xs.First() >= 300 - 1e-6);
                 Assert.IsTrue(6000 - xs.Last() >= 300 - 1e-6);
             }
+        }
+
+        [TestMethod]
+        public void OneSideHangers_ReverseWithFurringStartSide()
+        {
+            var settings = new VxtSettings
+            {
+                DrawFurring = false,
+                HangerLayout = HangerLayoutMode.OneSideFollowFurring,
+                HangerMinEdgeOffset = 300,
+                HangerMaxEdgeOffset = 400
+            };
+            var near = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings, new VxtLayoutContext());
+            var farContext = new VxtLayoutContext { GlobalFurringFromFarEdge = true };
+            var far = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings, farContext);
+            var nearX = near.HangerPoints.OrderBy(p => p.Y).ThenBy(p => p.X).First().X;
+            var farX = far.HangerPoints.OrderBy(p => p.Y).ThenBy(p => p.X).First().X;
+            Assert.AreNotEqual(nearX, farX, 1e-6);
         }
 
         [TestMethod]
@@ -112,6 +150,18 @@ namespace HNL.VXT.Core.Tests
             var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings, context);
             Assert.IsTrue(plan.Lines.Any(x => x.Kind == PreviewLineKind.Main && Math.Abs(x.A.Y - x.B.Y) < 1e-6));
             Assert.IsTrue(plan.Lines.Any(x => x.Kind == PreviewLineKind.Main && Math.Abs(x.A.X - x.B.X) < 1e-6));
+        }
+
+        [TestMethod]
+        public void ManualRegionOutsideBoundary_ProducesNoGeometry()
+        {
+            var settings = new VxtSettings { MainDirection = MainDirectionMode.RectangleRegions };
+            var context = new VxtLayoutContext();
+            context.Regions.Add(new VxtLayoutRegion(new Box2(10000, 10000, 12000, 12000), 0.0));
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings, context);
+            Assert.AreEqual(0, plan.MainSegmentCount);
+            Assert.AreEqual(0, plan.FurringSegmentCount);
+            Assert.AreEqual(0, plan.HangerCount);
         }
 
         private static Boundary2 Rectangle(double width, double height)
