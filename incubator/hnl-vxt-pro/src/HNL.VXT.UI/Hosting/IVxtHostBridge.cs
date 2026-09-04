@@ -6,7 +6,9 @@ namespace HNL.VXT.UI.Hosting
     {
         bool IsDarkTheme { get; }
         void SelectBoundary();
-        void PickDirection();
+        void PickDirection(MainDirectionMode mode);
+        void PickBlock(BlockTarget target);
+        void PickEquipment(EquipmentTarget target);
         void PickDimensionPosition(DimensionTarget target);
         void RequestPreview(VxtSettings settings);
         void ClearPreview();
