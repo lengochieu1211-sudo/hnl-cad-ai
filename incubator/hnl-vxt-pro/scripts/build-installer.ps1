@@ -9,7 +9,7 @@ $bundle = Join-Path $Root 'artifacts\HNL.VXT.bundle'
 $iss = Join-Path $Root 'installer\HNL.VXT.Setup.iss'
 $branding = Join-Path $Root 'scripts\generate-installer-branding.ps1'
 $outDir = Join-Path $Root 'artifacts\installer'
-$expected = Join-Path $outDir 'HNL_VXT_Pro_Setup_7.0.0-alpha.4.exe'
+$expected = Join-Path $outDir 'HNL_VXT_Pro_Setup_7.0.0-beta.1.exe'
 
 if (-not (Test-Path (Join-Path $bundle 'PackageContents.xml'))) {
   throw "Bundle has not been prepared: $bundle"
@@ -55,6 +55,7 @@ $hashFile = "$expected.sha256.txt"
 "$hash  $([IO.Path]::GetFileName($expected))" | Set-Content -Path $hashFile -Encoding ascii
 
 $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $expected))
+if (-not $info.FileVersion.StartsWith('7.0.0.6')) { throw "Unexpected installer FileVersion: $($info.FileVersion)" }
 Write-Host "Installer: $expected"
 Write-Host "Size: $length bytes"
 Write-Host "FileVersion: $($info.FileVersion)"
