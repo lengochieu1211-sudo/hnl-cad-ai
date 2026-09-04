@@ -16,7 +16,33 @@ New-Item -ItemType Directory -Force -Path $out | Out-Null
 
 $base64 = (Get-Content $logoB64 -Raw).Trim()
 $bytes = [Convert]::FromBase64String($base64)
+if ($bytes.Length -lt 8 -or
+    $bytes[0] -ne 0x89 -or $bytes[1] -ne 0x50 -or $bytes[2] -ne 0x4E -or $bytes[3] -ne 0x47 -or
+    $bytes[4] -ne 0x0D -or $bytes[5] -ne 0x0A -or $bytes[6] -ne 0x1A -or $bytes[7] -ne 0x0A) {
+  throw 'HNL logo asset is not a valid PNG stream.'
+}
 [IO.File]::WriteAllBytes($officialPng, $bytes)
+
+function New-HnlArgbSource {
+  param([System.Drawing.Image]$InputImage)
+
+  $normalized = [System.Drawing.Bitmap]::new(
+    $InputImage.Width,
+    $InputImage.Height,
+    [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+  $g = [System.Drawing.Graphics]::FromImage($normalized)
+  try {
+    $g.Clear([System.Drawing.Color]::Transparent)
+    $g.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceOver
+    $g.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+    $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $g.DrawImage($InputImage, 0, 0, $InputImage.Width, $InputImage.Height)
+  }
+  finally { $g.Dispose() }
+  return $normalized
+}
 
 function New-HnlPngFrame {
   param(
@@ -28,13 +54,15 @@ function New-HnlPngFrame {
   $g = [System.Drawing.Graphics]::FromImage($bitmap)
   try {
     $g.Clear([System.Drawing.Color]::Transparent)
-    $g.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
+    $g.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceOver
     $g.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
     $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
 
-    $margin = [Math]::Max(1, [int][Math]::Round($Size * 0.045))
+    # The official artwork already contains its own rounded-edge safety area.
+    # Keep only a very small additional margin for Windows' smallest icon slots.
+    $margin = if ($Size -le 32) { 1 } else { [Math]::Max(1, [int][Math]::Round($Size * 0.02)) }
     $draw = $Size - (2 * $margin)
     $g.DrawImage($Source, $margin, $margin, $draw, $draw)
   }
@@ -43,7 +71,7 @@ function New-HnlPngFrame {
   $ms = [System.IO.MemoryStream]::new()
   try {
     $bitmap.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-    return $ms.ToArray()
+    return [byte[]]$ms.ToArray()
   }
   finally {
     $ms.Dispose()
@@ -54,18 +82,25 @@ function New-HnlPngFrame {
 function Write-HnlMultiSizeIco {
   param(
     [System.Drawing.Image]$Source,
+    [byte[]]$OriginalPngBytes,
     [string]$Path
   )
 
-  # Highest-resolution frame first. Some Windows/Inno paths are conservative when
-  # choosing from hand-built ICO resources, so alpha.5 never lets a 16px frame become
-  # the primary installer icon.
+  # Highest-resolution frame first. The 256px frame is the exact official PNG bytes,
+  # avoiding any GDI+ resampling/indexed-palette corruption in Explorer/Inno resources.
   $sizes = @(256, 128, 64, 48, 32, 24, 16)
   $frames = @()
   foreach ($size in $sizes) {
+    $frameData = if ($size -eq 256 -and $Source.Width -eq 256 -and $Source.Height -eq 256) {
+      [byte[]]$OriginalPngBytes
+    }
+    else {
+      [byte[]](New-HnlPngFrame -Source $Source -Size $size)
+    }
+
     $frames += ,([PSCustomObject]@{
       Size = $size
-      Data = (New-HnlPngFrame -Source $Source -Size $size)
+      Data = $frameData
     })
   }
 
@@ -100,14 +135,21 @@ function Write-HnlMultiSizeIco {
   }
 }
 
-$source = [System.Drawing.Image]::FromFile($officialPng)
+$loaded = [System.Drawing.Image]::FromFile($officialPng)
+$source = $null
 try {
-  Write-HnlMultiSizeIco -Source $source -Path $iconPath
+  if ($loaded.Width -ne 256 -or $loaded.Height -ne 256) {
+    throw "Official HNL logo must be 256x256 for installer branding; found $($loaded.Width)x$($loaded.Height)."
+  }
+
+  $source = New-HnlArgbSource -InputImage $loaded
+  Write-HnlMultiSizeIco -Source $source -OriginalPngBytes $bytes -Path $iconPath
 
   $small = [System.Drawing.Bitmap]::new(64, 64, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
   $gs = [System.Drawing.Graphics]::FromImage($small)
   try {
     $gs.Clear([System.Drawing.Color]::White)
+    $gs.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceOver
     $gs.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $gs.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $gs.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
@@ -118,7 +160,8 @@ try {
   $small.Dispose()
 }
 finally {
-  $source.Dispose()
+  if ($source -ne $null) { $source.Dispose() }
+  $loaded.Dispose()
 }
 
 foreach ($required in @($officialPng, $iconPath, $smallPath)) {
@@ -132,7 +175,19 @@ if ($count -ne 7) { throw "Generated HNL icon must contain 7 sizes; found $count
 $firstWidth = $icoBytes[6]
 if ($firstWidth -ne 0) { throw "Generated HNL icon must place the 256px frame first." }
 
+# Validate that the first ICO payload is byte-for-byte the official 256px PNG.
+$firstSize = [BitConverter]::ToUInt32($icoBytes, 14)
+$firstOffset = [BitConverter]::ToUInt32($icoBytes, 18)
+if ($firstSize -ne $bytes.Length) {
+  throw "Generated 256px icon payload size mismatch: $firstSize vs $($bytes.Length)."
+}
+for ($i = 0; $i -lt $bytes.Length; $i++) {
+  if ($icoBytes[$firstOffset + $i] -ne $bytes[$i]) {
+    throw "Generated 256px icon payload differs from official HNL PNG at byte $i."
+  }
+}
+
 Write-Host 'HNL official branding generated:'
 Write-Host "  PNG: $officialPng"
-Write-Host "  ICO: $iconPath (256/128/64/48/32/24/16)"
+Write-Host "  ICO: $iconPath (256 exact PNG + 128/64/48/32/24/16 ARGB frames)"
 Write-Host "  BMP: $smallPath"
