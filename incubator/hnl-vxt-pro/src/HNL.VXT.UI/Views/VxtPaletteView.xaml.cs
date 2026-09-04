@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using HNL.VXT.UI.Hosting;
@@ -13,9 +14,47 @@ namespace HNL.VXT.UI.Views
             ApplyTheme(host.IsDarkTheme);
             ViewModel = new VxtPaletteViewModel(host);
             DataContext = ViewModel;
+            AddDiagnosticButton();
         }
 
         public VxtPaletteViewModel ViewModel { get; }
+
+        private void AddDiagnosticButton()
+        {
+            var createButton = FindButtonByContent(this, "✓ TẠO KHUNG XƯƠNG TRẦN");
+            var footer = createButton?.Parent as StackPanel;
+            if (footer == null) return;
+
+            var exportButton = new Button
+            {
+                Content = "Xuất lỗi",
+                Command = ViewModel.ExportDiagnosticsCommand,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 6, 0, 0),
+                ToolTip = "Xuất thông tin kiểm tra HNL VXT để gửi khi cần chẩn đoán lỗi"
+            };
+
+            if (Resources["CompactButton"] is Style compactStyle)
+                exportButton.Style = compactStyle;
+
+            var insertIndex = footer.Children.IndexOf(createButton) + 1;
+            footer.Children.Insert(insertIndex, exportButton);
+        }
+
+        private static Button FindButtonByContent(DependencyObject parent, string content)
+        {
+            if (parent == null) return null;
+            var count = VisualTreeHelper.GetChildrenCount(parent);
+            for (var i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is Button button && string.Equals(button.Content as string, content))
+                    return button;
+                var nested = FindButtonByContent(child, content);
+                if (nested != null) return nested;
+            }
+            return null;
+        }
 
         private void ApplyTheme(bool dark)
         {
