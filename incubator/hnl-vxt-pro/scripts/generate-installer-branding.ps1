@@ -34,9 +34,7 @@ function New-HnlPngFrame {
     $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
 
-    # Preserve the supplied square HNL artwork and leave a small safety margin so
-    # Windows never clips the rounded outside edge at small icon sizes.
-    $margin = [Math]::Max(1, [int][Math]::Round($Size * 0.035))
+    $margin = [Math]::Max(1, [int][Math]::Round($Size * 0.045))
     $draw = $Size - (2 * $margin)
     $g.DrawImage($Source, $margin, $margin, $draw, $draw)
   }
@@ -59,7 +57,10 @@ function Write-HnlMultiSizeIco {
     [string]$Path
   )
 
-  $sizes = @(16, 24, 32, 48, 64, 128, 256)
+  # Highest-resolution frame first. Some Windows/Inno paths are conservative when
+  # choosing from hand-built ICO resources, so alpha.5 never lets a 16px frame become
+  # the primary installer icon.
+  $sizes = @(256, 128, 64, 48, 32, 24, 16)
   $frames = @()
   foreach ($size in $sizes) {
     $frames += ,([PSCustomObject]@{
@@ -71,20 +72,19 @@ function Write-HnlMultiSizeIco {
   $fs = [System.IO.File]::Create($Path)
   $bw = [System.IO.BinaryWriter]::new($fs)
   try {
-    # ICONDIR
-    $bw.Write([UInt16]0)                 # reserved
-    $bw.Write([UInt16]1)                 # type = icon
+    $bw.Write([UInt16]0)
+    $bw.Write([UInt16]1)
     $bw.Write([UInt16]$frames.Count)
 
     $offset = 6 + (16 * $frames.Count)
     foreach ($frame in $frames) {
       $wh = if ($frame.Size -eq 256) { [byte]0 } else { [byte]$frame.Size }
-      $bw.Write($wh)                     # width
-      $bw.Write($wh)                     # height
-      $bw.Write([byte]0)                 # color count
-      $bw.Write([byte]0)                 # reserved
-      $bw.Write([UInt16]1)               # planes
-      $bw.Write([UInt16]32)              # bits per pixel
+      $bw.Write($wh)
+      $bw.Write($wh)
+      $bw.Write([byte]0)
+      $bw.Write([byte]0)
+      $bw.Write([UInt16]1)
+      $bw.Write([UInt16]32)
       $bw.Write([UInt32]$frame.Data.Length)
       $bw.Write([UInt32]$offset)
       $offset += $frame.Data.Length
@@ -104,7 +104,6 @@ $source = [System.Drawing.Image]::FromFile($officialPng)
 try {
   Write-HnlMultiSizeIco -Source $source -Path $iconPath
 
-  # Inno wizard compact branding image.
   $small = [System.Drawing.Bitmap]::new(64, 64, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
   $gs = [System.Drawing.Graphics]::FromImage($small)
   try {
@@ -126,13 +125,14 @@ foreach ($required in @($officialPng, $iconPath, $smallPath)) {
   if (-not (Test-Path $required)) { throw "Missing generated HNL branding asset: $required" }
 }
 
-# Validate ICO header + expected image count so CI cannot silently regress to a single legacy frame.
 $icoBytes = [IO.File]::ReadAllBytes($iconPath)
 if ($icoBytes.Length -lt 128) { throw "Generated HNL icon is unexpectedly small." }
 $count = [BitConverter]::ToUInt16($icoBytes, 4)
 if ($count -ne 7) { throw "Generated HNL icon must contain 7 sizes; found $count." }
+$firstWidth = $icoBytes[6]
+if ($firstWidth -ne 0) { throw "Generated HNL icon must place the 256px frame first." }
 
 Write-Host 'HNL official branding generated:'
 Write-Host "  PNG: $officialPng"
-Write-Host "  ICO: $iconPath (16/24/32/48/64/128/256)"
+Write-Host "  ICO: $iconPath (256/128/64/48/32/24/16)"
 Write-Host "  BMP: $smallPath"
