@@ -3,16 +3,20 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using HNL.VXT.Core.Utilities;
 
 namespace HNL.VXT.UI.Controls
 {
     public partial class HnlNumericBox : UserControl
     {
         private bool _syncing;
+        private double _lastCommittedValue;
 
         public HnlNumericBox()
         {
             InitializeComponent();
+            _lastCommittedValue = Value;
             SyncText();
         }
 
@@ -45,35 +49,93 @@ namespace HNL.VXT.UI.Controls
 
         private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            ((HnlNumericBox)d).SyncText();
+            var control = (HnlNumericBox)d;
+            control._lastCommittedValue = (double)e.NewValue;
+            control.SyncText();
         }
 
-        private void Decrease_Click(object sender, RoutedEventArgs e) => Value = Clamp(Value - Step);
-        private void Increase_Click(object sender, RoutedEventArgs e) => Value = Clamp(Value + Step);
+        private void Decrease_Click(object sender, RoutedEventArgs e)
+        {
+            ClearInputError();
+            Value = Clamp(Value - Step);
+        }
+
+        private void Increase_Click(object sender, RoutedEventArgs e)
+        {
+            ClearInputError();
+            Value = Clamp(Value + Step);
+        }
 
         private void ValueTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (_syncing) return;
-            if (TryParse(ValueTextBox.Text, out var value))
+            ClearInputError();
+
+            // Keep the original live-update behavior for a plain number.
+            // Expressions are committed only on Enter/LostFocus so typing 100+200*2
+            // is not prematurely replaced by an intermediate result.
+            if (NumericExpressionEvaluator.IsPlainNumber(ValueTextBox.Text, out var value))
                 Value = Clamp(value);
         }
 
-        private void ValueTextBox_LostFocus(object sender, RoutedEventArgs e) => CommitOrRestore();
+        private void ValueTextBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            CommitExpression(restoreOnError: true);
+        }
 
         private void ValueTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter)
             {
-                CommitOrRestore();
+                if (CommitExpression(restoreOnError: false))
+                    Keyboard.ClearFocus();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                ClearInputError();
+                Value = _lastCommittedValue;
+                SyncText();
                 Keyboard.ClearFocus();
                 e.Handled = true;
             }
         }
 
-        private void CommitOrRestore()
+        private bool CommitExpression(bool restoreOnError)
         {
-            if (TryParse(ValueTextBox.Text, out var value)) Value = Clamp(value);
-            SyncText();
+            var text = ValueTextBox.Text;
+            if (NumericExpressionEvaluator.TryEvaluate(text, out var value))
+            {
+                ClearInputError();
+                Value = Clamp(value);
+                _lastCommittedValue = Value;
+                SyncText();
+                return true;
+            }
+
+            ShowInputError("Phép tính không hợp lệ. Ví dụ: 1220/3 hoặc (1200-100)/2");
+            if (restoreOnError)
+            {
+                Value = _lastCommittedValue;
+                SyncText();
+            }
+            return false;
+        }
+
+        private void ShowInputError(string message)
+        {
+            if (ValueTextBox == null) return;
+            ValueTextBox.BorderBrush = Brushes.IndianRed;
+            ValueTextBox.BorderThickness = new Thickness(1.5);
+            ValueTextBox.ToolTip = message;
+        }
+
+        private void ClearInputError()
+        {
+            if (ValueTextBox == null) return;
+            ValueTextBox.ClearValue(Border.BorderBrushProperty);
+            ValueTextBox.ClearValue(Border.BorderThicknessProperty);
+            ValueTextBox.ToolTip = "Nhập số hoặc phép tính, ví dụ: 1220/3, 600+25, 2*450, (1200-100)/2";
         }
 
         private void SyncText()
@@ -85,11 +147,5 @@ namespace HNL.VXT.UI.Controls
         }
 
         private double Clamp(double value) => Math.Max(Minimum, Math.Min(Maximum, value));
-
-        private static bool TryParse(string text, out double value)
-        {
-            text = (text ?? string.Empty).Trim().Replace(',', '.');
-            return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
-        }
     }
 }
