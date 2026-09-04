@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using HNL.VXT.UI.Hosting;
 using HNL.VXT.UI.ViewModels;
@@ -14,10 +15,82 @@ namespace HNL.VXT.UI.Views
             ApplyTheme(host.IsDarkTheme);
             ViewModel = new VxtPaletteViewModel(host);
             DataContext = ViewModel;
+            AddDimensionResourceFields();
             AddDiagnosticButton();
         }
 
         public VxtPaletteViewModel ViewModel { get; }
+
+        private void AddDimensionResourceFields()
+        {
+            var dimExpander = FindExpanderByHeaderText(this, "KÍCH THƯỚC DIM");
+            var content = dimExpander?.Content as StackPanel;
+            if (content == null) return;
+
+            var block = new Border
+            {
+                BorderBrush = (Brush)Resources["CardBorder"],
+                BorderThickness = new Thickness(0, 1, 0, 0),
+                Padding = new Thickness(0, 9, 0, 0),
+                Margin = new Thickness(0, 9, 0, 0)
+            };
+
+            var panel = new StackPanel();
+            panel.Children.Add(CreateDimensionResourceRow(
+                "Layer DIM",
+                nameof(VxtPaletteViewModel.DimensionLayer),
+                "Layer dùng cho DIM và Preview DIM. Nếu layer không tồn tại, Preview dùng thiết lập hiện hành."));
+            panel.Children.Add(CreateDimensionResourceRow(
+                "DimStyle",
+                nameof(VxtPaletteViewModel.DimensionStyle),
+                "Tên DimStyle dùng cho DIM. Để trống để dùng DimStyle hiện hành của bản vẽ.",
+                new Thickness(0, 7, 0, 0)));
+
+            var hint = new TextBlock
+            {
+                Text = "Để trống DimStyle = dùng DimStyle hiện hành của bản vẽ.",
+                Margin = new Thickness(190, 5, 0, 0),
+                TextWrapping = TextWrapping.Wrap
+            };
+            if (Resources["HintText"] is Style hintStyle)
+                hint.Style = hintStyle;
+            panel.Children.Add(hint);
+
+            block.Child = panel;
+            content.Children.Add(block);
+        }
+
+        private Grid CreateDimensionResourceRow(string label, string bindingPath, string toolTip, Thickness? margin = null)
+        {
+            var row = new Grid { Margin = margin ?? new Thickness(0) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var text = new TextBlock
+            {
+                Text = label,
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = toolTip
+            };
+            if (Resources["FieldLabel"] is Style fieldLabelStyle)
+                text.Style = fieldLabelStyle;
+
+            var input = new TextBox
+            {
+                ToolTip = toolTip,
+                MinWidth = 120
+            };
+            input.SetBinding(TextBox.TextProperty, new Binding(bindingPath)
+            {
+                Mode = BindingMode.TwoWay,
+                UpdateSourceTrigger = UpdateSourceTrigger.LostFocus
+            });
+            Grid.SetColumn(input, 1);
+
+            row.Children.Add(text);
+            row.Children.Add(input);
+            return row;
+        }
 
         private void AddDiagnosticButton()
         {
@@ -39,6 +112,33 @@ namespace HNL.VXT.UI.Views
 
             var insertIndex = footer.Children.IndexOf(createButton) + 1;
             footer.Children.Insert(insertIndex, exportButton);
+        }
+
+        private static Expander FindExpanderByHeaderText(DependencyObject parent, string text)
+        {
+            if (parent == null) return null;
+            var count = VisualTreeHelper.GetChildrenCount(parent);
+            for (var i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is Expander expander && ContainsText(expander.Header as DependencyObject, text))
+                    return expander;
+                var nested = FindExpanderByHeaderText(child, text);
+                if (nested != null) return nested;
+            }
+            return null;
+        }
+
+        private static bool ContainsText(DependencyObject parent, string text)
+        {
+            if (parent == null) return false;
+            if (parent is TextBlock textBlock && textBlock.Text == text) return true;
+            var count = VisualTreeHelper.GetChildrenCount(parent);
+            for (var i = 0; i < count; i++)
+            {
+                if (ContainsText(VisualTreeHelper.GetChild(parent, i), text)) return true;
+            }
+            return false;
         }
 
         private static Button FindButtonByContent(DependencyObject parent, string content)
