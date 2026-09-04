@@ -13,8 +13,8 @@ using HNL.VXT.Core.Preview;
 namespace HNL.VXT.AutoCAD
 {
     /// <summary>
-    /// WYSIWYG transient renderer. Preview uses the same block definitions, layer appearance
-    /// and DimStyle that the future Create engine will use, while keeping Model Space clean.
+    /// WYSIWYG transient renderer. Preview and Create consume the exact same Core plan.
+    /// No temporary entity is appended to Model Space.
     /// </summary>
     internal sealed class VxtTransientPreview
     {
@@ -27,7 +27,6 @@ namespace HNL.VXT.AutoCAD
         public void Refresh()
         {
             Clear();
-
             var session = VxtSession.Current;
             if (!session.HasBoundary) return;
 
@@ -36,13 +35,15 @@ namespace HNL.VXT.AutoCAD
 
             try
             {
-                var builder = new VxtPreviewPlanBuilder();
-                var plan = builder.Build(session.Boundary, session.Settings);
                 var settings = session.Settings;
                 var db = doc.Database;
+                VxtPreviewPlan plan;
 
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
+                    var context = VxtLayoutContextFactory.Build(session, tr);
+                    plan = new VxtPreviewPlanBuilder().Build(session.Boundary, settings, context);
+
                     var blockTable = tr.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
                     var layerTable = tr.GetObject(db.LayerTableId, OpenMode.ForRead) as LayerTable;
                     var linetypeTable = tr.GetObject(db.LinetypeTableId, OpenMode.ForRead) as LinetypeTable;
@@ -50,9 +51,8 @@ namespace HNL.VXT.AutoCAD
 
                     RenderStructuralLines(plan, settings, db, blockTable, layerTable, linetypeTable);
                     RenderHangers(plan, settings, db, blockTable, layerTable, linetypeTable);
-                    RenderDimensions(plan, session.Boundary, settings, db, dimStyleTable, layerTable, linetypeTable);
-                    RenderGuides(plan, settings, db, layerTable, linetypeTable);
-
+                    RenderDimensions(plan, settings, db, dimStyleTable, layerTable, linetypeTable);
+                    RenderGuides(plan, db);
                     tr.Commit();
                 }
 
@@ -75,8 +75,7 @@ namespace HNL.VXT.AutoCAD
             foreach (var drawable in _drawables)
             {
                 try { manager.EraseTransient(drawable, _viewports); } catch { }
-                if (drawable is IDisposable disposable)
-                    disposable.Dispose();
+                if (drawable is IDisposable disposable) disposable.Dispose();
             }
             _drawables.Clear();
         }
@@ -97,7 +96,6 @@ namespace HNL.VXT.AutoCAD
                         item, settings.MainBlockName, settings.MainLayer, settings.MainColorIndex,
                         settings.MainLinetype, settings.MainLineweight, db, blockTable, layerTable, linetypeTable))
                         continue;
-
                     AddStyledLine(item, settings.MainLayer, settings.MainColorIndex,
                         settings.MainLinetype, settings.MainLineweight, db, layerTable, linetypeTable);
                 }
@@ -107,7 +105,6 @@ namespace HNL.VXT.AutoCAD
                         item, settings.FurringBlockName, settings.FurringLayer, settings.FurringColorIndex,
                         settings.FurringLinetype, settings.FurringLineweight, db, blockTable, layerTable, linetypeTable))
                         continue;
-
                     AddStyledLine(item, settings.FurringLayer, settings.FurringColorIndex,
                         settings.FurringLinetype, settings.FurringLineweight, db, layerTable, linetypeTable);
                 }
@@ -123,25 +120,15 @@ namespace HNL.VXT.AutoCAD
             LinetypeTable linetypeTable)
         {
             if (!settings.DrawHangers) return;
-
-            var hangerLines = plan.Lines.Where(x => x.Kind == PreviewLineKind.Hanger).ToList();
             var blockAvailable = blockTable != null && !string.IsNullOrWhiteSpace(settings.HangerBlockName) && blockTable.Has(settings.HangerBlockName);
 
             if (blockAvailable)
             {
-                // AddHangerMark emits two crossing lines per Ty point. Use their common midpoint.
-                for (var i = 0; i + 1 < hangerLines.Count; i += 2)
+                foreach (var p in plan.HangerPoints)
                 {
-                    var a = hangerLines[i];
-                    var center = new Point3d(
-                        (a.A.X + a.B.X) * 0.5,
-                        (a.A.Y + a.B.Y) * 0.5,
-                        0.0);
-
-                    var blockId = blockTable[settings.HangerBlockName];
-                    var br = new BlockReference(center, blockId)
+                    var br = new BlockReference(ToPoint3d(p), blockTable[settings.HangerBlockName])
                     {
-                        Rotation = settings.DirectionDegrees * Math.PI / 180.0
+                        Rotation = ResolveHangerRotation(plan, p)
                     };
                     br.SetDatabaseDefaults(db);
                     ApplyAppearance(br, settings.HangerLayer, settings.HangerColorIndex,
@@ -151,72 +138,32 @@ namespace HNL.VXT.AutoCAD
                 return;
             }
 
-            foreach (var item in hangerLines)
+            // Same fallback marks present in the Core plan when the Ty block is unavailable.
+            foreach (var item in plan.Lines.Where(x => x.Kind == PreviewLineKind.Hanger))
                 AddStyledLine(item, settings.HangerLayer, settings.HangerColorIndex,
                     settings.HangerLinetype, settings.HangerLineweight, db, layerTable, linetypeTable);
         }
 
         private void RenderDimensions(
             VxtPreviewPlan plan,
-            Boundary2 boundary,
             VxtSettings settings,
             Database db,
             DimStyleTable dimStyleTable,
             LayerTable layerTable,
             LinetypeTable linetypeTable)
         {
-            if (!settings.AutoDimension) return;
-
-            var dimLines = plan.Lines.Where(x => x.Kind == PreviewLineKind.Dimension).ToList();
-            if (dimLines.Count == 0) return;
-
-            var radians = settings.DirectionDegrees * Math.PI / 180.0;
-            var localBoundary = boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)).ToList();
-            var minX = localBoundary.Min(p => p.X);
-            var maxX = localBoundary.Max(p => p.X);
-            var minY = localBoundary.Min(p => p.Y);
-            var maxY = localBoundary.Max(p => p.Y);
+            if (!settings.AutoDimension || plan.Dimensions.Count == 0) return;
             var dimStyleId = ResolveDimStyle(settings.DimensionStyle, db, dimStyleTable);
 
-            foreach (var item in dimLines)
+            foreach (var item in plan.Dimensions)
             {
-                var aLocal = Transform2.ToLocal(item.A, radians);
-                var bLocal = Transform2.ToLocal(item.B, radians);
-                var dx = Math.Abs(bLocal.X - aLocal.X);
-                var dy = Math.Abs(bLocal.Y - aLocal.Y);
-
-                Point2 x1;
-                Point2 x2;
-                Point2 dimPoint;
-                double rotation;
-
-                if (dx >= dy)
-                {
-                    var yDim = (aLocal.Y + bLocal.Y) * 0.5;
-                    var yBase = Math.Abs(yDim - maxY) <= Math.Abs(yDim - minY) ? maxY : minY;
-                    x1 = Transform2.ToWorld(new Point2(aLocal.X, yBase), radians);
-                    x2 = Transform2.ToWorld(new Point2(bLocal.X, yBase), radians);
-                    dimPoint = Transform2.ToWorld(new Point2((aLocal.X + bLocal.X) * 0.5, yDim), radians);
-                    rotation = radians;
-                }
-                else
-                {
-                    var xDim = (aLocal.X + bLocal.X) * 0.5;
-                    var xBase = Math.Abs(xDim - maxX) <= Math.Abs(xDim - minX) ? maxX : minX;
-                    x1 = Transform2.ToWorld(new Point2(xBase, aLocal.Y), radians);
-                    x2 = Transform2.ToWorld(new Point2(xBase, bLocal.Y), radians);
-                    dimPoint = Transform2.ToWorld(new Point2(xDim, (aLocal.Y + bLocal.Y) * 0.5), radians);
-                    rotation = radians + Math.PI / 2.0;
-                }
-
                 var dim = new RotatedDimension(
-                    rotation,
-                    ToPoint3d(x1),
-                    ToPoint3d(x2),
-                    ToPoint3d(dimPoint),
+                    item.RotationRadians,
+                    ToPoint3d(item.ExtensionPoint1),
+                    ToPoint3d(item.ExtensionPoint2),
+                    ToPoint3d(item.DimensionLinePoint),
                     string.Empty,
                     dimStyleId);
-
                 dim.SetDatabaseDefaults(db);
                 ApplyAppearance(dim, settings.DimensionLayer, settings.DimensionColorIndex,
                     settings.DimensionLinetype, settings.DimensionLineweight, layerTable, linetypeTable);
@@ -224,34 +171,15 @@ namespace HNL.VXT.AutoCAD
             }
         }
 
-        private void RenderGuides(
-            VxtPreviewPlan plan,
-            VxtSettings settings,
-            Database db,
-            LayerTable layerTable,
-            LinetypeTable linetypeTable)
+        private void RenderGuides(VxtPreviewPlan plan, Database db)
         {
-            var hasRealDimensions = settings.AutoDimension && plan.Lines.Any(x => x.Kind == PreviewLineKind.Dimension);
-
             foreach (var item in plan.Lines)
             {
                 if (item.Kind == PreviewLineKind.Main || item.Kind == PreviewLineKind.Furring || item.Kind == PreviewLineKind.Hanger)
                     continue;
-
-                // Fake DIM line/extensions are retained in Core for geometry tests only.
-                // The AutoCAD bridge renders real RotatedDimension objects instead.
-                if (hasRealDimensions && (item.Kind == PreviewLineKind.Dimension || item.Kind == PreviewLineKind.DimensionExtension))
-                    continue;
-
                 AddGuideLine(item, db);
             }
-
-            foreach (var text in plan.Texts)
-            {
-                if (hasRealDimensions && text.Kind == PreviewLineKind.Dimension)
-                    continue;
-                AddGuideText(text, db);
-            }
+            foreach (var text in plan.Texts) AddGuideText(text, db);
         }
 
         private bool TryAddSegmentBlock(
@@ -266,9 +194,7 @@ namespace HNL.VXT.AutoCAD
             LayerTable layerTable,
             LinetypeTable linetypeTable)
         {
-            if (blockTable == null || string.IsNullOrWhiteSpace(blockName) || !blockTable.Has(blockName))
-                return false;
-
+            if (blockTable == null || string.IsNullOrWhiteSpace(blockName) || !blockTable.Has(blockName)) return false;
             var start = ToPoint3d(item.A);
             var end = ToPoint3d(item.B);
             var vector = end - start;
@@ -281,38 +207,29 @@ namespace HNL.VXT.AutoCAD
             };
             br.SetDatabaseDefaults(db);
             ApplyAppearance(br, layerName, colorIndex, linetypeName, lineweightText, layerTable, linetypeTable);
-
-            // Port of V6.7.4 draw-pline behavior: writable numeric dynamic properties that are
-            // not angle/position/array/spacing metadata are treated as the member length.
             TryApplyDynamicLength(br, length);
             AddDrawable(br);
             return true;
         }
 
-        private static void TryApplyDynamicLength(BlockReference br, double length)
+        internal static void TryApplyDynamicLength(BlockReference br, double length)
         {
             try
             {
                 if (!br.IsDynamicBlock) return;
-                var props = br.DynamicBlockReferencePropertyCollection;
-                foreach (DynamicBlockReferenceProperty prop in props)
+                foreach (DynamicBlockReferenceProperty prop in br.DynamicBlockReferencePropertyCollection)
                 {
-                    if (prop.ReadOnly) continue;
-                    var value = prop.Value;
-                    if (!(value is double)) continue;
-                    if (ShouldSkipDynamicProperty(prop.PropertyName)) continue;
+                    if (prop.ReadOnly || !(prop.Value is double) || ShouldSkipDynamicProperty(prop.PropertyName)) continue;
                     try { prop.Value = length; } catch { }
                 }
             }
             catch
             {
-                // Some AutoCAD builds do not expose dynamic properties until a BlockReference
-                // is database-resident. Preview must remain non-destructive, so leave the
-                // original block state rather than inserting temporary Model Space entities.
+                // Non-resident transient dynamic blocks may not expose properties on every release.
             }
         }
 
-        private static bool ShouldSkipDynamicProperty(string name)
+        internal static bool ShouldSkipDynamicProperty(string name)
         {
             if (string.IsNullOrWhiteSpace(name)) return false;
             var n = name.ToUpperInvariant();
@@ -343,8 +260,6 @@ namespace HNL.VXT.AutoCAD
             var line = new Line(ToPoint3d(item.A), ToPoint3d(item.B));
             line.SetDatabaseDefaults(db);
             line.Color = Color.FromColorIndex(ColorMethod.ByAci, GuideColorIndex(item.Kind));
-            if (item.Kind == PreviewLineKind.DimensionExtension)
-                line.LinetypeScale = 0.5;
             AddDrawable(line);
         }
 
@@ -352,12 +267,10 @@ namespace HNL.VXT.AutoCAD
         {
             var bounds = VxtSession.Current.Boundary.GetBounds();
             var diag = bounds.Min.DistanceTo(bounds.Max);
-            var textHeight = Math.Max(60.0, Math.Min(180.0, diag * 0.015));
-
             var text = new DBText
             {
                 Position = ToPoint3d(item.Position),
-                Height = textHeight,
+                Height = Math.Max(60.0, Math.Min(180.0, diag * 0.015)),
                 TextString = item.Text,
                 Rotation = item.RotationRadians,
                 Color = Color.FromColorIndex(ColorMethod.ByAci, GuideColorIndex(item.Kind))
@@ -366,7 +279,7 @@ namespace HNL.VXT.AutoCAD
             AddDrawable(text);
         }
 
-        private static void ApplyAppearance(
+        internal static void ApplyAppearance(
             Entity entity,
             string layerName,
             short colorIndex,
@@ -376,40 +289,51 @@ namespace HNL.VXT.AutoCAD
             LinetypeTable linetypeTable)
         {
             if (layerTable != null && !string.IsNullOrWhiteSpace(layerName) && layerTable.Has(layerName))
-            {
                 try { entity.LayerId = layerTable[layerName]; } catch { }
-            }
 
             if (colorIndex >= 0 && colorIndex <= 256)
-            {
                 try { entity.Color = Color.FromColorIndex(ColorMethod.ByAci, colorIndex); } catch { }
-            }
 
             if (linetypeTable != null && !string.IsNullOrWhiteSpace(linetypeName) && linetypeTable.Has(linetypeName))
-            {
                 try { entity.LinetypeId = linetypeTable[linetypeName]; } catch { }
-            }
 
-            if (short.TryParse(lineweightText, out var lineweight))
-            {
+            short lineweight;
+            if (short.TryParse(lineweightText, out lineweight))
                 try { entity.LineWeight = (LineWeight)lineweight; } catch { }
-            }
         }
 
-        private static ObjectId ResolveDimStyle(string dimStyleName, Database db, DimStyleTable dimStyleTable)
+        internal static ObjectId ResolveDimStyle(string dimStyleName, Database db, DimStyleTable dimStyleTable)
         {
             if (dimStyleTable != null && !string.IsNullOrWhiteSpace(dimStyleName) && dimStyleTable.Has(dimStyleName))
                 return dimStyleTable[dimStyleName];
             return db.Dimstyle;
         }
 
+        private static double ResolveHangerRotation(VxtPreviewPlan plan, Point2 point)
+        {
+            var nearest = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Select(x => new { Line = x, Distance = DistanceToSegment(point, x.A, x.B) })
+                .OrderBy(x => x.Distance)
+                .FirstOrDefault();
+            return nearest == null ? 0.0 : Math.Atan2(nearest.Line.B.Y - nearest.Line.A.Y, nearest.Line.B.X - nearest.Line.A.X);
+        }
+
+        private static double DistanceToSegment(Point2 p, Point2 a, Point2 b)
+        {
+            var dx = b.X - a.X;
+            var dy = b.Y - a.Y;
+            var l2 = dx * dx + dy * dy;
+            if (l2 <= 1e-12) return p.DistanceTo(a);
+            var t = ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / l2;
+            t = Math.Max(0.0, Math.Min(1.0, t));
+            return p.DistanceTo(new Point2(a.X + t * dx, a.Y + t * dy));
+        }
+
         private void AddDrawable(Drawable drawable)
         {
             TransientManager.CurrentTransientManager.AddTransient(
-                drawable,
-                TransientDrawingMode.DirectShortTerm,
-                SubDrawingMode,
-                _viewports);
+                drawable, TransientDrawingMode.DirectShortTerm, SubDrawingMode, _viewports);
             _drawables.Add(drawable);
         }
 
