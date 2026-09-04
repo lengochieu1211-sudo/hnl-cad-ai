@@ -9,7 +9,7 @@ $bundle = Join-Path $Root 'artifacts\HNL.VXT.bundle'
 $iss = Join-Path $Root 'installer\HNL.VXT.Setup.iss'
 $branding = Join-Path $Root 'scripts\generate-installer-branding.ps1'
 $outDir = Join-Path $Root 'artifacts\installer'
-$expected = Join-Path $outDir 'HNL_VXT_Pro_Setup_7.0.0-alpha.1.exe'
+$expected = Join-Path $outDir 'HNL_VXT_Pro_Setup_7.0.0-alpha.2.exe'
 
 if (-not (Test-Path (Join-Path $bundle 'PackageContents.xml'))) {
   throw "Bundle has not been prepared: $bundle"
@@ -20,16 +20,15 @@ if (-not (Test-Path $iss)) { throw "Missing Inno Setup script: $iss" }
 
 if ([string]::IsNullOrWhiteSpace($IsccPath)) {
   $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-  if ($cmd) {
-    $IsccPath = $cmd.Source
-  }
+  if ($cmd) { $IsccPath = $cmd.Source }
 }
 
 if ([string]::IsNullOrWhiteSpace($IsccPath)) {
-  $pf86 = ${env:ProgramFiles(x86)}
+  $programFilesX86 = [Environment]::GetFolderPath('ProgramFilesX86')
+  $programFiles = [Environment]::GetFolderPath('ProgramFiles')
   $candidates = @(
-    $(if ($pf86) { Join-Path $pf86 'Inno Setup 6\ISCC.exe' }),
-    $(if ($env:ProgramFiles) { Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe' }),
+    $(if ($programFilesX86) { Join-Path $programFilesX86 'Inno Setup 6\ISCC.exe' }),
+    $(if ($programFiles) { Join-Path $programFiles 'Inno Setup 6\ISCC.exe' }),
     'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
     'C:\Program Files\Inno Setup 6\ISCC.exe',
     'C:\ProgramData\chocolatey\bin\ISCC.exe'
@@ -39,8 +38,6 @@ if ([string]::IsNullOrWhiteSpace($IsccPath)) {
 }
 
 if (-not $IsccPath -or -not (Test-Path $IsccPath)) {
-  Write-Host 'Searched for ISCC.exe in:'
-  Get-ChildItem 'C:\Program Files*' -Directory -ErrorAction SilentlyContinue | Where-Object Name -Match 'Inno' | ForEach-Object FullName
   throw 'ISCC.exe not found although Inno Setup was installed.'
 }
 
