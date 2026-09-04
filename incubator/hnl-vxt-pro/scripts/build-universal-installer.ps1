@@ -9,7 +9,7 @@ $universal = Join-Path $Root 'artifacts\universal'
 $iss = Join-Path $Root 'installer\HNL.VXT.Universal.Setup.iss'
 $branding = Join-Path $Root 'scripts\generate-installer-branding.ps1'
 $outDir = Join-Path $Root 'artifacts\universal-installer'
-$expected = Join-Path $outDir 'HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.2.exe'
+$expected = Join-Path $outDir 'HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.3.exe'
 
 $requiredStages = @('2023','2024','2025','2026-net8','2026-net10','2027')
 foreach ($stageName in $requiredStages) {
