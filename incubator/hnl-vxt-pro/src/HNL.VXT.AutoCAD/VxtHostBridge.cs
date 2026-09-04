@@ -1,3 +1,4 @@
+using System;
 using Autodesk.AutoCAD.ApplicationServices.Core;
 using HNL.VXT.Core.Models;
 using HNL.VXT.UI.Hosting;
@@ -6,6 +7,15 @@ namespace HNL.VXT.AutoCAD
 {
     internal sealed class VxtHostBridge : IVxtHostBridge
     {
+        public bool IsDarkTheme
+        {
+            get
+            {
+                try { return Convert.ToInt32(Application.GetSystemVariable("COLORTHEME")) == 0; }
+                catch { return true; }
+            }
+        }
+
         public void SelectBoundary() => Send("VXTSELECTBOUNDARY ");
         public void PickDirection() => Send("VXTPICKDIRECTION ");
 
@@ -31,7 +41,7 @@ namespace HNL.VXT.AutoCAD
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             doc?.Editor.WriteMessage(
-                "\nHNL Tool - VXT Pro v7.0.0-alpha.1: Tạo thật đang khóa cho tới khi Golden Verification với V6.7.4 hoàn tất.");
+                "\nHNL Tool - VXT Pro v7.0.0-alpha.2: Tạo thật đang khóa cho tới khi Golden Verification với V6.7.4 hoàn tất.");
         }
 
         private static void Send(string command)
