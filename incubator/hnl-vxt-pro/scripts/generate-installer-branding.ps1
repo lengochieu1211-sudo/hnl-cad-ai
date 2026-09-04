@@ -156,10 +156,10 @@ function Write-HnlMultiSizeIco {
   }
 }
 
-# WPF decodes indexed/palette and true-color PNG consistently on AutoCAD-supported Windows.
-# Normalize the embedded source to BGRA32 before System.Drawing creates the installer icon frames.
-Test-HnlImageBytes -Data $bytes -ExpectedSize 192
-Write-HnlNormalizedSourcePng -Data $bytes -Path $officialPng -ExpectedSize 192
+# The source is a standard RGBA PNG generated directly from the official HNL artwork.
+# Normalize through WPF before System.Drawing creates the installer icon frames.
+Test-HnlImageBytes -Data $bytes -ExpectedSize 128
+Write-HnlNormalizedSourcePng -Data $bytes -Path $officialPng -ExpectedSize 128
 
 $loaded = [System.Drawing.Image]::FromFile($officialPng)
 $source = $null
