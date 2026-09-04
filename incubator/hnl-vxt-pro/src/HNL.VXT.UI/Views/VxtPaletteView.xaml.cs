@@ -17,6 +17,7 @@ namespace HNL.VXT.UI.Views
             DataContext = ViewModel;
             AddDimensionResourceFields();
             AddDiagnosticButton();
+            VxtPaletteEnhancer.Apply(this, host, ViewModel);
         }
 
         public VxtPaletteViewModel ViewModel { get; }
@@ -184,9 +185,6 @@ namespace HNL.VXT.UI.Views
             var hoverBackground = (Brush)Resources["HoverBackground"];
             var selectedBackground = (Brush)Resources["AccentSoft"];
 
-            // WPF's default ComboBox popup can otherwise use the Windows light system
-            // colors while inheriting HNL's dark foreground, producing white-on-white text.
-            // Override the system brushes only inside this palette.
             Resources[SystemColors.WindowBrushKey] = inputBackground;
             Resources[SystemColors.WindowTextBrushKey] = primaryText;
             Resources[SystemColors.ControlBrushKey] = inputBackground;
