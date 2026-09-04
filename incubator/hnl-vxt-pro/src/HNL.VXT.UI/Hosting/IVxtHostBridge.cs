@@ -5,6 +5,8 @@ namespace HNL.VXT.UI.Hosting
     public interface IVxtHostBridge
     {
         bool IsDarkTheme { get; }
+        string[] GetLinetypeNames();
+        string[] GetDimStyleNames();
         void SelectBoundary();
         void PickDirection(MainDirectionMode mode);
         void PickBlock(BlockTarget target);
