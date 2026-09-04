@@ -9,8 +9,8 @@
     <Authors>HNL Tool</Authors>
     <Copyright>Copyright © HNL Tool 2026</Copyright>
     <VersionPrefix>7.0.0</VersionPrefix>
-    <VersionSuffix>alpha.4</VersionSuffix>
-    <AssemblyVersion>7.0.0.4</AssemblyVersion>
-    <FileVersion>7.0.0.4</FileVersion>
+    <VersionSuffix>alpha.5</VersionSuffix>
+    <AssemblyVersion>7.0.0.5</AssemblyVersion>
+    <FileVersion>7.0.0.5</FileVersion>
   </PropertyGroup>
 </Project>
