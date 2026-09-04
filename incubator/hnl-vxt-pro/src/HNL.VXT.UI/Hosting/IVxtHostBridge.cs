@@ -4,6 +4,7 @@ namespace HNL.VXT.UI.Hosting
 {
     public interface IVxtHostBridge
     {
+        bool IsDarkTheme { get; }
         void SelectBoundary();
         void PickDirection();
         void PickDimensionPosition(DimensionTarget target);
