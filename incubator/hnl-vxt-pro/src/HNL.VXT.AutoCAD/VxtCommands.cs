@@ -70,10 +70,39 @@ namespace HNL.VXT.AutoCAD
             var dx = p2.Value.X - p1.Value.X;
             var dy = p2.Value.Y - p1.Value.Y;
             var degrees = Math.Atan2(dy, dx) * 180.0 / Math.PI;
+            VxtSession.Current.Settings.MainDirection = MainDirectionMode.TwoPoints;
             VxtSession.Current.Settings.DirectionDegrees = degrees;
             VxtSession.Current.ViewModel?.SetDirection(degrees);
             VxtTransientPreview.Instance.Refresh();
         }
+
+        [CommandMethod("VXTRECTDIRECTION", CommandFlags.Modal)]
+        public void RectangleDirectionMode()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            VxtSession.Current.Settings.MainDirection = MainDirectionMode.RectangleRegions;
+            doc.Editor.WriteMessage(
+                "\nHNL Tool - VXT Pro: Chế độ chia vùng bằng hình chữ nhật đã chọn. Việc quét từng vùng sẽ chạy trong Create engine sau Golden Verification.");
+        }
+
+        [CommandMethod("VXTPICKMAINBLOCK", CommandFlags.Modal)]
+        public void PickMainBlock() => PickBlock(BlockTarget.Main);
+
+        [CommandMethod("VXTPICKFURRINGBLOCK", CommandFlags.Modal)]
+        public void PickFurringBlock() => PickBlock(BlockTarget.Furring);
+
+        [CommandMethod("VXTPICKHANGERBLOCK", CommandFlags.Modal)]
+        public void PickHangerBlock() => PickBlock(BlockTarget.Hanger);
+
+        [CommandMethod("VXTPICKEQUIPGENERAL", CommandFlags.Modal)]
+        public void PickGeneralEquipment() => PickEquipment(EquipmentTarget.General);
+
+        [CommandMethod("VXTPICKEQUIPMAIN", CommandFlags.Modal)]
+        public void PickMainEquipment() => PickEquipment(EquipmentTarget.Main);
+
+        [CommandMethod("VXTPICKEQUIPFURRING", CommandFlags.Modal)]
+        public void PickFurringEquipment() => PickEquipment(EquipmentTarget.Furring);
 
         [CommandMethod("VXTPICKDIMMAIN", CommandFlags.Modal)]
         public void PickMainDim() => PickDimension(DimensionTarget.Main);
@@ -83,6 +112,94 @@ namespace HNL.VXT.AutoCAD
 
         [CommandMethod("VXTPICKDIMHANGER", CommandFlags.Modal)]
         public void PickHangerDim() => PickDimension(DimensionTarget.Hanger);
+
+        private static void PickBlock(BlockTarget target)
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            var ed = doc.Editor;
+
+            var label = target == BlockTarget.Main
+                ? "Xương chính"
+                : target == BlockTarget.Furring ? "Xương phụ" : "Ty treo";
+
+            var options = new PromptEntityOptions($"\nHNL Tool - VXT Pro: Chọn Block mẫu {label}: ");
+            options.SetRejectMessage("\nHNL Tool - VXT Pro: Đối tượng phải là Block.");
+            options.AddAllowedClass(typeof(BlockReference), true);
+
+            var result = ed.GetEntity(options);
+            if (result.Status != PromptStatus.OK) return;
+
+            using (var tr = doc.TransactionManager.StartTransaction())
+            {
+                var br = tr.GetObject(result.ObjectId, OpenMode.ForRead) as BlockReference;
+                if (br == null) return;
+
+                var blockId = br.IsDynamicBlock ? br.DynamicBlockTableRecord : br.BlockTableRecord;
+                var btr = tr.GetObject(blockId, OpenMode.ForRead) as BlockTableRecord;
+                var blockName = btr?.Name ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(blockName)) return;
+
+                var settings = VxtSession.Current.Settings;
+                switch (target)
+                {
+                    case BlockTarget.Main:
+                        settings.MainBlockName = blockName;
+                        settings.MainLayer = br.Layer;
+                        break;
+                    case BlockTarget.Furring:
+                        settings.FurringBlockName = blockName;
+                        settings.FurringLayer = br.Layer;
+                        break;
+                    case BlockTarget.Hanger:
+                        settings.HangerBlockName = blockName;
+                        settings.HangerLayer = br.Layer;
+                        break;
+                }
+
+                VxtSession.Current.ViewModel?.SetBlock(target, blockName);
+                ed.WriteMessage($"\nHNL Tool - VXT Pro: Đã chọn Block {label}: {blockName}");
+                tr.Commit();
+            }
+        }
+
+        private static void PickEquipment(EquipmentTarget target)
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            var ed = doc.Editor;
+
+            var label = target == EquipmentTarget.General
+                ? "dùng chung"
+                : target == EquipmentTarget.Main ? "cho Xương chính" : "cho Xương phụ";
+
+            var options = new PromptSelectionOptions
+            {
+                MessageForAdding = $"\nHNL Tool - VXT Pro: Chọn Block thiết bị {label}: "
+            };
+            var filter = new SelectionFilter(new[]
+            {
+                new TypedValue((int)DxfCode.Start, "INSERT")
+            });
+
+            var result = ed.GetSelection(options, filter);
+            if (result.Status != PromptStatus.OK)
+            {
+                VxtSession.Current.ViewModel?.SetEquipmentStatus(target, 0);
+                return;
+            }
+
+            var ids = result.Value.GetObjectIds();
+            switch (target)
+            {
+                case EquipmentTarget.General: VxtSession.Current.GeneralEquipmentIds = ids; break;
+                case EquipmentTarget.Main: VxtSession.Current.MainEquipmentIds = ids; break;
+                case EquipmentTarget.Furring: VxtSession.Current.FurringEquipmentIds = ids; break;
+            }
+
+            VxtSession.Current.ViewModel?.SetEquipmentStatus(target, ids.Length);
+            ed.WriteMessage($"\nHNL Tool - VXT Pro: Đã chọn {ids.Length} Block thiết bị {label}.");
+        }
 
         private static void PickDimension(DimensionTarget target)
         {
