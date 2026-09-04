@@ -1,8 +1,8 @@
 #define MyAppName "HNL Tool - VXT Pro"
-#define MyAppVersion "7.0.0-alpha.1"
-#define MyNumericVersion "7.0.0.1"
+#define MyAppVersion "7.0.0-alpha.2"
+#define MyNumericVersion "7.0.0.2"
 #define MyPublisher "HNL Tool"
-#define MySetupBaseName "HNL_VXT_Pro_Setup_7.0.0-alpha.1"
+#define MySetupBaseName "HNL_VXT_Pro_Setup_7.0.0-alpha.2"
 
 [Setup]
 AppId={{A71F4558-7412-4B35-9EB8-6A2E2F2F6D44}
@@ -15,7 +15,7 @@ VersionInfoCompany={#MyPublisher}
 VersionInfoDescription=HNL Tool - VXT Pro AutoCAD 2023 Installer
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyNumericVersion}
-DefaultDirName={pf}\Autodesk\ApplicationPlugins\HNL.VXT.bundle
+DefaultDirName={commonpf}\Autodesk\ApplicationPlugins\HNL.VXT.bundle
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
