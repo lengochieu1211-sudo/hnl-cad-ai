@@ -19,6 +19,9 @@ namespace HNL.VXT.AutoCAD
         public ObjectId[] MainEquipmentIds { get; set; } = new ObjectId[0];
         public ObjectId[] FurringEquipmentIds { get; set; } = new ObjectId[0];
 
+        // V6.7.4 ask_each: false = Trái/Dưới, true = Phải/Trên.
+        public bool GlobalFurringFromFarEdge { get; set; }
+
         // Manual rectangle regions from the V6.7.4 "Quét HCN" workflow.
         public List<VxtLayoutRegion> Regions { get; } = new List<VxtLayoutRegion>();
 
