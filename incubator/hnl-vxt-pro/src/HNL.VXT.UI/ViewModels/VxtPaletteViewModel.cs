@@ -233,6 +233,8 @@ namespace HNL.VXT.UI.ViewModels
 
         public double DimensionDistance { get => _settings.DimensionDistance; set => SetNumberSetting(() => _settings.DimensionDistance, v => _settings.DimensionDistance = v, value); }
         public double DimensionSpacing { get => _settings.DimensionSpacing; set => SetNumberSetting(() => _settings.DimensionSpacing, v => _settings.DimensionSpacing = v, value); }
+        public string DimensionLayer { get => _settings.DimensionLayer; set => SetStringSetting(() => _settings.DimensionLayer, v => _settings.DimensionLayer = v, value); }
+        public string DimensionStyle { get => _settings.DimensionStyle; set => SetStringSetting(() => _settings.DimensionStyle, v => _settings.DimensionStyle = v, value); }
         public double DirectionDegrees { get => _settings.DirectionDegrees; set => SetDirectionFromInput(value); }
 
         public VxtSettings Snapshot() => _settings.Clone();
