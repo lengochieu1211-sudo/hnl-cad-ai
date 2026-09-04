@@ -47,11 +47,12 @@ namespace HNL.VXT.UI.ViewModels
             RefreshPreviewCommand = new RelayCommand(RequestPreview);
             ResetCommand = new RelayCommand(ResetDefaults);
             ClearPreviewCommand = new RelayCommand(() => _host.ClearPreview());
+            ExportDiagnosticsCommand = new RelayCommand(() => _host.ExportDiagnostics(_settings.Clone()));
             CreateCommand = new RelayCommand(() => _host.RequestCreate(), () => CanCreate);
         }
 
-        public string VersionLabel => "VXT Pro v7.0.0-alpha.2";
-        public string Subtitle => "UI tương thích V6.7.4 • AutoCAD 2023–2027";
+        public string VersionLabel => "VXT Pro v7.0.0-alpha.3";
+        public string Subtitle => "WYSIWYG Preview • tương thích V6.7.4 • AutoCAD 2023–2027";
         public bool IsDarkTheme => _host.IsDarkTheme;
 
         public string[] Presets { get; } = { "Trần chìm tiêu chuẩn", "Tùy chỉnh" };
@@ -108,6 +109,7 @@ namespace HNL.VXT.UI.ViewModels
         public ICommand RefreshPreviewCommand { get; }
         public ICommand ResetCommand { get; }
         public ICommand ClearPreviewCommand { get; }
+        public ICommand ExportDiagnosticsCommand { get; }
         public ICommand CreateCommand { get; }
 
         public bool HasBoundary
