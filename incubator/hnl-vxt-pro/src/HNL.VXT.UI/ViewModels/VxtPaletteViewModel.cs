@@ -15,7 +15,9 @@ namespace HNL.VXT.UI.ViewModels
         private string _boundaryStatus = "Chưa chọn biên trần";
         private string _previewStatus = "Chọn Polyline kín để bắt đầu Live Preview.";
         private string _summary = "XC --  •  XP --  •  TY --  •  DIM --";
+        private string _selectedPreset = "Trần chìm tiêu chuẩn";
         private bool _hasBoundary;
+        private bool _applyingPreset;
 
         public VxtPaletteViewModel(IVxtHostBridge host)
         {
@@ -31,8 +33,21 @@ namespace HNL.VXT.UI.ViewModels
             CreateCommand = new RelayCommand(() => _host.RequestCreate(), () => CanCreate);
         }
 
-        public string VersionLabel => "HNL Tool - VXT Pro v7.0.0-alpha.1";
-        public string Subtitle => "Vẽ Xương Trần • Universal AutoCAD 2023–2027";
+        public string VersionLabel => "HNL Tool - VXT Pro v7.0.0-alpha.2";
+        public string Subtitle => "Professional UI • Universal AutoCAD 2023–2027";
+        public bool IsDarkTheme => _host.IsDarkTheme;
+        public string[] Presets { get; } = { "Trần chìm tiêu chuẩn", "Tùy chỉnh" };
+
+        public string SelectedPreset
+        {
+            get => _selectedPreset;
+            set
+            {
+                if (!Set(ref _selectedPreset, value)) return;
+                if (!_applyingPreset && value == "Trần chìm tiêu chuẩn")
+                    ApplyStandardPreset();
+            }
+        }
 
         public ICommand SelectBoundaryCommand { get; }
         public ICommand PickDirectionCommand { get; }
@@ -94,12 +109,13 @@ namespace HNL.VXT.UI.ViewModels
         {
             BoundaryStatus = display;
             HasBoundary = hasBoundary;
-            PreviewStatus = hasBoundary ? "Live Preview đang bật. Thay đổi thông số để cập nhật." : "Chọn Polyline kín để bắt đầu Live Preview.";
+            PreviewStatus = hasBoundary ? "Live Preview đang bật • thay đổi thông số để cập nhật." : "Chọn Polyline kín để bắt đầu Live Preview.";
         }
 
         public void SetDirection(double degrees)
         {
             _settings.DirectionDegrees = Normalize(degrees);
+            MarkCustom();
             OnPropertyChanged(nameof(DirectionDegrees));
             RequestPreview();
         }
@@ -113,6 +129,7 @@ namespace HNL.VXT.UI.ViewModels
                 case DimensionTarget.Hanger: _settings.HangerDimPosition = position; OnPropertyChanged(nameof(HangerDimPosition)); break;
             }
             _settings.DimensionDistance = Math.Max(0, distance);
+            MarkCustom();
             OnPropertyChanged(nameof(DimensionDistance));
             RequestPreview();
         }
@@ -123,15 +140,20 @@ namespace HNL.VXT.UI.ViewModels
             PreviewStatus = "✓ Preview cập nhật • chưa ghi đối tượng vào DWG";
         }
 
-        public void SetPreviewError(string message)
-        {
-            PreviewStatus = "⚠ " + message;
-        }
+        public void SetPreviewError(string message) => PreviewStatus = "⚠ " + message;
 
         private void Changed([CallerMemberName] string propertyName = null)
         {
             OnPropertyChanged(propertyName);
+            MarkCustom();
             RequestPreview();
+        }
+
+        private void MarkCustom()
+        {
+            if (_applyingPreset || _selectedPreset == "Tùy chỉnh") return;
+            _selectedPreset = "Tùy chỉnh";
+            OnPropertyChanged(nameof(SelectedPreset));
         }
 
         private void RequestPreview()
@@ -145,10 +167,22 @@ namespace HNL.VXT.UI.ViewModels
             _host.RequestPreview(_settings.Clone());
         }
 
-        private void ResetDefaults()
+        private void ApplyStandardPreset()
         {
+            _applyingPreset = true;
             _settings = new VxtSettings();
             OnPropertyChanged(string.Empty);
+            _applyingPreset = false;
+            RequestPreview();
+        }
+
+        private void ResetDefaults()
+        {
+            _applyingPreset = true;
+            _settings = new VxtSettings();
+            _selectedPreset = "Trần chìm tiêu chuẩn";
+            OnPropertyChanged(string.Empty);
+            _applyingPreset = false;
             RequestPreview();
         }
 
