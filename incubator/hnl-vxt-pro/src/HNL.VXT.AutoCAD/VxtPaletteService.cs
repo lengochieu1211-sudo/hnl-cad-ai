@@ -7,7 +7,9 @@ namespace HNL.VXT.AutoCAD
 {
     internal static class VxtPaletteService
     {
-        private static readonly Guid PaletteGuid = new Guid("E197984B-C567-46A2-ABCD-8BD7E43BCA36");
+        // Alpha.5 uses a refreshed Palette GUID so AutoCAD does not restore the stale alpha.1 title
+        // from the profile cache. A stable final GUID will be frozen after Golden verification.
+        private static readonly Guid PaletteGuid = new Guid("925513AF-8743-438C-8F53-BA6C586CF2D2");
         private static PaletteSet _palette;
         private static VxtPaletteView _view;
 
@@ -19,7 +21,7 @@ namespace HNL.VXT.AutoCAD
                 _view = new VxtPaletteView(bridge);
                 VxtSession.Current.ViewModel = _view.ViewModel;
 
-                _palette = new PaletteSet("HNL Tool - VXT Pro v7.0.0-alpha.4", PaletteGuid)
+                _palette = new PaletteSet("HNL Tool - VXT Pro v7.0.0-alpha.5", PaletteGuid)
                 {
                     Style = PaletteSetStyles.ShowAutoHideButton |
                             PaletteSetStyles.ShowCloseButton |
