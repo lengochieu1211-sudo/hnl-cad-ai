@@ -175,6 +175,8 @@ namespace HNL.VXT.Core.Preview
             IReadOnlyList<Segment2> furringSegments,
             IReadOnlyList<Point2> hangerPoints)
         {
+            if (!s.AutoDimension) return;
+
             var mainXs = mainSegments.Select(seg => seg.A.X).Distinct(new DoubleToleranceComparer()).OrderBy(x => x).ToList();
             var furringYs = furringSegments.Select(seg => seg.A.Y).Distinct(new DoubleToleranceComparer()).OrderBy(y => y).ToList();
 
