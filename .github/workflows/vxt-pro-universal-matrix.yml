@@ -1,4 +1,4 @@
-name: HNL VXT Pro Universal 2023-2027 Matrix
+name: HNL VXT Pro Universal 2023-2027 Beta Matrix
 
 on:
   push:
@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   core-tests:
-    name: Core / Geometry / DIM / Numeric Expression / V6.7.4 Defaults Tests
+    name: Core / Golden / DIM / Numeric Expression Tests
     runs-on: windows-latest
     timeout-minutes: 15
     env:
@@ -36,6 +36,23 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
+      - name: Functional source and branding gate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vm = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\VxtPaletteViewModel.cs" -Raw
+          if ($vm.Contains('public bool CanCreate => false')) { throw 'Create is still hard-locked.' }
+          if (-not $vm.Contains('VXT Pro v7.0.0-beta.1')) { throw 'Palette beta.1 label missing.' }
+          $commands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
+          if (-not $commands.Contains('[CommandMethod("VXTCREATE"')) { throw 'VXTCREATE command missing.' }
+          $create = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCreateEngine.cs" -Raw
+          if (-not $create.Contains('StartTransaction')) { throw 'Create transaction gate missing.' }
+          $logoText = (Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64" -Raw) -replace '\s',''
+          try { $logoBytes = [Convert]::FromBase64String($logoText) }
+          catch { throw 'HNL logo Base64 is invalid.' }
+          if ($logoBytes.Length -lt 1024) { throw 'Decoded HNL logo is unexpectedly small.' }
+          if ($logoBytes[0] -ne 0x89 -or $logoBytes[1] -ne 0x50 -or $logoBytes[2] -ne 0x4E -or $logoBytes[3] -ne 0x47) { throw 'HNL logo is not PNG.' }
+          Write-Host 'Functional beta.1 source/branding gate PASS'
       - name: Run golden core tests
         shell: pwsh
         run: dotnet test "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj" -c Release
@@ -106,7 +123,7 @@ jobs:
           $bad = Get-ChildItem $stage -File | Where-Object { $_.Name -match '^(Ac|AutoCAD).*\.dll$' }
           if ($bad) { throw 'Autodesk runtime DLL must not be redistributed.' }
           $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $stage 'HNL.VXT.AutoCAD.dll'))
-          if (-not $info.FileVersion.StartsWith('7.0.0.5')) { throw "Unexpected bridge version: $($info.FileVersion)" }
+          if (-not $info.FileVersion.StartsWith('7.0.0.6')) { throw "Unexpected bridge version: $($info.FileVersion)" }
           Write-Host "AutoCAD ${{ matrix.cad }} / ${{ matrix.runtime }} => $($info.FileVersion)"
       - uses: actions/upload-artifact@v4
         with:
@@ -116,7 +133,7 @@ jobs:
           if-no-files-found: error
 
   universal-setup:
-    name: Universal Setup EXE / AutoCAD 2023-2027 / alpha.5
+    name: Universal Setup EXE / AutoCAD 2023-2027 / beta.1
     needs:
       - core-tests
       - cad-bridge-matrix
@@ -164,19 +181,22 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $exe = Join-Path $env:VXT_ROOT 'artifacts\universal-installer\HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.5.exe'
+          $exe = Join-Path $env:VXT_ROOT 'artifacts\universal-installer\HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe'
           $sha = "$exe.sha256.txt"
           if (-not (Test-Path $exe)) { throw "Universal setup missing: $exe" }
           if (-not (Test-Path $sha)) { throw "Universal SHA256 file missing: $sha" }
           $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
-          if (-not $info.FileVersion.StartsWith('7.0.0.5')) { throw "Unexpected installer FileVersion: $($info.FileVersion)" }
-          Write-Host "Universal setup gate PASS: $($info.FileVersion)"
+          if (-not $info.FileVersion.StartsWith('7.0.0.6')) { throw "Unexpected installer FileVersion: $($info.FileVersion)" }
+          $actual = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $declared = ((Get-Content $sha -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          if ($actual -ne $declared) { throw "Universal SHA mismatch: $actual != $declared" }
+          Write-Host "Universal beta.1 setup gate PASS: $($info.FileVersion)"
           Get-Content $sha
       - uses: actions/upload-artifact@v4
         with:
-          name: HNL-VXT-Pro-v7.0.0-alpha.5-Universal-Setup-AutoCAD2023-2027
+          name: HNL-VXT-Pro-v7.0.0-beta.1-Universal-Setup-AutoCAD2023-2027
           path: |
-            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.5.exe
-            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.5.exe.sha256.txt
+            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe
+            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe.sha256.txt
           retention-days: 14
           if-no-files-found: error
