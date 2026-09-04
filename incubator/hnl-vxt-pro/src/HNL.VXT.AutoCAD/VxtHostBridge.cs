@@ -40,15 +40,9 @@ namespace HNL.VXT.AutoCAD
         {
             switch (mode)
             {
-                case MainDirectionMode.TwoPoints:
-                    Send("VXTPICKDIRECTION ");
-                    break;
-                case MainDirectionMode.RectangleRegions:
-                    Send("VXTRECTDIRECTION ");
-                    break;
-                default:
-                    Write("\nHNL Tool - VXT Pro: Hướng hiện tại không cần chọn điểm trên CAD.");
-                    break;
+                case MainDirectionMode.TwoPoints: Send("VXTPICKDIRECTION "); break;
+                case MainDirectionMode.RectangleRegions: Send("VXTRECTDIRECTION "); break;
+                default: Write("\nHNL Tool - VXT Pro: Hướng hiện tại không cần chọn điểm trên CAD."); break;
             }
         }
 
@@ -90,11 +84,17 @@ namespace HNL.VXT.AutoCAD
 
         public void ClearPreview() => VxtTransientPreview.Instance.Clear();
 
+        public void RequestCreate()
+        {
+            var session = VxtSession.Current;
+            if (session.ViewModel != null) session.Settings = session.ViewModel.Snapshot();
+            Send("VXTCREATE ");
+        }
+
         public void ExportDiagnostics(VxtSettings settings)
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             if (doc == null) return;
-
             try
             {
                 var dialog = new SaveFileDialog
@@ -107,16 +107,14 @@ namespace HNL.VXT.AutoCAD
                     DefaultExt = ".txt",
                     OverwritePrompt = true
                 };
-
                 if (dialog.ShowDialog() != true) return;
 
                 var session = VxtSession.Current;
                 var vm = session.ViewModel;
                 var sb = new StringBuilder(4096);
-
                 sb.AppendLine("HNL TOOL - VXT PRO DIAGNOSTIC");
                 sb.AppendLine("========================================");
-                sb.AppendLine("VXT Version: 7.0.0-alpha.5");
+                sb.AppendLine("VXT Version: 7.0.0-alpha.5-production-engine");
                 sb.AppendLine("Time: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
                 sb.AppendLine("OS: " + Environment.OSVersion);
                 sb.AppendLine("CLR: " + Environment.Version);
@@ -126,7 +124,6 @@ namespace HNL.VXT.AutoCAD
                 sb.AppendLine("Theme: " + (IsDarkTheme ? "Dark" : "Light"));
                 sb.AppendLine("Drawing: " + SafeDrawingName(doc));
                 sb.AppendLine();
-
                 sb.AppendLine("[SESSION]");
                 sb.AppendLine("Boundary: " + (session.HasBoundary ? "Selected" : "Not selected"));
                 if (session.HasBoundary)
@@ -136,18 +133,14 @@ namespace HNL.VXT.AutoCAD
                     sb.AppendLine("Boundary min: " + bounds.Min.X.ToString("0.###") + ", " + bounds.Min.Y.ToString("0.###"));
                     sb.AppendLine("Boundary max: " + bounds.Max.X.ToString("0.###") + ", " + bounds.Max.Y.ToString("0.###"));
                 }
+                sb.AppendLine("Manual regions: " + session.Regions.Count);
                 sb.AppendLine("Preview summary: " + (vm?.Summary ?? "N/A"));
                 sb.AppendLine("Preview status: " + (vm?.PreviewStatus ?? "N/A"));
                 sb.AppendLine("Boundary status: " + (vm?.BoundaryStatus ?? "N/A"));
-                sb.AppendLine("Equipment general/main/furring: " +
-                              session.GeneralEquipmentIds.Length + "/" +
-                              session.MainEquipmentIds.Length + "/" +
-                              session.FurringEquipmentIds.Length);
+                sb.AppendLine("Equipment general/main/furring: " + session.GeneralEquipmentIds.Length + "/" + session.MainEquipmentIds.Length + "/" + session.FurringEquipmentIds.Length);
                 sb.AppendLine();
-
                 AppendSettings(sb, settings);
                 AppendDrawingResources(sb, doc.Database, settings);
-
                 File.WriteAllText(dialog.FileName, sb.ToString(), new UTF8Encoding(true));
                 Write("\nHNL Tool - VXT Pro: Đã xuất file kiểm tra lỗi: " + dialog.FileName);
             }
@@ -155,11 +148,6 @@ namespace HNL.VXT.AutoCAD
             {
                 Write("\nHNL Tool - VXT Pro: Không thể xuất file kiểm tra lỗi: " + ex.Message);
             }
-        }
-
-        public void RequestCreate()
-        {
-            Write("\nHNL Tool - VXT Pro v7.0.0-alpha.5: Tạo thật đang khóa cho tới khi Golden Verification với V6.7.4 hoàn tất.");
         }
 
         private static string[] ReadSymbolNames(Database db, ObjectId tableId)
@@ -175,8 +163,7 @@ namespace HNL.VXT.AutoCAD
                         foreach (ObjectId id in table)
                         {
                             var record = tr.GetObject(id, OpenMode.ForRead) as SymbolTableRecord;
-                            if (record != null && !string.IsNullOrWhiteSpace(record.Name))
-                                names.Add(record.Name);
+                            if (record != null && !string.IsNullOrWhiteSpace(record.Name)) names.Add(record.Name);
                         }
                     }
                     tr.Commit();
@@ -233,15 +220,11 @@ namespace HNL.VXT.AutoCAD
                     sb.AppendLine("Furring layer exists: " + Has(lt, s.FurringLayer));
                     sb.AppendLine("Hanger layer exists: " + Has(lt, s.HangerLayer));
                     sb.AppendLine("DIM layer exists: " + Has(lt, s.DimensionLayer));
-                    sb.AppendLine("DIM style exists/current: " +
-                                  (string.IsNullOrWhiteSpace(s.DimensionStyle) ? "Current" : Has(dst, s.DimensionStyle).ToString()));
+                    sb.AppendLine("DIM style exists/current: " + (string.IsNullOrWhiteSpace(s.DimensionStyle) ? "Current" : Has(dst, s.DimensionStyle).ToString()));
                     tr.Commit();
                 }
             }
-            catch (System.Exception ex)
-            {
-                sb.AppendLine("Resource check error: " + ex.Message);
-            }
+            catch (System.Exception ex) { sb.AppendLine("Resource check error: " + ex.Message); }
             sb.AppendLine();
         }
 
@@ -262,9 +245,7 @@ namespace HNL.VXT.AutoCAD
             try
             {
                 var fileName = Process.GetCurrentProcess().MainModule?.FileName;
-                return string.IsNullOrWhiteSpace(fileName)
-                    ? "N/A"
-                    : FileVersionInfo.GetVersionInfo(fileName).FileVersion;
+                return string.IsNullOrWhiteSpace(fileName) ? "N/A" : FileVersionInfo.GetVersionInfo(fileName).FileVersion;
             }
             catch { return "N/A"; }
         }
