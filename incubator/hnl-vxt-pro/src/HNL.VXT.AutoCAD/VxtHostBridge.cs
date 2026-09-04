@@ -17,7 +17,42 @@ namespace HNL.VXT.AutoCAD
         }
 
         public void SelectBoundary() => Send("VXTSELECTBOUNDARY ");
-        public void PickDirection() => Send("VXTPICKDIRECTION ");
+
+        public void PickDirection(MainDirectionMode mode)
+        {
+            switch (mode)
+            {
+                case MainDirectionMode.TwoPoints:
+                    Send("VXTPICKDIRECTION ");
+                    break;
+                case MainDirectionMode.RectangleRegions:
+                    Send("VXTRECTDIRECTION ");
+                    break;
+                default:
+                    Write("\nHNL Tool - VXT Pro: Hướng hiện tại không cần chọn điểm trên CAD.");
+                    break;
+            }
+        }
+
+        public void PickBlock(BlockTarget target)
+        {
+            switch (target)
+            {
+                case BlockTarget.Main: Send("VXTPICKMAINBLOCK "); break;
+                case BlockTarget.Furring: Send("VXTPICKFURRINGBLOCK "); break;
+                case BlockTarget.Hanger: Send("VXTPICKHANGERBLOCK "); break;
+            }
+        }
+
+        public void PickEquipment(EquipmentTarget target)
+        {
+            switch (target)
+            {
+                case EquipmentTarget.General: Send("VXTPICKEQUIPGENERAL "); break;
+                case EquipmentTarget.Main: Send("VXTPICKEQUIPMAIN "); break;
+                case EquipmentTarget.Furring: Send("VXTPICKEQUIPFURRING "); break;
+            }
+        }
 
         public void PickDimensionPosition(DimensionTarget target)
         {
@@ -39,15 +74,19 @@ namespace HNL.VXT.AutoCAD
 
         public void RequestCreate()
         {
-            var doc = Application.DocumentManager.MdiActiveDocument;
-            doc?.Editor.WriteMessage(
-                "\nHNL Tool - VXT Pro v7.0.0-alpha.2: Tạo thật đang khóa cho tới khi Golden Verification với V6.7.4 hoàn tất.");
+            Write("\nHNL Tool - VXT Pro v7.0.0-alpha.2: Tạo thật đang khóa cho tới khi Golden Verification với V6.7.4 hoàn tất.");
         }
 
         private static void Send(string command)
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             doc?.SendStringToExecute(command, true, false, false);
+        }
+
+        private static void Write(string message)
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            doc?.Editor.WriteMessage(message);
         }
     }
 }
