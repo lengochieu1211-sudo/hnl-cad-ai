@@ -106,7 +106,7 @@ jobs:
           $bad = Get-ChildItem $stage -File | Where-Object { $_.Name -match '^(Ac|AutoCAD).*\.dll$' }
           if ($bad) { throw 'Autodesk runtime DLL must not be redistributed.' }
           $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $stage 'HNL.VXT.AutoCAD.dll'))
-          if (-not $info.FileVersion.StartsWith('7.0.0.4')) { throw "Unexpected bridge version: $($info.FileVersion)" }
+          if (-not $info.FileVersion.StartsWith('7.0.0.5')) { throw "Unexpected bridge version: $($info.FileVersion)" }
           Write-Host "AutoCAD ${{ matrix.cad }} / ${{ matrix.runtime }} => $($info.FileVersion)"
       - uses: actions/upload-artifact@v4
         with:
@@ -116,7 +116,7 @@ jobs:
           if-no-files-found: error
 
   universal-setup:
-    name: Universal Setup EXE / AutoCAD 2023-2027 / alpha.4
+    name: Universal Setup EXE / AutoCAD 2023-2027 / alpha.5
     needs:
       - core-tests
       - cad-bridge-matrix
@@ -164,19 +164,19 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $exe = Join-Path $env:VXT_ROOT 'artifacts\universal-installer\HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.4.exe'
+          $exe = Join-Path $env:VXT_ROOT 'artifacts\universal-installer\HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.5.exe'
           $sha = "$exe.sha256.txt"
           if (-not (Test-Path $exe)) { throw "Universal setup missing: $exe" }
           if (-not (Test-Path $sha)) { throw "Universal SHA256 file missing: $sha" }
           $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
-          if (-not $info.FileVersion.StartsWith('7.0.0.4')) { throw "Unexpected installer FileVersion: $($info.FileVersion)" }
+          if (-not $info.FileVersion.StartsWith('7.0.0.5')) { throw "Unexpected installer FileVersion: $($info.FileVersion)" }
           Write-Host "Universal setup gate PASS: $($info.FileVersion)"
           Get-Content $sha
       - uses: actions/upload-artifact@v4
         with:
-          name: HNL-VXT-Pro-v7.0.0-alpha.4-Universal-Setup-AutoCAD2023-2027
+          name: HNL-VXT-Pro-v7.0.0-alpha.5-Universal-Setup-AutoCAD2023-2027
           path: |
-            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.4.exe
-            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.4.exe.sha256.txt
+            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.5.exe
+            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-alpha.5.exe.sha256.txt
           retention-days: 14
           if-no-files-found: error
