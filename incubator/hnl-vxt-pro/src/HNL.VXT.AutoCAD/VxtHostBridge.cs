@@ -103,7 +103,7 @@ namespace HNL.VXT.AutoCAD
 
                 sb.AppendLine("HNL TOOL - VXT PRO DIAGNOSTIC");
                 sb.AppendLine("========================================");
-                sb.AppendLine("VXT Version: 7.0.0-alpha.3");
+                sb.AppendLine("VXT Version: 7.0.0-alpha.4");
                 sb.AppendLine("Time: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
                 sb.AppendLine("OS: " + Environment.OSVersion);
                 sb.AppendLine("CLR: " + Environment.Version);
@@ -146,7 +146,7 @@ namespace HNL.VXT.AutoCAD
 
         public void RequestCreate()
         {
-            Write("\nHNL Tool - VXT Pro v7.0.0-alpha.3: Tạo thật đang khóa cho tới khi Golden Verification với V6.7.4 hoàn tất.");
+            Write("\nHNL Tool - VXT Pro v7.0.0-alpha.4: Tạo thật đang khóa cho tới khi Golden Verification với V6.7.4 hoàn tất.");
         }
 
         private static void AppendSettings(StringBuilder sb, VxtSettings s)
