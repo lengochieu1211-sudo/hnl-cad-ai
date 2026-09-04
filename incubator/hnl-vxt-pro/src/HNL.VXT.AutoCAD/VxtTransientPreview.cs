@@ -218,7 +218,6 @@ namespace HNL.VXT.AutoCAD
                     dimStyleId);
 
                 dim.SetDatabaseDefaults(db);
-                dim.Dimstyle = dimStyleId;
                 ApplyAppearance(dim, settings.DimensionLayer, settings.DimensionColorIndex,
                     settings.DimensionLinetype, settings.DimensionLineweight, layerTable, linetypeTable);
                 AddDrawable(dim);
