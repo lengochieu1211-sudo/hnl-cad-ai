@@ -12,6 +12,7 @@ namespace HNL.VXT.UI.Hosting
         void PickDimensionPosition(DimensionTarget target);
         void RequestPreview(VxtSettings settings);
         void ClearPreview();
+        void ExportDiagnostics(VxtSettings settings);
         void RequestCreate();
     }
 }
