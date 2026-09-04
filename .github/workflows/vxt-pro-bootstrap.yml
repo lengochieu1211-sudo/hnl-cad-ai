@@ -40,11 +40,14 @@ jobs:
           Write-Host "Target: AutoCAD 2023 / .NET Framework 4.8 / AutoCAD.NET 24.2.0"
           $required = @(
             "$env:VXT_ROOT\src\HNL.VXT.Core\HNL.VXT.Core.csproj",
+            "$env:VXT_ROOT\src\HNL.VXT.Core\Utilities\NumericExpressionEvaluator.cs",
             "$env:VXT_ROOT\src\HNL.VXT.UI\HNL.VXT.UI.csproj",
             "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj",
             "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtTransientPreview.cs",
             "$env:VXT_ROOT\src\HNL.VXT.UI\Controls\HnlLogo.xaml",
+            "$env:VXT_ROOT\src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64",
             "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj",
+            "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\NumericExpressionEvaluatorTests.cs",
             "$env:VXT_ROOT\build\HNL.VXT.bundle\PackageContents.xml",
             "$env:VXT_ROOT\installer\HNL.VXT.Setup.iss",
             "$env:VXT_ROOT\scripts\generate-installer-branding.ps1",
@@ -55,7 +58,7 @@ jobs:
           }
           $createSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\VxtPaletteViewModel.cs" -Raw
           if (-not $createSource.Contains("public bool CanCreate => false")) {
-            throw "Safety gate failed: real Create must remain locked in alpha.2."
+            throw "Safety gate failed: real Create must remain locked in alpha.3."
           }
           $iss = Get-Content "$env:VXT_ROOT\installer\HNL.VXT.Setup.iss" -Raw
           if (-not $iss.Contains('DefaultDirName={commonpf}\Autodesk\ApplicationPlugins\HNL.VXT.bundle')) {
@@ -64,7 +67,7 @@ jobs:
           if (-not $iss.Contains('PrivilegesRequired=admin')) {
             throw "Installer gate failed: Program Files setup must request admin privileges."
           }
-          Write-Host "HNL VXT alpha.2 source/safety/installer gate PASS"
+          Write-Host "HNL VXT alpha.3 source/safety/installer gate PASS"
       - name: Restore AutoCAD 2023 plugin
         shell: pwsh
         run: dotnet restore "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj"
@@ -74,7 +77,7 @@ jobs:
       - name: Build AutoCAD 2023 plugin
         shell: pwsh
         run: dotnet build "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj" -c Release --no-restore
-      - name: Run Core / Geometry / DIM / V6.7.4 defaults tests
+      - name: Run Core / Geometry / DIM / Numeric Expression / V6.7.4 defaults tests
         shell: pwsh
         run: dotnet test "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj" -c Release
       - name: Package AutoCAD ApplicationPlugins bundle
@@ -100,8 +103,8 @@ jobs:
           $dll = Join-Path $windows "HNL.VXT.AutoCAD.dll"
           $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $dll))
           Write-Host "HNL.VXT.AutoCAD.dll FileVersion: $($info.FileVersion)"
-          if (-not $info.FileVersion.StartsWith("7.0.0.2")) { throw "Unexpected VXT DLL version: $($info.FileVersion)" }
-          $zip = Join-Path $artifactRoot "HNL-VXT-Pro-v7.0.0-alpha.2-AutoCAD2023.zip"
+          if (-not $info.FileVersion.StartsWith("7.0.0.3")) { throw "Unexpected VXT DLL version: $($info.FileVersion)" }
+          $zip = Join-Path $artifactRoot "HNL-VXT-Pro-v7.0.0-alpha.3-AutoCAD2023.zip"
           Compress-Archive -Path $bundleRoot -DestinationPath $zip -CompressionLevel Optimal
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
           Write-Host "Bundle ZIP SHA256: $hash"
@@ -116,31 +119,31 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $exe = "$env:VXT_ROOT\artifacts\installer\HNL_VXT_Pro_Setup_7.0.0-alpha.2.exe"
+          $exe = "$env:VXT_ROOT\artifacts\installer\HNL_VXT_Pro_Setup_7.0.0-alpha.3.exe"
           $sha = "$exe.sha256.txt"
           if (-not (Test-Path $exe)) { throw "Missing Setup EXE: $exe" }
           if (-not (Test-Path $sha)) { throw "Missing Setup SHA256: $sha" }
           $size = (Get-Item $exe).Length
           if ($size -lt 300KB) { throw "Setup EXE too small: $size bytes" }
           $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
-          if (-not $info.FileVersion.StartsWith('7.0.0.2')) { throw "Unexpected Setup FileVersion: $($info.FileVersion)" }
-          Write-Host "ONE-FILE SETUP alpha.2 PASS"
+          if (-not $info.FileVersion.StartsWith('7.0.0.3')) { throw "Unexpected Setup FileVersion: $($info.FileVersion)" }
+          Write-Host "ONE-FILE SETUP alpha.3 PASS"
           Write-Host "Setup size: $size bytes"
           Write-Host "Setup FileVersion: $($info.FileVersion)"
           Get-Content $sha
       - name: Upload debug bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: HNL-VXT-Pro-v7.0.0-alpha.2-AutoCAD2023-Bundle
-          path: ${{ env.VXT_ROOT }}/artifacts/HNL-VXT-Pro-v7.0.0-alpha.2-AutoCAD2023.zip
+          name: HNL-VXT-Pro-v7.0.0-alpha.3-AutoCAD2023-Bundle
+          path: ${{ env.VXT_ROOT }}/artifacts/HNL-VXT-Pro-v7.0.0-alpha.3-AutoCAD2023.zip
           if-no-files-found: error
           retention-days: 7
       - name: Upload one-file Setup EXE
         uses: actions/upload-artifact@v4
         with:
-          name: HNL-VXT-Pro-v7.0.0-alpha.2-Setup-AutoCAD2023
+          name: HNL-VXT-Pro-v7.0.0-alpha.3-Setup-AutoCAD2023
           path: |
-            ${{ env.VXT_ROOT }}/artifacts/installer/HNL_VXT_Pro_Setup_7.0.0-alpha.2.exe
-            ${{ env.VXT_ROOT }}/artifacts/installer/HNL_VXT_Pro_Setup_7.0.0-alpha.2.exe.sha256.txt
+            ${{ env.VXT_ROOT }}/artifacts/installer/HNL_VXT_Pro_Setup_7.0.0-alpha.3.exe
+            ${{ env.VXT_ROOT }}/artifacts/installer/HNL_VXT_Pro_Setup_7.0.0-alpha.3.exe.sha256.txt
           if-no-files-found: error
           retention-days: 14
