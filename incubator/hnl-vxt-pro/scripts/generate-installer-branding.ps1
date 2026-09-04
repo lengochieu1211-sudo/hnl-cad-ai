@@ -23,9 +23,24 @@ if ($bytes.Length -lt 8 -or
 }
 [IO.File]::WriteAllBytes($officialPng, $bytes)
 
+function Test-HnlImageBytes {
+  param([byte[]]$Data, [int]$ExpectedSize)
+  $ms = [System.IO.MemoryStream]::new($Data, $false)
+  $img = $null
+  try {
+    $img = [System.Drawing.Image]::FromStream($ms, $true, $true)
+    if ($img.Width -ne $ExpectedSize -or $img.Height -ne $ExpectedSize) {
+      throw "Decoded frame is $($img.Width)x$($img.Height), expected ${ExpectedSize}x${ExpectedSize}."
+    }
+  }
+  finally {
+    if ($img -ne $null) { $img.Dispose() }
+    $ms.Dispose()
+  }
+}
+
 function New-HnlArgbSource {
   param([System.Drawing.Image]$InputImage)
-
   $normalized = [System.Drawing.Bitmap]::new(
     $InputImage.Width,
     $InputImage.Height,
@@ -45,10 +60,7 @@ function New-HnlArgbSource {
 }
 
 function New-HnlPngFrame {
-  param(
-    [System.Drawing.Image]$Source,
-    [int]$Size
-  )
+  param([System.Drawing.Image]$Source, [int]$Size)
 
   $bitmap = [System.Drawing.Bitmap]::new($Size, $Size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
   $g = [System.Drawing.Graphics]::FromImage($bitmap)
@@ -59,9 +71,6 @@ function New-HnlPngFrame {
     $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-
-    # The official artwork already contains its own rounded-edge safety area.
-    # Keep only a very small additional margin for Windows' smallest icon slots.
     $margin = if ($Size -le 32) { 1 } else { [Math]::Max(1, [int][Math]::Round($Size * 0.02)) }
     $draw = $Size - (2 * $margin)
     $g.DrawImage($Source, $margin, $margin, $draw, $draw)
@@ -71,36 +80,25 @@ function New-HnlPngFrame {
   $ms = [System.IO.MemoryStream]::new()
   try {
     $bitmap.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-    return [byte[]]$ms.ToArray()
+    $result = [byte[]]$ms.ToArray()
   }
   finally {
     $ms.Dispose()
     $bitmap.Dispose()
   }
+  Test-HnlImageBytes -Data $result -ExpectedSize $Size
+  return $result
 }
 
 function Write-HnlMultiSizeIco {
-  param(
-    [System.Drawing.Image]$Source,
-    [byte[]]$OriginalPngBytes,
-    [string]$Path
-  )
+  param([System.Drawing.Image]$Source, [string]$Path)
 
-  # Highest-resolution frame first. The 256px frame is the exact official PNG bytes,
-  # avoiding any GDI+ resampling/indexed-palette corruption in Explorer/Inno resources.
   $sizes = @(256, 128, 64, 48, 32, 24, 16)
   $frames = @()
   foreach ($size in $sizes) {
-    $frameData = if ($size -eq 256 -and $Source.Width -eq 256 -and $Source.Height -eq 256) {
-      [byte[]]$OriginalPngBytes
-    }
-    else {
-      [byte[]](New-HnlPngFrame -Source $Source -Size $size)
-    }
-
     $frames += ,([PSCustomObject]@{
       Size = $size
-      Data = $frameData
+      Data = [byte[]](New-HnlPngFrame -Source $Source -Size $size)
     })
   }
 
@@ -110,24 +108,15 @@ function Write-HnlMultiSizeIco {
     $bw.Write([UInt16]0)
     $bw.Write([UInt16]1)
     $bw.Write([UInt16]$frames.Count)
-
     $offset = 6 + (16 * $frames.Count)
     foreach ($frame in $frames) {
       $wh = if ($frame.Size -eq 256) { [byte]0 } else { [byte]$frame.Size }
-      $bw.Write($wh)
-      $bw.Write($wh)
-      $bw.Write([byte]0)
-      $bw.Write([byte]0)
-      $bw.Write([UInt16]1)
-      $bw.Write([UInt16]32)
-      $bw.Write([UInt32]$frame.Data.Length)
-      $bw.Write([UInt32]$offset)
+      $bw.Write($wh); $bw.Write($wh); $bw.Write([byte]0); $bw.Write([byte]0)
+      $bw.Write([UInt16]1); $bw.Write([UInt16]32)
+      $bw.Write([UInt32]$frame.Data.Length); $bw.Write([UInt32]$offset)
       $offset += $frame.Data.Length
     }
-
-    foreach ($frame in $frames) {
-      $bw.Write([byte[]]$frame.Data)
-    }
+    foreach ($frame in $frames) { $bw.Write([byte[]]$frame.Data) }
   }
   finally {
     $bw.Dispose()
@@ -135,15 +124,17 @@ function Write-HnlMultiSizeIco {
   }
 }
 
+# Decode the actual embedded source before doing any branding work. This catches malformed
+# palette/indexed PNGs that can pass a simple 8-byte PNG signature check.
+Test-HnlImageBytes -Data $bytes -ExpectedSize 192
 $loaded = [System.Drawing.Image]::FromFile($officialPng)
 $source = $null
 try {
-  if ($loaded.Width -ne 256 -or $loaded.Height -ne 256) {
-    throw "Official HNL logo must be 256x256 for installer branding; found $($loaded.Width)x$($loaded.Height)."
+  if ($loaded.Width -lt 192 -or $loaded.Height -lt 192) {
+    throw "Official HNL logo must be at least 192x192; found $($loaded.Width)x$($loaded.Height)."
   }
-
   $source = New-HnlArgbSource -InputImage $loaded
-  Write-HnlMultiSizeIco -Source $source -OriginalPngBytes $bytes -Path $iconPath
+  Write-HnlMultiSizeIco -Source $source -Path $iconPath
 
   $small = [System.Drawing.Bitmap]::new(64, 64, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
   $gs = [System.Drawing.Graphics]::FromImage($small)
@@ -172,22 +163,22 @@ $icoBytes = [IO.File]::ReadAllBytes($iconPath)
 if ($icoBytes.Length -lt 128) { throw "Generated HNL icon is unexpectedly small." }
 $count = [BitConverter]::ToUInt16($icoBytes, 4)
 if ($count -ne 7) { throw "Generated HNL icon must contain 7 sizes; found $count." }
-$firstWidth = $icoBytes[6]
-if ($firstWidth -ne 0) { throw "Generated HNL icon must place the 256px frame first." }
+if ($icoBytes[6] -ne 0) { throw "Generated HNL icon must place the 256px frame first." }
 
-# Validate that the first ICO payload is byte-for-byte the official 256px PNG.
-$firstSize = [BitConverter]::ToUInt32($icoBytes, 14)
-$firstOffset = [BitConverter]::ToUInt32($icoBytes, 18)
-if ($firstSize -ne $bytes.Length) {
-  throw "Generated 256px icon payload size mismatch: $firstSize vs $($bytes.Length)."
-}
-for ($i = 0; $i -lt $bytes.Length; $i++) {
-  if ($icoBytes[$firstOffset + $i] -ne $bytes[$i]) {
-    throw "Generated 256px icon payload differs from official HNL PNG at byte $i."
-  }
+# Round-trip decode every ICO payload so CI catches an icon that is structurally present
+# but visually undecodable/corrupt.
+for ($entry = 0; $entry -lt $count; $entry++) {
+  $base = 6 + (16 * $entry)
+  $w = $icoBytes[$base]
+  $size = if ($w -eq 0) { 256 } else { [int]$w }
+  $dataLen = [BitConverter]::ToUInt32($icoBytes, $base + 8)
+  $dataOff = [BitConverter]::ToUInt32($icoBytes, $base + 12)
+  $frame = New-Object byte[] $dataLen
+  [Array]::Copy($icoBytes, [int]$dataOff, $frame, 0, [int]$dataLen)
+  Test-HnlImageBytes -Data $frame -ExpectedSize $size
 }
 
-Write-Host 'HNL official branding generated:'
-Write-Host "  PNG: $officialPng"
-Write-Host "  ICO: $iconPath (256 exact PNG + 128/64/48/32/24/16 ARGB frames)"
+Write-Host 'HNL official branding generated and decode-verified:'
+Write-Host "  PNG: $officialPng (RGBA source)"
+Write-Host "  ICO: $iconPath (256/128/64/48/32/24/16, every frame round-trip decoded)"
 Write-Host "  BMP: $smallPath"
