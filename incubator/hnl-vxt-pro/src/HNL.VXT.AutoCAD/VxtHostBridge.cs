@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -19,6 +20,18 @@ namespace HNL.VXT.AutoCAD
                 try { return Convert.ToInt32(Application.GetSystemVariable("COLORTHEME")) == 0; }
                 catch { return true; }
             }
+        }
+
+        public string[] GetLinetypeNames()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            return doc == null ? Array.Empty<string>() : ReadSymbolNames(doc.Database, doc.Database.LinetypeTableId);
+        }
+
+        public string[] GetDimStyleNames()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            return doc == null ? Array.Empty<string>() : ReadSymbolNames(doc.Database, doc.Database.DimStyleTableId);
         }
 
         public void SelectBoundary() => Send("VXTSELECTBOUNDARY ");
@@ -103,7 +116,7 @@ namespace HNL.VXT.AutoCAD
 
                 sb.AppendLine("HNL TOOL - VXT PRO DIAGNOSTIC");
                 sb.AppendLine("========================================");
-                sb.AppendLine("VXT Version: 7.0.0-alpha.4");
+                sb.AppendLine("VXT Version: 7.0.0-alpha.5");
                 sb.AppendLine("Time: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
                 sb.AppendLine("OS: " + Environment.OSVersion);
                 sb.AppendLine("CLR: " + Environment.Version);
@@ -146,7 +159,32 @@ namespace HNL.VXT.AutoCAD
 
         public void RequestCreate()
         {
-            Write("\nHNL Tool - VXT Pro v7.0.0-alpha.4: Tạo thật đang khóa cho tới khi Golden Verification với V6.7.4 hoàn tất.");
+            Write("\nHNL Tool - VXT Pro v7.0.0-alpha.5: Tạo thật đang khóa cho tới khi Golden Verification với V6.7.4 hoàn tất.");
+        }
+
+        private static string[] ReadSymbolNames(Database db, ObjectId tableId)
+        {
+            var names = new List<string>();
+            try
+            {
+                using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+                {
+                    var table = tr.GetObject(tableId, OpenMode.ForRead) as SymbolTable;
+                    if (table != null)
+                    {
+                        foreach (ObjectId id in table)
+                        {
+                            var record = tr.GetObject(id, OpenMode.ForRead) as SymbolTableRecord;
+                            if (record != null && !string.IsNullOrWhiteSpace(record.Name))
+                                names.Add(record.Name);
+                        }
+                    }
+                    tr.Commit();
+                }
+            }
+            catch { }
+            names.Sort(StringComparer.OrdinalIgnoreCase);
+            return names.ToArray();
         }
 
         private static void AppendSettings(StringBuilder sb, VxtSettings s)
@@ -173,7 +211,8 @@ namespace HNL.VXT.AutoCAD
             sb.AppendLine("DIM enabled main/furring/hanger: " + s.AutoDimension + " / " + s.DimMain + " / " + s.DimFurring + " / " + s.DimHanger);
             sb.AppendLine("DIM positions: " + s.MainDimPosition + " / " + s.FurringDimPosition + " / " + s.HangerDimPosition);
             sb.AppendLine("DIM distance/spacing: " + s.DimensionDistance + " / " + s.DimensionSpacing);
-            sb.AppendLine("DIM layer/style: " + s.DimensionLayer + " / " + (string.IsNullOrWhiteSpace(s.DimensionStyle) ? "<Current>" : s.DimensionStyle));
+            sb.AppendLine("DIM layer/linetype/lineweight/color: " + s.DimensionLayer + " / " + s.DimensionLinetype + " / " + s.DimensionLineweight + " / " + s.DimensionColorIndex);
+            sb.AppendLine("DIM style: " + (string.IsNullOrWhiteSpace(s.DimensionStyle) ? "<Current>" : s.DimensionStyle));
             sb.AppendLine();
         }
 
