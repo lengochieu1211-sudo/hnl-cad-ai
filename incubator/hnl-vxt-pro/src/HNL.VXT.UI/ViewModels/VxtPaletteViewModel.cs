@@ -51,7 +51,7 @@ namespace HNL.VXT.UI.ViewModels
             CreateCommand = new RelayCommand(() => _host.RequestCreate(), () => CanCreate);
         }
 
-        public string VersionLabel => "VXT Pro v7.0.0-alpha.5";
+        public string VersionLabel => "VXT Pro v7.0.0-beta.1";
         public string Subtitle => "WYSIWYG Preview • tương thích V6.7.4 • AutoCAD 2023–2027";
         public bool IsDarkTheme => _host.IsDarkTheme;
 
@@ -125,8 +125,15 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        // Locked until Golden parity is verified.
-        public bool CanCreate => false;
+        // Functional beta gate: Create is enabled only with a selected boundary and valid settings.
+        public bool CanCreate
+        {
+            get
+            {
+                string error;
+                return HasBoundary && _settings.IsValid(out error);
+            }
+        }
 
         public string BoundaryStatus { get => _boundaryStatus; private set => Set(ref _boundaryStatus, value); }
         public string PreviewStatus { get => _previewStatus; private set => Set(ref _previewStatus, value); }
@@ -359,6 +366,8 @@ namespace HNL.VXT.UI.ViewModels
         private void Changed([CallerMemberName] string propertyName = null)
         {
             OnPropertyChanged(propertyName);
+            OnPropertyChanged(nameof(CanCreate));
+            (CreateCommand as RelayCommand)?.RaiseCanExecuteChanged();
             MarkCustom();
             RequestPreview();
         }
