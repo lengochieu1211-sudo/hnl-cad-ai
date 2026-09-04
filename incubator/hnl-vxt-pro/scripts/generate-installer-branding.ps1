@@ -4,6 +4,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsBase
 
 $out = Join-Path $Root 'artifacts\installer-assets'
 $logoB64 = Join-Path $Root 'src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64'
@@ -14,29 +16,59 @@ $smallPath = Join-Path $out 'HNL-VXT-Small.bmp'
 if (-not (Test-Path $logoB64)) { throw "Missing official HNL logo asset: $logoB64" }
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-$base64 = (Get-Content $logoB64 -Raw).Trim()
+$base64 = (Get-Content $logoB64 -Raw) -replace '\s',''
 $bytes = [Convert]::FromBase64String($base64)
 if ($bytes.Length -lt 8 -or
     $bytes[0] -ne 0x89 -or $bytes[1] -ne 0x50 -or $bytes[2] -ne 0x4E -or $bytes[3] -ne 0x47 -or
     $bytes[4] -ne 0x0D -or $bytes[5] -ne 0x0A -or $bytes[6] -ne 0x1A -or $bytes[7] -ne 0x0A) {
   throw 'HNL logo asset is not a valid PNG stream.'
 }
-[IO.File]::WriteAllBytes($officialPng, $bytes)
+
+function Get-HnlWpfPngFrame {
+  param([byte[]]$Data)
+  $ms = [System.IO.MemoryStream]::new($Data, $false)
+  try {
+    $decoder = [System.Windows.Media.Imaging.PngBitmapDecoder]::new(
+      $ms,
+      [System.Windows.Media.Imaging.BitmapCreateOptions]::PreservePixelFormat,
+      [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad)
+    if ($decoder.Frames.Count -lt 1) { throw 'PNG decoder returned no frames.' }
+    return $decoder.Frames[0]
+  }
+  finally { $ms.Dispose() }
+}
 
 function Test-HnlImageBytes {
   param([byte[]]$Data, [int]$ExpectedSize)
-  $ms = [System.IO.MemoryStream]::new($Data, $false)
-  $img = $null
-  try {
-    $img = [System.Drawing.Image]::FromStream($ms, $true, $true)
-    if ($img.Width -ne $ExpectedSize -or $img.Height -ne $ExpectedSize) {
-      throw "Decoded frame is $($img.Width)x$($img.Height), expected ${ExpectedSize}x${ExpectedSize}."
-    }
+  $frame = Get-HnlWpfPngFrame -Data $Data
+  if ($frame.PixelWidth -ne $ExpectedSize -or $frame.PixelHeight -ne $ExpectedSize) {
+    throw "Decoded frame is $($frame.PixelWidth)x$($frame.PixelHeight), expected ${ExpectedSize}x${ExpectedSize}."
   }
-  finally {
-    if ($img -ne $null) { $img.Dispose() }
-    $ms.Dispose()
+}
+
+function Write-HnlNormalizedSourcePng {
+  param([byte[]]$Data, [string]$Path, [int]$ExpectedSize)
+
+  $frame = Get-HnlWpfPngFrame -Data $Data
+  if ($frame.PixelWidth -ne $ExpectedSize -or $frame.PixelHeight -ne $ExpectedSize) {
+    throw "Official HNL logo must be ${ExpectedSize}x${ExpectedSize}; found $($frame.PixelWidth)x$($frame.PixelHeight)."
   }
+
+  $converted = [System.Windows.Media.Imaging.FormatConvertedBitmap]::new()
+  $converted.BeginInit()
+  $converted.Source = $frame
+  $converted.DestinationFormat = [System.Windows.Media.PixelFormats]::Bgra32
+  $converted.EndInit()
+  $converted.Freeze()
+
+  $encoder = [System.Windows.Media.Imaging.PngBitmapEncoder]::new()
+  $encoder.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($converted))
+  $fs = [System.IO.File]::Create($Path)
+  try { $encoder.Save($fs) }
+  finally { $fs.Dispose() }
+
+  $normalizedBytes = [IO.File]::ReadAllBytes($Path)
+  Test-HnlImageBytes -Data $normalizedBytes -ExpectedSize $ExpectedSize
 }
 
 function New-HnlArgbSource {
@@ -124,15 +156,14 @@ function Write-HnlMultiSizeIco {
   }
 }
 
-# Decode the actual embedded source before doing any branding work. This catches malformed
-# palette/indexed PNGs that can pass a simple 8-byte PNG signature check.
+# WPF decodes indexed/palette and true-color PNG consistently on AutoCAD-supported Windows.
+# Normalize the embedded source to BGRA32 before System.Drawing creates the installer icon frames.
 Test-HnlImageBytes -Data $bytes -ExpectedSize 192
+Write-HnlNormalizedSourcePng -Data $bytes -Path $officialPng -ExpectedSize 192
+
 $loaded = [System.Drawing.Image]::FromFile($officialPng)
 $source = $null
 try {
-  if ($loaded.Width -lt 192 -or $loaded.Height -lt 192) {
-    throw "Official HNL logo must be at least 192x192; found $($loaded.Width)x$($loaded.Height)."
-  }
   $source = New-HnlArgbSource -InputImage $loaded
   Write-HnlMultiSizeIco -Source $source -Path $iconPath
 
@@ -165,8 +196,7 @@ $count = [BitConverter]::ToUInt16($icoBytes, 4)
 if ($count -ne 7) { throw "Generated HNL icon must contain 7 sizes; found $count." }
 if ($icoBytes[6] -ne 0) { throw "Generated HNL icon must place the 256px frame first." }
 
-# Round-trip decode every ICO payload so CI catches an icon that is structurally present
-# but visually undecodable/corrupt.
+# Round-trip decode every PNG payload embedded in the ICO.
 for ($entry = 0; $entry -lt $count; $entry++) {
   $base = 6 + (16 * $entry)
   $w = $icoBytes[$base]
@@ -179,6 +209,6 @@ for ($entry = 0; $entry -lt $count; $entry++) {
 }
 
 Write-Host 'HNL official branding generated and decode-verified:'
-Write-Host "  PNG: $officialPng (RGBA source)"
+Write-Host "  PNG: $officialPng (WPF-normalized BGRA32 source)"
 Write-Host "  ICO: $iconPath (256/128/64/48/32/24/16, every frame round-trip decoded)"
 Write-Host "  BMP: $smallPath"
