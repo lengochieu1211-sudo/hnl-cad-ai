@@ -9,7 +9,7 @@ $bundle = Join-Path $Root 'artifacts\HNL.VXT.bundle'
 $iss = Join-Path $Root 'installer\HNL.VXT.Setup.iss'
 $branding = Join-Path $Root 'scripts\generate-installer-branding.ps1'
 $outDir = Join-Path $Root 'artifacts\installer'
-$expected = Join-Path $outDir 'HNL_VXT_Pro_Setup_7.0.0-alpha.3.exe'
+$expected = Join-Path $outDir 'HNL_VXT_Pro_Setup_7.0.0-alpha.4.exe'
 
 if (-not (Test-Path (Join-Path $bundle 'PackageContents.xml'))) {
   throw "Bundle has not been prepared: $bundle"
