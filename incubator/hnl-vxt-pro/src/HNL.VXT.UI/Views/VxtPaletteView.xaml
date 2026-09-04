@@ -3,10 +3,18 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:HNL.VXT.UI.Controls"
              Background="{DynamicResource AppBackground}"
-             MinWidth="360">
+             MinWidth="380">
     <UserControl.Resources>
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style TargetType="Expander">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         </Style>
 
         <Style x:Key="SectionCard" TargetType="Border">
@@ -29,6 +37,12 @@
             <Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="FontSize" Value="11"/>
+        </Style>
+
+        <Style x:Key="HintText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
 
         <Style TargetType="TextBox">
@@ -60,11 +74,16 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type Button}">
-                        <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6" SnapsToDevicePixels="True">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                              Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"/>
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"
+                                              RecognizesAccessKey="True"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -94,7 +113,7 @@
         <Style x:Key="CompactButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Height" Value="28"/>
             <Setter Property="Padding" Value="8,2"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="10.5"/>
         </Style>
 
         <Style x:Key="ToggleSwitch" TargetType="CheckBox">
@@ -122,10 +141,6 @@
                 </Setter.Value>
             </Setter>
         </Style>
-
-        <Style TargetType="Expander">
-            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
-        </Style>
     </UserControl.Resources>
 
     <Grid Background="{DynamicResource AppBackground}">
@@ -135,6 +150,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
+        <!-- HEADER -->
         <Border Grid.Row="0" Background="{DynamicResource HeaderBackground}" Padding="14,12">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -158,193 +174,349 @@
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="10">
             <StackPanel>
+                <!-- PRESET -->
                 <Border Style="{StaticResource SectionCard}" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="72"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="PRESET" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
+                        <TextBlock Text="CẤU HÌNH" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
                         <ComboBox Grid.Column="1" ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}"/>
                     </Grid>
                 </Border>
 
+                <!-- PHẠM VI -->
                 <Border Style="{StaticResource SectionCard}">
                     <StackPanel>
-                        <TextBlock Text="PHẠM VI &amp; HƯỚNG BỐ TRÍ" Style="{StaticResource SectionTitle}" Margin="0,0,0,9"/>
-                        <Button Content="⌖  Chọn / Chọn lại biên trần trên CAD" Command="{Binding SelectBoundaryCommand}"
+                        <TextBlock Text="PHẠM VI BỐ TRÍ" Style="{StaticResource SectionTitle}" Margin="0,0,0,9"/>
+                        <Button Content="⌖  Chọn / Chọn lại biên trần trên CAD"
+                                Command="{Binding SelectBoundaryCommand}"
                                 HorizontalAlignment="Stretch" Margin="0,0,0,7"/>
                         <Border Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}"
-                                BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,0,0,9">
+                                BorderThickness="1" CornerRadius="6" Padding="8,6">
                             <TextBlock Text="{Binding BoundaryStatus}" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" FontSize="10.5"/>
                         </Border>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="145"/>
-                                <ColumnDefinition Width="88"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Hướng XC" Style="{StaticResource FieldLabel}"/>
-                            <controls:HnlNumericBox Grid.Column="1" Value="{Binding DirectionDegrees, Mode=TwoWay}" Unit="°" Step="5" Minimum="0" Maximum="359.99"/>
-                            <Button Grid.Column="2" Content="Chọn 2 điểm" Command="{Binding PickDirectionCommand}" Margin="6,0,0,0" Style="{StaticResource CompactButton}"/>
-                        </Grid>
                     </StackPanel>
                 </Border>
 
+                <!-- XƯƠNG CHÍNH -->
                 <Border Style="{StaticResource SectionCard}">
                     <Expander IsExpanded="True">
                         <Expander.Header>
-                            <Grid Margin="0,0,0,2">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Rectangle Width="4" Height="18" Fill="#22D3EE" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
-                                    <TextBlock Text="XƯƠNG CHÍNH (XC)" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Text="XƯƠNG CHÍNH" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
-                                <CheckBox Grid.Column="1" IsChecked="{Binding DrawMain}" Style="{StaticResource ToggleSwitch}"/>
+                                <TextBlock Grid.Column="1" Text="Bật Xương chính" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
+                                <CheckBox Grid.Column="2" IsChecked="{Binding DrawMain}" Style="{StaticResource ToggleSwitch}"/>
                             </Grid>
                         </Expander.Header>
-                        <StackPanel Margin="0,10,0,0">
+
+                        <StackPanel Margin="0,11,0,0" IsEnabled="{Binding DrawMain}">
                             <Grid Margin="0,0,0,7">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="174"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="Khoảng cách Min" Style="{StaticResource FieldLabel}"/>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="92"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Hướng bố trí" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding MainDirectionOptions}" SelectedItem="{Binding SelectedMainDirection}"/>
+                                <Button Grid.Column="2" Content="Thiết lập CAD" Command="{Binding PickDirectionCommand}" Style="{StaticResource CompactButton}" Margin="6,0,0,0"/>
+                            </Grid>
+
+                            <Grid Margin="0,0,0,7">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Kiểu bố trí" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding MainLayoutOptions}" SelectedItem="{Binding SelectedMainLayout}"/>
+                            </Grid>
+
+                            <Grid Margin="0,0,0,7">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Khoảng cách tâm Min" Style="{StaticResource FieldLabel}"/>
                                 <controls:HnlNumericBox Grid.Column="1" Value="{Binding MainMinSpacing, Mode=TwoWay}" Step="50" Minimum="1"/>
                             </Grid>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="174"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="Khoảng cách Max" Style="{StaticResource FieldLabel}"/>
+                            <Grid Margin="0,0,0,7">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Khoảng cách tâm Max" Style="{StaticResource FieldLabel}"/>
                                 <controls:HnlNumericBox Grid.Column="1" Value="{Binding MainMaxSpacing, Mode=TwoWay}" Step="50" Minimum="1"/>
                             </Grid>
+                            <Grid Margin="0,0,0,7">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Khoảng cách biên Min" Style="{StaticResource FieldLabel}"/>
+                                <controls:HnlNumericBox Grid.Column="1" Value="{Binding MainMinEdgeOffset, Mode=TwoWay}" Step="50" Minimum="0"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,7">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Khoảng cách biên Max" Style="{StaticResource FieldLabel}"/>
+                                <controls:HnlNumericBox Grid.Column="1" Value="{Binding MainMaxEdgeOffset, Mode=TwoWay}" Step="50" Minimum="0"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,7">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Bỏ Xương chính nếu ngắn hơn" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
+                                <controls:HnlNumericBox Grid.Column="1" Value="{Binding MainSkipLimit, Mode=TwoWay}" Step="50" Minimum="0"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,9">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Bước bù khoảng cách" Style="{StaticResource FieldLabel}"/>
+                                <controls:HnlNumericBox Grid.Column="1" Value="{Binding MainBalanceStep, Mode=TwoWay}" Step="10" Minimum="1"/>
+                            </Grid>
+
+                            <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="0,9,0,0">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,7">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Sử dụng Block động" Style="{StaticResource FieldLabel}"/>
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding UseDynamicMainBlock}"/>
+                                    </Grid>
+                                    <Grid IsEnabled="{Binding UseDynamicMainBlock}">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Block sử dụng" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Grid.Column="1" Text="{Binding MainBlockName, UpdateSourceTrigger=LostFocus}"/>
+                                        <Button Grid.Column="2" Content="⌖ Chọn" Command="{Binding PickMainBlockCommand}" Style="{StaticResource CompactButton}" Margin="6,0,0,0"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </Expander>
                 </Border>
 
+                <!-- XƯƠNG PHỤ -->
                 <Border Style="{StaticResource SectionCard}">
                     <Expander IsExpanded="True">
                         <Expander.Header>
-                            <Grid Margin="0,0,0,2">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Rectangle Width="4" Height="18" Fill="#FACC15" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
-                                    <TextBlock Text="XƯƠNG PHỤ (XP)" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Text="XƯƠNG PHỤ" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
-                                <CheckBox Grid.Column="1" IsChecked="{Binding DrawFurring}" Style="{StaticResource ToggleSwitch}"/>
+                                <TextBlock Grid.Column="1" Text="Bật Xương phụ" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
+                                <CheckBox Grid.Column="2" IsChecked="{Binding DrawFurring}" Style="{StaticResource ToggleSwitch}"/>
                             </Grid>
                         </Expander.Header>
-                        <Grid Margin="0,10,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="174"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Khoảng cách" Style="{StaticResource FieldLabel}"/>
-                            <controls:HnlNumericBox Grid.Column="1" Value="{Binding FurringSpacing, Mode=TwoWay}" Step="10" Minimum="1"/>
-                        </Grid>
+
+                        <StackPanel Margin="0,11,0,0" IsEnabled="{Binding DrawFurring}">
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Khoảng cách Xương phụ" Style="{StaticResource FieldLabel}"/>
+                                <controls:HnlNumericBox Grid.Column="1" Value="{Binding FurringSpacing, Mode=TwoWay}" Step="10" Minimum="1"/>
+                            </Grid>
+                            <CheckBox IsChecked="{Binding AskDirectionEachRegion}"
+                                      Content="Chọn hướng rải cho từng vùng"
+                                      Margin="0,0,0,9"/>
+
+                            <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="0,9,0,0">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,7">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Sử dụng Block động" Style="{StaticResource FieldLabel}"/>
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding UseDynamicFurringBlock}"/>
+                                    </Grid>
+                                    <Grid IsEnabled="{Binding UseDynamicFurringBlock}">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Block sử dụng" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Grid.Column="1" Text="{Binding FurringBlockName, UpdateSourceTrigger=LostFocus}"/>
+                                        <Button Grid.Column="2" Content="⌖ Chọn" Command="{Binding PickFurringBlockCommand}" Style="{StaticResource CompactButton}" Margin="6,0,0,0"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
                     </Expander>
                 </Border>
 
+                <!-- TY TREO -->
                 <Border Style="{StaticResource SectionCard}">
                     <Expander IsExpanded="True">
                         <Expander.Header>
-                            <Grid Margin="0,0,0,2">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Rectangle Width="4" Height="18" Fill="#22C55E" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
                                     <TextBlock Text="TY TREO" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
-                                <CheckBox Grid.Column="1" IsChecked="{Binding DrawHangers}" Style="{StaticResource ToggleSwitch}"/>
+                                <TextBlock Grid.Column="1" Text="Bật Ty treo" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
+                                <CheckBox Grid.Column="2" IsChecked="{Binding DrawHangers}" Style="{StaticResource ToggleSwitch}"/>
                             </Grid>
                         </Expander.Header>
-                        <StackPanel Margin="0,10,0,0">
+
+                        <StackPanel Margin="0,11,0,0" IsEnabled="{Binding DrawHangers}">
                             <Grid Margin="0,0,0,7">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="174"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="Khoảng cách Min" Style="{StaticResource FieldLabel}"/>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Kiểu bố trí" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding HangerLayoutOptions}" SelectedItem="{Binding SelectedHangerLayout}"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,7">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Khoảng cách tâm Min" Style="{StaticResource FieldLabel}"/>
                                 <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerMinSpacing, Mode=TwoWay}" Step="50" Minimum="1"/>
                             </Grid>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="174"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="Khoảng cách Max" Style="{StaticResource FieldLabel}"/>
+                            <Grid Margin="0,0,0,7">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Khoảng cách tâm Max" Style="{StaticResource FieldLabel}"/>
                                 <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerMaxSpacing, Mode=TwoWay}" Step="50" Minimum="1"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,7">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Khoảng cách biên Min" Style="{StaticResource FieldLabel}"/>
+                                <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerMinEdgeOffset, Mode=TwoWay}" Step="50" Minimum="0"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,7">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Khoảng cách biên Max" Style="{StaticResource FieldLabel}"/>
+                                <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerMaxEdgeOffset, Mode=TwoWay}" Step="50" Minimum="0"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,9">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Bước bù khoảng cách" Style="{StaticResource FieldLabel}"/>
+                                <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerBalanceStep, Mode=TwoWay}" Step="10" Minimum="1"/>
+                            </Grid>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Block sử dụng" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Grid.Column="1" Text="{Binding HangerBlockName, UpdateSourceTrigger=LostFocus}"/>
+                                <Button Grid.Column="2" Content="⌖ Chọn" Command="{Binding PickHangerBlockCommand}" Style="{StaticResource CompactButton}" Margin="6,0,0,0"/>
                             </Grid>
                         </StackPanel>
                     </Expander>
                 </Border>
 
+                <!-- NÉ THIẾT BỊ -->
+                <Border Style="{StaticResource SectionCard}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Rectangle Width="4" Height="18" Fill="#EF4444" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
+                                    <TextBlock Text="NÉ THIẾT BỊ" Style="{StaticResource SectionTitle}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Text="Tự động né thiết bị" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
+                                <CheckBox Grid.Column="2" IsChecked="{Binding UseAvoidance}" Style="{StaticResource ToggleSwitch}"/>
+                            </Grid>
+                        </Expander.Header>
+
+                        <StackPanel Margin="0,11,0,0" IsEnabled="{Binding UseAvoidance}">
+                            <CheckBox IsChecked="{Binding ShiftAllForAvoidance}" Content="Ưu tiên dịch cả hàng" Margin="0,0,0,8"/>
+                            <Grid Margin="0,0,0,9">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Khoảng hở né thiết bị" Style="{StaticResource FieldLabel}"/>
+                                <controls:HnlNumericBox Grid.Column="1" Value="{Binding ClearanceDistance, Mode=TwoWay}" Step="10" Minimum="0"/>
+                            </Grid>
+
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Thiết bị dùng chung" Style="{StaticResource FieldLabel}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding GeneralEquipmentStatus}" VerticalAlignment="Center" FontSize="10.5"/>
+                                <Button Grid.Column="2" Content="⌖ Chọn" Command="{Binding PickGeneralEquipmentCommand}" Style="{StaticResource CompactButton}"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Thiết bị Xương chính" Style="{StaticResource FieldLabel}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding MainEquipmentStatus}" VerticalAlignment="Center" FontSize="10.5"/>
+                                <Button Grid.Column="2" Content="⌖ Chọn" Command="{Binding PickMainEquipmentCommand}" Style="{StaticResource CompactButton}"/>
+                            </Grid>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Thiết bị Xương phụ" Style="{StaticResource FieldLabel}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding FurringEquipmentStatus}" VerticalAlignment="Center" FontSize="10.5"/>
+                                <Button Grid.Column="2" Content="⌖ Chọn" Command="{Binding PickFurringEquipmentCommand}" Style="{StaticResource CompactButton}"/>
+                            </Grid>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <!-- DIM -->
                 <Border Style="{StaticResource SectionCard}" BorderBrush="{DynamicResource AccentBorder}">
                     <Expander IsExpanded="True">
                         <Expander.Header>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Rectangle Width="4" Height="18" Fill="#D946EF" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
-                                <TextBlock Text="DIMENSION • VỊ TRÍ TRỰC TIẾP TRÊN CAD" Style="{StaticResource SectionTitle}"/>
-                            </StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Rectangle Width="4" Height="18" Fill="#D946EF" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
+                                    <TextBlock Text="KÍCH THƯỚC DIM" Style="{StaticResource SectionTitle}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Text="Tự động tạo DIM" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
+                                <CheckBox Grid.Column="2" IsChecked="{Binding AutoDimension}" Style="{StaticResource ToggleSwitch}"/>
+                            </Grid>
                         </Expander.Header>
-                        <StackPanel Margin="0,10,0,0">
+
+                        <StackPanel Margin="0,11,0,0" IsEnabled="{Binding AutoDimension}">
                             <Grid Margin="0,0,0,7">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="38"/><ColumnDefinition Width="32"/><ColumnDefinition Width="*"/><ColumnDefinition Width="54"/>
-                                </Grid.ColumnDefinitions>
-                                <CheckBox IsChecked="{Binding DimMain}" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" Text="XC" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                <ComboBox Grid.Column="2" ItemsSource="{Binding DimensionPositions}" SelectedItem="{Binding MainDimPosition}"/>
-                                <Button Grid.Column="3" Content="Pick" Command="{Binding PickMainDimCommand}" Margin="6,0,0,0" Style="{StaticResource CompactButton}"/>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
+                                <CheckBox IsChecked="{Binding DimMain}"/>
+                                <TextBlock Grid.Column="1" Text="Xương chính" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox Grid.Column="2" ItemsSource="{Binding DimensionPositionOptions}" SelectedItem="{Binding SelectedMainDimPosition}" IsEnabled="{Binding DimMain}"/>
+                                <Button Grid.Column="3" Content="⌖ Chọn" Command="{Binding PickMainDimCommand}" IsEnabled="{Binding DimMain}" Style="{StaticResource CompactButton}" Margin="6,0,0,0"/>
                             </Grid>
                             <Grid Margin="0,0,0,7">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="38"/><ColumnDefinition Width="32"/><ColumnDefinition Width="*"/><ColumnDefinition Width="54"/>
-                                </Grid.ColumnDefinitions>
-                                <CheckBox IsChecked="{Binding DimFurring}" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" Text="XP" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                <ComboBox Grid.Column="2" ItemsSource="{Binding DimensionPositions}" SelectedItem="{Binding FurringDimPosition}"/>
-                                <Button Grid.Column="3" Content="Pick" Command="{Binding PickFurringDimCommand}" Margin="6,0,0,0" Style="{StaticResource CompactButton}"/>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
+                                <CheckBox IsChecked="{Binding DimFurring}"/>
+                                <TextBlock Grid.Column="1" Text="Xương phụ" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox Grid.Column="2" ItemsSource="{Binding DimensionPositionOptions}" SelectedItem="{Binding SelectedFurringDimPosition}" IsEnabled="{Binding DimFurring}"/>
+                                <Button Grid.Column="3" Content="⌖ Chọn" Command="{Binding PickFurringDimCommand}" IsEnabled="{Binding DimFurring}" Style="{StaticResource CompactButton}" Margin="6,0,0,0"/>
                             </Grid>
                             <Grid Margin="0,0,0,9">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="38"/><ColumnDefinition Width="32"/><ColumnDefinition Width="*"/><ColumnDefinition Width="54"/>
-                                </Grid.ColumnDefinitions>
-                                <CheckBox IsChecked="{Binding DimHanger}" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" Text="Ty" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                <ComboBox Grid.Column="2" ItemsSource="{Binding DimensionPositions}" SelectedItem="{Binding HangerDimPosition}"/>
-                                <Button Grid.Column="3" Content="Pick" Command="{Binding PickHangerDimCommand}" Margin="6,0,0,0" Style="{StaticResource CompactButton}"/>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
+                                <CheckBox IsChecked="{Binding DimHanger}"/>
+                                <TextBlock Grid.Column="1" Text="Ty treo" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox Grid.Column="2" ItemsSource="{Binding DimensionPositionOptions}" SelectedItem="{Binding SelectedHangerDimPosition}" IsEnabled="{Binding DimHanger}"/>
+                                <Button Grid.Column="3" Content="⌖ Chọn" Command="{Binding PickHangerDimCommand}" IsEnabled="{Binding DimHanger}" Style="{StaticResource CompactButton}" Margin="6,0,0,0"/>
                             </Grid>
-                            <Border Height="1" Background="{DynamicResource CardBorder}" Margin="0,0,0,9"/>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="174"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="Offset DIM chung" Style="{StaticResource FieldLabel}"/>
-                                <controls:HnlNumericBox Grid.Column="1" Value="{Binding DimensionDistance, Mode=TwoWay}" Step="50" Minimum="0"/>
-                            </Grid>
+
+                            <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="0,9,0,0">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,7">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Khoảng cách DIM" Style="{StaticResource FieldLabel}"/>
+                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding DimensionDistance, Mode=TwoWay}" Step="50" Minimum="0"/>
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Khoảng cách giữa các hàng DIM" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
+                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding DimensionSpacing, Mode=TwoWay}" Step="50" Minimum="1"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </Expander>
                 </Border>
 
+                <!-- LIVE PREVIEW -->
                 <Border Style="{StaticResource SectionCard}" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}">
                     <StackPanel>
-                        <Grid Margin="0,0,0,7">
+                        <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="LIVE PREVIEW" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                <Ellipse Width="8" Height="8" Fill="{DynamicResource Success}" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="ON" Foreground="{DynamicResource Success}" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
-                            </StackPanel>
+                            <TextBlock Text="XEM TRƯỚC TRÊN BẢN VẼ" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
+                            <Ellipse Grid.Column="1" Width="8" Height="8" Fill="{DynamicResource Success}" VerticalAlignment="Center"/>
                         </Grid>
+
                         <WrapPanel Margin="0,0,0,8">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="18" Height="3" Fill="#22D3EE" VerticalAlignment="Center"/><TextBlock Text=" XC" FontSize="10" Foreground="{DynamicResource SecondaryText}"/></StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="18" Height="3" Fill="#FACC15" VerticalAlignment="Center"/><TextBlock Text=" XP" FontSize="10" Foreground="{DynamicResource SecondaryText}"/></StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Ellipse Width="7" Height="7" Fill="#22C55E" VerticalAlignment="Center"/><TextBlock Text=" Ty" FontSize="10" Foreground="{DynamicResource SecondaryText}"/></StackPanel>
-                            <StackPanel Orientation="Horizontal"><Rectangle Width="18" Height="3" Fill="#D946EF" VerticalAlignment="Center"/><TextBlock Text=" DIM" FontSize="10" Foreground="{DynamicResource SecondaryText}"/></StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#22D3EE" VerticalAlignment="Center"/><TextBlock Text=" Xương chính" FontSize="9.5"/></StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#FACC15" VerticalAlignment="Center"/><TextBlock Text=" Xương phụ" FontSize="9.5"/></StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#22C55E" VerticalAlignment="Center"/><TextBlock Text=" Ty" FontSize="9.5"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><Rectangle Width="20" Height="3" Fill="#D946EF" VerticalAlignment="Center"/><TextBlock Text=" DIM" FontSize="9.5"/></StackPanel>
                         </WrapPanel>
-                        <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="12.5"/>
-                        <TextBlock Text="{Binding PreviewStatus}" Margin="0,5,0,0" Foreground="{DynamicResource AccentStrong}" TextWrapping="Wrap" FontSize="10.5"/>
-                        <Grid Margin="0,9,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Button Content="↻ Cập nhật" Command="{Binding RefreshPreviewCommand}" Style="{StaticResource CompactButton}" Margin="0,0,4,0"/>
-                            <Button Grid.Column="1" Content="Ẩn Preview" Command="{Binding ClearPreviewCommand}" Style="{StaticResource CompactButton}" Margin="2,0"/>
-                            <Button Grid.Column="2" Content="↶ Mặc định" Command="{Binding ResetCommand}" Style="{StaticResource CompactButton}" Margin="4,0,0,0"/>
-                        </Grid>
+
+                        <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="11"/>
+                        <TextBlock Text="{Binding PreviewStatus}" Margin="0,5,0,0" Foreground="{DynamicResource AccentStrong}" TextWrapping="Wrap" FontSize="10"/>
+                        <StackPanel Orientation="Horizontal" Margin="-3,7,0,0">
+                            <Button Content="Cập nhật" Command="{Binding RefreshPreviewCommand}" Style="{StaticResource CompactButton}" Margin="3"/>
+                            <Button Content="Ẩn xem trước" Command="{Binding ClearPreviewCommand}" Style="{StaticResource CompactButton}" Margin="3"/>
+                            <Button Content="Khôi phục mặc định" Command="{Binding ResetCommand}" Style="{StaticResource CompactButton}" Margin="3"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
             </StackPanel>
         </ScrollViewer>
 
-        <Border Grid.Row="2" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="10,9">
+        <!-- FOOTER -->
+        <Border Grid.Row="2" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="10">
             <StackPanel>
-                <Button Style="{StaticResource PrimaryButton}" Content="✓  TẠO KHUNG XƯƠNG TRẦN" Command="{Binding CreateCommand}"
-                        IsEnabled="{Binding CanCreate}" HorizontalAlignment="Stretch"/>
-                <TextBlock Text="alpha.2 • Tạo thật vẫn khóa cho đến khi Golden Test khớp V6.7.4"
+                <Button Style="{StaticResource PrimaryButton}"
+                        Content="✓ TẠO KHUNG XƯƠNG TRẦN"
+                        Command="{Binding CreateCommand}"
+                        IsEnabled="{Binding CanCreate}"
+                        HorizontalAlignment="Stretch"/>
+                <TextBlock Text="Alpha.2: Đã khôi phục tùy chọn V6.7.4 • Tạo thật đang khóa đến khi Golden Test hoàn tất."
                            FontSize="9.5" Foreground="{DynamicResource SecondaryText}" TextAlignment="Center"
                            Margin="0,5,0,0" TextWrapping="Wrap"/>
             </StackPanel>
