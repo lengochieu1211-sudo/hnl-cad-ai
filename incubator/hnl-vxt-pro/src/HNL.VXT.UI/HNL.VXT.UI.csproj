@@ -10,5 +10,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\HNL.VXT.Core\HNL.VXT.Core.csproj" />
+    <EmbeddedResource Include="Assets\HNL-Logo-Official.b64" LogicalName="HNL.VXT.UI.HNLLogoOfficial" />
   </ItemGroup>
 </Project>
