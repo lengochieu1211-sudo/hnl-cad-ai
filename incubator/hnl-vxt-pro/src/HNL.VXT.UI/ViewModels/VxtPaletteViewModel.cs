@@ -8,7 +8,7 @@ using HNL.VXT.UI.Infrastructure;
 
 namespace HNL.VXT.UI.ViewModels
 {
-    public sealed class VxtPaletteViewModel : INotifyPropertyChanged
+    public sealed partial class VxtPaletteViewModel : INotifyPropertyChanged
     {
         private readonly IVxtHostBridge _host;
         private VxtSettings _settings = new VxtSettings();
@@ -51,7 +51,7 @@ namespace HNL.VXT.UI.ViewModels
             CreateCommand = new RelayCommand(() => _host.RequestCreate(), () => CanCreate);
         }
 
-        public string VersionLabel => "VXT Pro v7.0.0-alpha.4";
+        public string VersionLabel => "VXT Pro v7.0.0-alpha.5";
         public string Subtitle => "WYSIWYG Preview • tương thích V6.7.4 • AutoCAD 2023–2027";
         public bool IsDarkTheme => _host.IsDarkTheme;
 
