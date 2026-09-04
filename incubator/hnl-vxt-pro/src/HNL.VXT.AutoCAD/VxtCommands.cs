@@ -16,7 +16,25 @@ namespace HNL.VXT.AutoCAD
         public void ShowPalette() => VxtPaletteService.Show();
 
         [CommandMethod("VXTCREATE", CommandFlags.Modal)]
-        public void Create() => VxtCreateEngine.Execute();
+        public void Create()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            var session = VxtSession.Current;
+            if (!session.HasBoundary)
+            {
+                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Chưa chọn biên trần.");
+                return;
+            }
+
+            if (session.Settings.AskDirectionEachRegion)
+            {
+                if (!PromptFurringStartSides(doc.Editor, session)) return;
+                VxtTransientPreview.Instance.Refresh();
+            }
+
+            VxtCreateEngine.Execute();
+        }
 
         [CommandMethod("VXTSELECTBOUNDARY", CommandFlags.Modal)]
         public void SelectBoundary()
@@ -43,6 +61,7 @@ namespace HNL.VXT.AutoCAD
                 var boundary = BoundarySampler.FromPolyline(pl);
                 VxtSession.Current.Boundary = boundary;
                 VxtSession.Current.Regions.Clear();
+                VxtSession.Current.GlobalFurringFromFarEdge = false;
                 VxtSession.Current.ViewModel?.SetBoundaryStatus(
                     $"✓ Đã chọn {pl.NumberOfVertices} đỉnh • Layer: {pl.Layer}", true);
                 tr.Commit();
@@ -120,7 +139,14 @@ namespace HNL.VXT.AutoCAD
                     angle = picked.Value;
                 }
 
-                session.Regions.Add(new VxtLayoutRegion(new Box2(minX, minY, maxX, maxY), angle));
+                var region = new VxtLayoutRegion(new Box2(minX, minY, maxX, maxY), angle);
+                if (session.Settings.AskDirectionEachRegion)
+                {
+                    bool fromFar;
+                    if (!PromptFurringStartSide(ed, angle, "vùng " + (session.Regions.Count + 1), out fromFar)) return;
+                    region.FurringFromFarEdge = fromFar;
+                }
+                session.Regions.Add(region);
                 ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận vùng " + session.Regions.Count + ".");
             }
 
@@ -155,6 +181,76 @@ namespace HNL.VXT.AutoCAD
         public void PickFurringDim() => PickDimension(DimensionTarget.Furring);
         [CommandMethod("VXTPICKDIMHANGER", CommandFlags.Modal)]
         public void PickHangerDim() => PickDimension(DimensionTarget.Hanger);
+
+        private static bool PromptFurringStartSides(Editor ed, VxtSession session)
+        {
+            if (session.Regions.Count == 0)
+            {
+                bool far;
+                var angle = ResolveCurrentMainAngle(session.Settings);
+                if (!PromptFurringStartSide(ed, angle, "biên trần", out far)) return false;
+                session.GlobalFurringFromFarEdge = far;
+                return true;
+            }
+
+            for (var i = 0; i < session.Regions.Count; i++)
+            {
+                bool far;
+                var region = session.Regions[i];
+                if (!PromptFurringStartSide(ed, region.MainAngleDegrees, "vùng " + (i + 1), out far)) return false;
+                region.FurringFromFarEdge = far;
+            }
+            return true;
+        }
+
+        private static bool PromptFurringStartSide(Editor ed, double mainAngleDegrees, string label, out bool fromFarEdge)
+        {
+            fromFarEdge = false;
+            var normalized = NormalizeAngle(mainAngleDegrees);
+            var verticalLike = IsVerticalLike(normalized);
+
+            PromptKeywordOptions options;
+            if (verticalLike)
+            {
+                options = new PromptKeywordOptions("\nHNL Tool - Chọn hướng rải Xương phụ cho " + label + " [Duoi/Tren] <Duoi>: ");
+                options.Keywords.Add("Duoi");
+                options.Keywords.Add("Tren");
+                options.Keywords.Default = "Duoi";
+            }
+            else
+            {
+                options = new PromptKeywordOptions("\nHNL Tool - Chọn hướng rải Xương phụ cho " + label + " [Trai/Phai] <Trai>: ");
+                options.Keywords.Add("Trai");
+                options.Keywords.Add("Phai");
+                options.Keywords.Default = "Trai";
+            }
+
+            var result = ed.GetKeywords(options);
+            if (result.Status != PromptStatus.OK && result.Status != PromptStatus.None) return false;
+            var value = result.Status == PromptStatus.None ? options.Keywords.Default : result.StringResult;
+            fromFarEdge = value == "Phai" || value == "Tren";
+            return true;
+        }
+
+        private static double ResolveCurrentMainAngle(VxtSettings settings)
+        {
+            if (settings.MainDirection == MainDirectionMode.Vertical) return 90.0;
+            if (settings.MainDirection == MainDirectionMode.TwoPoints || settings.MainDirection == MainDirectionMode.RectangleRegions)
+                return settings.DirectionDegrees;
+            return 0.0;
+        }
+
+        private static bool IsVerticalLike(double angleDegrees)
+        {
+            var radians = angleDegrees * Math.PI / 180.0;
+            return Math.Abs(Math.Sin(radians)) > Math.Abs(Math.Cos(radians));
+        }
+
+        private static double NormalizeAngle(double angle)
+        {
+            angle %= 180.0;
+            return angle < 0.0 ? angle + 180.0 : angle;
+        }
 
         private static double? PromptAngleByTwoPoints(Editor ed, string label)
         {
@@ -250,7 +346,8 @@ namespace HNL.VXT.AutoCAD
             var result = ed.GetPoint("\nHNL Tool - VXT Pro: Chọn vị trí đặt đường DIM: ");
             if (result.Status != PromptStatus.OK) return;
             var settings = session.Settings;
-            var radians = settings.DirectionDegrees * Math.PI / 180.0;
+            var angle = ResolveCurrentMainAngle(settings);
+            var radians = angle * Math.PI / 180.0;
             var localPick = Transform2.ToLocal(new Point2(result.Value.X, result.Value.Y), radians);
             var localBoundary = new Boundary2(session.Boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)));
             var bounds = localBoundary.GetBounds();
