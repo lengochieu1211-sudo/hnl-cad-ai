@@ -71,9 +71,8 @@ namespace HNL.VXT.UI.Controls
             if (_syncing) return;
             ClearInputError();
 
-            // Keep the original live-update behavior for a plain number.
-            // Expressions are committed only on Enter/LostFocus so typing 100+200*2
-            // is not prematurely replaced by an intermediate result.
+            // Plain numbers keep live update. Arithmetic expressions are committed on
+            // Enter/LostFocus so intermediate text is never evaluated too early.
             if (NumericExpressionEvaluator.IsPlainNumber(ValueTextBox.Text, out var value))
                 Value = Clamp(value);
         }
@@ -133,8 +132,8 @@ namespace HNL.VXT.UI.Controls
         private void ClearInputError()
         {
             if (ValueTextBox == null) return;
-            ValueTextBox.ClearValue(Border.BorderBrushProperty);
-            ValueTextBox.ClearValue(Border.BorderThicknessProperty);
+            ValueTextBox.ClearValue(Control.BorderBrushProperty);
+            ValueTextBox.ClearValue(Control.BorderThicknessProperty);
             ValueTextBox.ToolTip = "Nhập số hoặc phép tính, ví dụ: 1220/3, 600+25, 2*450, (1200-100)/2";
         }
 
