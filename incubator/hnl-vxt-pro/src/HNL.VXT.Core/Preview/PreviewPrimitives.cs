@@ -32,4 +32,31 @@ namespace HNL.VXT.Core.Preview
         public PreviewLineKind Kind { get; }
         public double RotationRadians { get; }
     }
+
+    /// <summary>
+    /// Geometry needed to render a real AutoCAD RotatedDimension as a transient drawable.
+    /// The Core project stays AutoCAD-independent; the bridge resolves DimStyle/Layer at runtime.
+    /// </summary>
+    public readonly struct PreviewDimension
+    {
+        public PreviewDimension(
+            Point2 extensionPoint1,
+            Point2 extensionPoint2,
+            Point2 dimensionLinePoint,
+            double rotationRadians,
+            DimensionTarget target)
+        {
+            ExtensionPoint1 = extensionPoint1;
+            ExtensionPoint2 = extensionPoint2;
+            DimensionLinePoint = dimensionLinePoint;
+            RotationRadians = rotationRadians;
+            Target = target;
+        }
+
+        public Point2 ExtensionPoint1 { get; }
+        public Point2 ExtensionPoint2 { get; }
+        public Point2 DimensionLinePoint { get; }
+        public double RotationRadians { get; }
+        public DimensionTarget Target { get; }
+    }
 }
