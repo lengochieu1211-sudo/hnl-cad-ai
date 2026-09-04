@@ -13,6 +13,7 @@
                 Padding="0" Margin="0" FontSize="14" FontWeight="SemiBold"/>
         <TextBox Grid.Column="1" x:Name="ValueTextBox" TextAlignment="Right"
                  VerticalContentAlignment="Center" Padding="6,2" Margin="4,0"
+                 ToolTip="Nhập số hoặc phép tính: 1220/3, 600+25, 2*450, (1200-100)/2"
                  TextChanged="ValueTextBox_TextChanged" LostFocus="ValueTextBox_LostFocus"
                  PreviewKeyDown="ValueTextBox_PreviewKeyDown"/>
         <Button Grid.Column="2" x:Name="IncreaseButton" Content="+" Click="Increase_Click"
