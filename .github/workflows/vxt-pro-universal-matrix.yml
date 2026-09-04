@@ -18,6 +18,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: vxt-pro-universal-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   core-tests:
     name: Core / Geometry / DIM / Numeric Expression / V6.7.4 Defaults Tests
