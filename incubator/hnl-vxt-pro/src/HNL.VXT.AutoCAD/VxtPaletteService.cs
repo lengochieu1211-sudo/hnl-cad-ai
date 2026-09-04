@@ -19,7 +19,7 @@ namespace HNL.VXT.AutoCAD
                 _view = new VxtPaletteView(bridge);
                 VxtSession.Current.ViewModel = _view.ViewModel;
 
-                _palette = new PaletteSet("HNL Tool - VXT Pro v7.0.0-alpha.3", PaletteGuid)
+                _palette = new PaletteSet("HNL Tool - VXT Pro v7.0.0-alpha.4", PaletteGuid)
                 {
                     Style = PaletteSetStyles.ShowAutoHideButton |
                             PaletteSetStyles.ShowCloseButton |
