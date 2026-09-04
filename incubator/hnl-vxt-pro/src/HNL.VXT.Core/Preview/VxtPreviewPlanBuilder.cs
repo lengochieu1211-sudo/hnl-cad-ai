@@ -31,13 +31,13 @@ namespace HNL.VXT.Core.Preview
 
             if (settings.MainDirection == MainDirectionMode.Auto)
             {
-                var a = BuildAtAngle(boundary, settings, context, 0.0, null, includeGuides: true);
-                var b = BuildAtAngle(boundary, settings, context, 90.0, null, includeGuides: true);
+                var a = BuildAtAngle(boundary, settings, context, 0.0, null, context.GlobalFurringFromFarEdge, includeGuides: true);
+                var b = BuildAtAngle(boundary, settings, context, 90.0, null, context.GlobalFurringFromFarEdge, includeGuides: true);
                 return AutoScore(a) <= AutoScore(b) ? a : b;
             }
 
             var angle = ResolveAngle(settings);
-            return BuildAtAngle(boundary, settings, context, angle, null, includeGuides: true);
+            return BuildAtAngle(boundary, settings, context, angle, null, context.GlobalFurringFromFarEdge, includeGuides: true);
         }
 
         private VxtPreviewPlan BuildRegions(Boundary2 boundary, VxtSettings settings, VxtLayoutContext context)
@@ -49,11 +49,17 @@ namespace HNL.VXT.Core.Preview
             for (var i = 0; i < context.Regions.Count; i++)
             {
                 var region = context.Regions[i];
-                var partial = BuildAtAngle(boundary, settings, context, region.MainAngleDegrees, region.WorldBounds, includeGuides: i == 0);
+                var partial = BuildAtAngle(
+                    boundary,
+                    settings,
+                    context,
+                    region.MainAngleDegrees,
+                    region.WorldBounds,
+                    region.FurringFromFarEdge,
+                    includeGuides: i == 0);
                 Merge(result, partial, seenLines, seenHangers);
             }
 
-            // DIM chains are generated per region by BuildAtAngle. De-duplicate coincident dimensions.
             var dims = result.Dimensions
                 .GroupBy(DimensionKey, StringComparer.Ordinal)
                 .Select(g => g.First())
@@ -70,15 +76,24 @@ namespace HNL.VXT.Core.Preview
             VxtLayoutContext context,
             double angleDegrees,
             Box2? regionWorld,
+            bool furringFromFarEdge,
             bool includeGuides)
         {
             var plan = new VxtPreviewPlan();
             var radians = angleDegrees * Math.PI / 180.0;
             var localPolygon = boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)).ToList();
             var polygonBounds = Box2.FromPoints(localPolygon);
-            var domain = regionWorld.HasValue
-                ? Intersect(polygonBounds, TransformBox(regionWorld.Value, radians))
-                : polygonBounds;
+
+            Box2 domain;
+            if (regionWorld.HasValue)
+            {
+                if (!TryIntersect(polygonBounds, TransformBox(regionWorld.Value, radians), out domain))
+                    return plan;
+            }
+            else
+            {
+                domain = polygonBounds;
+            }
 
             if (domain.Width <= Eps || domain.Height <= Eps) return plan;
 
@@ -97,7 +112,10 @@ namespace HNL.VXT.Core.Preview
 
             var mainSegmentsLocal = new List<Segment2>();
             var mainCoords = new List<double>();
-            if (settings.DrawMain)
+            var skipMainRegion = settings.MainSkipLimit > 0.0 &&
+                                 (domain.Width <= settings.MainSkipLimit + Eps || domain.Height <= settings.MainSkipLimit + Eps);
+
+            if (settings.DrawMain && !skipMainRegion)
             {
                 var layoutMode = settings.MainLayout == MainLayoutMode.Auto ? MainLayoutMode.BalancedTwoEnds : settings.MainLayout;
                 var layout = SmartLayout1D.Calculate(
@@ -131,30 +149,29 @@ namespace HNL.VXT.Core.Preview
                     if (settings.UseAvoidance && mainObstacles.Count > 0 && !IsHorizontalGridCoordinateClear(y, mainObstacles))
                     {
                         y = ResolveHorizontalCoordinate(
-                            y, previous, domain, mainObstacles,
-                            settings.MainMinSpacing, settings.MainMaxSpacing,
+                            y,
+                            previous,
+                            domain,
+                            mainObstacles,
+                            settings.MainMinSpacing,
+                            settings.MainMaxSpacing,
                             settings.MainBalanceStep);
                         if (double.IsNaN(y)) continue;
                     }
 
-                    var clipped = PolygonScanline.ClipHorizontal(localPolygon, y);
-                    foreach (var raw in clipped)
+                    var drewRow = false;
+                    foreach (var raw in PolygonScanline.ClipHorizontal(localPolygon, y))
                     {
                         if (!TryTrimHorizontal(raw, domain, out var seg)) continue;
-                        if (settings.MainSkipLimit > 0.0 && seg.A.DistanceTo(seg.B) + Eps < settings.MainSkipLimit) continue;
-                        if (settings.UseAvoidance && SegmentHitsHorizontalObstacles(seg, mainObstacles))
-                        {
-                            // Golden first shifts the whole grid; if a local fragment still crosses
-                            // equipment, omit only that fragment rather than drawing through it.
-                            continue;
-                        }
+                        if (settings.UseAvoidance && SegmentHitsHorizontalObstacles(seg, mainObstacles)) continue;
 
                         mainSegmentsLocal.Add(seg);
                         AddWorldLine(plan, seg, radians, PreviewLineKind.Main);
                         plan.MainSegmentCount++;
+                        drewRow = true;
                     }
 
-                    if (clipped.Count > 0)
+                    if (drewRow)
                     {
                         mainCoords.Add(y);
                         previous = y;
@@ -162,11 +179,10 @@ namespace HNL.VXT.Core.Preview
                 }
             }
 
-            var furringSegmentsLocal = new List<Segment2>();
             var furringCoords = new List<double>();
             if (settings.DrawFurring)
             {
-                var coords = FixedCenteredPositions(domain.MinX, domain.MaxX, settings.FurringSpacing);
+                var coords = FixedEdgePositions(domain.MinX, domain.MaxX, settings.FurringSpacing, furringFromFarEdge);
                 var adjusted = settings.UseAvoidance && settings.ShiftAllForAvoidance && furringObstacles.Count > 0
                     ? OptimizeFixedGrid(coords, domain.MinX, domain.MaxX, settings.FurringSpacing, furringObstacles, vertical: true)
                     : coords;
@@ -180,16 +196,16 @@ namespace HNL.VXT.Core.Preview
                         if (double.IsNaN(x)) continue;
                     }
 
-                    var clipped = PolygonScanline.ClipVertical(localPolygon, x);
-                    foreach (var raw in clipped)
+                    var drewColumn = false;
+                    foreach (var raw in PolygonScanline.ClipVertical(localPolygon, x))
                     {
                         if (!TryTrimVertical(raw, domain, out var seg)) continue;
                         if (settings.UseAvoidance && SegmentHitsVerticalObstacles(seg, furringObstacles)) continue;
-                        furringSegmentsLocal.Add(seg);
                         AddWorldLine(plan, seg, radians, PreviewLineKind.Furring);
                         plan.FurringSegmentCount++;
+                        drewColumn = true;
                     }
-                    if (clipped.Count > 0) furringCoords.Add(x);
+                    if (drewColumn) furringCoords.Add(x);
                 }
             }
 
@@ -203,9 +219,7 @@ namespace HNL.VXT.Core.Preview
                     var length = maxX - minX;
                     if (length <= Eps) continue;
 
-                    var hangerLayout = settings.HangerLayout == HangerLayoutMode.OneSideFollowFurring
-                        ? MainLayoutMode.OneSide
-                        : MainLayoutMode.BalancedTwoEnds;
+                    var oneSide = settings.HangerLayout == HangerLayoutMode.OneSideFollowFurring;
                     var layout = SmartLayout1D.Calculate(
                         length,
                         settings.HangerMaxSpacing,
@@ -213,8 +227,8 @@ namespace HNL.VXT.Core.Preview
                         settings.HangerMaxEdgeOffset,
                         settings.HangerMinEdgeOffset,
                         settings.HangerBalanceStep,
-                        hangerLayout,
-                        reverse: false);
+                        oneSide ? MainLayoutMode.OneSide : MainLayoutMode.BalancedTwoEnds,
+                        reverse: oneSide && furringFromFarEdge);
                     if (layout == null) continue;
 
                     var rowObstacles = mainObstacles
@@ -240,8 +254,10 @@ namespace HNL.VXT.Core.Preview
                         if (settings.UseAvoidance && rowObstacles.Any(b => x > b.MinX + Eps && x < b.MaxX - Eps))
                         {
                             x = ResolvePointCoordinate(
-                                x, minX, maxX,
-                                settings.HangerMinEdgeOffset, settings.HangerMaxEdgeOffset,
+                                x,
+                                minX,
+                                maxX,
+                                settings.HangerMinEdgeOffset,
                                 settings.HangerBalanceStep,
                                 v => !rowObstacles.Any(b => v > b.MinX + Eps && v < b.MaxX - Eps));
                             if (double.IsNaN(x)) continue;
@@ -278,11 +294,7 @@ namespace HNL.VXT.Core.Preview
         }
 
         private static int AutoScore(VxtPreviewPlan plan)
-        {
-            // Golden Auto simulates both directions and prefers the candidate with fewer
-            // fragmented XC members. Use furring as a secondary tie-breaker.
-            return plan.MainSegmentCount * 100000 + plan.FurringSegmentCount;
-        }
+            => plan.MainSegmentCount * 100000 + plan.FurringSegmentCount;
 
         private static List<Box2> TransformObstacles(IEnumerable<Box2> boxes, double radians, double clearance, Box2 domain)
         {
@@ -305,8 +317,20 @@ namespace HNL.VXT.Core.Preview
             return Box2.FromPoints(points);
         }
 
-        private static Box2 Intersect(Box2 a, Box2 b)
-            => new Box2(Math.Max(a.MinX, b.MinX), Math.Max(a.MinY, b.MinY), Math.Min(a.MaxX, b.MaxX), Math.Min(a.MaxY, b.MaxY));
+        private static bool TryIntersect(Box2 a, Box2 b, out Box2 result)
+        {
+            var minX = Math.Max(a.MinX, b.MinX);
+            var minY = Math.Max(a.MinY, b.MinY);
+            var maxX = Math.Min(a.MaxX, b.MaxX);
+            var maxY = Math.Min(a.MaxY, b.MaxY);
+            if (maxX <= minX + Eps || maxY <= minY + Eps)
+            {
+                result = default(Box2);
+                return false;
+            }
+            result = new Box2(minX, minY, maxX, maxY);
+            return true;
+        }
 
         private static IReadOnlyList<double> Positions(double min, SmartLayout1D.Result layout, double startOffset)
         {
@@ -322,20 +346,23 @@ namespace HNL.VXT.Core.Preview
             return values;
         }
 
-        private static List<double> FixedCenteredPositions(double min, double max, double spacing)
+        private static List<double> FixedEdgePositions(double min, double max, double spacing, bool fromFarEdge)
         {
             var length = max - min;
-            if (length <= Eps || spacing <= Eps) return new List<double>();
-            var intervalCount = Math.Max(1, (int)Math.Floor(length / spacing));
-            var used = intervalCount * spacing;
-            var edge = (length - used) * 0.5;
             var result = new List<double>();
-            for (var i = 0; i <= intervalCount; i++)
-            {
-                var value = min + edge + i * spacing;
-                if (value > min + Eps && value < max - Eps) result.Add(value);
-            }
-            if (result.Count == 0) result.Add((min + max) * 0.5);
+            if (length <= Eps || spacing <= Eps) return result;
+
+            var offset = fromFarEdge ? PositiveRemainder(length, spacing) : spacing;
+            if (offset <= Eps) offset = spacing;
+            for (var value = min + offset; value < max - Eps; value += spacing)
+                result.Add(value);
+            return result;
+        }
+
+        private static double PositiveRemainder(double value, double divisor)
+        {
+            var result = value % divisor;
+            if (result < 0.0) result += divisor;
             return result;
         }
 
@@ -406,17 +433,14 @@ namespace HNL.VXT.Core.Preview
             return double.NaN;
         }
 
-        private static double ResolvePointCoordinate(double ideal, double min, double max, double minEdge, double maxEdge, double step, Func<double, bool> clear)
+        private static double ResolvePointCoordinate(double ideal, double min, double max, double minEdge, double step, Func<double, bool> clear)
         {
             for (var k = 1; k <= 100; k++)
             {
                 foreach (var sign in new[] { 1.0, -1.0 })
                 {
                     var v = ideal + sign * k * step;
-                    var e1 = v - min;
-                    var e2 = max - v;
-                    if (e1 < minEdge - Eps || e2 < minEdge - Eps) continue;
-                    if (e1 > max - min - minEdge + Eps || e2 > max - min - minEdge + Eps) continue;
+                    if (v < min + minEdge - Eps || v > max - minEdge + Eps) continue;
                     if (clear(v)) return v;
                 }
             }
@@ -471,22 +495,15 @@ namespace HNL.VXT.Core.Preview
             var stack = new Dictionary<string, int>(StringComparer.Ordinal);
 
             if (settings.DimMain)
-            {
-                AddVerticalChain(plan, mainCoords, settings.MainDimPosition, DimensionTarget.Main,
-                    radians, domain, settings.DimensionDistance, settings.DimensionSpacing, stack);
-            }
+                AddVerticalChain(plan, mainCoords, settings.MainDimPosition, DimensionTarget.Main, radians, domain, settings.DimensionDistance, settings.DimensionSpacing, stack);
             if (settings.DimFurring)
-            {
-                AddHorizontalChain(plan, furringCoords, settings.FurringDimPosition, DimensionTarget.Furring,
-                    radians, domain, settings.DimensionDistance, settings.DimensionSpacing, stack);
-            }
+                AddHorizontalChain(plan, furringCoords, settings.FurringDimPosition, DimensionTarget.Furring, radians, domain, settings.DimensionDistance, settings.DimensionSpacing, stack);
             if (settings.DimHanger)
             {
                 foreach (var row in hangerRows)
                 {
                     var xs = row.Select(p => p.X).Distinct(new DoubleToleranceComparer()).OrderBy(x => x).ToList();
-                    AddHorizontalChain(plan, xs, settings.HangerDimPosition, DimensionTarget.Hanger,
-                        radians, domain, settings.DimensionDistance, settings.DimensionSpacing, stack);
+                    AddHorizontalChain(plan, xs, settings.HangerDimPosition, DimensionTarget.Hanger, radians, domain, settings.DimensionDistance, settings.DimensionSpacing, stack);
                 }
             }
         }
@@ -593,6 +610,7 @@ namespace HNL.VXT.Core.Preview
             => d.Target + ":" + PointKey(d.ExtensionPoint1) + ":" + PointKey(d.ExtensionPoint2) + ":" + PointKey(d.DimensionLinePoint);
 
         private static string PointKey(Point2 p) => Math.Round(p.X, 3) + "," + Math.Round(p.Y, 3);
+
         private static double NormalizeDegrees(double value)
         {
             value %= 360.0;
