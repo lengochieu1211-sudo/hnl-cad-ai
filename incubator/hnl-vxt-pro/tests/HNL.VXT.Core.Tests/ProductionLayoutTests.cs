@@ -109,6 +109,9 @@ namespace HNL.VXT.Core.Tests
         [TestMethod]
         public void OneSideHangers_ReverseWithFurringStartSide()
         {
+            // Use an asymmetric run so reversing the Golden one-side plan is observable.
+            // A 6000 run resolves to 300/300 edges, so reversal is intentionally identical.
+            const double width = 6075.0;
             var settings = new VxtSettings
             {
                 DrawFurring = false,
@@ -116,12 +119,12 @@ namespace HNL.VXT.Core.Tests
                 HangerMinEdgeOffset = 300,
                 HangerMaxEdgeOffset = 400
             };
-            var near = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings, new VxtLayoutContext());
+            var near = new VxtPreviewPlanBuilder().Build(Rectangle(width, 4000), settings, new VxtLayoutContext());
             var farContext = new VxtLayoutContext { GlobalFurringFromFarEdge = true };
-            var far = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings, farContext);
+            var far = new VxtPreviewPlanBuilder().Build(Rectangle(width, 4000), settings, farContext);
             var nearX = near.HangerPoints.OrderBy(p => p.Y).ThenBy(p => p.X).First().X;
             var farX = far.HangerPoints.OrderBy(p => p.Y).ThenBy(p => p.X).First().X;
-            Assert.AreNotEqual(nearX, farX, 1e-6);
+            Assert.AreNotEqual(nearX, farX, 1e-6, "Golden reverse must swap asymmetric edge offsets.");
         }
 
         [TestMethod]
