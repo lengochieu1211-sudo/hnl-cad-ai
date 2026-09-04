@@ -3,8 +3,8 @@ namespace HNL.VXT.Core.Models
     public sealed class VxtSettings
     {
         // Xương chính - parity V6.7.4
-        public bool DrawMain { get; set; } = true;
-        public bool UseDynamicMainBlock { get; set; } = true;
+        public bool DrawMain = true;
+        public bool UseDynamicMainBlock = true;
         public string MainBlockName { get; set; } = "AP_THANH CHINH 06.2026";
         public double MainMinSpacing { get; set; } = 700.0;
         public double MainMaxSpacing { get; set; } = 1000.0;
@@ -16,14 +16,14 @@ namespace HNL.VXT.Core.Models
         public MainLayoutMode MainLayout { get; set; } = MainLayoutMode.BalancedTwoEnds;
 
         // Xương phụ - parity V6.7.4
-        public bool DrawFurring { get; set; } = true;
-        public bool UseDynamicFurringBlock { get; set; } = true;
+        public bool DrawFurring = true;
+        public bool UseDynamicFurringBlock = true;
         public string FurringBlockName { get; set; } = "AP_THANH PHU 06.2026";
         public double FurringSpacing { get; set; } = 1220.0 / 3.0;
-        public bool AskDirectionEachRegion { get; set; } = false;
+        public bool AskDirectionEachRegion = false;
 
         // Ty treo - parity V6.7.4
-        public bool DrawHangers { get; set; } = true;
+        public bool DrawHangers = true;
         public string HangerBlockName { get; set; } = "AP_DIEM TY 06.2026";
         public double HangerMinSpacing { get; set; } = 700.0;
         public double HangerMaxSpacing { get; set; } = 1000.0;
@@ -33,15 +33,15 @@ namespace HNL.VXT.Core.Models
         public HangerLayoutMode HangerLayout { get; set; } = HangerLayoutMode.BalancedTwoEnds;
 
         // Né thiết bị - parity V6.7.4
-        public bool UseAvoidance { get; set; } = true;
-        public bool ShiftAllForAvoidance { get; set; } = true;
+        public bool UseAvoidance = true;
+        public bool ShiftAllForAvoidance = true;
         public double ClearanceDistance { get; set; } = 20.0;
 
         // DIM - parity V6.7.4
-        public bool AutoDimension { get; set; } = false;
-        public bool DimMain { get; set; } = false;
-        public bool DimFurring { get; set; } = false;
-        public bool DimHanger { get; set; } = false;
+        public bool AutoDimension = false;
+        public bool DimMain = false;
+        public bool DimFurring = false;
+        public bool DimHanger = false;
         public DimensionPosition MainDimPosition { get; set; } = DimensionPosition.Auto;
         public DimensionPosition FurringDimPosition { get; set; } = DimensionPosition.Auto;
         public DimensionPosition HangerDimPosition { get; set; } = DimensionPosition.Auto;
