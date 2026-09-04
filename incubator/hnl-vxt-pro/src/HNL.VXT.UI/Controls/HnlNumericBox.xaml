@@ -1,0 +1,23 @@
+<UserControl x:Class="HNL.VXT.UI.Controls.HnlNumericBox"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             MinHeight="30">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="28"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="28"/>
+            <ColumnDefinition Width="32"/>
+        </Grid.ColumnDefinitions>
+        <Button Grid.Column="0" x:Name="DecreaseButton" Content="−" Click="Decrease_Click"
+                Padding="0" Margin="0" FontSize="14" FontWeight="SemiBold"/>
+        <TextBox Grid.Column="1" x:Name="ValueTextBox" TextAlignment="Right"
+                 VerticalContentAlignment="Center" Padding="6,2" Margin="4,0"
+                 TextChanged="ValueTextBox_TextChanged" LostFocus="ValueTextBox_LostFocus"
+                 PreviewKeyDown="ValueTextBox_PreviewKeyDown"/>
+        <Button Grid.Column="2" x:Name="IncreaseButton" Content="+" Click="Increase_Click"
+                Padding="0" Margin="0" FontSize="14" FontWeight="SemiBold"/>
+        <TextBlock Grid.Column="3" Text="{Binding Unit, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                   VerticalAlignment="Center" Margin="5,0,0,0" Opacity="0.72"/>
+    </Grid>
+</UserControl>
