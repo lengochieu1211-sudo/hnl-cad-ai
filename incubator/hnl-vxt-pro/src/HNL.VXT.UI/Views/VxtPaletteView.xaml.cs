@@ -72,6 +72,52 @@ namespace HNL.VXT.UI.Views
             Resources["AccentBorder"] = Brush(dark ? "#155E75" : "#BAE6FD");
             Resources["HeaderBackground"] = Brush(dark ? "#0B1118" : "#0F172A");
             Resources["Success"] = Brush("#22C55E");
+
+            ApplyComboBoxTheme();
+        }
+
+        private void ApplyComboBoxTheme()
+        {
+            var inputBackground = (Brush)Resources["InputBackground"];
+            var inputBorder = (Brush)Resources["InputBorder"];
+            var primaryText = (Brush)Resources["PrimaryText"];
+            var hoverBackground = (Brush)Resources["HoverBackground"];
+            var selectedBackground = (Brush)Resources["AccentSoft"];
+
+            // WPF's default ComboBox popup can otherwise use the Windows light system
+            // colors while inheriting HNL's dark foreground, producing white-on-white text.
+            // Override the system brushes only inside this palette.
+            Resources[SystemColors.WindowBrushKey] = inputBackground;
+            Resources[SystemColors.WindowTextBrushKey] = primaryText;
+            Resources[SystemColors.ControlBrushKey] = inputBackground;
+            Resources[SystemColors.ControlTextBrushKey] = primaryText;
+            Resources[SystemColors.HighlightBrushKey] = selectedBackground;
+            Resources[SystemColors.HighlightTextBrushKey] = primaryText;
+            Resources[SystemColors.InactiveSelectionHighlightBrushKey] = selectedBackground;
+            Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = primaryText;
+
+            var itemStyle = new Style(typeof(ComboBoxItem));
+            itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, primaryText));
+            itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, inputBackground));
+            itemStyle.Setters.Add(new Setter(Control.BorderBrushProperty, inputBorder));
+            itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(8, 5, 8, 5)));
+            itemStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
+
+            var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hover.Setters.Add(new Setter(Control.BackgroundProperty, hoverBackground));
+            hover.Setters.Add(new Setter(Control.ForegroundProperty, primaryText));
+            itemStyle.Triggers.Add(hover);
+
+            var selected = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
+            selected.Setters.Add(new Setter(Control.BackgroundProperty, selectedBackground));
+            selected.Setters.Add(new Setter(Control.ForegroundProperty, primaryText));
+            itemStyle.Triggers.Add(selected);
+
+            var disabled = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
+            disabled.Setters.Add(new Setter(UIElement.OpacityProperty, 0.55));
+            itemStyle.Triggers.Add(disabled);
+
+            Resources[typeof(ComboBoxItem)] = itemStyle;
         }
 
         private static SolidColorBrush Brush(string hex) =>
