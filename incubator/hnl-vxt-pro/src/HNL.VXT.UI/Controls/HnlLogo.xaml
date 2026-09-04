@@ -17,7 +17,7 @@
             </Border>
             <TextBlock Text="HNL" Foreground="White" FontFamily="Segoe UI Semibold"
                        FontWeight="Bold" FontSize="35" HorizontalAlignment="Center"
-                       VerticalAlignment="Center" Margin="0,-2,0,0" LetterSpacing="45"/>
+                       VerticalAlignment="Center" Margin="0,-2,0,0"/>
             <Border Height="3" Width="74" Background="#BAE6FD" CornerRadius="2"
                     VerticalAlignment="Bottom" Margin="0,0,0,11" Opacity="0.9"/>
         </Grid>
