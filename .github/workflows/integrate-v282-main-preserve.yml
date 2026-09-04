@@ -157,23 +157,28 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'package.json version integration failed'}
           node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'));console.log('package.json JSON PASS')"
           if($LASTEXITCODE -ne 0){throw 'package.json JSON validation failed'}
+
           $v='src/lib/version.ts'
           $vt=Get-Content $v -Raw
           $vt=$vt.Replace('HNL_APP_VERSION = "2.8.1"','HNL_APP_VERSION = "2.8.2"')
           Set-Content $v $vt -NoNewline -Encoding utf8
+
           if(Test-Path 'metadata.json'){
             $m=Get-Content metadata.json -Raw | ConvertFrom-Json
             $m.version='2.8.2'
             $m | ConvertTo-Json -Depth 20 | Set-Content metadata.json -Encoding utf8
           }
+
           $xml='autocad-plugin/HNL.CadBridge.bundle/PackageContents.xml'
           $x=Get-Content $xml -Raw
           $x=$x.Replace('2.8.1','2.8.2')
           Set-Content $xml $x -NoNewline -Encoding utf8
+
           $bridge='autocad-plugin/Hnl.CadBridge/BridgeCommands.cs'
           $b=Get-Content $bridge -Raw
           $b=$b.Replace('PluginVersion = "2.8.1"','PluginVersion = "2.8.2"')
           Set-Content $bridge $b -NoNewline -Encoding utf8
+
           foreach($year in 2023,2024,2025,2026,2027){
             $cs="autocad-plugin/Hnl.CadBridge/Hnl.CadBridge.AutoCAD$year.csproj"
             if(-not(Test-Path $cs)){throw "Missing AutoCAD $year project"}
@@ -181,8 +186,10 @@ jobs:
             $c=$c.Replace('<Version>2.8.1</Version>','<Version>2.8.2</Version>')
             $c=$c.Replace('<AssemblyVersion>2.8.1.0</AssemblyVersion>','<AssemblyVersion>2.8.2.0</AssemblyVersion>')
             $c=$c.Replace('<FileVersion>2.8.1.0</FileVersion>','<FileVersion>2.8.2.0</FileVersion>')
+            $c=$c.Replace('<InformationalVersion>2.8.1</InformationalVersion>','<InformationalVersion>2.8.2</InformationalVersion>')
             Set-Content $cs $c -NoNewline -Encoding utf8
           }
+
           foreach($f in @('sketchup-extension/hnl_cad_ai_bridge.rb','sketchup-extension/hnl_cad_ai_bridge/main.rb','src/components/Dialogs/SketchUp2DBridgeModal.tsx','src/components/Dialogs/UsageGuideModal.tsx')){
             if(Test-Path $f){
               $z=Get-Content $f -Raw
@@ -190,6 +197,27 @@ jobs:
               Set-Content $f $z -NoNewline -Encoding utf8
             }
           }
+
+          $readme='README.md'
+          $r=Get-Content $readme -Raw
+          if(-not $r.StartsWith('# HNL CAD AI v2.8.1')){throw 'README v2.8.1 heading anchor missing'}
+          $r='# HNL CAD AI v2.8.2'+$r.Substring('# HNL CAD AI v2.8.1'.Length)
+          Set-Content $readme $r -NoNewline -Encoding utf8
+
+          $buildReadme='BUILD_EXE_README.md'
+          $brText=Get-Content $buildReadme -Raw
+          if(-not $brText.Contains('v2.8.1')){throw 'BUILD_EXE_README v2.8.1 anchor missing'}
+          $brText=$brText.Replace('v2.8.1','v2.8.2').Replace('HNL_CAD_AI_Setup_2.8.1.exe','HNL_CAD_AI_Setup_2.8.2.exe')
+          Set-Content $buildReadme $brText -NoNewline -Encoding utf8
+
+          $rbz='sketchup-extension/HNL_CAD_AI_Bridge_v2.8.2.rbz'
+          $zip=Join-Path $env:RUNNER_TEMP 'HNL_CAD_AI_Bridge_v2.8.2.zip'
+          if(Test-Path $zip){Remove-Item $zip -Force}
+          if(Test-Path $rbz){Remove-Item $rbz -Force}
+          Compress-Archive -Path 'sketchup-extension/hnl_cad_ai_bridge.rb','sketchup-extension/hnl_cad_ai_bridge' -DestinationPath $zip -CompressionLevel Optimal -Force
+          Move-Item $zip $rbz -Force
+          if(-not(Test-Path $rbz)){throw 'Failed to create versioned SketchUp RBZ v2.8.2'}
+          Write-Host "SketchUp RBZ v2.8.2 created: $((Get-Item $rbz).Length) bytes"
           Write-Host 'Version sync patched across 2023-2027 without removing 2027.'
 
       - name: Update audits and environment examples
