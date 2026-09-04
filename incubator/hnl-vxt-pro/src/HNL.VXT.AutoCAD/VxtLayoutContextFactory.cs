@@ -9,7 +9,10 @@ namespace HNL.VXT.AutoCAD
     {
         public static VxtLayoutContext Build(VxtSession session, Transaction tr)
         {
-            var context = new VxtLayoutContext();
+            var context = new VxtLayoutContext
+            {
+                GlobalFurringFromFarEdge = session.GlobalFurringFromFarEdge
+            };
             AddExtents(context.GeneralObstacles, session.GeneralEquipmentIds, tr);
             AddExtents(context.MainObstacles, session.MainEquipmentIds, tr);
             AddExtents(context.FurringObstacles, session.FurringEquipmentIds, tr);
@@ -33,8 +36,7 @@ namespace HNL.VXT.AutoCAD
                 }
                 catch
                 {
-                    // Proxy/custom entities without extents are ignored exactly like V6.7.4's
-                    // defensive GetBoundingBox behavior.
+                    // Proxy/custom entities without extents are ignored like V6.7.4 GetBoundingBox.
                 }
             }
         }
