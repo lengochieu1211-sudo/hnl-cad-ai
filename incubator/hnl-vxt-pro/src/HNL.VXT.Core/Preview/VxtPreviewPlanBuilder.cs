@@ -1,296 +1,608 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using HNL.VXT.Core.Geometry;
+using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
 
 namespace HNL.VXT.Core.Preview
 {
+    /// <summary>
+    /// Single source of geometry for both transient Preview and permanent Create.
+    /// Main direction semantics follow V6.7.4: 0°/Ngang = horizontal XC; XP is perpendicular.
+    /// </summary>
     public sealed class VxtPreviewPlanBuilder
     {
+        private const double Eps = 1e-7;
+
         public VxtPreviewPlan Build(Boundary2 boundary, VxtSettings settings)
+            => Build(boundary, settings, null);
+
+        public VxtPreviewPlan Build(Boundary2 boundary, VxtSettings settings, VxtLayoutContext context)
         {
             if (boundary == null) throw new ArgumentNullException(nameof(boundary));
             if (settings == null) throw new ArgumentNullException(nameof(settings));
             if (!settings.IsValid(out var error)) throw new ArgumentException(error, nameof(settings));
 
+            context = context ?? new VxtLayoutContext();
+
+            if (settings.MainDirection == MainDirectionMode.RectangleRegions && context.HasManualRegions)
+                return BuildRegions(boundary, settings, context);
+
+            if (settings.MainDirection == MainDirectionMode.Auto)
+            {
+                var a = BuildAtAngle(boundary, settings, context, 0.0, null, includeGuides: true);
+                var b = BuildAtAngle(boundary, settings, context, 90.0, null, includeGuides: true);
+                return AutoScore(a) <= AutoScore(b) ? a : b;
+            }
+
+            var angle = ResolveAngle(settings);
+            return BuildAtAngle(boundary, settings, context, angle, null, includeGuides: true);
+        }
+
+        private VxtPreviewPlan BuildRegions(Boundary2 boundary, VxtSettings settings, VxtLayoutContext context)
+        {
+            var result = new VxtPreviewPlan();
+            var seenLines = new HashSet<string>(StringComparer.Ordinal);
+            var seenHangers = new HashSet<string>(StringComparer.Ordinal);
+
+            for (var i = 0; i < context.Regions.Count; i++)
+            {
+                var region = context.Regions[i];
+                var partial = BuildAtAngle(boundary, settings, context, region.MainAngleDegrees, region.WorldBounds, includeGuides: i == 0);
+                Merge(result, partial, seenLines, seenHangers);
+            }
+
+            // DIM chains are generated per region by BuildAtAngle. De-duplicate coincident dimensions.
+            var dims = result.Dimensions
+                .GroupBy(DimensionKey, StringComparer.Ordinal)
+                .Select(g => g.First())
+                .ToList();
+            result.Dimensions.Clear();
+            result.Dimensions.AddRange(dims);
+            result.DimensionSegmentCount = result.Dimensions.Count;
+            return result;
+        }
+
+        private VxtPreviewPlan BuildAtAngle(
+            Boundary2 boundary,
+            VxtSettings settings,
+            VxtLayoutContext context,
+            double angleDegrees,
+            Box2? regionWorld,
+            bool includeGuides)
+        {
             var plan = new VxtPreviewPlan();
-            var radians = settings.DirectionDegrees * Math.PI / 180.0;
-            var world = boundary.Vertices;
-            var local = world.Select(p => Transform2.ToLocal(p, radians)).ToList();
+            var radians = angleDegrees * Math.PI / 180.0;
+            var localPolygon = boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)).ToList();
+            var polygonBounds = Box2.FromPoints(localPolygon);
+            var domain = regionWorld.HasValue
+                ? Intersect(polygonBounds, TransformBox(regionWorld.Value, radians))
+                : polygonBounds;
 
-            AddBoundary(plan, world);
+            if (domain.Width <= Eps || domain.Height <= Eps) return plan;
 
-            var minX = local.Min(p => p.X);
-            var maxX = local.Max(p => p.X);
-            var minY = local.Min(p => p.Y);
-            var maxY = local.Max(p => p.Y);
+            if (includeGuides)
+            {
+                AddBoundary(plan, boundary);
+                var c = boundary.GetBounds();
+                var center = new Point2((c.Min.X + c.Max.X) * 0.5, (c.Min.Y + c.Max.Y) * 0.5);
+                var guideLength = Math.Max(800.0, center.DistanceTo(c.Max) * 0.35);
+                var end = new Point2(center.X + Math.Cos(radians) * guideLength, center.Y + Math.Sin(radians) * guideLength);
+                plan.Lines.Add(new PreviewLine(center, end, PreviewLineKind.Direction));
+            }
 
-            var mainLocalSegments = new List<Segment2>();
-            var furringLocalSegments = new List<Segment2>();
+            var mainObstacles = TransformObstacles(context.GeneralObstacles.Concat(context.MainObstacles), radians, settings.ClearanceDistance, domain);
+            var furringObstacles = TransformObstacles(context.GeneralObstacles.Concat(context.FurringObstacles), radians, settings.ClearanceDistance, domain);
 
+            var mainSegmentsLocal = new List<Segment2>();
+            var mainCoords = new List<double>();
             if (settings.DrawMain)
             {
-                foreach (var x in SmartCenteredPositions(minX, maxX, settings.MainMinSpacing, settings.MainMaxSpacing))
+                var layoutMode = settings.MainLayout == MainLayoutMode.Auto ? MainLayoutMode.BalancedTwoEnds : settings.MainLayout;
+                var layout = SmartLayout1D.Calculate(
+                    domain.Height,
+                    settings.MainMaxSpacing,
+                    settings.MainMinSpacing,
+                    settings.MainMaxEdgeOffset,
+                    settings.MainMinEdgeOffset,
+                    settings.MainBalanceStep,
+                    layoutMode,
+                    reverse: false);
+
+                var startOffset = layout?.StartOffset ?? domain.Height * 0.5;
+                if (settings.UseAvoidance && settings.ShiftAllForAvoidance && layout != null && mainObstacles.Count > 0)
                 {
-                    foreach (var seg in PolygonScanline.ClipVertical(local, x))
+                    var optimized = SmartLayout1D.OptimizeOffset(
+                        layout,
+                        domain.MinY,
+                        settings.MainMinEdgeOffset,
+                        settings.MainMaxEdgeOffset,
+                        settings.MainBalanceStep,
+                        y => IsHorizontalGridCoordinateClear(y, mainObstacles));
+                    if (!double.IsNaN(optimized)) startOffset = optimized;
+                }
+
+                var coordinates = Positions(domain.MinY, layout, startOffset);
+                var previous = double.NaN;
+                foreach (var idealY in coordinates)
+                {
+                    var y = idealY;
+                    if (settings.UseAvoidance && mainObstacles.Count > 0 && !IsHorizontalGridCoordinateClear(y, mainObstacles))
                     {
-                        mainLocalSegments.Add(seg);
+                        y = ResolveHorizontalCoordinate(
+                            y, previous, domain, mainObstacles,
+                            settings.MainMinSpacing, settings.MainMaxSpacing,
+                            settings.MainBalanceStep);
+                        if (double.IsNaN(y)) continue;
+                    }
+
+                    var clipped = PolygonScanline.ClipHorizontal(localPolygon, y);
+                    foreach (var raw in clipped)
+                    {
+                        if (!TryTrimHorizontal(raw, domain, out var seg)) continue;
+                        if (settings.MainSkipLimit > 0.0 && seg.A.DistanceTo(seg.B) + Eps < settings.MainSkipLimit) continue;
+                        if (settings.UseAvoidance && SegmentHitsHorizontalObstacles(seg, mainObstacles))
+                        {
+                            // Golden first shifts the whole grid; if a local fragment still crosses
+                            // equipment, omit only that fragment rather than drawing through it.
+                            continue;
+                        }
+
+                        mainSegmentsLocal.Add(seg);
                         AddWorldLine(plan, seg, radians, PreviewLineKind.Main);
                         plan.MainSegmentCount++;
                     }
+
+                    if (clipped.Count > 0)
+                    {
+                        mainCoords.Add(y);
+                        previous = y;
+                    }
                 }
             }
 
+            var furringSegmentsLocal = new List<Segment2>();
+            var furringCoords = new List<double>();
             if (settings.DrawFurring)
             {
-                foreach (var y in FixedCenteredPositions(minY, maxY, settings.FurringSpacing))
+                var coords = FixedCenteredPositions(domain.MinX, domain.MaxX, settings.FurringSpacing);
+                var adjusted = settings.UseAvoidance && settings.ShiftAllForAvoidance && furringObstacles.Count > 0
+                    ? OptimizeFixedGrid(coords, domain.MinX, domain.MaxX, settings.FurringSpacing, furringObstacles, vertical: true)
+                    : coords;
+
+                foreach (var idealX in adjusted)
                 {
-                    foreach (var seg in PolygonScanline.ClipHorizontal(local, y))
+                    var x = idealX;
+                    if (settings.UseAvoidance && furringObstacles.Count > 0 && !IsVerticalGridCoordinateClear(x, furringObstacles))
                     {
-                        furringLocalSegments.Add(seg);
+                        x = ResolveVerticalCoordinate(x, domain, furringObstacles, Math.Min(50.0, Math.Max(10.0, settings.FurringSpacing / 8.0)));
+                        if (double.IsNaN(x)) continue;
+                    }
+
+                    var clipped = PolygonScanline.ClipVertical(localPolygon, x);
+                    foreach (var raw in clipped)
+                    {
+                        if (!TryTrimVertical(raw, domain, out var seg)) continue;
+                        if (settings.UseAvoidance && SegmentHitsVerticalObstacles(seg, furringObstacles)) continue;
+                        furringSegmentsLocal.Add(seg);
                         AddWorldLine(plan, seg, radians, PreviewLineKind.Furring);
                         plan.FurringSegmentCount++;
                     }
+                    if (clipped.Count > 0) furringCoords.Add(x);
                 }
             }
 
-            var hangerLocalPoints = new List<Point2>();
-            if (settings.DrawHangers && settings.DrawMain)
+            var hangerRows = new List<List<Point2>>();
+            if (settings.DrawHangers && mainSegmentsLocal.Count > 0)
             {
-                foreach (var mainSeg in mainLocalSegments)
+                foreach (var main in mainSegmentsLocal)
                 {
-                    var length = mainSeg.Length;
-                    if (length < 1e-6) continue;
+                    var minX = Math.Min(main.A.X, main.B.X);
+                    var maxX = Math.Max(main.A.X, main.B.X);
+                    var length = maxX - minX;
+                    if (length <= Eps) continue;
 
-                    foreach (var distance in SmartCenteredDistances(length, settings.HangerMinSpacing, settings.HangerMaxSpacing))
+                    var hangerLayout = settings.HangerLayout == HangerLayoutMode.OneSideFollowFurring
+                        ? MainLayoutMode.OneSide
+                        : MainLayoutMode.BalancedTwoEnds;
+                    var layout = SmartLayout1D.Calculate(
+                        length,
+                        settings.HangerMaxSpacing,
+                        settings.HangerMinSpacing,
+                        settings.HangerMaxEdgeOffset,
+                        settings.HangerMinEdgeOffset,
+                        settings.HangerBalanceStep,
+                        hangerLayout,
+                        reverse: false);
+                    if (layout == null) continue;
+
+                    var rowObstacles = mainObstacles
+                        .Where(b => main.A.Y > b.MinY + Eps && main.A.Y < b.MaxY - Eps && b.MaxX >= minX && b.MinX <= maxX)
+                        .ToList();
+                    var startOffset = layout.StartOffset;
+                    if (settings.UseAvoidance && settings.ShiftAllForAvoidance && rowObstacles.Count > 0)
                     {
-                        var t = distance / length;
-                        var p = new Point2(
-                            mainSeg.A.X + (mainSeg.B.X - mainSeg.A.X) * t,
-                            mainSeg.A.Y + (mainSeg.B.Y - mainSeg.A.Y) * t
-                        );
-                        hangerLocalPoints.Add(p);
-                        AddHangerMark(plan, p, radians, Math.Max(20.0, Math.Min(60.0, settings.FurringSpacing * 0.08)));
+                        var optimized = SmartLayout1D.OptimizeOffset(
+                            layout,
+                            minX,
+                            settings.HangerMinEdgeOffset,
+                            settings.HangerMaxEdgeOffset,
+                            settings.HangerBalanceStep,
+                            x => !rowObstacles.Any(b => x > b.MinX + Eps && x < b.MaxX - Eps));
+                        if (!double.IsNaN(optimized)) startOffset = optimized;
+                    }
+
+                    var row = new List<Point2>();
+                    foreach (var idealX in Positions(minX, layout, startOffset))
+                    {
+                        var x = idealX;
+                        if (settings.UseAvoidance && rowObstacles.Any(b => x > b.MinX + Eps && x < b.MaxX - Eps))
+                        {
+                            x = ResolvePointCoordinate(
+                                x, minX, maxX,
+                                settings.HangerMinEdgeOffset, settings.HangerMaxEdgeOffset,
+                                settings.HangerBalanceStep,
+                                v => !rowObstacles.Any(b => v > b.MinX + Eps && v < b.MaxX - Eps));
+                            if (double.IsNaN(x)) continue;
+                        }
+
+                        var localPoint = new Point2(x, main.A.Y);
+                        var world = Transform2.ToWorld(localPoint, radians);
+                        if (plan.HangerPoints.Any(p => p.DistanceTo(world) < 0.01)) continue;
+                        plan.HangerPoints.Add(world);
+                        row.Add(localPoint);
+                        AddHangerCross(plan, localPoint, radians);
                         plan.HangerCount++;
                     }
+                    if (row.Count > 1) hangerRows.Add(row.OrderBy(p => p.X).ToList());
                 }
             }
 
-            AddDimensions(
-                plan, settings, radians,
-                minX, maxX, minY, maxY,
-                mainLocalSegments, furringLocalSegments, hangerLocalPoints);
+            if (settings.AutoDimension)
+                AddDimensions(plan, settings, radians, domain, mainCoords, furringCoords, hangerRows);
 
-            AddDirectionIndicator(plan, radians, minX, minY, maxX, maxY);
+            plan.DimensionSegmentCount = plan.Dimensions.Count;
             return plan;
         }
 
-        private static void AddBoundary(VxtPreviewPlan plan, IReadOnlyList<Point2> polygon)
+        private static double ResolveAngle(VxtSettings settings)
         {
-            for (var i = 0; i < polygon.Count; i++)
-                plan.Lines.Add(new PreviewLine(polygon[i], polygon[(i + 1) % polygon.Count], PreviewLineKind.Boundary));
+            switch (settings.MainDirection)
+            {
+                case MainDirectionMode.Vertical: return 90.0;
+                case MainDirectionMode.TwoPoints: return NormalizeDegrees(settings.DirectionDegrees);
+                case MainDirectionMode.RectangleRegions: return NormalizeDegrees(settings.DirectionDegrees);
+                default: return 0.0;
+            }
+        }
+
+        private static int AutoScore(VxtPreviewPlan plan)
+        {
+            // Golden Auto simulates both directions and prefers the candidate with fewer
+            // fragmented XC members. Use furring as a secondary tie-breaker.
+            return plan.MainSegmentCount * 100000 + plan.FurringSegmentCount;
+        }
+
+        private static List<Box2> TransformObstacles(IEnumerable<Box2> boxes, double radians, double clearance, Box2 domain)
+        {
+            var result = new List<Box2>();
+            foreach (var b in boxes ?? Enumerable.Empty<Box2>())
+            {
+                var transformed = TransformBox(b, radians).Expand(clearance);
+                if (transformed.Intersects(domain)) result.Add(transformed);
+            }
+            return result;
+        }
+
+        private static Box2 TransformBox(Box2 box, double radians)
+        {
+            var points = new[]
+            {
+                new Point2(box.MinX, box.MinY), new Point2(box.MaxX, box.MinY),
+                new Point2(box.MaxX, box.MaxY), new Point2(box.MinX, box.MaxY)
+            }.Select(p => Transform2.ToLocal(p, radians));
+            return Box2.FromPoints(points);
+        }
+
+        private static Box2 Intersect(Box2 a, Box2 b)
+            => new Box2(Math.Max(a.MinX, b.MinX), Math.Max(a.MinY, b.MinY), Math.Min(a.MaxX, b.MaxX), Math.Min(a.MaxY, b.MaxY));
+
+        private static IReadOnlyList<double> Positions(double min, SmartLayout1D.Result layout, double startOffset)
+        {
+            if (layout == null) return new[] { min + startOffset };
+            var values = new List<double>(layout.PointCount);
+            var value = min + startOffset;
+            values.Add(value);
+            for (var i = 0; i < layout.Steps.Count; i++)
+            {
+                value += layout.Steps[i];
+                values.Add(value);
+            }
+            return values;
+        }
+
+        private static List<double> FixedCenteredPositions(double min, double max, double spacing)
+        {
+            var length = max - min;
+            if (length <= Eps || spacing <= Eps) return new List<double>();
+            var intervalCount = Math.Max(1, (int)Math.Floor(length / spacing));
+            var used = intervalCount * spacing;
+            var edge = (length - used) * 0.5;
+            var result = new List<double>();
+            for (var i = 0; i <= intervalCount; i++)
+            {
+                var value = min + edge + i * spacing;
+                if (value > min + Eps && value < max - Eps) result.Add(value);
+            }
+            if (result.Count == 0) result.Add((min + max) * 0.5);
+            return result;
+        }
+
+        private static List<double> OptimizeFixedGrid(List<double> baseGrid, double min, double max, double spacing, List<Box2> obstacles, bool vertical)
+        {
+            if (baseGrid.Count == 0 || obstacles.Count == 0) return baseGrid;
+            Func<IEnumerable<double>, bool> clear = values => values.All(v => vertical
+                ? IsVerticalGridCoordinateClear(v, obstacles)
+                : IsHorizontalGridCoordinateClear(v, obstacles));
+            if (clear(baseGrid)) return baseGrid;
+
+            var step = Math.Min(50.0, Math.Max(10.0, spacing / 8.0));
+            for (var k = 1; k <= 100; k++)
+            {
+                foreach (var sign in new[] { 1.0, -1.0 })
+                {
+                    var delta = sign * k * step;
+                    var shifted = baseGrid.Select(v => v + delta).ToList();
+                    if (shifted[0] <= min + Eps || shifted[shifted.Count - 1] >= max - Eps) continue;
+                    if (clear(shifted)) return shifted;
+                }
+            }
+            return baseGrid;
+        }
+
+        private static bool IsHorizontalGridCoordinateClear(double y, List<Box2> obstacles)
+            => obstacles.All(b => y <= b.MinY + Eps || y >= b.MaxY - Eps);
+
+        private static bool IsVerticalGridCoordinateClear(double x, List<Box2> obstacles)
+            => obstacles.All(b => x <= b.MinX + Eps || x >= b.MaxX - Eps);
+
+        private static bool SegmentHitsHorizontalObstacles(Segment2 s, List<Box2> obstacles)
+            => obstacles.Any(b => b.IntersectsHorizontal(s.A.Y, s.A.X, s.B.X));
+
+        private static bool SegmentHitsVerticalObstacles(Segment2 s, List<Box2> obstacles)
+            => obstacles.Any(b => b.IntersectsVertical(s.A.X, s.A.Y, s.B.Y));
+
+        private static double ResolveHorizontalCoordinate(double ideal, double previous, Box2 domain, List<Box2> obstacles, double minSpacing, double maxSpacing, double step)
+        {
+            for (var k = 1; k <= 100; k++)
+            {
+                foreach (var sign in new[] { 1.0, -1.0 })
+                {
+                    var v = ideal + sign * k * step;
+                    if (v <= domain.MinY + Eps || v >= domain.MaxY - Eps) continue;
+                    if (!double.IsNaN(previous))
+                    {
+                        var d = Math.Abs(v - previous);
+                        if (d < minSpacing - Eps || d > maxSpacing + Eps) continue;
+                    }
+                    if (IsHorizontalGridCoordinateClear(v, obstacles)) return v;
+                }
+            }
+            return double.NaN;
+        }
+
+        private static double ResolveVerticalCoordinate(double ideal, Box2 domain, List<Box2> obstacles, double step)
+        {
+            for (var k = 1; k <= 100; k++)
+            {
+                foreach (var sign in new[] { 1.0, -1.0 })
+                {
+                    var v = ideal + sign * k * step;
+                    if (v <= domain.MinX + Eps || v >= domain.MaxX - Eps) continue;
+                    if (IsVerticalGridCoordinateClear(v, obstacles)) return v;
+                }
+            }
+            return double.NaN;
+        }
+
+        private static double ResolvePointCoordinate(double ideal, double min, double max, double minEdge, double maxEdge, double step, Func<double, bool> clear)
+        {
+            for (var k = 1; k <= 100; k++)
+            {
+                foreach (var sign in new[] { 1.0, -1.0 })
+                {
+                    var v = ideal + sign * k * step;
+                    var e1 = v - min;
+                    var e2 = max - v;
+                    if (e1 < minEdge - Eps || e2 < minEdge - Eps) continue;
+                    if (e1 > max - min - minEdge + Eps || e2 > max - min - minEdge + Eps) continue;
+                    if (clear(v)) return v;
+                }
+            }
+            return double.NaN;
+        }
+
+        private static bool TryTrimHorizontal(Segment2 raw, Box2 domain, out Segment2 result)
+        {
+            var a = Math.Max(Math.Min(raw.A.X, raw.B.X), domain.MinX);
+            var b = Math.Min(Math.Max(raw.A.X, raw.B.X), domain.MaxX);
+            result = new Segment2(new Point2(a, raw.A.Y), new Point2(b, raw.A.Y));
+            return b - a > Eps && raw.A.Y >= domain.MinY - Eps && raw.A.Y <= domain.MaxY + Eps;
+        }
+
+        private static bool TryTrimVertical(Segment2 raw, Box2 domain, out Segment2 result)
+        {
+            var a = Math.Max(Math.Min(raw.A.Y, raw.B.Y), domain.MinY);
+            var b = Math.Min(Math.Max(raw.A.Y, raw.B.Y), domain.MaxY);
+            result = new Segment2(new Point2(raw.A.X, a), new Point2(raw.A.X, b));
+            return b - a > Eps && raw.A.X >= domain.MinX - Eps && raw.A.X <= domain.MaxX + Eps;
         }
 
         private static void AddWorldLine(VxtPreviewPlan plan, Segment2 local, double radians, PreviewLineKind kind)
+            => plan.Lines.Add(new PreviewLine(Transform2.ToWorld(local.A, radians), Transform2.ToWorld(local.B, radians), kind));
+
+        private static void AddHangerCross(VxtPreviewPlan plan, Point2 local, double radians)
         {
-            plan.Lines.Add(new PreviewLine(
-                Transform2.ToWorld(local.A, radians),
-                Transform2.ToWorld(local.B, radians),
-                kind));
+            const double half = 45.0;
+            AddWorldLine(plan, new Segment2(new Point2(local.X - half, local.Y), new Point2(local.X + half, local.Y)), radians, PreviewLineKind.Hanger);
+            AddWorldLine(plan, new Segment2(new Point2(local.X, local.Y - half), new Point2(local.X, local.Y + half)), radians, PreviewLineKind.Hanger);
         }
 
-        private static IReadOnlyList<double> SmartCenteredPositions(double min, double max, double minSpacing, double maxSpacing)
+        private static void AddBoundary(VxtPreviewPlan plan, Boundary2 boundary)
         {
-            var length = max - min;
-            if (length <= 1e-6) return Array.Empty<double>();
-
-            var internalCount = Math.Max(1, (int)Math.Ceiling(length / maxSpacing) - 1);
-            var spacing = length / (internalCount + 1);
-
-            if (spacing < minSpacing && internalCount > 1)
+            for (var i = 0; i < boundary.Vertices.Count; i++)
             {
-                internalCount = Math.Max(1, (int)Math.Floor(length / minSpacing) - 1);
-                spacing = length / (internalCount + 1);
+                var a = boundary.Vertices[i];
+                var b = boundary.Vertices[(i + 1) % boundary.Vertices.Count];
+                plan.Lines.Add(new PreviewLine(a, b, PreviewLineKind.Boundary));
             }
-
-            var result = new List<double>();
-            for (var i = 1; i <= internalCount; i++)
-                result.Add(min + spacing * i);
-            return result;
-        }
-
-        private static IReadOnlyList<double> FixedCenteredPositions(double min, double max, double spacing)
-        {
-            var length = max - min;
-            if (length <= 1e-6 || spacing <= 0) return Array.Empty<double>();
-
-            var count = Math.Max(1, (int)Math.Floor(length / spacing));
-            var used = (count - 1) * spacing;
-            var start = min + (length - used) / 2.0;
-            var result = new List<double>();
-
-            for (var i = 0; i < count; i++)
-            {
-                var p = start + i * spacing;
-                if (p > min + 1e-6 && p < max - 1e-6) result.Add(p);
-            }
-
-            return result;
-        }
-
-        private static IReadOnlyList<double> SmartCenteredDistances(double length, double minSpacing, double maxSpacing)
-        {
-            if (length <= 1e-6) return Array.Empty<double>();
-            var count = Math.Max(1, (int)Math.Ceiling(length / maxSpacing) - 1);
-            var spacing = length / (count + 1);
-            if (spacing < minSpacing && count > 1)
-            {
-                count = Math.Max(1, (int)Math.Floor(length / minSpacing) - 1);
-                spacing = length / (count + 1);
-            }
-
-            var result = new List<double>();
-            for (var i = 1; i <= count; i++) result.Add(spacing * i);
-            return result;
-        }
-
-        private static void AddHangerMark(VxtPreviewPlan plan, Point2 pLocal, double radians, double halfSize)
-        {
-            var a1 = new Point2(pLocal.X - halfSize, pLocal.Y);
-            var b1 = new Point2(pLocal.X + halfSize, pLocal.Y);
-            var a2 = new Point2(pLocal.X, pLocal.Y - halfSize);
-            var b2 = new Point2(pLocal.X, pLocal.Y + halfSize);
-            AddWorldLine(plan, new Segment2(a1, b1), radians, PreviewLineKind.Hanger);
-            AddWorldLine(plan, new Segment2(a2, b2), radians, PreviewLineKind.Hanger);
         }
 
         private static void AddDimensions(
             VxtPreviewPlan plan,
-            VxtSettings s,
+            VxtSettings settings,
             double radians,
-            double minX, double maxX, double minY, double maxY,
-            IReadOnlyList<Segment2> mainSegments,
-            IReadOnlyList<Segment2> furringSegments,
-            IReadOnlyList<Point2> hangerPoints)
+            Box2 domain,
+            List<double> mainCoords,
+            List<double> furringCoords,
+            List<List<Point2>> hangerRows)
         {
-            if (!s.AutoDimension) return;
+            var stack = new Dictionary<string, int>(StringComparer.Ordinal);
 
-            var mainXs = mainSegments.Select(seg => seg.A.X).Distinct(new DoubleToleranceComparer()).OrderBy(x => x).ToList();
-            var furringYs = furringSegments.Select(seg => seg.A.Y).Distinct(new DoubleToleranceComparer()).OrderBy(y => y).ToList();
-
-            if (s.DimMain && mainXs.Count >= 2)
+            if (settings.DimMain)
             {
-                var pos = Resolve(s.MainDimPosition, DimensionTarget.Main);
-                AddAxisDimension(plan, mainXs, true, pos, s.DimensionDistance, 0, minX, maxX, minY, maxY, radians, "XC");
+                AddVerticalChain(plan, mainCoords, settings.MainDimPosition, DimensionTarget.Main,
+                    radians, domain, settings.DimensionDistance, settings.DimensionSpacing, stack);
             }
-
-            if (s.DimFurring && furringYs.Count >= 2)
+            if (settings.DimFurring)
             {
-                var pos = Resolve(s.FurringDimPosition, DimensionTarget.Furring);
-                AddAxisDimension(plan, furringYs, false, pos, s.DimensionDistance, 0, minX, maxX, minY, maxY, radians, "XP");
+                AddHorizontalChain(plan, furringCoords, settings.FurringDimPosition, DimensionTarget.Furring,
+                    radians, domain, settings.DimensionDistance, settings.DimensionSpacing, stack);
             }
-
-            if (s.DimHanger && hangerPoints.Count >= 2)
+            if (settings.DimHanger)
             {
-                var grouped = hangerPoints
-                    .GroupBy(p => Math.Round(p.X, 4))
-                    .Select(g => g.OrderBy(p => p.Y).ToList())
-                    .FirstOrDefault(g => g.Count >= 2);
-
-                if (grouped != null)
+                foreach (var row in hangerRows)
                 {
-                    var ys = grouped.Select(p => p.Y).ToList();
-                    var pos = Resolve(s.HangerDimPosition, DimensionTarget.Hanger);
-                    AddAxisDimension(plan, ys, false, pos, s.DimensionDistance + s.DimensionSpacing, 1,
-                        minX, maxX, minY, maxY, radians, "TY");
+                    var xs = row.Select(p => p.X).Distinct(new DoubleToleranceComparer()).OrderBy(x => x).ToList();
+                    AddHorizontalChain(plan, xs, settings.HangerDimPosition, DimensionTarget.Hanger,
+                        radians, domain, settings.DimensionDistance, settings.DimensionSpacing, stack);
                 }
             }
         }
 
-        private static DimensionPosition Resolve(DimensionPosition requested, DimensionTarget target)
-        {
-            if (requested != DimensionPosition.Auto) return requested;
-            switch (target)
-            {
-                case DimensionTarget.Main: return DimensionPosition.Top;
-                case DimensionTarget.Furring: return DimensionPosition.Left;
-                default: return DimensionPosition.Right;
-            }
-        }
-
-        private static void AddAxisDimension(
+        private static void AddVerticalChain(
             VxtPreviewPlan plan,
-            IReadOnlyList<double> values,
-            bool valuesAreX,
+            IEnumerable<double> values,
             DimensionPosition position,
-            double distance,
-            int stackIndex,
-            double minX, double maxX, double minY, double maxY,
+            DimensionTarget target,
             double radians,
-            string prefix)
+            Box2 domain,
+            double distance,
+            double spacing,
+            IDictionary<string, int> stack)
         {
-            if (values.Count < 2) return;
+            var ys = values.Distinct(new DoubleToleranceComparer()).OrderBy(x => x).ToList();
+            if (ys.Count < 2) return;
 
-            var extra = stackIndex * 0.0;
-            if (valuesAreX)
+            var side = position == DimensionPosition.Left ? "L" : position == DimensionPosition.Right ? "R" : "C-V";
+            var index = GetAndIncrement(stack, side);
+            var x = position == DimensionPosition.Left
+                ? domain.MinX - distance - index * spacing
+                : position == DimensionPosition.Right
+                    ? domain.MaxX + distance + index * spacing
+                    : (domain.MinX + domain.MaxX) * 0.5 + index * spacing;
+
+            for (var i = 0; i + 1 < ys.Count; i++)
             {
-                var y = position == DimensionPosition.Bottom ? minY - distance - extra : maxY + distance + extra;
-                for (var i = 0; i + 1 < values.Count; i++)
-                {
-                    var a = new Point2(values[i], y);
-                    var b = new Point2(values[i + 1], y);
-                    AddWorldLine(plan, new Segment2(a, b), radians, PreviewLineKind.Dimension);
-                    AddWorldLine(plan, new Segment2(new Point2(values[i], y - 80), new Point2(values[i], y + 80)), radians, PreviewLineKind.DimensionExtension);
-                    if (i == values.Count - 2)
-                        AddWorldLine(plan, new Segment2(new Point2(values[i + 1], y - 80), new Point2(values[i + 1], y + 80)), radians, PreviewLineKind.DimensionExtension);
-
-                    var text = (values[i + 1] - values[i]).ToString("0", CultureInfo.InvariantCulture);
-                    var mid = new Point2((values[i] + values[i + 1]) / 2.0, y + 70);
-                    plan.Texts.Add(new PreviewText(Transform2.ToWorld(mid, radians), $"{prefix} {text}", PreviewLineKind.Dimension, radians));
-                    plan.DimensionSegmentCount++;
-                }
-            }
-            else
-            {
-                var x = position == DimensionPosition.Right ? maxX + distance + extra : minX - distance - extra;
-                for (var i = 0; i + 1 < values.Count; i++)
-                {
-                    var a = new Point2(x, values[i]);
-                    var b = new Point2(x, values[i + 1]);
-                    AddWorldLine(plan, new Segment2(a, b), radians, PreviewLineKind.Dimension);
-                    AddWorldLine(plan, new Segment2(new Point2(x - 80, values[i]), new Point2(x + 80, values[i])), radians, PreviewLineKind.DimensionExtension);
-                    if (i == values.Count - 2)
-                        AddWorldLine(plan, new Segment2(new Point2(x - 80, values[i + 1]), new Point2(x + 80, values[i + 1])), radians, PreviewLineKind.DimensionExtension);
-
-                    var text = (values[i + 1] - values[i]).ToString("0", CultureInfo.InvariantCulture);
-                    var mid = new Point2(x + 70, (values[i] + values[i + 1]) / 2.0);
-                    plan.Texts.Add(new PreviewText(Transform2.ToWorld(mid, radians), $"{prefix} {text}", PreviewLineKind.Dimension, radians + Math.PI / 2.0));
-                    plan.DimensionSegmentCount++;
-                }
+                var e1 = Transform2.ToWorld(new Point2(x, ys[i]), radians);
+                var e2 = Transform2.ToWorld(new Point2(x, ys[i + 1]), radians);
+                var dimLine = Transform2.ToWorld(new Point2(x, (ys[i] + ys[i + 1]) * 0.5), radians);
+                plan.Dimensions.Add(new PreviewDimension(e1, e2, dimLine, radians + Math.PI / 2.0, target));
             }
         }
 
-        private static void AddDirectionIndicator(VxtPreviewPlan plan, double radians, double minX, double minY, double maxX, double maxY)
+        private static void AddHorizontalChain(
+            VxtPreviewPlan plan,
+            IEnumerable<double> values,
+            DimensionPosition position,
+            DimensionTarget target,
+            double radians,
+            Box2 domain,
+            double distance,
+            double spacing,
+            IDictionary<string, int> stack)
         {
-            var length = Math.Max(maxX - minX, maxY - minY);
-            if (length < 1e-6) return;
+            var xs = values.Distinct(new DoubleToleranceComparer()).OrderBy(x => x).ToList();
+            if (xs.Count < 2) return;
 
-            var startLocal = new Point2(minX, minY - length * 0.08);
-            var endLocal = new Point2(minX + length * 0.15, minY - length * 0.08);
-            AddWorldLine(plan, new Segment2(startLocal, endLocal), radians, PreviewLineKind.Direction);
-            plan.Texts.Add(new PreviewText(
-                Transform2.ToWorld(new Point2(minX, minY - length * 0.11), radians),
-                "Hướng XC",
-                PreviewLineKind.Direction,
-                radians));
+            var side = position == DimensionPosition.Bottom ? "B" : position == DimensionPosition.Top ? "T" : "C-H";
+            var index = GetAndIncrement(stack, side);
+            var y = position == DimensionPosition.Bottom
+                ? domain.MinY - distance - index * spacing
+                : position == DimensionPosition.Top
+                    ? domain.MaxY + distance + index * spacing
+                    : (domain.MinY + domain.MaxY) * 0.5 + index * spacing;
+
+            for (var i = 0; i + 1 < xs.Count; i++)
+            {
+                var e1 = Transform2.ToWorld(new Point2(xs[i], y), radians);
+                var e2 = Transform2.ToWorld(new Point2(xs[i + 1], y), radians);
+                var dimLine = Transform2.ToWorld(new Point2((xs[i] + xs[i + 1]) * 0.5, y), radians);
+                plan.Dimensions.Add(new PreviewDimension(e1, e2, dimLine, radians, target));
+            }
+        }
+
+        private static int GetAndIncrement(IDictionary<string, int> stack, string key)
+        {
+            int value;
+            if (!stack.TryGetValue(key, out value)) value = 0;
+            stack[key] = value + 1;
+            return value;
+        }
+
+        private static void Merge(VxtPreviewPlan target, VxtPreviewPlan source, HashSet<string> seenLines, HashSet<string> seenHangers)
+        {
+            foreach (var line in source.Lines)
+            {
+                var key = LineKey(line);
+                if (!seenLines.Add(key)) continue;
+                target.Lines.Add(line);
+                if (line.Kind == PreviewLineKind.Main) target.MainSegmentCount++;
+                if (line.Kind == PreviewLineKind.Furring) target.FurringSegmentCount++;
+            }
+            foreach (var p in source.HangerPoints)
+            {
+                var key = PointKey(p);
+                if (!seenHangers.Add(key)) continue;
+                target.HangerPoints.Add(p);
+                target.HangerCount++;
+            }
+            foreach (var d in source.Dimensions) target.Dimensions.Add(d);
+            foreach (var t in source.Texts) target.Texts.Add(t);
+        }
+
+        private static string LineKey(PreviewLine line)
+        {
+            var a = PointKey(line.A);
+            var b = PointKey(line.B);
+            return string.CompareOrdinal(a, b) <= 0 ? line.Kind + ":" + a + ":" + b : line.Kind + ":" + b + ":" + a;
+        }
+
+        private static string DimensionKey(PreviewDimension d)
+            => d.Target + ":" + PointKey(d.ExtensionPoint1) + ":" + PointKey(d.ExtensionPoint2) + ":" + PointKey(d.DimensionLinePoint);
+
+        private static string PointKey(Point2 p) => Math.Round(p.X, 3) + "," + Math.Round(p.Y, 3);
+        private static double NormalizeDegrees(double value)
+        {
+            value %= 360.0;
+            return value < 0 ? value + 360.0 : value;
         }
 
         private sealed class DoubleToleranceComparer : IEqualityComparer<double>
         {
-            public bool Equals(double x, double y) => Math.Abs(x - y) < 1e-4;
-            public int GetHashCode(double obj) => Math.Round(obj, 4).GetHashCode();
+            public bool Equals(double x, double y) => Math.Abs(x - y) < 0.01;
+            public int GetHashCode(double obj) => Math.Round(obj, 2).GetHashCode();
         }
     }
 }
