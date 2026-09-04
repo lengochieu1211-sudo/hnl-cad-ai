@@ -114,7 +114,7 @@ namespace HNL.VXT.AutoCAD
                 var sb = new StringBuilder(4096);
                 sb.AppendLine("HNL TOOL - VXT PRO DIAGNOSTIC");
                 sb.AppendLine("========================================");
-                sb.AppendLine("VXT Version: 7.0.0-alpha.5-production-engine");
+                sb.AppendLine("VXT Version: 7.0.0-beta.1");
                 sb.AppendLine("Time: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
                 sb.AppendLine("OS: " + Environment.OSVersion);
                 sb.AppendLine("CLR: " + Environment.Version);
