@@ -1,0 +1,176 @@
+name: HNL VXT Pro v7 Beta CI
+
+on:
+  push:
+    branches:
+      - research/vxt-pro-v7-bootstrap
+    paths:
+      - "incubator/hnl-vxt-pro/**"
+      - ".github/workflows/vxt-pro-bootstrap.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "incubator/hnl-vxt-pro/**"
+      - ".github/workflows/vxt-pro-bootstrap.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-package:
+    name: AutoCAD 2023 Build / Golden Tests / Functional Setup
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
+    steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v4
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Toolchain and functional source gate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          dotnet --info
+          Write-Host "Target: AutoCAD 2023 / .NET Framework 4.8 / AutoCAD.NET 24.2.0"
+          $required = @(
+            "$env:VXT_ROOT\src\HNL.VXT.Core\HNL.VXT.Core.csproj",
+            "$env:VXT_ROOT\src\HNL.VXT.Core\Layout\SmartLayout1D.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.Core\Preview\VxtPreviewPlanBuilder.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.Core\Utilities\NumericExpressionEvaluator.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.UI\HNL.VXT.UI.csproj",
+            "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj",
+            "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCreateEngine.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtTransientPreview.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.UI\Controls\HnlLogo.xaml",
+            "$env:VXT_ROOT\src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64",
+            "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj",
+            "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\NumericExpressionEvaluatorTests.cs",
+            "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\ProductionLayoutTests.cs",
+            "$env:VXT_ROOT\build\HNL.VXT.bundle\PackageContents.xml",
+            "$env:VXT_ROOT\installer\HNL.VXT.Setup.iss",
+            "$env:VXT_ROOT\scripts\generate-installer-branding.ps1",
+            "$env:VXT_ROOT\scripts\build-installer.ps1"
+          )
+          foreach ($file in $required) {
+            if (-not (Test-Path $file)) { throw "Missing required VXT source: $file" }
+          }
+
+          $vmSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\VxtPaletteViewModel.cs" -Raw
+          if ($vmSource.Contains("public bool CanCreate => false")) {
+            throw "Functional gate failed: Create is still hard-locked."
+          }
+          if (-not $vmSource.Contains('VXT Pro v7.0.0-beta.1')) {
+            throw "Version gate failed: Palette is not beta.1."
+          }
+
+          $commandSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
+          if (-not $commandSource.Contains('[CommandMethod("VXTCREATE"')) {
+            throw "Functional gate failed: VXTCREATE command is missing."
+          }
+          $bridgeSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtHostBridge.cs" -Raw
+          if (-not $bridgeSource.Contains('Send("VXTCREATE ")')) {
+            throw "Functional gate failed: UI bridge does not invoke VXTCREATE."
+          }
+
+          $logoText = (Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64" -Raw) -replace '\s',''
+          try { $logoBytes = [Convert]::FromBase64String($logoText) }
+          catch { throw "Branding gate failed: HNL logo Base64 is invalid." }
+          if ($logoBytes.Length -lt 1024) { throw "Branding gate failed: decoded HNL logo is unexpectedly small." }
+          if ($logoBytes[0] -ne 0x89 -or $logoBytes[1] -ne 0x50 -or $logoBytes[2] -ne 0x4E -or $logoBytes[3] -ne 0x47) {
+            throw "Branding gate failed: HNL logo is not a PNG."
+          }
+
+          $iss = Get-Content "$env:VXT_ROOT\installer\HNL.VXT.Setup.iss" -Raw
+          if (-not $iss.Contains('DefaultDirName={commonpf}\Autodesk\ApplicationPlugins\HNL.VXT.bundle')) {
+            throw "Installer gate failed: VXT must install to trusted Program Files ApplicationPlugins."
+          }
+          if (-not $iss.Contains('PrivilegesRequired=admin')) {
+            throw "Installer gate failed: Program Files setup must request admin privileges."
+          }
+          Write-Host "HNL VXT beta.1 functional/source/branding/installer gate PASS"
+      - name: Restore AutoCAD 2023 plugin
+        shell: pwsh
+        run: dotnet restore "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj"
+      - name: Restore core tests
+        shell: pwsh
+        run: dotnet restore "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj"
+      - name: Build AutoCAD 2023 plugin
+        shell: pwsh
+        run: dotnet build "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj" -c Release --no-restore
+      - name: Run Core / Golden / DIM / Numeric Expression tests
+        shell: pwsh
+        run: dotnet test "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj" -c Release
+      - name: Package AutoCAD ApplicationPlugins bundle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $artifactRoot = Join-Path $env:VXT_ROOT "artifacts"
+          $bundleRoot = Join-Path $artifactRoot "HNL.VXT.bundle"
+          $windows = Join-Path $bundleRoot "Contents\Windows"
+          if (Test-Path $artifactRoot) { Remove-Item $artifactRoot -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $windows | Out-Null
+          Copy-Item "$env:VXT_ROOT\build\HNL.VXT.bundle\PackageContents.xml" "$bundleRoot\PackageContents.xml" -Force
+          $out = "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\bin\Release\net48"
+          if (-not (Test-Path $out)) { throw "Missing AutoCAD Release output: $out" }
+          Get-ChildItem $out -File | Where-Object {
+            $_.Extension -in @('.dll', '.config') -and $_.Name -notmatch '^(Ac|AutoCAD).*\.dll$'
+          } | Copy-Item -Destination $windows -Force
+          $bad = Get-ChildItem $windows -File | Where-Object { $_.Name -match '^(Ac|AutoCAD).*\.dll$' }
+          if ($bad) { throw "Autodesk runtime DLL detected in distributable bundle." }
+          foreach ($requiredDll in @('HNL.VXT.AutoCAD.dll','HNL.VXT.Core.dll','HNL.VXT.UI.dll')) {
+            if (-not (Test-Path (Join-Path $windows $requiredDll))) { throw "Missing bundle DLL: $requiredDll" }
+          }
+          $dll = Join-Path $windows "HNL.VXT.AutoCAD.dll"
+          $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $dll))
+          Write-Host "HNL.VXT.AutoCAD.dll FileVersion: $($info.FileVersion)"
+          if (-not $info.FileVersion.StartsWith("7.0.0.6")) { throw "Unexpected VXT DLL version: $($info.FileVersion)" }
+          $zip = Join-Path $artifactRoot "HNL-VXT-Pro-v7.0.0-beta.1-AutoCAD2023.zip"
+          Compress-Archive -Path $bundleRoot -DestinationPath $zip -CompressionLevel Optimal
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
+          Write-Host "Bundle ZIP SHA256: $hash"
+          Write-Host "HNL VXT beta.1 bundle gate PASS"
+      - name: Install Inno Setup 6
+        shell: pwsh
+        run: choco install innosetup -y --no-progress --limit-output
+      - name: Build one-file HNL VXT Setup EXE
+        shell: pwsh
+        run: '& "$env:VXT_ROOT\scripts\build-installer.ps1" -Root $env:VXT_ROOT'
+      - name: Verify one-file installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $exe = "$env:VXT_ROOT\artifacts\installer\HNL_VXT_Pro_Setup_7.0.0-beta.1.exe"
+          $sha = "$exe.sha256.txt"
+          if (-not (Test-Path $exe)) { throw "Missing Setup EXE: $exe" }
+          if (-not (Test-Path $sha)) { throw "Missing Setup SHA256: $sha" }
+          $size = (Get-Item $exe).Length
+          if ($size -lt 300KB) { throw "Setup EXE too small: $size bytes" }
+          $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
+          if (-not $info.FileVersion.StartsWith('7.0.0.6')) { throw "Unexpected Setup FileVersion: $($info.FileVersion)" }
+          Write-Host "ONE-FILE SETUP beta.1 PASS"
+          Write-Host "Setup size: $size bytes"
+          Write-Host "Setup FileVersion: $($info.FileVersion)"
+          Get-Content $sha
+      - name: Upload debug bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HNL-VXT-Pro-v7.0.0-beta.1-AutoCAD2023-Bundle
+          path: ${{ env.VXT_ROOT }}/artifacts/HNL-VXT-Pro-v7.0.0-beta.1-AutoCAD2023.zip
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload one-file Setup EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: HNL-VXT-Pro-v7.0.0-beta.1-Setup-AutoCAD2023
+          path: |
+            ${{ env.VXT_ROOT }}/artifacts/installer/HNL_VXT_Pro_Setup_7.0.0-beta.1.exe
+            ${{ env.VXT_ROOT }}/artifacts/installer/HNL_VXT_Pro_Setup_7.0.0-beta.1.exe.sha256.txt
+          if-no-files-found: error
+          retention-days: 14

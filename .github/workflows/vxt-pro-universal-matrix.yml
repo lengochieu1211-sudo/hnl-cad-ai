@@ -1,0 +1,202 @@
+name: HNL VXT Pro Universal 2023-2027 Beta Matrix
+
+on:
+  push:
+    branches:
+      - research/vxt-pro-v7-bootstrap
+    paths:
+      - "incubator/hnl-vxt-pro/**"
+      - ".github/workflows/vxt-pro-universal-matrix.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "incubator/hnl-vxt-pro/**"
+      - ".github/workflows/vxt-pro-universal-matrix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vxt-pro-universal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    name: Core / Golden / DIM / Numeric Expression Tests
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Functional source and branding gate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vm = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\VxtPaletteViewModel.cs" -Raw
+          if ($vm.Contains('public bool CanCreate => false')) { throw 'Create is still hard-locked.' }
+          if (-not $vm.Contains('VXT Pro v7.0.0-beta.1')) { throw 'Palette beta.1 label missing.' }
+          $commands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
+          if (-not $commands.Contains('[CommandMethod("VXTCREATE"')) { throw 'VXTCREATE command missing.' }
+          $create = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCreateEngine.cs" -Raw
+          if (-not $create.Contains('StartTransaction')) { throw 'Create transaction gate missing.' }
+          $logoText = (Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64" -Raw) -replace '\s',''
+          try { $logoBytes = [Convert]::FromBase64String($logoText) }
+          catch { throw 'HNL logo Base64 is invalid.' }
+          if ($logoBytes.Length -lt 1024) { throw 'Decoded HNL logo is unexpectedly small.' }
+          if ($logoBytes[0] -ne 0x89 -or $logoBytes[1] -ne 0x50 -or $logoBytes[2] -ne 0x4E -or $logoBytes[3] -ne 0x47) { throw 'HNL logo is not PNG.' }
+          Write-Host 'Functional beta.1 source/branding gate PASS'
+      - name: Run golden core tests
+        shell: pwsh
+        run: dotnet test "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj" -c Release
+
+  cad-bridge-matrix:
+    name: AutoCAD ${{ matrix.cad }} / ${{ matrix.runtime }}
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cad: "2023"
+            runtime: "NET48"
+            project: "src/HNL.VXT.AutoCAD/HNL.VXT.AutoCAD.csproj"
+            tfm: "net48"
+          - cad: "2024"
+            runtime: "NET48"
+            project: "src/Bridges/AutoCAD2024/HNL.VXT.AutoCAD.2024.csproj"
+            tfm: "net48"
+          - cad: "2025"
+            runtime: "NET8"
+            project: "src/Bridges/AutoCAD2025/HNL.VXT.AutoCAD.2025.csproj"
+            tfm: "net8.0-windows"
+          - cad: "2026-pre-1.2"
+            runtime: "NET8"
+            project: "src/Bridges/AutoCAD2026Net8/HNL.VXT.AutoCAD.2026.Net8.csproj"
+            tfm: "net8.0-windows"
+          - cad: "2026-1.2-plus"
+            runtime: "NET10"
+            project: "src/Bridges/AutoCAD2026Net10/HNL.VXT.AutoCAD.2026.Net10.csproj"
+            tfm: "net10.0-windows"
+          - cad: "2027"
+            runtime: "NET10"
+            project: "src/Bridges/AutoCAD2027/HNL.VXT.AutoCAD.2027.csproj"
+            tfm: "net10.0-windows"
+    env:
+      VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Restore bridge
+        shell: pwsh
+        run: dotnet restore (Join-Path $env:VXT_ROOT '${{ matrix.project }}')
+      - name: Build bridge
+        shell: pwsh
+        run: dotnet build (Join-Path $env:VXT_ROOT '${{ matrix.project }}') -c Release --no-restore
+      - name: Stage and validate bridge
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $project = Join-Path $env:VXT_ROOT '${{ matrix.project }}'
+          $projectDir = Split-Path $project -Parent
+          $out = Join-Path $projectDir 'bin\Release\${{ matrix.tfm }}'
+          $stage = Join-Path $env:VXT_ROOT 'artifacts\matrix\${{ matrix.cad }}-${{ matrix.runtime }}'
+          if (-not (Test-Path $out)) { throw "Missing output: $out" }
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Get-ChildItem $out -File | Where-Object {
+            $_.Extension -in @('.dll', '.config', '.json') -and $_.Name -notmatch '^(Ac|AutoCAD).*\.dll$'
+          } | Copy-Item -Destination $stage -Force
+          foreach ($dll in @('HNL.VXT.AutoCAD.dll','HNL.VXT.Core.dll','HNL.VXT.UI.dll')) {
+            if (-not (Test-Path (Join-Path $stage $dll))) { throw "Missing staged DLL: $dll" }
+          }
+          $bad = Get-ChildItem $stage -File | Where-Object { $_.Name -match '^(Ac|AutoCAD).*\.dll$' }
+          if ($bad) { throw 'Autodesk runtime DLL must not be redistributed.' }
+          $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $stage 'HNL.VXT.AutoCAD.dll'))
+          if (-not $info.FileVersion.StartsWith('7.0.0.6')) { throw "Unexpected bridge version: $($info.FileVersion)" }
+          Write-Host "AutoCAD ${{ matrix.cad }} / ${{ matrix.runtime }} => $($info.FileVersion)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HNL-VXT-Bridge-${{ matrix.cad }}-${{ matrix.runtime }}
+          path: ${{ env.VXT_ROOT }}/artifacts/matrix/${{ matrix.cad }}-${{ matrix.runtime }}
+          retention-days: 7
+          if-no-files-found: error
+
+  universal-setup:
+    name: Universal Setup EXE / AutoCAD 2023-2027 / beta.1
+    needs:
+      - core-tests
+      - cad-bridge-matrix
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
+      DOWNLOAD_ROOT: ${{ github.workspace }}\universal-downloads
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all certified bridge artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: HNL-VXT-Bridge-*
+          path: ${{ env.DOWNLOAD_ROOT }}
+      - name: Assemble Universal bridge tree
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $universal = Join-Path $env:VXT_ROOT 'artifacts\universal'
+          if (Test-Path $universal) { Remove-Item $universal -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $universal | Out-Null
+          $map = @{
+            'HNL-VXT-Bridge-2023-NET48' = '2023'
+            'HNL-VXT-Bridge-2024-NET48' = '2024'
+            'HNL-VXT-Bridge-2025-NET8' = '2025'
+            'HNL-VXT-Bridge-2026-pre-1.2-NET8' = '2026-net8'
+            'HNL-VXT-Bridge-2026-1.2-plus-NET10' = '2026-net10'
+            'HNL-VXT-Bridge-2027-NET10' = '2027'
+          }
+          foreach ($artifact in $map.Keys) {
+            $src = Join-Path $env:DOWNLOAD_ROOT $artifact
+            $dst = Join-Path $universal $map[$artifact]
+            if (-not (Test-Path $src)) { throw "Missing matrix artifact directory: $src" }
+            New-Item -ItemType Directory -Force -Path $dst | Out-Null
+            Copy-Item (Join-Path $src '*') $dst -Recurse -Force
+          }
+      - name: Install Inno Setup 6
+        shell: pwsh
+        run: choco install innosetup -y --no-progress --limit-output
+      - name: Build HNL Universal Setup EXE
+        shell: pwsh
+        run: '& "$env:VXT_ROOT\scripts\build-universal-installer.ps1" -Root $env:VXT_ROOT'
+      - name: Verify Universal installer gate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $env:VXT_ROOT 'artifacts\universal-installer\HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe'
+          $sha = "$exe.sha256.txt"
+          if (-not (Test-Path $exe)) { throw "Universal setup missing: $exe" }
+          if (-not (Test-Path $sha)) { throw "Universal SHA256 file missing: $sha" }
+          $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
+          if (-not $info.FileVersion.StartsWith('7.0.0.6')) { throw "Unexpected installer FileVersion: $($info.FileVersion)" }
+          $actual = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $declared = ((Get-Content $sha -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          if ($actual -ne $declared) { throw "Universal SHA mismatch: $actual != $declared" }
+          Write-Host "Universal beta.1 setup gate PASS: $($info.FileVersion)"
+          Get-Content $sha
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HNL-VXT-Pro-v7.0.0-beta.1-Universal-Setup-AutoCAD2023-2027
+          path: |
+            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe
+            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe.sha256.txt
+          retention-days: 14
+          if-no-files-found: error
