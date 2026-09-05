@@ -599,8 +599,9 @@ namespace HNL.VXT.Core.Preview
                     var xs = row.Select(p => p.X).Distinct(new DoubleToleranceComparer()).OrderBy(x => x).ToList();
                     if (xs.Count == 0) continue;
                     if (!uniquePatterns.Add(PatternKey(xs))) continue;
+                    var sourceRow = row[0].Y;
                     AddHorizontalChain(plan, WithBounds(xs, domain.MinX, domain.MaxX), settings.HangerDimPosition,
-                        DimensionTarget.Hanger, radians, domain, settings.DimensionDistance, settings.DimensionSpacing, stack);
+                        DimensionTarget.Hanger, radians, domain, settings.DimensionDistance, settings.DimensionSpacing, stack, sourceRow);
                 }
             }
         }
@@ -624,38 +625,45 @@ namespace HNL.VXT.Core.Preview
             Box2 domain,
             double distance,
             double spacing,
-            IDictionary<string, int> stack)
+            IDictionary<string, int> stack,
+            double? sourceBaseCoordinate = null)
         {
             var ys = values.Distinct(new DoubleToleranceComparer()).OrderBy(x => x).ToList();
             if (ys.Count < 2) return;
 
             string side;
-            double x;
+            double baseX;
+            double textX;
             if (position == DimensionPosition.Auto)
             {
                 side = "C-V";
                 var index = GetAndIncrement(stack, side);
-                x = (domain.MinX + domain.MaxX) * 0.5 + index * spacing;
+                baseX = (domain.MinX + domain.MaxX) * 0.5;
+                textX = baseX + index * spacing;
             }
             else if (position == DimensionPosition.Left || position == DimensionPosition.Bottom)
             {
                 side = "L";
                 var index = GetAndIncrement(stack, side);
-                x = domain.MinX - distance - index * spacing;
+                baseX = domain.MinX;
+                textX = domain.MinX - distance - index * spacing;
             }
             else
             {
                 side = "R";
                 var index = GetAndIncrement(stack, side);
-                x = domain.MaxX + distance + index * spacing;
+                baseX = domain.MaxX;
+                textX = domain.MaxX + distance + index * spacing;
             }
+
+            if (sourceBaseCoordinate.HasValue) baseX = sourceBaseCoordinate.Value;
 
             for (var i = 0; i + 1 < ys.Count; i++)
             {
                 if (Math.Abs(ys[i + 1] - ys[i]) <= 1.0) continue;
-                var e1 = Transform2.ToWorld(new Point2(x, ys[i]), radians);
-                var e2 = Transform2.ToWorld(new Point2(x, ys[i + 1]), radians);
-                var dimLine = Transform2.ToWorld(new Point2(x, (ys[i] + ys[i + 1]) * 0.5), radians);
+                var e1 = Transform2.ToWorld(new Point2(baseX, ys[i]), radians);
+                var e2 = Transform2.ToWorld(new Point2(baseX, ys[i + 1]), radians);
+                var dimLine = Transform2.ToWorld(new Point2(textX, (ys[i] + ys[i + 1]) * 0.5), radians);
                 plan.Dimensions.Add(new PreviewDimension(e1, e2, dimLine, radians + Math.PI / 2.0, target));
             }
         }
@@ -669,38 +677,45 @@ namespace HNL.VXT.Core.Preview
             Box2 domain,
             double distance,
             double spacing,
-            IDictionary<string, int> stack)
+            IDictionary<string, int> stack,
+            double? sourceBaseCoordinate = null)
         {
             var xs = values.Distinct(new DoubleToleranceComparer()).OrderBy(x => x).ToList();
             if (xs.Count < 2) return;
 
             string side;
-            double y;
+            double baseY;
+            double textY;
             if (position == DimensionPosition.Auto)
             {
                 side = "C-H";
                 var index = GetAndIncrement(stack, side);
-                y = (domain.MinY + domain.MaxY) * 0.5 + index * spacing;
+                baseY = (domain.MinY + domain.MaxY) * 0.5;
+                textY = baseY + index * spacing;
             }
             else if (position == DimensionPosition.Top || position == DimensionPosition.Left)
             {
                 side = "T";
                 var index = GetAndIncrement(stack, side);
-                y = domain.MaxY + distance + index * spacing;
+                baseY = domain.MaxY;
+                textY = domain.MaxY + distance + index * spacing;
             }
             else
             {
                 side = "B";
                 var index = GetAndIncrement(stack, side);
-                y = domain.MinY - distance - index * spacing;
+                baseY = domain.MinY;
+                textY = domain.MinY - distance - index * spacing;
             }
+
+            if (sourceBaseCoordinate.HasValue) baseY = sourceBaseCoordinate.Value;
 
             for (var i = 0; i + 1 < xs.Count; i++)
             {
                 if (Math.Abs(xs[i + 1] - xs[i]) <= 1.0) continue;
-                var e1 = Transform2.ToWorld(new Point2(xs[i], y), radians);
-                var e2 = Transform2.ToWorld(new Point2(xs[i + 1], y), radians);
-                var dimLine = Transform2.ToWorld(new Point2((xs[i] + xs[i + 1]) * 0.5, y), radians);
+                var e1 = Transform2.ToWorld(new Point2(xs[i], baseY), radians);
+                var e2 = Transform2.ToWorld(new Point2(xs[i + 1], baseY), radians);
+                var dimLine = Transform2.ToWorld(new Point2((xs[i] + xs[i + 1]) * 0.5, textY), radians);
                 plan.Dimensions.Add(new PreviewDimension(e1, e2, dimLine, radians, target));
             }
         }
