@@ -14,6 +14,8 @@ namespace HNL.VXT.Core.Models
         public double MainSkipLimit { get; set; } = 500.0;
         public MainDirectionMode MainDirection { get; set; } = MainDirectionMode.Horizontal;
         public MainLayoutMode MainLayout { get; set; } = MainLayoutMode.BalancedTwoEnds;
+        // Lisp hỏi "Trần có đi Shadowline không?" khi chọn Auto và mặc định <Yes>.
+        public bool AutoShadowline { get; set; } = true;
 
         // Xương phụ - parity V6.7.4
         public bool DrawFurring = true;
