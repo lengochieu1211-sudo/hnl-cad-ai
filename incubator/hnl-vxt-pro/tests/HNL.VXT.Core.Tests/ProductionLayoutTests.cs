@@ -43,6 +43,41 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void SmartLayout_ExactLegacyResultFor4000Run_Is300_850x4_300()
+        {
+            // Direct Golden from legacy calc-smart-layout with L=4000,
+            // max/min spacing=1000/700, max/min edge=400/300, multiple=50.
+            var result = SmartLayout1D.Calculate(4000, 1000, 700, 400, 300, 50, MainLayoutMode.BalancedTwoEnds);
+            Assert.IsNotNull(result);
+            Assert.AreEqual(300.0, result.StartOffset, 1e-8);
+            CollectionAssert.AreEqual(new[] { 850.0, 850.0, 850.0, 850.0 }, result.Steps.ToArray());
+            Assert.AreEqual(300.0, result.EndOffset, 1e-8);
+            CollectionAssert.AreEqual(new[] { 300.0, 1150.0, 2000.0, 2850.0, 3700.0 }, result.Positions(0).ToArray());
+        }
+
+        [TestMethod]
+        public void AutoDirection_FollowsLegacyShadowlineRule()
+        {
+            var withShadowline = new VxtSettings
+            {
+                MainDirection = MainDirectionMode.Auto,
+                AutoShadowline = true,
+                DrawFurring = false,
+                DrawHangers = false
+            };
+            var withoutShadowline = withShadowline.Clone();
+            withoutShadowline.AutoShadowline = false;
+
+            var longSide = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), withShadowline);
+            var shortSide = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), withoutShadowline);
+
+            Assert.IsTrue(longSide.Lines.Where(x => x.Kind == PreviewLineKind.Main)
+                .All(x => Math.Abs(x.A.Y - x.B.Y) < 1e-6), "Shadowline=Yes must follow the long side on a 6000x4000 region.");
+            Assert.IsTrue(shortSide.Lines.Where(x => x.Kind == PreviewLineKind.Main)
+                .All(x => Math.Abs(x.A.X - x.B.X) < 1e-6), "Shadowline=No must follow the short side on a 6000x4000 region.");
+        }
+
+        [TestMethod]
         public void MainSkipLimit_SkipsWholeShortRegionLikeV674()
         {
             var settings = new VxtSettings { MainSkipLimit = 500.0 };
@@ -141,6 +176,46 @@ namespace HNL.VXT.Core.Tests
             Assert.IsTrue(plan.Dimensions.Count > 0);
             Assert.AreEqual(plan.Dimensions.Count, plan.DimensionSegmentCount);
             Assert.IsFalse(plan.Lines.Any(x => x.Kind == PreviewLineKind.Dimension || x.Kind == PreviewLineKind.DimensionExtension));
+        }
+
+        [TestMethod]
+        public void Dimensions_IncludeBothBoundarySegmentsLikeLegacyProcessDims()
+        {
+            var settings = new VxtSettings
+            {
+                DrawFurring = false,
+                DrawHangers = false,
+                AutoDimension = true,
+                DimMain = true,
+                MainDimPosition = DimensionPosition.Left
+            };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings);
+            var dims = plan.Dimensions.Where(d => d.Target == DimensionTarget.Main).ToList();
+            Assert.AreEqual(6, dims.Count, "Legacy process-dims must dimension boundary→first XC, every XC gap, and last XC→boundary.");
+            Assert.AreEqual(300.0, dims.First().ExtensionPoint1.DistanceTo(dims.First().ExtensionPoint2), 1e-6);
+            Assert.AreEqual(300.0, dims.Last().ExtensionPoint1.DistanceTo(dims.Last().ExtensionPoint2), 1e-6);
+        }
+
+        [TestMethod]
+        public void DimensionExtensionPoints_StayOnLegacyBaseLine_NotOnDimTextLine()
+        {
+            var settings = new VxtSettings
+            {
+                DrawFurring = false,
+                DrawHangers = false,
+                AutoDimension = true,
+                DimMain = true,
+                MainDimPosition = DimensionPosition.Left,
+                DimensionDistance = 500.0
+            };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings);
+            var dim = plan.Dimensions.First(d => d.Target == DimensionTarget.Main);
+
+            // Legacy process-dims uses bound_X_min (=0) as extension base, while the dimension
+            // text/line sits at bound_X_min - dim_dist (=-500).
+            Assert.AreEqual(0.0, dim.ExtensionPoint1.X, 1e-6);
+            Assert.AreEqual(0.0, dim.ExtensionPoint2.X, 1e-6);
+            Assert.AreEqual(-500.0, dim.DimensionLinePoint.X, 1e-6);
         }
 
         [TestMethod]
