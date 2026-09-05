@@ -28,8 +28,10 @@ if ($bytes.Length -lt 24 -or
 function Get-HnlPngSize {
   param([byte[]]$Data)
   if ($Data.Length -lt 24) { throw 'PNG stream is too short.' }
-  $width = (($Data[16] -shl 24) -bor ($Data[17] -shl 16) -bor ($Data[18] -shl 8) -bor $Data[19])
-  $height = (($Data[20] -shl 24) -bor ($Data[21] -shl 16) -bor ($Data[22] -shl 8) -bor $Data[23])
+  # PNG IHDR width/height are unsigned 32-bit big-endian values. Multiplication avoids
+  # PowerShell preserving the [byte] type across -shl operations and overflowing to zero.
+  $width = ([int64]$Data[16] * 16777216) + ([int64]$Data[17] * 65536) + ([int64]$Data[18] * 256) + [int64]$Data[19]
+  $height = ([int64]$Data[20] * 16777216) + ([int64]$Data[21] * 65536) + ([int64]$Data[22] * 256) + [int64]$Data[23]
   return @([int]$width, [int]$height)
 }
 
