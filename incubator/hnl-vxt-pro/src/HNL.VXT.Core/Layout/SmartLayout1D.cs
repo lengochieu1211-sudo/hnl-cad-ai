@@ -238,6 +238,7 @@ namespace HNL.VXT.Core.Layout
             double increment)
         {
             var x = (idealCoordinates ?? Enumerable.Empty<double>()).ToList();
+            var ideal = x.ToArray();
             var obstacles = (obstacleIntervals ?? Enumerable.Empty<Tuple<double, double>>()).ToList();
             if (x.Count == 0 || obstacles.Count == 0) return x;
             if (increment <= Eps) increment = 1.0;
@@ -325,8 +326,104 @@ namespace HNL.VXT.Core.Layout
                 }
                 iteration++;
             }
+
+            // V7 safety fallback: the legacy forward/back repair can oscillate when an obstacle
+            // occupies the entire legal edge band (for example an equipment box from 230..470
+            // while the required first edge is 300..400). In that impossible case the legacy
+            // loop may finish with a member still crossing equipment. Preserve the legacy result
+            // whenever it is clear; otherwise move only the residual colliding coordinates to the
+            // nearest collision-free rounded position, prioritizing spacing/edge compliance and
+            // then minimum displacement. Safety (never crossing selected equipment) has priority
+            // over an impossible combination of spacing/edge constraints.
+            for (var pass = 0; pass < 4; pass++)
+            {
+                var anyMoved = false;
+                for (var i = 0; i < x.Count; i++)
+                {
+                    if (!Collides(x[i], obstacles)) continue;
+                    var safe = FindSafetyCoordinate(
+                        i, x, ideal, obstacles, minLimit, maxLimit,
+                        minSpacing, maxSpacing, minEdge, maxEdge, increment);
+                    if (!double.IsNaN(safe) && Math.Abs(safe - x[i]) > Eps)
+                    {
+                        x[i] = safe;
+                        anyMoved = true;
+                    }
+                }
+                if (!anyMoved || x.All(v => !Collides(v, obstacles))) break;
+            }
+
             return x;
         }
+
+        private static double FindSafetyCoordinate(
+            int index,
+            IList<double> current,
+            IReadOnlyList<double> ideal,
+            IReadOnlyList<Tuple<double, double>> obstacles,
+            double minLimit,
+            double maxLimit,
+            double minSpacing,
+            double maxSpacing,
+            double minEdge,
+            double maxEdge,
+            double increment)
+        {
+            var candidates = new HashSet<double>();
+            foreach (var box in obstacles)
+            {
+                var left = FloorMultiple(box.Item1, increment);
+                var right = CeilMultiple(box.Item2, increment);
+                candidates.Add(left);
+                candidates.Add(right);
+                // Also search a few rounded positions outward in case adjacent obstacle bands touch.
+                for (var k = 1; k <= 8; k++)
+                {
+                    candidates.Add(left - k * increment);
+                    candidates.Add(right + k * increment);
+                }
+            }
+
+            var best = double.NaN;
+            var bestScore = double.MaxValue;
+            foreach (var candidate in candidates)
+            {
+                if (candidate <= minLimit + Eps || candidate >= maxLimit - Eps) continue;
+                if (Collides(candidate, obstacles)) continue;
+
+                var score = 0.0;
+                if (index == 0)
+                    score += ConstraintPenalty(candidate - minLimit, minEdge, maxEdge);
+                if (index == current.Count - 1)
+                    score += ConstraintPenalty(maxLimit - candidate, minEdge, maxEdge);
+                if (index > 0)
+                    score += ConstraintPenalty(candidate - current[index - 1], minSpacing, maxSpacing);
+                if (index + 1 < current.Count)
+                    score += ConstraintPenalty(current[index + 1] - candidate, minSpacing, maxSpacing);
+
+                // Keep the fallback as close as possible to the Lisp-produced ideal grid after
+                // satisfying as many engineering constraints as the geometry allows.
+                score += Math.Abs(candidate - ideal[index]);
+                if (score < bestScore - Eps ||
+                    (Math.Abs(score - bestScore) <= Eps &&
+                     Math.Abs(candidate - ideal[index]) < Math.Abs(best - ideal[index])))
+                {
+                    bestScore = score;
+                    best = candidate;
+                }
+            }
+            return best;
+        }
+
+        private static double ConstraintPenalty(double distance, double min, double max)
+        {
+            if (distance < min - 0.1) return 100000.0 + 10000.0 * (min - distance);
+            if (distance > max + 0.1) return 100000.0 + 10000.0 * (distance - max);
+            return 0.0;
+        }
+
+        private static bool Collides(double value, IEnumerable<Tuple<double, double>> obstacles)
+            => obstacles.Any(box => value > box.Item1 + 0.1 && value < box.Item2 - 0.1);
 
         public static double OptimizeOffset(
             Result layout,
