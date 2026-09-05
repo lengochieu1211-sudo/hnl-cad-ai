@@ -94,6 +94,9 @@ jobs:
       - name: Bridge P0 audit
         run: npm run audit:bridge
 
+      - name: AI CAD Agent audit
+        run: npm run audit:ai-agent
+
       - name: TypeScript audit
         run: npm run lint
 
