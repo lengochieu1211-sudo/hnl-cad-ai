@@ -1,4 +1,4 @@
-# BUILD HNL CAD AI v2.8.1 thanh .EXE dung duoc voi AutoCAD
+# BUILD HNL CAD AI v2.8.2 thanh .EXE dung duoc voi AutoCAD
 
 1. Cai Node.js, .NET SDK 8.x va .NET SDK 10.x tren may build. AutoCAD DLL 2023/2024 build `net48`, AutoCAD DLL 2025/2026 build `net8.0-windows`, AutoCAD DLL 2027 build `net10.0-windows`.
 2. Chay `npm install`.
@@ -8,10 +8,10 @@
 
 Ket qua:
 
-- Installer Windows: `dist_electron\HNL_CAD_AI_Setup_2.8.1.exe`.
+- Installer Windows: `dist_electron\HNL_CAD_AI_Setup_2.8.2.exe`.
 - AutoCAD bundle: `autocad-plugin\HNL.CadBridge.bundle`.
-- GitHub artifact installer: `HNL-CAD-AI-v2.8.1-Windows-Installer`.
-- GitHub artifact AutoCAD bundle: `HNL-CAD-AI-v2.8.1-AutoCAD-Plugin-Bundle`.
+- GitHub artifact installer: `HNL-CAD-AI-v2.8.2-Windows-Installer`.
+- GitHub artifact AutoCAD bundle: `HNL-CAD-AI-v2.8.2-AutoCAD-Plugin-Bundle`.
 
 Luu y CAD:
 

@@ -1,4 +1,4 @@
-# HNL CAD AI v2.8.1
+# HNL CAD AI v2.8.2
 
 HNL CAD AI là ứng dụng CAD/Shopdrawing dạng Windows Desktop (Electron) có hai chế độ kiến trúc:
 

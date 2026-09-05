@@ -21,7 +21,7 @@ namespace Hnl.CadBridge;
 
 public sealed class BridgeCommands : IExtensionApplication
 {
-    internal const string PluginVersion = "2.8.1";
+    internal const string PluginVersion = "2.8.2";
     private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
     private static readonly ConcurrentQueue<JObject> UiActions = new ConcurrentQueue<JObject>();
     private static readonly ConcurrentDictionary<string, byte> CancelledActionIds = new ConcurrentDictionary<string, byte>();

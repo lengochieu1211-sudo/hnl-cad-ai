@@ -46,6 +46,7 @@ import {
   INITIAL_TRANSLATION_MEMORY,
   INITIAL_AUDIT_ISSUES,
 } from "./lib/initialData";
+import { validateAiPlanForExecution } from "./lib/aiCadAgent";
 import {
   INITIAL_SMART_OBJECTS,
   buildLogicalProjectTree,
@@ -1168,28 +1169,76 @@ export default function App() {
     showToast(`Đã thêm đối tượng [${entity.type}] vào Model Space`);
   };
 
-  // AI Plan Execution Dispatcher
-  const handleExecutePlan = (plan: AICommandPlan) => {
-    if (directDwgMode && autoCadBridgeStatus.connected && (plan.actionType === "DRAW_WALL" || plan.actionType === "DRAW_CEILING")) {
-      setIsSmartShopdrawingOpen(true);
-      showToast(`AI đã tạo kế hoạch ${plan.actionType}; Direct DWG yêu cầu Preview/xác nhận trong Smart Shopdrawing trước khi ghi vào DWG.`);
+  // AI Plan Execution Dispatcher — Safe Agent Gateway.
+  // AI never gets raw EXECUTE_COMMAND access here; only whitelisted structured tools are mapped to Bridge actions.
+  const handleExecutePlan = async (plan: AICommandPlan) => {
+    const gate = validateAiPlanForExecution(plan);
+    if ("reason" in gate) {
+      showToast(`AI Agent chặn: ${gate.reason}`);
       return;
     }
-    if (plan.actionType === "DRAW_WALL") {
-      const newWall: CadWall = {
-        id: `wall_${Date.now()}`,
-        handle: Math.random().toString(16).substring(2, 6).toUpperCase(),
-        type: "WALL",
-        layer: "KT_TUONG",
-        color: plan.intent.includes("200") ? "#00E5FF" : "#FF9100",
-        p1: { x: 0, y: 0 },
-        p2: { x: 6000, y: 0 },
-        thickness: plan.intent.includes("200") ? 200 : 100,
-        wallType: plan.intent.includes("200") ? "BRICK_200" : "BRICK_100",
-      };
-      updateEntitiesWithHistory([...entities, newWall]);
-      showToast(`AI: Đã vẽ tường ${newWall.thickness}mm tim trục dài 6000mm!`);
-    } else if (plan.actionType === "DRAW_CEILING") {
+
+    const actionType = String(plan.actionType || "").toUpperCase();
+    const params:any = Array.isArray(plan.steps) ? (plan.steps.find((s:any)=>s?.parameters)?.parameters || {}) : {};
+
+    // Selection-safe property change: only current selection, never model-wide.
+    if (actionType === "SET_LAYER") {
+      const layer = String(params.layer || params.layerName || "").trim();
+      if (!layer) { showToast("AI Agent chặn: SET_LAYER thiếu layer."); return; }
+      if (directDwgMode && autoCadBridgeStatus.connected) {
+        const handles = entities.filter((e:any)=>selectedEntityIds.includes(e.id)).map((e:any)=>String(e.handle||"")).filter(Boolean);
+        if (!handles.length) { showToast("AI Agent: chưa có selection native để đổi layer."); return; }
+        const result:any = await executeAutoCadAction("SET_ENTITY_LAYER", { handles, layer });
+        if (!result?.ok) { showToast(`AI Agent SET_LAYER lỗi: ${result?.error || result?.reason || "Bridge error"}`); return; }
+        await refreshDirectDwgSnapshot(true);
+        showToast(`AI Agent: đã chuyển ${handles.length} đối tượng sang layer ${layer}.`);
+        return;
+      }
+      if (!selectedEntityIds.length) { showToast("AI Agent: chưa chọn đối tượng để đổi layer."); return; }
+      updateEntitiesWithHistory(entities.map((e:any)=>selectedEntityIds.includes(e.id) ? { ...e, layer } : e));
+      showToast(`AI Agent: đã đổi layer selection sang ${layer}.`);
+      return;
+    }
+
+    // Native create tools are executed strictly from validated Preview entities.
+    if (gate.entities.length > 0) {
+      if (directDwgMode && autoCadBridgeStatus.connected) {
+        const createdHandles:string[] = [];
+        for (const entity of gate.entities) {
+          const result:any = await executeAutoCadAction("CREATE_NATIVE_ENTITY", { entity });
+          if (!result?.ok) {
+            if (createdHandles.length) await executeAutoCadAction("ERASE_HANDLES", { handles: createdHandles });
+            await refreshDirectDwgSnapshot(true);
+            showToast(`AI Agent rollback: ${result?.error || result?.reason || "CREATE_NATIVE_ENTITY lỗi"}`);
+            return;
+          }
+          if (result?.handle) createdHandles.push(String(result.handle));
+        }
+        await refreshDirectDwgSnapshot(true);
+        showToast(`AI Agent: đã tạo ${createdHandles.length} entity native trong AutoCAD.`);
+        return;
+      }
+
+      const now = Date.now();
+      const created = gate.entities.map((raw:any, index:number) => ({
+        ...raw,
+        id: raw.id || `ai_${now}_${index}`,
+        handle: raw.handle || Math.random().toString(16).substring(2, 10).toUpperCase(),
+        layer: raw.layer || "0",
+        color: raw.color || "#00E5FF",
+      })) as CadEntity[];
+      updateEntitiesWithHistory([...entities, ...created]);
+      showToast(`AI Agent: đã tạo ${created.length} entity trong HNL Canvas.`);
+      return;
+    }
+
+    // Existing high-level HNL engines remain behind their own preview/validation workflows.
+    if (directDwgMode && autoCadBridgeStatus.connected && (actionType === "DRAW_WALL" || actionType === "DRAW_CEILING")) {
+      setIsSmartShopdrawingOpen(true);
+      showToast(`AI đã tạo kế hoạch ${actionType}; Direct DWG yêu cầu Preview/xác nhận trong Smart Shopdrawing trước khi ghi vào DWG.`);
+      return;
+    }
+    if (actionType === "DRAW_CEILING") {
       const newCeiling: CadCeilingGrid = {
         id: `ceil_${Date.now()}`,
         handle: Math.random().toString(16).substring(2, 6).toUpperCase(),
@@ -1210,11 +1259,11 @@ export default function App() {
       };
       updateEntitiesWithHistory([...entities, newCeiling]);
       showToast(`AI: Đã bố trí hệ trần chìm (xương phụ 1220/3 = ${(1220/3).toFixed(2)}mm).`);
-    } else if (plan.actionType === "AUTO_LAYOUT") {
+    } else if (actionType === "AUTO_LAYOUT") {
       handleExecuteCommand("AUTO_LAYOUT_A3");
-    } else if (plan.actionType === "CALC_AREA") {
+    } else if (actionType === "CALC_AREA") {
       handleExecuteCommand("LABEL_ROOM_AREAS");
-    } else if (plan.actionType === "TRANSLATE") {
+    } else if (actionType === "TRANSLATE") {
       handleTranslateDrawing("Bilingual", "en");
     } else {
       showToast(`AI Planner chưa có executor an toàn cho tác vụ: ${plan.intent}. Không có thay đổi nào được áp dụng.`);

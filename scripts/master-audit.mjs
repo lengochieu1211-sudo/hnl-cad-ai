@@ -16,6 +16,7 @@ const electron=read("electron/main.cjs");
 const server=read("server.ts");
 const workflow=read(".github/workflows/build-windows.yml");
 const ai=read("src/components/Dialogs/AiProviderManager.tsx");
+const aiProviderCatalog=read("src/lib/aiProviderCatalog.ts");
 const lispBuilder=read("src/components/Dialogs/LispBuilderModal.tsx");
 const autoBridge=read("src/lib/autoCadBridge.ts");
 const promptHits=[app,canvas,diag].reduce((n,x)=>n+(x.match(/window\.prompt\s*\(/g)||[]).length,0);
@@ -36,7 +37,7 @@ check("WEB_RIBBON_NO_DUP_SHOP",(ribbon.match(/>Smart Shopdrawing Platform<\/butt
 check("LIBRARY_QUEUE",bridge.includes('CommandMethod("HNLINSERTPENDING"')&&bridge.includes("PendingLibraryInserts"),"non-blocking point prompt");
 check("BOQ_NATIVE",bridge.includes('"GET_HNL_BOQ" => GetHnlBoq()'),"native tagged BOQ endpoint");
 check("SHOP_AUDIT_NATIVE",bridge.includes('"AUDIT_HNL_SHOPDRAWING" => AuditHnlShopdrawing()'),"native shop audit endpoint");
-check("AI_NO_SILENT_FALLBACK",ai.includes("autoFallbackOffline:false")&&electron.includes("autoFallbackOffline: false")&&server.includes('HNL_AI_AUTO_FALLBACK_OFFLINE || "false"'),"fallback requires explicit opt-in");
+check("AI_NO_SILENT_FALLBACK",aiProviderCatalog.includes("autoFallbackOffline:false")&&electron.includes("autoFallbackOffline: false")&&server.includes('HNL_AI_AUTO_FALLBACK_OFFLINE || "false"'),"fallback requires explicit opt-in");
 check("AI_LISP_ONLINE_PAYLOAD",lispBuilder.includes("data?.lisp || (data?.code ? data : null)"),"online/offline payload normalized");
 check("INSTALLER_PLUGIN",electron.includes("ApplicationPlugins")&&workflow.includes("Build AutoCAD plugins 2023-2027"),"one-click plugin path + build");
 check("WORKFLOW_CURRENT_RIBBON",workflow.includes('"Block / Attr"')&&workflow.includes('"Dim+"')&&!workflow.includes('"Field Doctor","Quick Dim"'),"workflow gate matches current ribbon");

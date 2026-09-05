@@ -1034,13 +1034,17 @@ ipcMain.handle('open-external-url', async (_event, url) => {
 ipcMain.handle('set-renderer-dirty', (_event, value) => { isRendererDirty = Boolean(value); return true; });
 ipcMain.handle('set-window-title', (_event, title) => { if (mainWindow && typeof title === 'string') mainWindow.setTitle(title.slice(0, 240)); return true; });
 
-const AI_PROVIDER_IDS = ['OFFLINE','GEMINI','OPENAI','CLAUDE','GROK','OLLAMA','CUSTOM_OPENAI'];
+const AI_PROVIDER_IDS = ['OFFLINE','GEMINI','OPENAI','CLAUDE','GROK','GROQ','OPENROUTER','MISTRAL','HUGGINGFACE','OLLAMA','CUSTOM_OPENAI'];
 const AI_PROVIDER_DEFAULTS = {
   OFFLINE: { model:'hnl-rules-v1', baseUrl:'' },
   GEMINI: { model:'gemini-3.7-flash', baseUrl:'https://generativelanguage.googleapis.com' },
   OPENAI: { model:'gpt-5.6', baseUrl:'https://api.openai.com/v1' },
   CLAUDE: { model:'claude-sonnet-4-20250514', baseUrl:'https://api.anthropic.com/v1' },
   GROK: { model:'grok-4.6', baseUrl:'https://api.x.ai/v1' },
+  GROQ: { model:'openai/gpt-oss-120b', baseUrl:'https://api.groq.com/openai/v1' },
+  OPENROUTER: { model:'openai/gpt-oss-20b:free', baseUrl:'https://openrouter.ai/api/v1' },
+  MISTRAL: { model:'mistral-small-latest', baseUrl:'https://api.mistral.ai/v1' },
+  HUGGINGFACE: { model:'openai/gpt-oss-120b:fastest', baseUrl:'https://router.huggingface.co/v1' },
   OLLAMA: { model:'gemma3', baseUrl:'http://127.0.0.1:11434' },
   CUSTOM_OPENAI: { model:'gpt-4o-mini', baseUrl:'http://127.0.0.1:1234/v1' },
 };
@@ -1109,6 +1113,10 @@ function applyAiProviderStateToEnv(config = readAiProviderConfig(), secrets = re
   process.env.OPENAI_API_KEY = String(secrets.OPENAI || process.env.OPENAI_API_KEY || '');
   process.env.ANTHROPIC_API_KEY = String(secrets.CLAUDE || process.env.ANTHROPIC_API_KEY || '');
   process.env.XAI_API_KEY = String(secrets.GROK || process.env.XAI_API_KEY || '');
+  process.env.GROQ_API_KEY = String(secrets.GROQ || process.env.GROQ_API_KEY || '');
+  process.env.OPENROUTER_API_KEY = String(secrets.OPENROUTER || process.env.OPENROUTER_API_KEY || '');
+  process.env.MISTRAL_API_KEY = String(secrets.MISTRAL || process.env.MISTRAL_API_KEY || '');
+  process.env.HF_TOKEN = String(secrets.HUGGINGFACE || process.env.HF_TOKEN || '');
   process.env.CUSTOM_OPENAI_API_KEY = String(secrets.CUSTOM_OPENAI || process.env.CUSTOM_OPENAI_API_KEY || '');
 }
 
@@ -1119,7 +1127,7 @@ function publicAiProviderConfig() {
     ...cfg,
     configured: Object.fromEntries(AI_PROVIDER_IDS.map(id => [
       id,
-      id === 'OFFLINE' || id === 'OLLAMA' || Boolean(secrets[id])
+      id === 'OFFLINE' || id === 'OLLAMA' || id === 'CUSTOM_OPENAI' || Boolean(secrets[id])
     ])),
   };
 }

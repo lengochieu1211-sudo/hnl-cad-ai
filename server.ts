@@ -28,6 +28,10 @@ type AiProviderId =
   | "OPENAI"
   | "CLAUDE"
   | "GROK"
+  | "GROQ"
+  | "OPENROUTER"
+  | "MISTRAL"
+  | "HUGGINGFACE"
   | "OLLAMA"
   | "CUSTOM_OPENAI";
 
@@ -46,6 +50,10 @@ const PROVIDER_DEFAULTS: Record<AiProviderId, {label:string; model:string; baseU
   OPENAI: { label: "ChatGPT / OpenAI", model: "gpt-5.6", baseUrl: "https://api.openai.com/v1", keyEnv: "OPENAI_API_KEY" },
   CLAUDE: { label: "Claude / Anthropic", model: "claude-sonnet-4-20250514", baseUrl: "https://api.anthropic.com/v1", keyEnv: "ANTHROPIC_API_KEY" },
   GROK: { label: "Grok / xAI", model: "grok-4.6", baseUrl: "https://api.x.ai/v1", keyEnv: "XAI_API_KEY" },
+  GROQ: { label: "GroqCloud", model: "openai/gpt-oss-120b", baseUrl: "https://api.groq.com/openai/v1", keyEnv: "GROQ_API_KEY" },
+  OPENROUTER: { label: "OpenRouter", model: "openai/gpt-oss-20b:free", baseUrl: "https://openrouter.ai/api/v1", keyEnv: "OPENROUTER_API_KEY" },
+  MISTRAL: { label: "Mistral AI", model: "mistral-small-latest", baseUrl: "https://api.mistral.ai/v1", keyEnv: "MISTRAL_API_KEY" },
+  HUGGINGFACE: { label: "Hugging Face Inference", model: "openai/gpt-oss-120b:fastest", baseUrl: "https://router.huggingface.co/v1", keyEnv: "HF_TOKEN" },
   OLLAMA: { label: "Ollama Local", model: "gemma3", baseUrl: "http://127.0.0.1:11434" },
   CUSTOM_OPENAI: { label: "Custom OpenAI-compatible", model: "gpt-4o-mini", baseUrl: "http://127.0.0.1:1234/v1", keyEnv: "CUSTOM_OPENAI_API_KEY" },
 };
@@ -59,14 +67,15 @@ function providerEnvPrefix(id: AiProviderId) {
   return `HNL_AI_${id}`;
 }
 
-function getProviderConfig(idValue?: unknown): AiProviderConfig {
+function getProviderConfig(idValue?: unknown, modelOverride?: unknown): AiProviderConfig {
   const id = normalizeProviderId(idValue);
   const def = PROVIDER_DEFAULTS[id];
   const prefix = providerEnvPrefix(id);
-  const model = process.env[`${prefix}_MODEL`] || def.model;
+  const requestedModel = typeof modelOverride === "string" ? modelOverride.trim() : "";
+  const model = requestedModel || process.env[`${prefix}_MODEL`] || def.model;
   const baseUrl = (process.env[`${prefix}_BASE_URL`] || def.baseUrl).replace(/\/+$/, "");
   const apiKey = def.keyEnv ? (process.env[def.keyEnv] || "") : (id === "CUSTOM_OPENAI" ? (process.env.CUSTOM_OPENAI_API_KEY || "") : "");
-  const configured = id === "OFFLINE" || id === "OLLAMA" || Boolean(apiKey);
+  const configured = id === "OFFLINE" || id === "OLLAMA" || id === "CUSTOM_OPENAI" || Boolean(apiKey);
   return { id, label: def.label, model, baseUrl, apiKey, configured };
 }
 
@@ -156,8 +165,9 @@ async function callAiText(args: {
   prompt: string;
   systemInstruction?: string;
   jsonMode?: boolean;
+  model?: unknown;
 }): Promise<{text:string; provider:AiProviderId; model:string}> {
-  const cfg = getProviderConfig(args.provider);
+  const cfg = getProviderConfig(args.provider, args.model);
   const system = args.systemInstruction || "Bạn là trợ lý kỹ sư CAD của HNL.";
   const userPrompt = args.jsonMode
     ? `${args.prompt}\n\nYÊU CẦU ĐẦU RA: Chỉ trả JSON hợp lệ, không markdown fence.`
@@ -220,6 +230,28 @@ async function callAiText(args: {
     });
     const data = await readJsonResponse(response);
     return { text: extractClaudeText(data), provider: cfg.id, model: cfg.model };
+  }
+
+  if (["GROQ","OPENROUTER","MISTRAL","HUGGINGFACE"].includes(cfg.id)) {
+    if (!cfg.apiKey) throw new Error(`${cfg.label} API key chưa cấu hình.`);
+    const response = await fetch(openAiChatUrl(cfg.baseUrl), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${cfg.apiKey}`,
+        ...(cfg.id === "OPENROUTER" ? { "X-Title": "HNL CAD AI" } : {}),
+      },
+      body: JSON.stringify({
+        model: cfg.model,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userPrompt },
+        ],
+        stream: false,
+      }),
+    });
+    const data = await readJsonResponse(response);
+    return { text: extractOpenAiResponseText(data), provider: cfg.id, model: cfg.model };
   }
 
   if (cfg.id === "OLLAMA") {
@@ -548,6 +580,7 @@ app.post("/api/ai/test", async (req, res) => {
   try {
     const result = await callAiText({
       provider,
+      model: req.body?.model,
       prompt: "Return exactly: HNL_OK",
       systemInstruction: "You are a connectivity test. Return exactly HNL_OK.",
       jsonMode: false,
@@ -560,6 +593,33 @@ app.post("/api/ai/test", async (req, res) => {
     });
   } catch (err:any) {
     res.status(400).json({ ok: false, provider, error: err?.message || String(err) });
+  }
+});
+
+app.post("/api/ai/chat", async (req, res) => {
+  try {
+    const prompt = String(req.body?.prompt || "").trim();
+    if (!prompt) return res.status(400).json({ error: "Prompt is required" });
+    const selected = normalizeProviderId(req.body?.provider);
+    if (selected === "OFFLINE") {
+      return res.json({
+        answer: "HNL Offline Rules chỉ hỗ trợ phân tích CAD có cấu trúc. Hãy chuyển sang Preview/Agent hoặc chọn AI online/local.",
+        provider: "OFFLINE",
+        model: "hnl-rules-v1",
+      });
+    }
+    if (!hasOnlineProvider(selected)) return res.status(400).json({ error: `${selected} chưa được cấu hình. HNL không tự đổi provider.` });
+    const cadContext = req.body?.cadContext || {};
+    const answer = await callAiText({
+      provider: selected,
+      model: req.body?.model,
+      systemInstruction: `Bạn là HNL CAD AI Copilot cho kỹ sư AutoCAD. Trả lời trực tiếp, kỹ thuật, ưu tiên CAD Context được cung cấp. Không tuyên bố đã sửa/vẽ DWG nếu chỉ đang ở chế độ hỏi đáp.`,
+      prompt: `Yêu cầu người dùng: ${prompt}\nCAD Context: ${JSON.stringify(cadContext)}`,
+      jsonMode: false,
+    });
+    return res.json({ answer: answer.text, provider: answer.provider, model: answer.model });
+  } catch (err:any) {
+    return res.status(500).json({ error: err?.message || String(err) });
   }
 });
 
@@ -577,19 +637,27 @@ QUY TẮC AN TOÀN:
 Trả JSON:
 {
   "intent": "Mục đích ngắn",
-  "actionType": "DRAW_WALL | DRAW_CEILING | DRAW_RECT | DRAW_POLYLINE | DIMENSION | CALC_AREA | CREATE_TABLE | BATCH_MODIFY | TRANSLATE | AUDIT | AUTO_LAYOUT | EXPORT_BOQ",
+  "actionType": "DRAW_WALL | DRAW_CEILING | DRAW_LINE | DRAW_CIRCLE | DRAW_RECT | DRAW_POLYLINE | ADD_TEXT | DIMENSION | CALC_AREA | CREATE_TABLE | SET_LAYER | MOVE_SELECTION | BATCH_MODIFY | TRANSLATE | AUDIT | AUTO_LAYOUT | EXPORT_BOQ",
   "isDestructive": false,
   "confidence": 0.0,
   "certainty": "APPROVED_PROJECT | MANUFACTURER_VERIFIED | HNL_PROJECT_RULE | UNVERIFIED",
   "explanation": "Giải thích cho kỹ sư",
   "sourceRefs": [{"type":"APPROVED_SUBMITTAL | PROJECT_SPEC | MANUFACTURER | HNL_RULE","title":"...","revision":"...","note":"..."}],
   "steps": [{"stepIndex":1,"command":"CAD_COMMAND_NAME","description":"...","parameters":{}}],
-  "previewData": {"entityType":"WALL | CEILING_GRID | RECTANGLE | TABLE | DIMENSION | TEXT","entitiesToAdd":[],"entitiesToModify":[],"entitiesToDelete":[]}
-}`;
+  "previewData": {"entityType":"LINE | WALL | CIRCLE | POLYLINE | RECTANGLE | TEXT | MTEXT | CEILING_GRID | TABLE | DIMENSION","entitiesToAdd":[],"entitiesToModify":[],"entitiesToDelete":[]}
+}
+
+CAD AGENT TOOL CONTRACT:
+- Chỉ tạo native entity bằng các type: LINE, WALL, CIRCLE, POLYLINE, RECTANGLE, TEXT, MTEXT.
+- Với DRAW_LINE/DRAW_CIRCLE/DRAW_RECT/DRAW_POLYLINE/ADD_TEXT phải điền previewData.entitiesToAdd với đầy đủ tọa độ, layer và thông số; không dùng raw EXECUTE_COMMAND.
+- SET_LAYER/MOVE_SELECTION chỉ áp dụng selection hiện tại và phải ghi parameters cụ thể.
+- DIMENSION/DELETE/PURGE/REPLACE/BATCH_MODIFY không được giả vờ đã thực thi nếu executor chưa hỗ trợ.
+- Preview/Agent đều chỉ sinh plan. Renderer HNL quyết định có cho Execute hay không.
+- Không bao giờ tự Save/Overwrite DWG trong plan AI.`;
 
 async function handleAiPlan(req:any, res:any) {
   try {
-    const { prompt, cadContext, provider } = req.body || {};
+    const { prompt, cadContext, provider, model } = req.body || {};
     if (!prompt) return res.status(400).json({ error: "Prompt is required" });
 
     const selected = normalizeProviderId(provider);
@@ -606,6 +674,7 @@ async function handleAiPlan(req:any, res:any) {
     try {
       const answer = await callAiText({
         provider: selected,
+        model,
         systemInstruction: CAD_PLAN_SYSTEM_INSTRUCTION,
         prompt: `Yêu cầu người dùng: "${prompt}"
 CAD Context hiện tại:

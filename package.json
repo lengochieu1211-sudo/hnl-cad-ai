@@ -1,7 +1,7 @@
 {
   "name": "hnl-cad-ai",
   "private": true,
-  "version": "2.8.1",
+  "version": "2.8.2",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -15,7 +15,8 @@
     "prepare:lisp": "node scripts/prepare-legacy-lisp.mjs",
     "audit:lisp-taxonomy": "node scripts/audit-lisp-taxonomy.mjs",
     "audit:master": "node scripts/master-audit.mjs",
-    "audit:bridge": "node scripts/audit-bridge-p0.mjs"
+    "audit:bridge": "node scripts/audit-bridge-p0.mjs",
+    "audit:ai-agent": "node scripts/audit-ai-agent.mjs"
   },
   "dependencies": {
     "@google/genai": "2.4.0",
@@ -45,7 +46,7 @@
     "cross-env": "10.0.0"
   },
   "productName": "HNL CAD AI",
-  "description": "HNL CAD AI v2.8.1 - Bridge P0 Golden Verification and queue safety hardening",
+  "description": "HNL CAD AI v2.8.2 - AI CAD Agent Preview + Bridge P0 hardening + AutoCAD 2023-2027",
   "main": "electron/main.cjs",
   "build": {
     "appId": "vn.hnl.cadai",

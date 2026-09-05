@@ -32,6 +32,7 @@ import {
 } from "../../types/cad";
 import { getManufacturerCeilingAiContext } from "../../lib/manufacturerCeilingKnowledge";
 import { getSmartShopdrawingAiContext } from "../../lib/smartShopdrawingPlatform";
+import { AI_PROVIDERS, AI_PROVIDER_MAP, DEFAULT_AI_PROVIDER_CONFIG, type AiProviderId } from "../../lib/aiProviderCatalog";
 
 interface HnlPaletteProps {
   isOpen: boolean;
@@ -82,6 +83,8 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
       sender: "user" | "ai";
       text: string;
       plan?: AICommandPlan;
+      allowExecute?: boolean;
+      mode?: "ASK" | "PREVIEW" | "AGENT";
       timestamp: string;
     }>
   >([
@@ -96,12 +99,63 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
   const [searchBlockQuery, setSearchBlockQuery] = useState("");
   const [selectedBlockCategory, setSelectedBlockCategory] = useState<string>("All");
   const [showAiQuickTools, setShowAiQuickTools] = useState(false);
+  const [aiMode, setAiMode] = useState<"ASK" | "PREVIEW" | "AGENT">("ASK");
+  const [aiProviderConfig, setAiProviderConfig] = useState<any>(DEFAULT_AI_PROVIDER_CONFIG);
+  const [activeProvider, setActiveProvider] = useState<AiProviderId>("GEMINI");
+  const [activeModel, setActiveModel] = useState(AI_PROVIDER_MAP.GEMINI.defaultModel);
+  const activeProviderEntry = AI_PROVIDER_MAP[activeProvider];
 
   useEffect(() => {
     if (!isOpen || activeTab !== "AI_CHAT") return;
     const timer = window.setTimeout(() => aiInputRef.current?.focus(), 80);
     return () => window.clearTimeout(timer);
   }, [isOpen, activeTab]);
+
+  useEffect(() => {
+    let disposed = false;
+    const load = async () => {
+      let merged:any = DEFAULT_AI_PROVIDER_CONFIG;
+      try {
+        const native = (window as any).electronNative;
+        const result = await native?.getAIProviderConfig?.();
+        if (result?.success && result.config) {
+          merged = {
+            ...DEFAULT_AI_PROVIDER_CONFIG,
+            ...result.config,
+            providers: { ...DEFAULT_AI_PROVIDER_CONFIG.providers, ...(result.config.providers || {}) },
+            configured: { ...DEFAULT_AI_PROVIDER_CONFIG.configured, ...(result.config.configured || {}) },
+          };
+        } else {
+          const raw = localStorage.getItem("hnl.ai.providers.v2");
+          if (raw) {
+            const local = JSON.parse(raw);
+            merged = { ...DEFAULT_AI_PROVIDER_CONFIG, ...local, providers: { ...DEFAULT_AI_PROVIDER_CONFIG.providers, ...(local.providers || {}) } };
+          }
+        }
+      } catch {}
+      if (disposed) return;
+      setAiProviderConfig(merged);
+      let quick:any = {};
+      try { quick = JSON.parse(localStorage.getItem("hnl.ai.palette.quick.v1") || "{}"); } catch {}
+      const provider = (AI_PROVIDER_MAP[quick.provider as AiProviderId] ? quick.provider : merged.activeProvider || "GEMINI") as AiProviderId;
+      const model = String(quick.model || merged.providers?.[provider]?.model || AI_PROVIDER_MAP[provider].defaultModel);
+      const mode = ["ASK","PREVIEW","AGENT"].includes(quick.mode) ? quick.mode : "ASK";
+      setActiveProvider(provider);
+      setActiveModel(model);
+      setAiMode(mode);
+    };
+    void load();
+    return () => { disposed = true; };
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem("hnl.ai.palette.quick.v1", JSON.stringify({ provider: activeProvider, model: activeModel, mode: aiMode })); } catch {}
+  }, [activeProvider, activeModel, aiMode]);
+
+  const handleProviderChange = (provider: AiProviderId) => {
+    setActiveProvider(provider);
+    setActiveModel(String(aiProviderConfig.providers?.[provider]?.model || AI_PROVIDER_MAP[provider].defaultModel));
+  };
 
   if (!isOpen) {
     return (
@@ -159,33 +213,57 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
     };
 
     try {
-      const res = await fetch("/api/ai/plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(((window as any).electronNative?.sessionToken) ? { "x-hnl-token": (window as any).electronNative.sessionToken } : {}) },
-        body: JSON.stringify({ prompt: userText, cadContext }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || data?.reason || `HTTP ${res.status}`);
-      const plan: AICommandPlan | undefined = data?.plan;
-      if (!plan || typeof plan !== "object") throw new Error("AI server không trả về Command Plan hợp lệ.");
+      const requestBody = { prompt: userText, cadContext, provider: activeProvider, model: activeModel, mode: aiMode };
+      if (aiMode === "ASK") {
+        const res = await fetch("/api/ai/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(((window as any).electronNative?.sessionToken) ? { "x-hnl-token": (window as any).electronNative.sessionToken } : {}) },
+          body: JSON.stringify(requestBody),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || data?.reason || `HTTP ${res.status}`);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `ai_${Date.now()}`,
+            sender: "ai",
+            text: `${data?.provider ? `[${data.provider}${data.model ? ` • ${data.model}` : ""}] ` : ""}${String(data?.answer || "AI không trả nội dung.")}`,
+            mode: "ASK",
+            timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+          },
+        ]);
+      } else {
+        const res = await fetch("/api/ai/plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(((window as any).electronNative?.sessionToken) ? { "x-hnl-token": (window as any).electronNative.sessionToken } : {}) },
+          body: JSON.stringify(requestBody),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || data?.reason || `HTTP ${res.status}`);
+        const plan: AICommandPlan | undefined = data?.plan;
+        if (!plan || typeof plan !== "object") throw new Error("AI server không trả về Command Plan hợp lệ.");
+        if (!Array.isArray((plan as any).steps)) (plan as any).steps = [];
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `ai_${Date.now()}`,
-          sender: "ai",
-          text: `${data?.provider ? `[${data.provider}${data.model ? ` • ${data.model}` : ""}] ` : ""}${plan.explanation || `Đã phân tích yêu cầu: ${plan.intent || userText}`}${Array.isArray((plan as any).sourceRefs) && (plan as any).sourceRefs.length ? `\nNguồn: ${(plan as any).sourceRefs.map((src:any)=>`${src.title || src.type}${src.revision ? ` (${src.revision})` : ""}`).join(" • ")}` : ""}${(plan as any).certainty ? `\nMức xác minh: ${(plan as any).certainty}` : ""}`,
-          plan,
-          timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-        },
-      ]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `ai_${Date.now()}`,
+            sender: "ai",
+            text: `${data?.provider ? `[${data.provider}${data.model ? ` • ${data.model}` : ""}] ` : ""}${data?.isOfflineFallback ? "[OFFLINE FALLBACK] " : ""}${plan.explanation || `Đã phân tích yêu cầu: ${plan.intent || userText}`}${Array.isArray((plan as any).sourceRefs) && (plan as any).sourceRefs.length ? `\nNguồn: ${(plan as any).sourceRefs.map((src:any)=>`${src.title || src.type}${src.revision ? ` (${src.revision})` : ""}`).join(" • ")}` : ""}${(plan as any).certainty ? `\nMức xác minh: ${(plan as any).certainty}` : ""}`,
+            plan,
+            allowExecute: aiMode === "AGENT",
+            mode: aiMode,
+            timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+          },
+        ]);
+      }
     } catch (err: any) {
       setMessages((prev) => [
         ...prev,
         {
           id: `ai_err_${Date.now()}`,
           sender: "ai",
-          text: `Lỗi kết nối AI: ${err.message}. Đã bật chế độ phân tích Offline an toàn.`,
+          text: `Lỗi AI: ${err.message}. HNL không thay đổi CAD và không tự đổi provider.`,
           timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
         },
       ]);
@@ -408,13 +486,13 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
                         </div>
 
                         {/* Confirm Execution Button */}
-                        <button
+                        {msg.allowExecute ? <button
                           onClick={() => onExecutePlan(msg.plan!)}
                           className="w-full mt-2 py-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold rounded-md flex items-center justify-center space-x-1.5 shadow transition"
                         >
                           <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Thực thi vào CAD (Execute)</span>
-                        </button>
+                          <span>AI Agent: Thực thi vào CAD</span>
+                        </button> : <div className="w-full mt-2 py-1.5 px-2 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[10px] text-center">Preview only — chuyển sang Agent để cho phép Execute</div>}
                       </div>
                     )}
                   </div>
@@ -423,7 +501,7 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
               {isAiLoading && (
                 <div className="flex items-center space-x-2 text-cyan-400 text-[11px] italic animate-pulse">
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>AI đang phân tích CAD Context & lập kế hoạch tác vụ...</span>
+                  <span>{aiMode === "ASK" ? "AI đang trả lời theo CAD Context..." : aiMode === "PREVIEW" ? "AI đang lập Preview Plan..." : "AI Agent đang lập kế hoạch CAD an toàn..."}</span>
                 </div>
               )}
             </div>
@@ -433,35 +511,50 @@ export const HnlPalette: React.FC<HnlPaletteProps> = ({
               onSubmit={handleSendMessage}
               onPointerDown={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
-              className="sticky bottom-0 z-20 mt-auto shrink-0 flex items-end space-x-1.5 border-t border-neutral-800 pt-2 bg-[#1E1F22]"
+              className="sticky bottom-0 z-20 mt-auto shrink-0 flex flex-col gap-1.5 border-t border-neutral-800 pt-2 bg-[#1E1F22]"
             >
-              <textarea
-                ref={aiInputRef}
-                rows={2}
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onPointerDown={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  e.stopPropagation();
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void handleSendMessage();
-                  }
-                }}
-                placeholder="Nhập yêu cầu AI… Enter = gửi, Shift+Enter = xuống dòng"
-                className="min-w-0 flex-1 resize-none select-text bg-[#25272C] text-neutral-100 placeholder-neutral-500 px-3 py-2 rounded-lg border border-neutral-700 text-xs leading-4 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500"
-                aria-label="Nhập yêu cầu HNL CAD AI"
-                data-hnl-ai-input="true"
-              />
-              <button
-                type="submit"
-                disabled={isAiLoading || !chatInput.trim()}
-                className="shrink-0 p-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition"
-                title="Gửi AI"
-              >
-                <Send className="w-4 h-4" />
-              </button>
+              <div className="grid grid-cols-[105px_1fr] gap-1.5">
+                <select value={activeProvider} onChange={(e)=>handleProviderChange(e.target.value as AiProviderId)} className="min-w-0 bg-[#25272C] border border-neutral-700 rounded px-1.5 py-1.5 text-[10px] text-neutral-200">
+                  {AI_PROVIDERS.map((p)=><option key={p.id} value={p.id}>{p.shortName}{p.freeTier ? " • Free" : ""}</option>)}
+                </select>
+                <div className="min-w-0">
+                  <input value={activeModel} onChange={(e)=>setActiveModel(e.target.value)} list={`hnl-ai-models-${activeProvider}`} className="w-full bg-[#25272C] border border-neutral-700 rounded px-2 py-1.5 text-[10px] text-neutral-200" title="Model AI — có thể gõ model ID tùy chỉnh"/>
+                  <datalist id={`hnl-ai-models-${activeProvider}`}>{activeProviderEntry.modelSuggestions.map((m)=><option key={m} value={m}/>)}</datalist>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-1 text-[9px]">
+                {([['ASK','💬 Hỏi'],['PREVIEW','👁 Preview'],['AGENT','🤖 Agent CAD']] as const).map(([mode,label])=><button key={mode} type="button" onClick={()=>setAiMode(mode)} className={`rounded px-1.5 py-1 border ${aiMode===mode ? mode==='AGENT' ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300' : 'bg-neutral-700 border-neutral-500 text-white' : 'bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300'}`}>{label}</button>)}
+              </div>
+              <div className="flex items-end gap-1.5">
+                <textarea
+                  ref={aiInputRef}
+                  rows={2}
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void handleSendMessage();
+                    }
+                  }}
+                  placeholder={aiMode === "ASK" ? "Hỏi HNL CAD AI…" : aiMode === "PREVIEW" ? "Yêu cầu AI lập Preview…" : "Yêu cầu AI Agent vẽ/thao tác CAD…"}
+                  className="min-w-0 flex-1 resize-none select-text bg-[#25272C] text-neutral-100 placeholder-neutral-500 px-3 py-2 rounded-lg border border-neutral-700 text-xs leading-4 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500"
+                  aria-label="Nhập yêu cầu HNL CAD AI"
+                  data-hnl-ai-input="true"
+                />
+                <button
+                  type="submit"
+                  disabled={isAiLoading || !chatInput.trim()}
+                  className="shrink-0 p-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition"
+                  title="Gửi AI"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="text-[8px] text-neutral-600">{aiMode === "AGENT" ? "Agent chỉ Execute tool CAD trong whitelist; thao tác phá hủy vẫn bị chặn/xác nhận." : aiMode === "PREVIEW" ? "Preview không thay đổi DWG." : "Hỏi đáp không thay đổi DWG."}</div>
             </form>
           </div>
         )}

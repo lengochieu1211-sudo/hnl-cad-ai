@@ -1,36 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Bot, CheckCircle2, Cloud, Cpu, Key, Laptop, RefreshCw, ShieldCheck, Wifi, XCircle } from "lucide-react";
-
-type ProviderId = "OFFLINE" | "GEMINI" | "OPENAI" | "CLAUDE" | "GROK" | "OLLAMA" | "CUSTOM_OPENAI";
-
-type ProviderEntry = {
-  id: ProviderId;
-  name: string;
-  kind: "offline" | "online" | "local";
-  description: string;
-  defaultModel: string;
-  defaultBaseUrl: string;
-  needsKey: boolean;
-};
-
-const PROVIDERS: ProviderEntry[] = [
-  { id:"OFFLINE", name:"HNL Nội bộ", kind:"offline", description:"Rule engine cục bộ. Không Internet, không API key.", defaultModel:"hnl-rules-v1", defaultBaseUrl:"", needsKey:false },
-  { id:"GEMINI", name:"Gemini", kind:"online", description:"Google Gemini API.", defaultModel:"gemini-3.7-flash", defaultBaseUrl:"https://generativelanguage.googleapis.com", needsKey:true },
-  { id:"OPENAI", name:"ChatGPT / OpenAI", kind:"online", description:"OpenAI Responses API.", defaultModel:"gpt-5.6", defaultBaseUrl:"https://api.openai.com/v1", needsKey:true },
-  { id:"CLAUDE", name:"Claude", kind:"online", description:"Anthropic Messages API.", defaultModel:"claude-sonnet-4-20250514", defaultBaseUrl:"https://api.anthropic.com/v1", needsKey:true },
-  { id:"GROK", name:"Grok / xAI", kind:"online", description:"xAI Responses API.", defaultModel:"grok-4.6", defaultBaseUrl:"https://api.x.ai/v1", needsKey:true },
-  { id:"OLLAMA", name:"Ollama Local", kind:"local", description:"LLM chạy trên PC qua Ollama.", defaultModel:"gemma3", defaultBaseUrl:"http://127.0.0.1:11434", needsKey:false },
-  { id:"CUSTOM_OPENAI", name:"Custom API", kind:"local", description:"Endpoint OpenAI-compatible: LM Studio, LiteLLM, server riêng...", defaultModel:"gpt-4o-mini", defaultBaseUrl:"http://127.0.0.1:1234/v1", needsKey:false },
-];
-
-const DEFAULT_CFG:any = {
-  activeProvider:"GEMINI",
-  autoFallbackOffline:false,
-  contextOnly:true,
-  previewBeforeExecute:true,
-  providers:Object.fromEntries(PROVIDERS.map((p)=>[p.id,{model:p.defaultModel,baseUrl:p.defaultBaseUrl}])),
-  configured:{OFFLINE:true,OLLAMA:true},
-};
+import { AI_PROVIDERS as PROVIDERS, DEFAULT_AI_PROVIDER_CONFIG as DEFAULT_CFG, type AiProviderId as ProviderId } from "../../lib/aiProviderCatalog";
 
 const headers = () => {
   const token=(window as any).electronNative?.sessionToken || "";
@@ -128,7 +98,7 @@ export const AiProviderManager:React.FC = () => {
         return <button key={p.id} type="button" onClick={()=>{setActive(p.id);setApiKey("");setClearKey(false);setTestStatus("idle")}}
           className={`text-left p-2.5 rounded-lg border transition ${active===p.id?"bg-cyan-500/15 border-cyan-500":"bg-[#25272C] border-neutral-700 hover:border-neutral-500"}`}>
           <div className="flex items-center justify-between gap-1">
-            <span className="font-semibold text-neutral-100 text-[11px]">{p.name}</span>
+            <span className="font-semibold text-neutral-100 text-[11px]">{p.name}{p.freeTier ? <span className="ml-1 text-[8px] text-emerald-300">FREE</span> : null}</span>
             {p.kind==="offline"?<ShieldCheck className="w-3.5 h-3.5 text-emerald-400"/>:p.kind==="local"?<Laptop className="w-3.5 h-3.5 text-purple-400"/>:<Cloud className="w-3.5 h-3.5 text-sky-400"/>}
           </div>
           <div className="text-[9px] text-neutral-500 mt-1 line-clamp-2">{p.description}</div>
@@ -141,8 +111,11 @@ export const AiProviderManager:React.FC = () => {
       <div className="grid md:grid-cols-2 gap-3">
         <label className="space-y-1">
           <span className="text-[10px] text-neutral-400">Model</span>
-          <input value={providerCfg.model || ""} disabled={active==="OFFLINE"} onChange={(e)=>updateProvider({model:e.target.value})}
+          <input value={providerCfg.model || ""} list={`hnl-provider-models-${active}`} disabled={active==="OFFLINE"} onChange={(e)=>updateProvider({model:e.target.value})}
             className="w-full bg-[#25272C] border border-neutral-700 rounded px-2.5 py-2 text-xs text-neutral-200 disabled:opacity-50"/>
+          <datalist id={`hnl-provider-models-${active}`}>
+            {provider.modelSuggestions.map((m)=><option key={m} value={m}/>) }
+          </datalist>
         </label>
         <label className="space-y-1">
           <span className="text-[10px] text-neutral-400">Base URL</span>
