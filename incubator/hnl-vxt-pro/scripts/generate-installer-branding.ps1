@@ -122,8 +122,9 @@ function Write-HnlMultiSizeIco {
   }
 }
 
-# The official source is the verified 128x128 RGBA PNG from the HNL continuation backup.
-Test-HnlImageBytes -Data $bytes -ExpectedSize 128
+# The official source is now regenerated from the user's original 1249x1248 HNL artwork
+# into a clean 256x256 RGBA master, avoiding the previous 128px pre-downscale.
+Test-HnlImageBytes -Data $bytes -ExpectedSize 256
 $loaded = [System.Drawing.Image]::FromFile($officialPng)
 $source = $null
 try {
@@ -171,6 +172,6 @@ for ($entry = 0; $entry -lt $count; $entry++) {
 }
 
 Write-Host 'HNL official branding generated and decode-verified:'
-Write-Host "  PNG: $officialPng (128x128 RGBA official source)"
+Write-Host "  PNG: $officialPng (256x256 RGBA official source)"
 Write-Host "  ICO: $iconPath (256/128/64/48/32/24/16, every frame round-trip decoded)"
 Write-Host "  BMP: $smallPath"
