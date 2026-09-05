@@ -43,16 +43,19 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void SmartLayout_ExactLegacyResultFor4000Run_Is300_850x4_300()
+        public void SmartLayout_ExactLegacyResultFor4000Run_Is400_800x4_400()
         {
-            // Direct Golden from legacy calc-smart-layout with L=4000,
+            // Exact legacy calc-smart-layout tie-break for L=4000,
             // max/min spacing=1000/700, max/min edge=400/300, multiple=50.
+            // S=850/O=300 and S=800/O=400 have the same penalty. The Lisp builds
+            // valid_plans with CONS while S descends, then keeps the first strict-best (>),
+            // therefore the later-consed S=800 candidate wins the tie.
             var result = SmartLayout1D.Calculate(4000, 1000, 700, 400, 300, 50, MainLayoutMode.BalancedTwoEnds);
             Assert.IsNotNull(result);
-            Assert.AreEqual(300.0, result.StartOffset, 1e-8);
-            CollectionAssert.AreEqual(new[] { 850.0, 850.0, 850.0, 850.0 }, result.Steps.ToArray());
-            Assert.AreEqual(300.0, result.EndOffset, 1e-8);
-            CollectionAssert.AreEqual(new[] { 300.0, 1150.0, 2000.0, 2850.0, 3700.0 }, result.Positions(0).ToArray());
+            Assert.AreEqual(400.0, result.StartOffset, 1e-8);
+            CollectionAssert.AreEqual(new[] { 800.0, 800.0, 800.0, 800.0 }, result.Steps.ToArray());
+            Assert.AreEqual(400.0, result.EndOffset, 1e-8);
+            CollectionAssert.AreEqual(new[] { 400.0, 1200.0, 2000.0, 2800.0, 3600.0 }, result.Positions(0).ToArray());
         }
 
         [TestMethod]
@@ -145,7 +148,7 @@ namespace HNL.VXT.Core.Tests
         public void OneSideHangers_ReverseWithFurringStartSide()
         {
             // Use an asymmetric run so reversing the Golden one-side plan is observable.
-            // A 6000 run resolves to 300/300 edges, so reversal is intentionally identical.
+            // A 6000 run resolves symmetrically, so reversal is intentionally identical there.
             const double width = 6075.0;
             var settings = new VxtSettings
             {
@@ -192,8 +195,8 @@ namespace HNL.VXT.Core.Tests
             var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings);
             var dims = plan.Dimensions.Where(d => d.Target == DimensionTarget.Main).ToList();
             Assert.AreEqual(6, dims.Count, "Legacy process-dims must dimension boundary→first XC, every XC gap, and last XC→boundary.");
-            Assert.AreEqual(300.0, dims.First().ExtensionPoint1.DistanceTo(dims.First().ExtensionPoint2), 1e-6);
-            Assert.AreEqual(300.0, dims.Last().ExtensionPoint1.DistanceTo(dims.Last().ExtensionPoint2), 1e-6);
+            Assert.AreEqual(400.0, dims.First().ExtensionPoint1.DistanceTo(dims.First().ExtensionPoint2), 1e-6);
+            Assert.AreEqual(400.0, dims.Last().ExtensionPoint1.DistanceTo(dims.Last().ExtensionPoint2), 1e-6);
         }
 
         [TestMethod]
