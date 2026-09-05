@@ -114,19 +114,26 @@ namespace HNL.VXT.AutoCAD
                     session.Settings = settings.Clone();
                 }
 
+                VxtDiagnosticService.RecordCreateSuccess(
+                    settings, counts.Main, counts.Furring, counts.Hangers, counts.Dimensions);
+
                 doc.Editor.WriteMessage(
                     "\nHNL Tool - VXT Pro: Đã tạo " + counts.Main + " Xương chính, " +
                     counts.Furring + " Xương phụ, " + counts.Hangers + " Ty treo, " +
-                    counts.Dimensions + " DIM. Dùng UNDO để hoàn tác toàn bộ lệnh VXT.");
+                    counts.Dimensions + " DIM. Runtime Golden đã ghi PASS. Dùng UNDO để hoàn tác toàn bộ lệnh VXT.");
 
-                // Rebuild transient preview from the same settings so visual verification remains immediate.
                 VxtTransientPreview.Instance.Refresh();
             }
             catch (System.Exception ex)
             {
-                // A non-committed AutoCAD transaction rolls all newly appended entities back.
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Không tạo được khung xương. Đã rollback toàn bộ. " + ex.Message);
-                session.ViewModel?.SetPreviewError("Tạo thất bại - đã rollback: " + ex.Message);
+                var diagnosticPath = VxtDiagnosticService.CaptureCreateFailure(
+                    settings, ex, "VxtCreateEngine.Execute");
+
+                doc.Editor.WriteMessage(
+                    "\nHNL Tool - VXT Pro: Không tạo được khung xương. Đã rollback toàn bộ. " + ex.Message +
+                    (string.IsNullOrWhiteSpace(diagnosticPath) ? string.Empty : " | Diagnostic: " + diagnosticPath));
+                session.ViewModel?.SetPreviewError(
+                    "Tạo thất bại - đã rollback. Diagnostic ZIP đã được ghi tự động.");
                 try { VxtTransientPreview.Instance.Refresh(); } catch { }
             }
         }
