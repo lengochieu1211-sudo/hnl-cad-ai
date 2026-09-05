@@ -12,6 +12,10 @@
     <PackageReference Include="AutoCAD.NET" Version="24.3.0" ExcludeAssets="runtime" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\HNL.VXT.Core\HNL.VXT.Core.csproj" />
     <ProjectReference Include="..\..\HNL.VXT.UI\HNL.VXT.UI.csproj" />
   </ItemGroup>
