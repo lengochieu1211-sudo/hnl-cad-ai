@@ -4,8 +4,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
-Add-Type -AssemblyName PresentationCore
-Add-Type -AssemblyName WindowsBase
 
 $out = Join-Path $Root 'artifacts\installer-assets'
 $logoB64 = Join-Path $Root 'src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64'
@@ -18,90 +16,47 @@ New-Item -ItemType Directory -Force -Path $out | Out-Null
 
 $base64 = (Get-Content $logoB64 -Raw) -replace '\s',''
 $bytes = [Convert]::FromBase64String($base64)
-if ($bytes.Length -lt 24 -or
+if ($bytes.Length -lt 8 -or
     $bytes[0] -ne 0x89 -or $bytes[1] -ne 0x50 -or $bytes[2] -ne 0x4E -or $bytes[3] -ne 0x47 -or
     $bytes[4] -ne 0x0D -or $bytes[5] -ne 0x0A -or $bytes[6] -ne 0x1A -or $bytes[7] -ne 0x0A) {
   throw 'HNL logo asset is not a valid PNG stream.'
 }
 [IO.File]::WriteAllBytes($officialPng, $bytes)
 
-function Get-HnlPngSize {
-  param([byte[]]$Data)
-  if ($Data.Length -lt 24) { throw 'PNG stream is too short.' }
-  # PNG IHDR width/height are unsigned 32-bit big-endian values. Multiplication avoids
-  # PowerShell preserving the [byte] type across -shl operations and overflowing to zero.
-  $width = ([int64]$Data[16] * 16777216) + ([int64]$Data[17] * 65536) + ([int64]$Data[18] * 256) + [int64]$Data[19]
-  $height = ([int64]$Data[20] * 16777216) + ([int64]$Data[21] * 65536) + ([int64]$Data[22] * 256) + [int64]$Data[23]
-  return @([int]$width, [int]$height)
-}
-
 function Test-HnlImageBytes {
   param([byte[]]$Data, [int]$ExpectedSize)
-  $size = Get-HnlPngSize -Data $Data
-  if ($size[0] -ne $ExpectedSize -or $size[1] -ne $ExpectedSize) {
-    throw "PNG frame is $($size[0])x$($size[1]), expected ${ExpectedSize}x${ExpectedSize}."
-  }
-
-  # WPF's PNG decoder supports indexed/paletted PNG reliably on Windows Server,
-  # unlike GDI+ Image.FromStream which rejects some optimized indexed PNG files.
   $ms = [System.IO.MemoryStream]::new($Data, $false)
+  $img = $null
   try {
-    $decoder = [System.Windows.Media.Imaging.PngBitmapDecoder]::new(
-      $ms,
-      [System.Windows.Media.Imaging.BitmapCreateOptions]::PreservePixelFormat,
-      [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad)
-    if ($decoder.Frames.Count -lt 1) { throw 'WPF PNG decoder returned no frames.' }
-    $frame = $decoder.Frames[0]
-    if ($frame.PixelWidth -ne $ExpectedSize -or $frame.PixelHeight -ne $ExpectedSize) {
-      throw "WPF decoded frame is $($frame.PixelWidth)x$($frame.PixelHeight), expected ${ExpectedSize}x${ExpectedSize}."
+    $img = [System.Drawing.Image]::FromStream($ms, $true, $true)
+    if ($img.Width -ne $ExpectedSize -or $img.Height -ne $ExpectedSize) {
+      throw "Decoded frame is $($img.Width)x$($img.Height), expected ${ExpectedSize}x${ExpectedSize}."
     }
   }
-  finally { $ms.Dispose() }
+  finally {
+    if ($img -ne $null) { $img.Dispose() }
+    $ms.Dispose()
+  }
 }
 
-function New-HnlArgbSourceFromPngBytes {
-  param([byte[]]$Data)
-
-  $ms = [System.IO.MemoryStream]::new($Data, $false)
+function New-HnlArgbSource {
+  param([System.Drawing.Image]$InputImage)
+  $normalized = [System.Drawing.Bitmap]::new(
+    $InputImage.Width,
+    $InputImage.Height,
+    [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+  $g = [System.Drawing.Graphics]::FromImage($normalized)
   try {
-    $decoder = [System.Windows.Media.Imaging.PngBitmapDecoder]::new(
-      $ms,
-      [System.Windows.Media.Imaging.BitmapCreateOptions]::PreservePixelFormat,
-      [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad)
-    $frame = $decoder.Frames[0]
-    $converted = [System.Windows.Media.Imaging.FormatConvertedBitmap]::new()
-    $converted.BeginInit()
-    $converted.Source = $frame
-    $converted.DestinationFormat = [System.Windows.Media.PixelFormats]::Bgra32
-    $converted.EndInit()
-    $converted.Freeze()
-
-    $width = $converted.PixelWidth
-    $height = $converted.PixelHeight
-    $stride = $width * 4
-    $pixels = New-Object byte[] ($stride * $height)
-    $converted.CopyPixels($pixels, $stride, 0)
-
-    $bitmap = [System.Drawing.Bitmap]::new(
-      $width,
-      $height,
-      [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    $rect = [System.Drawing.Rectangle]::new(0, 0, $width, $height)
-    $locked = $bitmap.LockBits(
-      $rect,
-      [System.Drawing.Imaging.ImageLockMode]::WriteOnly,
-      [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    try {
-      for ($row = 0; $row -lt $height; $row++) {
-        $srcOffset = $row * $stride
-        $dst = [IntPtr]::Add($locked.Scan0, $row * $locked.Stride)
-        [System.Runtime.InteropServices.Marshal]::Copy($pixels, $srcOffset, $dst, $stride)
-      }
-    }
-    finally { $bitmap.UnlockBits($locked) }
-    return $bitmap
+    $g.Clear([System.Drawing.Color]::Transparent)
+    $g.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceOver
+    $g.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+    $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $g.DrawImage($InputImage, 0, 0, $InputImage.Width, $InputImage.Height)
   }
-  finally { $ms.Dispose() }
+  finally { $g.Dispose() }
+  return $normalized
 }
 
 function New-HnlPngFrame {
@@ -167,11 +122,12 @@ function Write-HnlMultiSizeIco {
   }
 }
 
-# Official master: 256x256 generated from the user's original HNL artwork.
-Test-HnlImageBytes -Data $bytes -ExpectedSize 256
+# Verified Windows-compatible HNL source used by both Palette and Setup branding.
+Test-HnlImageBytes -Data $bytes -ExpectedSize 128
+$loaded = [System.Drawing.Image]::FromFile($officialPng)
 $source = $null
 try {
-  $source = New-HnlArgbSourceFromPngBytes -Data $bytes
+  $source = New-HnlArgbSource -InputImage $loaded
   Write-HnlMultiSizeIco -Source $source -Path $iconPath
 
   $small = [System.Drawing.Bitmap]::new(64, 64, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
@@ -190,6 +146,7 @@ try {
 }
 finally {
   if ($source -ne $null) { $source.Dispose() }
+  $loaded.Dispose()
 }
 
 foreach ($required in @($officialPng, $iconPath, $smallPath)) {
@@ -214,6 +171,6 @@ for ($entry = 0; $entry -lt $count; $entry++) {
 }
 
 Write-Host 'HNL official branding generated and decode-verified:'
-Write-Host "  PNG: $officialPng (256x256 official source)"
-Write-Host "  ICO: $iconPath (256/128/64/48/32/24/16, every frame WPF-decoded)"
+Write-Host "  PNG: $officialPng (128x128 RGBA verified source)"
+Write-Host "  ICO: $iconPath (256/128/64/48/32/24/16, every frame round-trip decoded)"
 Write-Host "  BMP: $smallPath"
