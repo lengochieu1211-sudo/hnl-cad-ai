@@ -72,8 +72,11 @@ jobs:
           }
 
           $commandSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
-          if (-not $commandSource.Contains('[CommandMethod("HNLVXT"')) {
-            throw "Command namespace gate failed: HNLVXT command is missing."
+          if (-not $commandSource.Contains('[CommandMethod("HVX"')) {
+            throw "Command namespace gate failed: HVX command is missing."
+          }
+          if ($commandSource.Contains('[CommandMethod("HNLVXT",')) {
+            throw "Command namespace gate failed: obsolete HNLVXT main alias is still exposed."
           }
           if (-not $commandSource.Contains('[CommandMethod("HNLVXTCREATE"')) {
             throw "Functional gate failed: HNLVXTCREATE command is missing."
@@ -81,6 +84,9 @@ jobs:
           $pluginSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\PluginEntry.cs" -Raw
           if (-not $pluginSource.Contains('CommandClass(typeof(HNL.VXT.AutoCAD.HnlVxtCommands))')) {
             throw "Command namespace gate failed: legacy VXT command class is still registered."
+          }
+          if (-not $pluginSource.Contains('Lệnh: HVX')) {
+            throw "Command namespace gate failed: startup prompt does not advertise HVX."
           }
           $bridgeSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtHostBridge.cs" -Raw
           if (-not $bridgeSource.Contains('Send("HNLVXTCREATE ")')) {
@@ -101,6 +107,9 @@ jobs:
           }
           if (-not $iss.Contains('PrivilegesRequired=admin')) {
             throw "Installer gate failed: Program Files setup must request admin privileges."
+          }
+          if (-not $iss.Contains('gõ HVX')) {
+            throw "Installer gate failed: post-install guidance does not advertise HVX."
           }
           Write-Host "HNL VXT beta.1 functional/source/branding/installer gate PASS"
       - name: Restore AutoCAD 2023 plugin
