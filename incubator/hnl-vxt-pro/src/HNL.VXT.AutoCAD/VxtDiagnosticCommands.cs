@@ -19,5 +19,11 @@ namespace HNL.VXT.AutoCAD
             var settings = session.ViewModel?.Snapshot() ?? session.Settings.Clone();
             VxtDiagnosticService.ExportInteractive(settings);
         }
+
+        [CommandMethod("VXTGOLDEN", CommandFlags.Modal)]
+        public void RuntimeGolden()
+        {
+            VxtRuntimeGoldenService.Run();
+        }
     }
 }
