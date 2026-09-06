@@ -16,6 +16,7 @@ namespace HNL.VXT.UI.Hosting
         void ClearPreview();
         string AnalyzeDiagnostics(VxtSettings settings);
         string ExportDiagnostics(VxtSettings settings);
+        void RequestRuntimeGolden();
         void RequestCreate();
     }
 }
