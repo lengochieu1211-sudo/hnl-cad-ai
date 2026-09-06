@@ -30,7 +30,24 @@ namespace HNL.VXT.AutoCAD
             return doc == null ? Array.Empty<string>() : ReadSymbolNames(doc.Database, doc.Database.DimStyleTableId);
         }
 
-        public void SelectBoundary() => Send("HNLVXTBOUNDARY ");
+        public void SelectBoundary()
+        {
+            // Preserve the Lisp interaction order even when the user chooses an interactive
+            // main-direction mode before selecting the ceiling boundary. AutoCAD queues the
+            // second command and runs it only after HNLVXTBOUNDARY has finished its selection.
+            switch (VxtSession.Current.Settings.MainDirection)
+            {
+                case MainDirectionMode.TwoPoints:
+                    Send("HNLVXTBOUNDARY HNLVXTDIRECTION ");
+                    break;
+                case MainDirectionMode.RectangleRegions:
+                    Send("HNLVXTBOUNDARY HNLVXTREGION ");
+                    break;
+                default:
+                    Send("HNLVXTBOUNDARY ");
+                    break;
+            }
+        }
 
         public void PickDirection(MainDirectionMode mode)
         {
@@ -79,28 +96,27 @@ namespace HNL.VXT.AutoCAD
             var previousMode = session.Settings?.MainDirection ?? MainDirectionMode.Horizontal;
             session.Settings = settings.Clone();
 
-            // Match the Lisp workflow more closely: switching to an interactive direction mode
-            // immediately starts the CAD pick instead of requiring a second "Thiết lập CAD" click.
-            // Repeated numeric edits while already in the same mode do not retrigger the command.
+            // Match the Lisp workflow: selecting an interactive direction immediately enters
+            // the CAD pick when a boundary already exists. If the user has not selected a
+            // boundary yet, SelectBoundary() will queue the required direction/region command.
             if (settings.MainDirection != previousMode)
             {
                 if (settings.MainDirection == MainDirectionMode.TwoPoints)
                 {
                     VxtTransientPreview.Instance.Clear();
-                    Send("HNLVXTDIRECTION ");
+                    if (session.HasBoundary)
+                        Send("HNLVXTDIRECTION ");
+                    else
+                        Write("\nHNL Tool - VXT Pro: Đã chọn hướng 2 điểm. Hãy chọn Polyline biên trần; HNL Tool sẽ yêu cầu 2 điểm ngay sau đó.");
                     return;
                 }
                 if (settings.MainDirection == MainDirectionMode.RectangleRegions)
                 {
+                    VxtTransientPreview.Instance.Clear();
                     if (session.HasBoundary)
-                    {
-                        VxtTransientPreview.Instance.Clear();
                         Send("HNLVXTREGION ");
-                    }
                     else
-                    {
                         Write("\nHNL Tool - VXT Pro: Đã chọn chế độ HCN. Hãy chọn Polyline biên trần; HNL Tool sẽ vào chia vùng ngay sau đó.");
-                    }
                     return;
                 }
             }
