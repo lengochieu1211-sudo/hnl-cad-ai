@@ -11,7 +11,7 @@ namespace HNL.VXT.AutoCAD
         public void Initialize()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
-            doc?.Editor.WriteMessage("\nHNL Tool - Vẽ Xương Trần | VXT Pro v7.0.0-beta.1 | Lệnh: HNLVXT");
+            doc?.Editor.WriteMessage("\nHNL Tool - Vẽ Xương Trần | VXT Pro v7.0.0-beta.1 | Lệnh: HVX");
         }
 
         public void Terminate()
