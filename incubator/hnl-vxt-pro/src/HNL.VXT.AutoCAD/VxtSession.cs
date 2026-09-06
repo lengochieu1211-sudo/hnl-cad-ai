@@ -11,7 +11,22 @@ namespace HNL.VXT.AutoCAD
     {
         public static VxtSession Current { get; } = new VxtSession();
 
-        public Boundary2 Boundary { get; set; }
+        // V6.7.4 parity: one command can receive a selection set containing many
+        // closed ceiling polylines. Each polygon remains an independent ceiling area.
+        public List<Boundary2> Boundaries { get; } = new List<Boundary2>();
+
+        // Backward-compatible first boundary for code paths that need one reference
+        // point (for example a manual DIM pick). New Preview/Create paths use Boundaries.
+        public Boundary2 Boundary
+        {
+            get => Boundaries.Count == 0 ? null : Boundaries[0];
+            set
+            {
+                Boundaries.Clear();
+                if (value != null) Boundaries.Add(value);
+            }
+        }
+
         public VxtSettings Settings { get; set; } = new VxtSettings();
         public VxtPaletteViewModel ViewModel { get; set; }
 
@@ -25,6 +40,6 @@ namespace HNL.VXT.AutoCAD
         // Manual rectangle regions from the V6.7.4 "Quét HCN" workflow.
         public List<VxtLayoutRegion> Regions { get; } = new List<VxtLayoutRegion>();
 
-        public bool HasBoundary => Boundary != null;
+        public bool HasBoundary => Boundaries.Count > 0;
     }
 }

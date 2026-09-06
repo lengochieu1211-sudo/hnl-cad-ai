@@ -42,7 +42,7 @@ namespace HNL.VXT.AutoCAD
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
                     var context = VxtLayoutContextFactory.Build(session, tr);
-                    plan = new VxtPreviewPlanBuilder().Build(session.Boundary, settings, context);
+                    plan = VxtMultiBoundaryPlanBuilder.Build(session.Boundaries, settings, context);
 
                     var blockTable = tr.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
                     var layerTable = tr.GetObject(db.LayerTableId, OpenMode.ForRead) as LayerTable;

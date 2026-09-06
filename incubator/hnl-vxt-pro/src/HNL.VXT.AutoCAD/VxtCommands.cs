@@ -42,29 +42,61 @@ namespace HNL.VXT.AutoCAD
             var doc = Application.DocumentManager.MdiActiveDocument;
             if (doc == null) return;
             var ed = doc.Editor;
-            var options = new PromptEntityOptions("\nHNL Tool - VXT Pro: Chọn Polyline kín làm biên trần: ");
-            options.SetRejectMessage("\nHNL Tool - VXT Pro: Đối tượng phải là Polyline.");
-            options.AddAllowedClass(typeof(Polyline), true);
-
-            var result = ed.GetEntity(options);
+            var options = new PromptSelectionOptions
+            {
+                MessageForAdding = "\nHNL Tool - VXT Pro: Quét chọn các Polyline kín làm biên trần: ",
+                MessageForRemoval = "\nHNL Tool - VXT Pro: Bỏ Polyline khỏi tập chọn: "
+            };
+            var filter = new SelectionFilter(new[]
+            {
+                new TypedValue((int)DxfCode.Start, "LWPOLYLINE,POLYLINE")
+            });
+            var result = ed.GetSelection(options, filter);
             if (result.Status != PromptStatus.OK) return;
 
             using (var tr = doc.TransactionManager.StartTransaction())
             {
-                var pl = tr.GetObject(result.ObjectId, OpenMode.ForRead) as Polyline;
-                if (pl == null || !pl.Closed)
+                var accepted = new System.Collections.Generic.List<Boundary2>();
+                var skippedOpen = 0;
+                var skippedUnsupported = 0;
+                foreach (var id in result.Value.GetObjectIds())
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Polyline phải khép kín.");
+                    var entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
+                    if (entity is Polyline pl)
+                    {
+                        if (!pl.Closed) { skippedOpen++; continue; }
+                        accepted.Add(BoundarySampler.FromPolyline(pl));
+                    }
+                    else if (entity is Polyline2d pl2)
+                    {
+                        if (!pl2.Closed) { skippedOpen++; continue; }
+                        accepted.Add(BoundarySampler.FromPolyline2d(pl2, tr));
+                    }
+                    else
+                    {
+                        skippedUnsupported++;
+                    }
+                }
+
+                if (accepted.Count == 0)
+                {
+                    ed.WriteMessage("\nHNL Tool - VXT Pro: Không có Polyline kín hợp lệ trong tập chọn.");
                     return;
                 }
 
-                var boundary = BoundarySampler.FromPolyline(pl);
-                VxtSession.Current.Boundary = boundary;
-                VxtSession.Current.Regions.Clear();
-                VxtSession.Current.GlobalFurringFromFarEdge = false;
-                VxtSession.Current.ViewModel?.SetBoundaryStatus(
-                    $"✓ Đã chọn {pl.NumberOfVertices} đỉnh • Layer: {pl.Layer}", true);
+                var session = VxtSession.Current;
+                session.Boundaries.Clear();
+                session.Boundaries.AddRange(accepted);
+                session.Regions.Clear();
+                session.GlobalFurringFromFarEdge = false;
+                var skipped = skippedOpen + skippedUnsupported;
+                session.ViewModel?.SetBoundaryStatus(
+                    "✓ Đã chọn " + accepted.Count + " Polyline kín" +
+                    (skipped > 0 ? " • Bỏ qua " + skipped + " đối tượng không hợp lệ" : string.Empty), true);
                 tr.Commit();
+
+                ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận " + accepted.Count +
+                    " mảng trần độc lập" + (skipped > 0 ? "; bỏ qua " + skipped + " đối tượng." : "."));
             }
             VxtTransientPreview.Instance.Refresh();
         }
@@ -310,8 +342,15 @@ namespace HNL.VXT.AutoCAD
             if (doc == null) return;
             var ed = doc.Editor;
             var label = target == EquipmentTarget.General ? "dùng chung" : target == EquipmentTarget.Main ? "cho Xương chính" : "cho Xương phụ";
-            var options = new PromptSelectionOptions { MessageForAdding = $"\nHNL Tool - VXT Pro: Chọn Block thiết bị {label}: " };
-            var filter = new SelectionFilter(new[] { new TypedValue((int)DxfCode.Start, "INSERT") });
+            var options = new PromptSelectionOptions
+            {
+                MessageForAdding = "\nHNL Tool - VXT Pro: Quét chọn đối tượng thiết bị " + label + " (Block/Polyline/Circle/Spline/Hatch/Line): ",
+                MessageForRemoval = "\nHNL Tool - VXT Pro: Bỏ đối tượng khỏi tập chọn: "
+            };
+            var filter = new SelectionFilter(new[]
+            {
+                new TypedValue((int)DxfCode.Start, "INSERT,LWPOLYLINE,POLYLINE,CIRCLE,SPLINE,HATCH,LINE")
+            });
             var result = ed.GetSelection(options, filter);
             if (result.Status != PromptStatus.OK)
             {
@@ -327,7 +366,7 @@ namespace HNL.VXT.AutoCAD
                 case EquipmentTarget.Furring: VxtSession.Current.FurringEquipmentIds = ids; break;
             }
             VxtSession.Current.ViewModel?.SetEquipmentStatus(target, ids.Length);
-            ed.WriteMessage($"\nHNL Tool - VXT Pro: Đã chọn {ids.Length} Block thiết bị {label}.");
+            ed.WriteMessage("\nHNL Tool - VXT Pro: Đã chọn " + ids.Length + " đối tượng thiết bị " + label + ".");
             VxtTransientPreview.Instance.Refresh();
         }
 
@@ -349,7 +388,16 @@ namespace HNL.VXT.AutoCAD
             var angle = ResolveCurrentMainAngle(settings);
             var radians = angle * Math.PI / 180.0;
             var localPick = Transform2.ToLocal(new Point2(result.Value.X, result.Value.Y), radians);
-            var localBoundary = new Boundary2(session.Boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)));
+            var localBoundary = session.Boundaries
+                .Select(b => new Boundary2(b.Vertices.Select(p => Transform2.ToLocal(p, radians))))
+                .OrderBy(b =>
+                {
+                    var bb = b.GetBounds();
+                    var dx = localPick.X < bb.Min.X ? bb.Min.X - localPick.X : localPick.X > bb.Max.X ? localPick.X - bb.Max.X : 0.0;
+                    var dy = localPick.Y < bb.Min.Y ? bb.Min.Y - localPick.Y : localPick.Y > bb.Max.Y ? localPick.Y - bb.Max.Y : 0.0;
+                    return dx * dx + dy * dy;
+                })
+                .First();
             var bounds = localBoundary.GetBounds();
 
             var dTop = Math.Abs(localPick.Y - bounds.Max.Y);

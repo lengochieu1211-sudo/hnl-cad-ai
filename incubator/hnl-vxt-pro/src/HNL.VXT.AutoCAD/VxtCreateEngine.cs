@@ -39,7 +39,7 @@ namespace HNL.VXT.AutoCAD
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
                     var context = VxtLayoutContextFactory.Build(session, tr);
-                    var plan = new VxtPreviewPlanBuilder().Build(session.Boundary, settings, context);
+                    var plan = VxtMultiBoundaryPlanBuilder.Build(session.Boundaries, settings, context);
                     ValidateRequiredResources(settings, plan, db, tr);
                     VxtCadResources.EnsureAll(db, tr, settings);
 

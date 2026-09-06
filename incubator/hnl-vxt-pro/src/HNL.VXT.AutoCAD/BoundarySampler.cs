@@ -30,5 +30,21 @@ namespace HNL.VXT.AutoCAD
 
             return new Boundary2(points);
         }
+
+        public static Boundary2 FromPolyline2d(Polyline2d polyline, Transaction tr)
+        {
+            if (polyline == null) throw new ArgumentNullException(nameof(polyline));
+            if (tr == null) throw new ArgumentNullException(nameof(tr));
+            if (!polyline.Closed) throw new ArgumentException("Polyline2d must be closed.", nameof(polyline));
+
+            var points = new List<Point2>();
+            foreach (ObjectId vertexId in polyline)
+            {
+                var vertex = tr.GetObject(vertexId, OpenMode.ForRead, false) as Vertex2d;
+                if (vertex == null) continue;
+                points.Add(new Point2(vertex.Position.X, vertex.Position.Y));
+            }
+            return new Boundary2(points);
+        }
     }
 }
