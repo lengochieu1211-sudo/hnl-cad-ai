@@ -83,7 +83,8 @@ namespace HNL.VXT.AutoCAD
         public string AnalyzeDiagnostics(VxtSettings settings)
         {
             VxtSession.Current.Settings = settings.Clone();
-            return VxtDiagnosticService.AnalyzeAndReport(settings);
+            VxtDiagnosticService.AnalyzeAndReport(settings);
+            return VxtDiagnosticService.LastAnalysis;
         }
 
         public string ExportDiagnostics(VxtSettings settings)
