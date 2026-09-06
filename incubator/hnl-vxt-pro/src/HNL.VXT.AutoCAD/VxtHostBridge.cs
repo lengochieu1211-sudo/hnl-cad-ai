@@ -93,6 +93,8 @@ namespace HNL.VXT.AutoCAD
             return VxtDiagnosticService.ExportInteractive(settings);
         }
 
+        public void RequestRuntimeGolden() => Send("VXTGOLDEN ");
+
         public void RequestCreate()
         {
             var session = VxtSession.Current;
