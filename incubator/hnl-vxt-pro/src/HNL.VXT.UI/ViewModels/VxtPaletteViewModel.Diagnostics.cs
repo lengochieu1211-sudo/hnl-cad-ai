@@ -11,6 +11,7 @@ namespace HNL.VXT.UI.ViewModels
         private string _diagnosticPackagePath = "Chưa có gói Diagnostic ZIP.";
         private ICommand _analyzeDiagnosticsCommand;
         private ICommand _exportDiagnosticsUiCommand;
+        private ICommand _runtimeGoldenCommand;
 
         public string DiagnosticState
         {
@@ -36,6 +37,9 @@ namespace HNL.VXT.UI.ViewModels
         public ICommand ExportDiagnosticsUiCommand =>
             _exportDiagnosticsUiCommand ?? (_exportDiagnosticsUiCommand = new RelayCommand(ExportDiagnosticPackage));
 
+        public ICommand RuntimeGoldenCommand =>
+            _runtimeGoldenCommand ?? (_runtimeGoldenCommand = new RelayCommand(RunRuntimeGolden));
+
         private void RunDiagnosticAnalysis()
         {
             try
@@ -58,6 +62,31 @@ namespace HNL.VXT.UI.ViewModels
                 DiagnosticState = "LỖI";
                 DiagnosticStatus = "Không chạy được phân tích: " + ex.Message;
             }
+        }
+
+        private void RunRuntimeGolden()
+        {
+            try
+            {
+                DiagnosticState = "ĐANG CHẠY GOLDEN";
+                DiagnosticStatus = "HNL Tool đang chạy Runtime Golden 6000×4000 bằng API AutoCAD thật. Bài test không lưu đối tượng vào DWG...";
+                _host.RequestRuntimeGolden();
+            }
+            catch (Exception ex)
+            {
+                DiagnosticState = "RUNTIME FAIL";
+                DiagnosticStatus = "Không khởi động được Runtime Golden: " + ex.Message;
+            }
+        }
+
+        public void SetRuntimeGoldenResult(bool passed, string summary, string diagnosticPath)
+        {
+            DiagnosticState = passed ? "RUNTIME PASS" : "RUNTIME FAIL";
+            DiagnosticStatus = string.IsNullOrWhiteSpace(summary)
+                ? (passed ? "PASS Runtime Golden." : "FAIL Runtime Golden.")
+                : summary;
+            if (!string.IsNullOrWhiteSpace(diagnosticPath))
+                DiagnosticPackagePath = diagnosticPath;
         }
 
         private void ExportDiagnosticPackage()
