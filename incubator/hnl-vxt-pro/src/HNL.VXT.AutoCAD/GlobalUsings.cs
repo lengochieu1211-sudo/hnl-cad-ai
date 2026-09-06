@@ -1,1 +1,1 @@
-global using Autodesk.AutoCAD.ApplicationServices;
+global using Document = Autodesk.AutoCAD.ApplicationServices.Document;
