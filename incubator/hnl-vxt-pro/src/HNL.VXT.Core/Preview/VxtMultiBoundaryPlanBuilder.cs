@@ -19,6 +19,8 @@ namespace HNL.VXT.Core.Preview
             VxtLayoutContext context)
         {
             if (boundaries == null) throw new ArgumentNullException(nameof(boundaries));
+            context = context ?? new VxtLayoutContext();
+
             var merged = new VxtPreviewPlan();
             var builder = new VxtPreviewPlanBuilder();
             var count = 0;
@@ -26,7 +28,8 @@ namespace HNL.VXT.Core.Preview
             foreach (var boundary in boundaries)
             {
                 if (boundary == null) continue;
-                var part = builder.Build(boundary, settings, context);
+                var boundaryContext = BuildBoundaryContext(context, count);
+                var part = builder.Build(boundary, settings, boundaryContext);
                 merged.Lines.AddRange(part.Lines);
                 merged.Texts.AddRange(part.Texts);
                 merged.HangerPoints.AddRange(part.HangerPoints);
@@ -41,6 +44,33 @@ namespace HNL.VXT.Core.Preview
             if (count == 0)
                 throw new InvalidOperationException("Không có Polyline kín hợp lệ để rải xương.");
             return merged;
+        }
+
+        private static VxtLayoutContext BuildBoundaryContext(VxtLayoutContext source, int boundaryIndex)
+        {
+            // Normal modes and legacy single-boundary callers keep the original context.
+            if (source.BoundaryRegionGroups.Count == 0)
+                return source;
+
+            var local = new VxtLayoutContext
+            {
+                GlobalFurringFromFarEdge = source.GlobalFurringFromFarEdge
+            };
+            local.GeneralObstacles.AddRange(source.GeneralObstacles);
+            local.MainObstacles.AddRange(source.MainObstacles);
+            local.FurringObstacles.AddRange(source.FurringObstacles);
+
+            if (boundaryIndex >= 0 && boundaryIndex < source.BoundaryRegionGroups.Count)
+            {
+                var regions = source.BoundaryRegionGroups[boundaryIndex];
+                if (regions != null) local.Regions.AddRange(regions);
+            }
+            else
+            {
+                // Defensive fallback for contexts assembled by older callers.
+                local.Regions.AddRange(source.Regions);
+            }
+            return local;
         }
     }
 }
