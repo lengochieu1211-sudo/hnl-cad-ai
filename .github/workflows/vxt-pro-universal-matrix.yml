@@ -45,14 +45,21 @@ jobs:
           if (-not $vm.Contains('VXT Pro v7.0.0-beta.1')) { throw 'Palette beta.1 label missing.' }
           $commands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
           if (-not $commands.Contains('[CommandMethod("VXTCREATE"')) { throw 'VXTCREATE command missing.' }
+          if (-not $commands.Contains('GetSelection(options, filter)')) { throw 'Multi-selection boundary/equipment parity gate missing.' }
+          $session = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtSession.cs" -Raw
+          if (-not $session.Contains('List<Boundary2> Boundaries')) { throw 'Multi-polyline boundary collection missing.' }
           $create = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCreateEngine.cs" -Raw
           if (-not $create.Contains('StartTransaction')) { throw 'Create transaction gate missing.' }
+          if (-not $create.Contains('VxtMultiBoundaryPlanBuilder.Build')) { throw 'Create does not use multi-boundary plan builder.' }
+          $preview = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtTransientPreview.cs" -Raw
+          if (-not $preview.Contains('VxtMultiBoundaryPlanBuilder.Build')) { throw 'Preview does not use multi-boundary plan builder.' }
           $logoText = (Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64" -Raw) -replace '\s',''
           try { $logoBytes = [Convert]::FromBase64String($logoText) }
           catch { throw 'HNL logo Base64 is invalid.' }
           if ($logoBytes.Length -lt 1024) { throw 'Decoded HNL logo is unexpectedly small.' }
           if ($logoBytes[0] -ne 0x89 -or $logoBytes[1] -ne 0x50 -or $logoBytes[2] -ne 0x4E -or $logoBytes[3] -ne 0x47) { throw 'HNL logo is not PNG.' }
-          Write-Host 'Functional beta.1 source/branding gate PASS'
+          if (-not (Test-Path "$env:VXT_ROOT\scripts\verify-installer-icon.ps1")) { throw 'Compiled installer icon verifier missing.' }
+          Write-Host 'Functional beta.1 source/branding/multi-polyline gate PASS'
       - name: Run golden core tests
         shell: pwsh
         run: dotnet test "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj" -c Release
@@ -123,7 +130,7 @@ jobs:
           $bad = Get-ChildItem $stage -File | Where-Object { $_.Name -match '^(Ac|AutoCAD).*\.dll$' }
           if ($bad) { throw 'Autodesk runtime DLL must not be redistributed.' }
           $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $stage 'HNL.VXT.AutoCAD.dll'))
-          if (-not $info.FileVersion.StartsWith('7.0.0.6')) { throw "Unexpected bridge version: $($info.FileVersion)" }
+          if (-not $info.FileVersion.StartsWith('7.0.0.7')) { throw "Unexpected bridge version: $($info.FileVersion)" }
           Write-Host "AutoCAD ${{ matrix.cad }} / ${{ matrix.runtime }} => $($info.FileVersion)"
       - uses: actions/upload-artifact@v4
         with:
@@ -183,13 +190,15 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $exe = Join-Path $env:VXT_ROOT 'artifacts\universal-installer\HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe'
           $sha = "$exe.sha256.txt"
+          $ico = Join-Path $env:VXT_ROOT 'artifacts\installer-assets\HNL-VXT.ico'
           if (-not (Test-Path $exe)) { throw "Universal setup missing: $exe" }
           if (-not (Test-Path $sha)) { throw "Universal SHA256 file missing: $sha" }
           $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
-          if (-not $info.FileVersion.StartsWith('7.0.0.6')) { throw "Unexpected installer FileVersion: $($info.FileVersion)" }
+          if (-not $info.FileVersion.StartsWith('7.0.0.7')) { throw "Unexpected installer FileVersion: $($info.FileVersion)" }
           $actual = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
           $declared = ((Get-Content $sha -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
           if ($actual -ne $declared) { throw "Universal SHA mismatch: $actual != $declared" }
+          & "$env:VXT_ROOT\scripts\verify-installer-icon.ps1" -ExePath $exe -IcoPath $ico
           Write-Host "Universal beta.1 setup gate PASS: $($info.FileVersion)"
           Get-Content $sha
       - uses: actions/upload-artifact@v4
@@ -198,5 +207,7 @@ jobs:
           path: |
             ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe
             ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe.sha256.txt
+            ${{ env.VXT_ROOT }}/artifacts/installer-assets/HNL-VXT.ico
+            ${{ env.VXT_ROOT }}/artifacts/installer-assets/HNL-Logo-Official.png
           retention-days: 14
           if-no-files-found: error
