@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
 using HNL.VXT.UI.Hosting;
 using HNL.VXT.UI.Infrastructure;
@@ -125,15 +126,10 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        // Functional beta gate: Create is enabled only with a selected boundary and valid settings.
-        public bool CanCreate
-        {
-            get
-            {
-                string error;
-                return HasBoundary && _settings.IsValid(out error);
-            }
-        }
+        // Exact V6.7.2 workflow gate: normal drawing needs a selected ceiling boundary, but
+        // XC off + XP off + Ty on + Auto DIM off may start without a boundary because Create
+        // then asks for existing XC and distributes Ty on those members.
+        public bool CanCreate => VxtWorkflowEligibility.CanStartCreate(HasBoundary, _settings);
 
         public string BoundaryStatus { get => _boundaryStatus; private set => Set(ref _boundaryStatus, value); }
         public string PreviewStatus { get => _previewStatus; private set => Set(ref _previewStatus, value); }
@@ -419,20 +415,23 @@ namespace HNL.VXT.UI.ViewModels
             OnPropertyChanged(string.Empty);
             _applyingPreset = false;
             (PickDirectionCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (CreateCommand as RelayCommand)?.RaiseCanExecuteChanged();
             RequestPreview();
         }
 
         private void ResetDefaults()
         {
+            // Original V6.7.2 reset restores numeric/layer defaults but does not silently throw
+            // away the user's current DIM style or CAD equipment selection sets. Preserve those
+            // runtime choices so the status text never lies about still-active obstacle IDs.
+            var dimensionStyle = _settings.DimensionStyle;
             _applyingPreset = true;
-            _settings = new VxtSettings();
+            _settings = new VxtSettings { DimensionStyle = dimensionStyle };
             _selectedPreset = "Trần chìm tiêu chuẩn";
-            _generalEquipmentStatus = "Chưa chọn";
-            _mainEquipmentStatus = "Chưa chọn";
-            _furringEquipmentStatus = "Chưa chọn";
             OnPropertyChanged(string.Empty);
             _applyingPreset = false;
             (PickDirectionCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (CreateCommand as RelayCommand)?.RaiseCanExecuteChanged();
             RequestPreview();
         }
 
