@@ -11,7 +11,6 @@ if (-not (Test-Path $IcoPath)) { throw "Source ICO not found: $IcoPath" }
 
 $code = @'
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 
@@ -29,12 +28,16 @@ public static class HnlPeIconReader
     private static extern bool FreeLibrary(IntPtr hModule);
 
     private delegate bool EnumResNameProc(IntPtr hModule, IntPtr lpszType, IntPtr lpszName, IntPtr lParam);
+    private delegate bool EnumResLangProc(IntPtr hModule, IntPtr lpszType, IntPtr lpszName, ushort wIDLanguage, IntPtr lParam);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool EnumResourceNames(IntPtr hModule, IntPtr lpszType, EnumResNameProc lpEnumFunc, IntPtr lParam);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern IntPtr FindResource(IntPtr hModule, IntPtr lpName, IntPtr lpType);
+    private static extern bool EnumResourceLanguages(IntPtr hModule, IntPtr lpszType, IntPtr lpszName, EnumResLangProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr FindResourceEx(IntPtr hModule, IntPtr lpType, IntPtr lpName, ushort wLanguage);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr LoadResource(IntPtr hModule, IntPtr hResInfo);
@@ -45,14 +48,38 @@ public static class HnlPeIconReader
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern uint SizeofResource(IntPtr hModule, IntPtr hResInfo);
 
-    private static byte[] ReadResource(IntPtr module, IntPtr name, IntPtr type)
+    private static byte[] ReadFirstLanguageResource(IntPtr module, IntPtr name, IntPtr type)
     {
-        IntPtr info = FindResource(module, name, type);
-        if (info == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "FindResource failed");
+        bool languageFound = false;
+        ushort language = 0;
+        Exception callbackError = null;
+        EnumResLangProc langCallback = delegate(IntPtr h, IntPtr t, IntPtr n, ushort lang, IntPtr p)
+        {
+            try
+            {
+                language = lang;
+                languageFound = true;
+            }
+            catch (Exception ex)
+            {
+                callbackError = ex;
+            }
+            return false; // first language is enough
+        };
+
+        EnumResourceLanguages(module, type, name, langCallback, IntPtr.Zero);
+        if (callbackError != null) throw callbackError;
+        if (!languageFound)
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "EnumResourceLanguages found no matching resource language");
+
+        IntPtr info = FindResourceEx(module, type, name, language);
+        if (info == IntPtr.Zero)
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "FindResourceEx failed");
         uint size = SizeofResource(module, info);
         if (size == 0) throw new InvalidOperationException("Resource size is zero.");
         IntPtr handle = LoadResource(module, info);
-        if (handle == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "LoadResource failed");
+        if (handle == IntPtr.Zero)
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "LoadResource failed");
         IntPtr ptr = LockResource(handle);
         if (ptr == IntPtr.Zero) throw new InvalidOperationException("LockResource failed.");
         byte[] bytes = new byte[size];
@@ -63,40 +90,61 @@ public static class HnlPeIconReader
     public static byte[] ReadLargestIconImage(string exePath, out int width)
     {
         IntPtr module = LoadLibraryEx(exePath, IntPtr.Zero, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
-        if (module == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "LoadLibraryEx failed");
+        if (module == IntPtr.Zero)
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "LoadLibraryEx failed");
+
+        byte[] result = null;
+        int foundWidth = -1;
+        Exception callbackError = null;
         try
         {
-            var names = new List<IntPtr>();
             EnumResNameProc callback = delegate(IntPtr h, IntPtr t, IntPtr n, IntPtr p)
             {
-                names.Add(n);
-                return true;
-            };
-            if (!EnumResourceNames(module, RT_GROUP_ICON, callback, IntPtr.Zero) || names.Count == 0)
-                throw new InvalidOperationException("No RT_GROUP_ICON resource found in installer EXE.");
-
-            byte[] group = ReadResource(module, names[0], RT_GROUP_ICON);
-            if (group.Length < 6) throw new InvalidOperationException("Invalid GROUP_ICON resource header.");
-            ushort count = BitConverter.ToUInt16(group, 4);
-            if (count == 0 || group.Length < 6 + count * 14)
-                throw new InvalidOperationException("Invalid GROUP_ICON resource entries.");
-
-            int bestWidth = -1;
-            ushort bestId = 0;
-            for (int i = 0; i < count; i++)
-            {
-                int p = 6 + i * 14;
-                int w = group[p] == 0 ? 256 : group[p];
-                ushort id = BitConverter.ToUInt16(group, p + 12);
-                if (w > bestWidth)
+                try
                 {
-                    bestWidth = w;
-                    bestId = id;
+                    // Read the GROUP_ICON while the resource-name pointer is still valid.
+                    // Inno Setup may use a string resource name; caching that IntPtr and
+                    // resolving it after EnumResourceNames returns can make FindResource fail.
+                    byte[] group = ReadFirstLanguageResource(h, n, RT_GROUP_ICON);
+                    if (group.Length < 6)
+                        throw new InvalidOperationException("Invalid GROUP_ICON resource header.");
+                    ushort count = BitConverter.ToUInt16(group, 4);
+                    if (count == 0 || group.Length < 6 + count * 14)
+                        throw new InvalidOperationException("Invalid GROUP_ICON resource entries.");
+
+                    int bestWidth = -1;
+                    ushort bestId = 0;
+                    for (int i = 0; i < count; i++)
+                    {
+                        int e = 6 + i * 14;
+                        int w = group[e] == 0 ? 256 : group[e];
+                        ushort id = BitConverter.ToUInt16(group, e + 12);
+                        if (w > bestWidth)
+                        {
+                            bestWidth = w;
+                            bestId = id;
+                        }
+                    }
+                    if (bestId == 0)
+                        throw new InvalidOperationException("Largest icon resource ID could not be resolved.");
+
+                    result = ReadFirstLanguageResource(h, new IntPtr(bestId), RT_ICON);
+                    foundWidth = bestWidth;
+                    return false; // one Setup icon group is sufficient
                 }
-            }
-            if (bestId == 0) throw new InvalidOperationException("Largest icon resource ID could not be resolved.");
-            width = bestWidth;
-            return ReadResource(module, new IntPtr(bestId), RT_ICON);
+                catch (Exception ex)
+                {
+                    callbackError = ex;
+                    return false;
+                }
+            };
+
+            EnumResourceNames(module, RT_GROUP_ICON, callback, IntPtr.Zero);
+            if (callbackError != null) throw callbackError;
+            if (result == null)
+                throw new InvalidOperationException("No readable RT_GROUP_ICON resource found in installer EXE.");
+            width = foundWidth;
+            return result;
         }
         finally
         {
@@ -168,8 +216,12 @@ if ($exeWidth -ne 256) { throw "Installer EXE largest embedded icon is $exeWidth
 Test-PngFrame -Data $source.Data -ExpectedSize 256 -Label 'Source ICO'
 Test-PngFrame -Data $exeFrame -ExpectedSize 256 -Label 'Installer EXE'
 
-$sourceHash = ([Security.Cryptography.SHA256]::Create()).ComputeHash($source.Data)
-$exeHash = ([Security.Cryptography.SHA256]::Create()).ComputeHash($exeFrame)
+$sha = [Security.Cryptography.SHA256]::Create()
+try {
+  $sourceHash = $sha.ComputeHash($source.Data)
+  $exeHash = $sha.ComputeHash($exeFrame)
+}
+finally { $sha.Dispose() }
 $sourceHex = ($sourceHash | ForEach-Object { $_.ToString('x2') }) -join ''
 $exeHex = ($exeHash | ForEach-Object { $_.ToString('x2') }) -join ''
 if ($sourceHex -ne $exeHex) {
