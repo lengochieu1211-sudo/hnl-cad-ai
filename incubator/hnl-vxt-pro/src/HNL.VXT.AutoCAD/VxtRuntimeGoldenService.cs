@@ -8,6 +8,7 @@ using Autodesk.AutoCAD.ApplicationServices.Core;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using HNL.VXT.Core.Geometry;
+using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
 using HNL.VXT.Core.Preview;
 
@@ -57,7 +58,6 @@ namespace HNL.VXT.AutoCAD
                 var db = doc.Database;
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
-                    // Resource creation is exercised in the same transaction and rolled back.
                     VxtCadResources.EnsureAll(db, tr, settings);
 
                     var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForWrite);
