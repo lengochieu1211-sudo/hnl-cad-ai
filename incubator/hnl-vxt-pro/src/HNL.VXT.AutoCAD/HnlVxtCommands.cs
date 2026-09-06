@@ -16,7 +16,7 @@ namespace HNL.VXT.AutoCAD
         public void ShowPalette() => new VxtCommands().ShowPalette();
 
         [CommandMethod("HNLVXTCREATE", CommandFlags.Modal)]
-        public void Create() => new VxtCommands().Create();
+        public void Create() => VxtLegacyParityCoordinator.ExecuteCreate();
 
         [CommandMethod("HNLVXTBOUNDARY", CommandFlags.Modal)]
         public void SelectBoundary() => new VxtCommands().SelectBoundary();
