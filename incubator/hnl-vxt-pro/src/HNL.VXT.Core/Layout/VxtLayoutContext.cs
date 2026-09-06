@@ -39,6 +39,12 @@ namespace HNL.VXT.Core.Layout
             FurringFromFarEdge = furringFromFarEdge;
         }
 
+        public VxtLayoutRegion((Point2 Min, Point2 Max) worldBounds, double mainAngleDegrees, bool furringFromFarEdge = false)
+            : this(new Box2(worldBounds.Min.X, worldBounds.Min.Y, worldBounds.Max.X, worldBounds.Max.Y),
+                mainAngleDegrees, furringFromFarEdge)
+        {
+        }
+
         public Box2 WorldBounds { get; }
         public double MainAngleDegrees { get; }
         public bool FurringFromFarEdge { get; set; }
