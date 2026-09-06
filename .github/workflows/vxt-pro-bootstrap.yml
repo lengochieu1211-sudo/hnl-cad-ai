@@ -42,6 +42,7 @@ jobs:
             "$env:VXT_ROOT\src\HNL.VXT.Core\HNL.VXT.Core.csproj",
             "$env:VXT_ROOT\src\HNL.VXT.Core\Layout\SmartLayout1D.cs",
             "$env:VXT_ROOT\src\HNL.VXT.Core\Preview\VxtPreviewPlanBuilder.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.Core\Preview\VxtMultiBoundaryPlanBuilder.cs",
             "$env:VXT_ROOT\src\HNL.VXT.Core\Utilities\NumericExpressionEvaluator.cs",
             "$env:VXT_ROOT\src\HNL.VXT.UI\HNL.VXT.UI.csproj",
             "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj",
@@ -57,6 +58,7 @@ jobs:
             "$env:VXT_ROOT\build\HNL.VXT.bundle\PackageContents.xml",
             "$env:VXT_ROOT\installer\HNL.VXT.Setup.iss",
             "$env:VXT_ROOT\scripts\generate-installer-branding.ps1",
+            "$env:VXT_ROOT\scripts\verify-installer-icon.ps1",
             "$env:VXT_ROOT\scripts\build-installer.ps1"
           )
           foreach ($file in $required) {
@@ -93,6 +95,26 @@ jobs:
             throw "Functional gate failed: UI bridge does not invoke HNLVXTCREATE."
           }
 
+          $commandsImpl = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
+          if (-not $commandsImpl.Contains('GetSelection(options, filter)')) {
+            throw "Parity gate failed: boundary/equipment selection is not multi-select."
+          }
+          if (-not $commandsImpl.Contains('LWPOLYLINE,POLYLINE,CIRCLE,SPLINE,HATCH,LINE')) {
+            throw "Parity gate failed: legacy obstacle object types are missing."
+          }
+          $sessionSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtSession.cs" -Raw
+          if (-not $sessionSource.Contains('List<Boundary2> Boundaries')) {
+            throw "Parity gate failed: multiple ceiling boundaries are not stored."
+          }
+          $createSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCreateEngine.cs" -Raw
+          $previewSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtTransientPreview.cs" -Raw
+          if (-not $createSource.Contains('VxtMultiBoundaryPlanBuilder.Build')) {
+            throw "Parity gate failed: Create is not using multi-boundary planning."
+          }
+          if (-not $previewSource.Contains('VxtMultiBoundaryPlanBuilder.Build')) {
+            throw "Parity gate failed: Preview is not using multi-boundary planning."
+          }
+
           $logoText = (Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64" -Raw) -replace '\s',''
           try { $logoBytes = [Convert]::FromBase64String($logoText) }
           catch { throw "Branding gate failed: HNL logo Base64 is invalid." }
@@ -111,7 +133,7 @@ jobs:
           if (-not $iss.Contains('gõ HVX')) {
             throw "Installer gate failed: post-install guidance does not advertise HVX."
           }
-          Write-Host "HNL VXT beta.1 functional/source/branding/installer gate PASS"
+          Write-Host "HNL VXT beta.1 functional/source/branding/multi-polyline/installer gate PASS"
       - name: Restore AutoCAD 2023 plugin
         shell: pwsh
         run: dotnet restore "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj"
@@ -147,7 +169,7 @@ jobs:
           $dll = Join-Path $windows "HNL.VXT.AutoCAD.dll"
           $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $dll))
           Write-Host "HNL.VXT.AutoCAD.dll FileVersion: $($info.FileVersion)"
-          if (-not $info.FileVersion.StartsWith("7.0.0.6")) { throw "Unexpected VXT DLL version: $($info.FileVersion)" }
+          if (-not $info.FileVersion.StartsWith("7.0.0.7")) { throw "Unexpected VXT DLL version: $($info.FileVersion)" }
           $zip = Join-Path $artifactRoot "HNL-VXT-Pro-v7.0.0-beta.1-AutoCAD2023.zip"
           Compress-Archive -Path $bundleRoot -DestinationPath $zip -CompressionLevel Optimal
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
@@ -165,12 +187,14 @@ jobs:
           $ErrorActionPreference = "Stop"
           $exe = "$env:VXT_ROOT\artifacts\installer\HNL_VXT_Pro_Setup_7.0.0-beta.1.exe"
           $sha = "$exe.sha256.txt"
+          $ico = "$env:VXT_ROOT\artifacts\installer-assets\HNL-VXT.ico"
           if (-not (Test-Path $exe)) { throw "Missing Setup EXE: $exe" }
           if (-not (Test-Path $sha)) { throw "Missing Setup SHA256: $sha" }
           $size = (Get-Item $exe).Length
           if ($size -lt 300KB) { throw "Setup EXE too small: $size bytes" }
           $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
-          if (-not $info.FileVersion.StartsWith('7.0.0.6')) { throw "Unexpected Setup FileVersion: $($info.FileVersion)" }
+          if (-not $info.FileVersion.StartsWith('7.0.0.7')) { throw "Unexpected Setup FileVersion: $($info.FileVersion)" }
+          & "$env:VXT_ROOT\scripts\verify-installer-icon.ps1" -ExePath $exe -IcoPath $ico
           Write-Host "ONE-FILE SETUP beta.1 PASS"
           Write-Host "Setup size: $size bytes"
           Write-Host "Setup FileVersion: $($info.FileVersion)"
@@ -189,5 +213,7 @@ jobs:
           path: |
             ${{ env.VXT_ROOT }}/artifacts/installer/HNL_VXT_Pro_Setup_7.0.0-beta.1.exe
             ${{ env.VXT_ROOT }}/artifacts/installer/HNL_VXT_Pro_Setup_7.0.0-beta.1.exe.sha256.txt
+            ${{ env.VXT_ROOT }}/artifacts/installer-assets/HNL-VXT.ico
+            ${{ env.VXT_ROOT }}/artifacts/installer-assets/HNL-Logo-Official.png
           if-no-files-found: error
           retention-days: 14
