@@ -37,6 +37,17 @@ namespace HNL.VXT.AutoCAD
         public ObjectId[] MainEquipmentIds { get; set; } = new ObjectId[0];
         public ObjectId[] FurringEquipmentIds { get; set; } = new ObjectId[0];
 
+        // V6.7.2 legacy manual-source parity. These are populated at Create time when
+        // a system is not redrawn but the Lisp would ask the user to select existing CAD
+        // members for hanger placement and/or automatic dimensions.
+        public ObjectId[] ManualMainIds { get; set; } = new ObjectId[0];
+        public ObjectId[] ManualFurringIds { get; set; } = new ObjectId[0];
+        public ObjectId[] ManualHangerIds { get; set; } = new ObjectId[0];
+
+        // One-side manual-Ty direction. false = Trái/Dưới; true = Phải/Trên.
+        public bool ManualHangerReverseHorizontal { get; set; }
+        public bool ManualHangerReverseVertical { get; set; }
+
         // V6.7.4 ask_each: false = Trái/Dưới, true = Phải/Trên.
         public bool GlobalFurringFromFarEdge { get; set; }
 
@@ -49,5 +60,6 @@ namespace HNL.VXT.AutoCAD
 
         public bool HasBoundary => Boundaries.Count > 0;
         public bool HasBoundaryRegions => BoundaryRegionGroups.Count > 0;
+        public bool HasManualMain => ManualMainIds != null && ManualMainIds.Length > 0;
     }
 }
