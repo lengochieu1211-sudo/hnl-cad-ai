@@ -26,7 +26,7 @@ namespace HNL.VXT.AutoCAD
             session.Settings = settings;
             var ed = doc.Editor;
 
-            if (!settings.DrawMain && !settings.DrawFurring && !settings.DrawHangers && !settings.AutoDimension)
+            if (!VxtWorkflowEligibility.HasAnyTask(settings))
             {
                 ed.WriteMessage("\nHNL Tool - VXT Pro: Không có tính năng nào được chọn.");
                 return;
@@ -50,13 +50,20 @@ namespace HNL.VXT.AutoCAD
                 session.Settings = settings;
             }
 
-            // Preserve the existing Ask-each workflow that used to live in VxtCommands.Create.
-            // Manual rectangle mode already stores the XP start side per HCN when the HCN is made.
+            // V6.7.2 ask_each is per selected ceiling Polyline/region and only applies when XP
+            // itself is drawn or XP DIM needs an existing/generated XP direction. Rectangle mode
+            // already asks and stores the XP side immediately for each HCN, so never ask twice.
             if (session.HasBoundary && settings.AskDirectionEachRegion &&
-                settings.MainDirection != MainDirectionMode.RectangleRegions)
+                settings.MainDirection != MainDirectionMode.RectangleRegions &&
+                (settings.DrawFurring || (settings.AutoDimension && settings.DimFurring)))
             {
-                if (!PromptFurringStartSides(ed, session, settings)) return;
+                if (!PromptFurringStartSides(doc, session, settings)) return;
                 VxtTransientPreview.Instance.Refresh();
+            }
+            else if (!settings.AskDirectionEachRegion || settings.MainDirection == MainDirectionMode.RectangleRegions)
+            {
+                // Prevent an earlier multi-boundary ask_each selection from leaking into a later run.
+                session.BoundaryFurringFromFarEdges.Clear();
             }
 
             // The Lisp creates fresh selection sets every run. Clearing them here also prevents
@@ -109,23 +116,38 @@ namespace HNL.VXT.AutoCAD
             return result.Status == PromptStatus.OK ? result.Value.GetObjectIds() : Array.Empty<ObjectId>();
         }
 
-        private static bool PromptFurringStartSides(Editor ed, VxtSession session, VxtSettings settings)
+        private static bool PromptFurringStartSides(Document doc, VxtSession session, VxtSettings settings)
         {
-            if (session.Regions.Count == 0)
+            var ed = doc.Editor;
+            session.BoundaryFurringFromFarEdges.Clear();
+
+            for (var i = 0; i < session.Boundaries.Count; i++)
             {
+                var boundary = session.Boundaries[i];
+                var boundaryId = i < session.BoundaryIds.Count ? session.BoundaryIds[i] : ObjectId.Null;
+                var angle = ResolveBoundaryMainAngle(settings, boundary);
                 bool far;
-                if (!PromptFurringStartSide(ed, ResolveCurrentMainAngle(settings), "biên trần", out far)) return false;
-                session.GlobalFurringFromFarEdge = far;
-                return true;
+
+                TryHighlight(doc, boundaryId, true);
+                try
+                {
+                    if (!PromptFurringStartSide(ed, angle,
+                        "mảng trần " + (i + 1) + "/" + session.Boundaries.Count, out far))
+                    {
+                        session.BoundaryFurringFromFarEdges.Clear();
+                        return false;
+                    }
+                }
+                finally
+                {
+                    TryHighlight(doc, boundaryId, false);
+                }
+
+                session.BoundaryFurringFromFarEdges.Add(far);
             }
 
-            for (var i = 0; i < session.Regions.Count; i++)
-            {
-                bool far;
-                var region = session.Regions[i];
-                if (!PromptFurringStartSide(ed, region.MainAngleDegrees, "vùng " + (i + 1), out far)) return false;
-                region.FurringFromFarEdge = far;
-            }
+            if (session.BoundaryFurringFromFarEdges.Count > 0)
+                session.GlobalFurringFromFarEdge = session.BoundaryFurringFromFarEdges[0];
             return true;
         }
 
@@ -157,11 +179,20 @@ namespace HNL.VXT.AutoCAD
             return true;
         }
 
-        private static double ResolveCurrentMainAngle(VxtSettings settings)
+        private static double ResolveBoundaryMainAngle(VxtSettings settings, Boundary2 boundary)
         {
             if (settings.MainDirection == MainDirectionMode.Vertical) return 90.0;
-            if (settings.MainDirection == MainDirectionMode.TwoPoints || settings.MainDirection == MainDirectionMode.RectangleRegions)
+            if (settings.MainDirection == MainDirectionMode.TwoPoints ||
+                settings.MainDirection == MainDirectionMode.RectangleRegions)
                 return settings.DirectionDegrees;
+            if (settings.MainDirection == MainDirectionMode.Auto && boundary != null)
+            {
+                var bounds = boundary.GetBounds();
+                var wide = bounds.Max.X - bounds.Min.X > bounds.Max.Y - bounds.Min.Y;
+                return settings.AutoShadowline
+                    ? (wide ? 0.0 : 90.0)
+                    : (wide ? 90.0 : 0.0);
+            }
             return 0.0;
         }
 
@@ -169,6 +200,28 @@ namespace HNL.VXT.AutoCAD
         {
             angle %= 180.0;
             return angle < 0.0 ? angle + 180.0 : angle;
+        }
+
+        private static void TryHighlight(Document doc, ObjectId id, bool highlight)
+        {
+            if (doc == null || id.IsNull || !id.IsValid || id.IsErased) return;
+            try
+            {
+                using (var tr = doc.TransactionManager.StartOpenCloseTransaction())
+                {
+                    var entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
+                    if (entity != null)
+                    {
+                        if (highlight) entity.Highlight();
+                        else entity.Unhighlight();
+                    }
+                    tr.Commit();
+                }
+            }
+            catch
+            {
+                // Highlight is only visual guidance; it must never block layout.
+            }
         }
 
         private static void PromptManualHangerDirections(Document doc, VxtSession session)
