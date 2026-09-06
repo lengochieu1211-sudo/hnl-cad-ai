@@ -16,8 +16,16 @@ namespace HNL.VXT.AutoCAD
             AddExtents(context.GeneralObstacles, session.GeneralEquipmentIds, tr);
             AddExtents(context.MainObstacles, session.MainEquipmentIds, tr);
             AddExtents(context.FurringObstacles, session.FurringEquipmentIds, tr);
+
             foreach (var region in session.Regions)
                 context.Regions.Add(region);
+
+            foreach (var group in session.BoundaryRegionGroups)
+            {
+                var copy = new List<VxtLayoutRegion>();
+                if (group != null) copy.AddRange(group);
+                context.BoundaryRegionGroups.Add(copy);
+            }
             return context;
         }
 
