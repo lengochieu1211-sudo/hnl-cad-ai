@@ -1,4 +1,5 @@
 using Autodesk.AutoCAD.Runtime;
+using HNL.VXT.Core.Models;
 
 namespace HNL.VXT.AutoCAD
 {
@@ -28,22 +29,22 @@ namespace HNL.VXT.AutoCAD
         public void RectangleDirectionMode() => new VxtCommands().RectangleDirectionMode();
 
         [CommandMethod("HNLVXTPICKMAIN", CommandFlags.Modal)]
-        public void PickMainBlock() => new VxtCommands().PickMainBlock();
+        public void PickMainBlock() => VxtSelectionParity.PickBlock(BlockTarget.Main);
 
         [CommandMethod("HNLVXTPICKFURRING", CommandFlags.Modal)]
-        public void PickFurringBlock() => new VxtCommands().PickFurringBlock();
+        public void PickFurringBlock() => VxtSelectionParity.PickBlock(BlockTarget.Furring);
 
         [CommandMethod("HNLVXTPICKHANGER", CommandFlags.Modal)]
-        public void PickHangerBlock() => new VxtCommands().PickHangerBlock();
+        public void PickHangerBlock() => VxtSelectionParity.PickBlock(BlockTarget.Hanger);
 
         [CommandMethod("HNLVXTMEP", CommandFlags.Modal)]
-        public void PickGeneralEquipment() => new VxtCommands().PickGeneralEquipment();
+        public void PickGeneralEquipment() => VxtSelectionParity.PickEquipment(EquipmentTarget.General);
 
         [CommandMethod("HNLVXTMEPMAIN", CommandFlags.Modal)]
-        public void PickMainEquipment() => new VxtCommands().PickMainEquipment();
+        public void PickMainEquipment() => VxtSelectionParity.PickEquipment(EquipmentTarget.Main);
 
         [CommandMethod("HNLVXTMEPFURRING", CommandFlags.Modal)]
-        public void PickFurringEquipment() => new VxtCommands().PickFurringEquipment();
+        public void PickFurringEquipment() => VxtSelectionParity.PickEquipment(EquipmentTarget.Furring);
 
         [CommandMethod("HNLVXTDIMMAIN", CommandFlags.Modal)]
         public void PickMainDim() => new VxtCommands().PickMainDim();
