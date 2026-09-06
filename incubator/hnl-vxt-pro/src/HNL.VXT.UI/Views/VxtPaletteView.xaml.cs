@@ -16,7 +16,7 @@ namespace HNL.VXT.UI.Views
             ViewModel = new VxtPaletteViewModel(host);
             DataContext = ViewModel;
             AddDimensionResourceFields();
-            AddDiagnosticButton();
+            AddDiagnosticCenter();
             VxtPaletteEnhancer.Apply(this, host, ViewModel);
         }
 
@@ -93,26 +93,154 @@ namespace HNL.VXT.UI.Views
             return row;
         }
 
-        private void AddDiagnosticButton()
+        private void AddDiagnosticCenter()
         {
-            var createButton = FindButtonByContent(this, "✓ TẠO KHUNG XƯƠNG TRẦN");
-            var footer = createButton?.Parent as StackPanel;
-            if (footer == null) return;
+            var liveTitle = FindTextBlockByText(this, "XEM TRƯỚC TRÊN BẢN VẼ");
+            if (liveTitle == null) return;
 
-            var exportButton = new Button
+            DependencyObject current = liveTitle;
+            Border liveCard = null;
+            while (current != null)
             {
-                Content = "Xuất lỗi",
-                Command = ViewModel.ExportDiagnosticsCommand,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 6, 0, 0),
-                ToolTip = "Xuất thông tin kiểm tra HNL VXT để gửi khi cần chẩn đoán lỗi"
+                liveCard = current as Border;
+                if (liveCard != null && liveCard.Parent is StackPanel) break;
+                current = (current as FrameworkElement)?.Parent;
+                liveCard = null;
+            }
+
+            var parent = liveCard?.Parent as StackPanel;
+            if (parent == null) return;
+
+            var card = new Border
+            {
+                Style = Resources["SectionCard"] as Style,
+                BorderBrush = (Brush)Resources["AccentBorder"]
             };
 
-            if (Resources["CompactButton"] is Style compactStyle)
-                exportButton.Style = compactStyle;
+            var panel = new StackPanel();
 
-            var insertIndex = footer.Children.IndexOf(createButton) + 1;
-            footer.Children.Insert(insertIndex, exportButton);
+            var header = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var titlePanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            titlePanel.Children.Add(new System.Windows.Shapes.Rectangle
+            {
+                Width = 4,
+                Height = 18,
+                RadiusX = 2,
+                RadiusY = 2,
+                Fill = Brush("#F59E0B"),
+                Margin = new Thickness(0, 0, 8, 0)
+            });
+            var title = new TextBlock { Text = "PHÂN TÍCH & KIỂM TRA LỖI" };
+            if (Resources["SectionTitle"] is Style sectionTitle) title.Style = sectionTitle;
+            titlePanel.Children.Add(title);
+            header.Children.Add(titlePanel);
+
+            var stateBadge = new Border
+            {
+                GridColumn = 1,
+                Background = (Brush)Resources["AccentSoft"],
+                BorderBrush = (Brush)Resources["AccentBorder"],
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(7, 3, 7, 3),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var stateText = new TextBlock
+            {
+                FontSize = 9,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)Resources["AccentStrong"]
+            };
+            stateText.SetBinding(TextBlock.TextProperty, new Binding(nameof(VxtPaletteViewModel.DiagnosticState)));
+            stateBadge.Child = stateText;
+            Grid.SetColumn(stateBadge, 1);
+            header.Children.Add(stateBadge);
+            panel.Children.Add(header);
+
+            var scope = new TextBlock
+            {
+                Text = "Kiểm tra: cấu hình Min/Max • biên trần • Block XC/XP/Ty • DimStyle • tài nguyên DWG • trạng thái Runtime.",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            if (Resources["HintText"] is Style hintStyle) scope.Style = hintStyle;
+            panel.Children.Add(scope);
+
+            var statusBox = new Border
+            {
+                Background = (Brush)Resources["InputBackground"],
+                BorderBrush = (Brush)Resources["InputBorder"],
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(8, 7, 8, 7),
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            var status = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 10.5
+            };
+            status.SetBinding(TextBlock.TextProperty, new Binding(nameof(VxtPaletteViewModel.DiagnosticStatus)));
+            statusBox.Child = status;
+            panel.Children.Add(statusBox);
+
+            var buttons = new Grid { Margin = new Thickness(0, 0, 0, 7) };
+            buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var analyze = new Button
+            {
+                Content = "✓ Phân tích nhanh",
+                Command = ViewModel.AnalyzeDiagnosticsCommand,
+                Margin = new Thickness(0, 0, 4, 0),
+                ToolTip = "Kiểm tra cấu hình, biên trần, Block, DimStyle và tài nguyên bản vẽ"
+            };
+            if (Resources["CompactButton"] is Style compactStyle) analyze.Style = compactStyle;
+            buttons.Children.Add(analyze);
+
+            var export = new Button
+            {
+                Content = "⬇ Xuất Diagnostic ZIP",
+                Command = ViewModel.ExportDiagnosticsUiCommand,
+                Margin = new Thickness(4, 0, 0, 0),
+                ToolTip = "Xuất gói đầy đủ để phân tích sâu khi có lỗi"
+            };
+            if (Resources["CompactButton"] is Style compactStyle2) export.Style = compactStyle2;
+            Grid.SetColumn(export, 1);
+            buttons.Children.Add(export);
+            panel.Children.Add(buttons);
+
+            var packageLabel = new TextBlock
+            {
+                Text = "Gói lỗi gần nhất:",
+                FontSize = 9.5,
+                Foreground = (Brush)Resources["SecondaryText"]
+            };
+            panel.Children.Add(packageLabel);
+
+            var packagePath = new TextBlock
+            {
+                FontSize = 9.5,
+                Foreground = (Brush)Resources["SecondaryText"],
+                TextWrapping = TextWrapping.Wrap
+            };
+            packagePath.SetBinding(TextBlock.TextProperty, new Binding(nameof(VxtPaletteViewModel.DiagnosticPackagePath)));
+            panel.Children.Add(packagePath);
+
+            var commandHint = new TextBlock
+            {
+                Text = "Lệnh kỹ thuật: VXTANALYZE • VXTDIAGZIP",
+                FontSize = 9,
+                Foreground = (Brush)Resources["SecondaryText"],
+                Margin = new Thickness(0, 5, 0, 0)
+            };
+            panel.Children.Add(commandHint);
+
+            card.Child = panel;
+            parent.Children.Insert(parent.Children.IndexOf(liveCard), card);
         }
 
         private static Expander FindExpanderByHeaderText(DependencyObject parent, string text)
@@ -130,6 +258,19 @@ namespace HNL.VXT.UI.Views
             return null;
         }
 
+        private static TextBlock FindTextBlockByText(DependencyObject parent, string text)
+        {
+            if (parent == null) return null;
+            if (parent is TextBlock direct && direct.Text == text) return direct;
+            var count = VisualTreeHelper.GetChildrenCount(parent);
+            for (var i = 0; i < count; i++)
+            {
+                var found = FindTextBlockByText(VisualTreeHelper.GetChild(parent, i), text);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
         private static bool ContainsText(DependencyObject parent, string text)
         {
             if (parent == null) return false;
@@ -140,21 +281,6 @@ namespace HNL.VXT.UI.Views
                 if (ContainsText(VisualTreeHelper.GetChild(parent, i), text)) return true;
             }
             return false;
-        }
-
-        private static Button FindButtonByContent(DependencyObject parent, string content)
-        {
-            if (parent == null) return null;
-            var count = VisualTreeHelper.GetChildrenCount(parent);
-            for (var i = 0; i < count; i++)
-            {
-                var child = VisualTreeHelper.GetChild(parent, i);
-                if (child is Button button && string.Equals(button.Content as string, content))
-                    return button;
-                var nested = FindButtonByContent(child, content);
-                if (nested != null) return nested;
-            }
-            return null;
         }
 
         private void ApplyTheme(bool dark)
