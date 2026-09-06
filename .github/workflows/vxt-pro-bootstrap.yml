@@ -45,6 +45,7 @@ jobs:
             "$env:VXT_ROOT\src\HNL.VXT.Core\Utilities\NumericExpressionEvaluator.cs",
             "$env:VXT_ROOT\src\HNL.VXT.UI\HNL.VXT.UI.csproj",
             "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj",
+            "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs",
             "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCreateEngine.cs",
             "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs",
             "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtTransientPreview.cs",
@@ -70,13 +71,20 @@ jobs:
             throw "Version gate failed: Palette is not beta.1."
           }
 
-          $commandSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
-          if (-not $commandSource.Contains('[CommandMethod("VXTCREATE"')) {
-            throw "Functional gate failed: VXTCREATE command is missing."
+          $commandSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
+          if (-not $commandSource.Contains('[CommandMethod("HNLVXT"')) {
+            throw "Command namespace gate failed: HNLVXT command is missing."
+          }
+          if (-not $commandSource.Contains('[CommandMethod("HNLVXTCREATE"')) {
+            throw "Functional gate failed: HNLVXTCREATE command is missing."
+          }
+          $pluginSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\PluginEntry.cs" -Raw
+          if (-not $pluginSource.Contains('CommandClass(typeof(HNL.VXT.AutoCAD.HnlVxtCommands))')) {
+            throw "Command namespace gate failed: legacy VXT command class is still registered."
           }
           $bridgeSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtHostBridge.cs" -Raw
-          if (-not $bridgeSource.Contains('Send("VXTCREATE ")')) {
-            throw "Functional gate failed: UI bridge does not invoke VXTCREATE."
+          if (-not $bridgeSource.Contains('Send("HNLVXTCREATE ")')) {
+            throw "Functional gate failed: UI bridge does not invoke HNLVXTCREATE."
           }
 
           $logoText = (Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64" -Raw) -replace '\s',''
