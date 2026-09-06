@@ -48,28 +48,36 @@ namespace HNL.VXT.Core.Preview
 
         private static VxtLayoutContext BuildBoundaryContext(VxtLayoutContext source, int boundaryIndex)
         {
-            // Normal modes and legacy single-boundary callers keep the original context.
-            if (source.BoundaryRegionGroups.Count == 0)
-                return source;
-
             var local = new VxtLayoutContext
             {
-                GlobalFurringFromFarEdge = source.GlobalFurringFromFarEdge
+                GlobalFurringFromFarEdge = boundaryIndex >= 0 && boundaryIndex < source.BoundaryFurringFromFarEdges.Count
+                    ? source.BoundaryFurringFromFarEdges[boundaryIndex]
+                    : source.GlobalFurringFromFarEdge
             };
             local.GeneralObstacles.AddRange(source.GeneralObstacles);
             local.MainObstacles.AddRange(source.MainObstacles);
             local.FurringObstacles.AddRange(source.FurringObstacles);
 
-            if (boundaryIndex >= 0 && boundaryIndex < source.BoundaryRegionGroups.Count)
+            // Manual HCN mode stores XP direction directly on every region. Normal modes use
+            // the per-boundary GlobalFurringFromFarEdge resolved above.
+            if (source.BoundaryRegionGroups.Count > 0)
             {
-                var regions = source.BoundaryRegionGroups[boundaryIndex];
-                if (regions != null) local.Regions.AddRange(regions);
+                if (boundaryIndex >= 0 && boundaryIndex < source.BoundaryRegionGroups.Count)
+                {
+                    var regions = source.BoundaryRegionGroups[boundaryIndex];
+                    if (regions != null) local.Regions.AddRange(regions);
+                }
+                else
+                {
+                    // Defensive fallback for contexts assembled by older callers.
+                    local.Regions.AddRange(source.Regions);
+                }
             }
             else
             {
-                // Defensive fallback for contexts assembled by older callers.
                 local.Regions.AddRange(source.Regions);
             }
+
             return local;
         }
     }
