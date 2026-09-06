@@ -30,14 +30,14 @@ namespace HNL.VXT.AutoCAD
             return doc == null ? Array.Empty<string>() : ReadSymbolNames(doc.Database, doc.Database.DimStyleTableId);
         }
 
-        public void SelectBoundary() => Send("VXTSELECTBOUNDARY ");
+        public void SelectBoundary() => Send("HNLVXTBOUNDARY ");
 
         public void PickDirection(MainDirectionMode mode)
         {
             switch (mode)
             {
-                case MainDirectionMode.TwoPoints: Send("VXTPICKDIRECTION "); break;
-                case MainDirectionMode.RectangleRegions: Send("VXTRECTDIRECTION "); break;
+                case MainDirectionMode.TwoPoints: Send("HNLVXTDIRECTION "); break;
+                case MainDirectionMode.RectangleRegions: Send("HNLVXTREGION "); break;
                 default: Write("\nHNL Tool - VXT Pro: Hướng hiện tại không cần chọn điểm trên CAD."); break;
             }
         }
@@ -46,9 +46,9 @@ namespace HNL.VXT.AutoCAD
         {
             switch (target)
             {
-                case BlockTarget.Main: Send("VXTPICKMAINBLOCK "); break;
-                case BlockTarget.Furring: Send("VXTPICKFURRINGBLOCK "); break;
-                case BlockTarget.Hanger: Send("VXTPICKHANGERBLOCK "); break;
+                case BlockTarget.Main: Send("HNLVXTPICKMAIN "); break;
+                case BlockTarget.Furring: Send("HNLVXTPICKFURRING "); break;
+                case BlockTarget.Hanger: Send("HNLVXTPICKHANGER "); break;
             }
         }
 
@@ -56,9 +56,9 @@ namespace HNL.VXT.AutoCAD
         {
             switch (target)
             {
-                case EquipmentTarget.General: Send("VXTPICKEQUIPGENERAL "); break;
-                case EquipmentTarget.Main: Send("VXTPICKEQUIPMAIN "); break;
-                case EquipmentTarget.Furring: Send("VXTPICKEQUIPFURRING "); break;
+                case EquipmentTarget.General: Send("HNLVXTMEP "); break;
+                case EquipmentTarget.Main: Send("HNLVXTMEPMAIN "); break;
+                case EquipmentTarget.Furring: Send("HNLVXTMEPFURRING "); break;
             }
         }
 
@@ -66,9 +66,9 @@ namespace HNL.VXT.AutoCAD
         {
             switch (target)
             {
-                case DimensionTarget.Main: Send("VXTPICKDIMMAIN "); break;
-                case DimensionTarget.Furring: Send("VXTPICKDIMFURRING "); break;
-                case DimensionTarget.Hanger: Send("VXTPICKDIMHANGER "); break;
+                case DimensionTarget.Main: Send("HNLVXTDIMMAIN "); break;
+                case DimensionTarget.Furring: Send("HNLVXTDIMFURRING "); break;
+                case DimensionTarget.Hanger: Send("HNLVXTDIMHANGER "); break;
             }
         }
 
@@ -93,13 +93,13 @@ namespace HNL.VXT.AutoCAD
             return VxtDiagnosticService.ExportInteractive(settings);
         }
 
-        public void RequestRuntimeGolden() => Send("VXTGOLDEN ");
+        public void RequestRuntimeGolden() => Send("HNLVXTGOLDEN ");
 
         public void RequestCreate()
         {
             var session = VxtSession.Current;
             if (session.ViewModel != null) session.Settings = session.ViewModel.Snapshot();
-            Send("VXTCREATE ");
+            Send("HNLVXTCREATE ");
         }
 
         private static string[] ReadSymbolNames(Database db, ObjectId tableId)
