@@ -4,14 +4,15 @@ namespace HNL.VXT.AutoCAD
 {
     /// <summary>
     /// The only registered AutoCAD command surface for HNL VXT Pro.
-    /// All public commands use the HNLVXT namespace so the plugin can coexist with
-    /// the legacy Lisp command VXT and with other AutoCAD/Lisp command sets.
+    /// User-facing shortcut: HVX (HNL + Ve Xuong), short for daily use and distinct
+    /// from the legacy Lisp command VXT. Technical commands keep the longer HNLVXT
+    /// namespace to minimize collision risk with AutoCAD and other Lisp tools.
     /// VxtCommands remains the implementation class but is intentionally not
     /// registered as a CommandClass, so its legacy VXT* attributes are not exposed.
     /// </summary>
     public sealed class HnlVxtCommands
     {
-        [CommandMethod("HNLVXT", CommandFlags.Modal)]
+        [CommandMethod("HVX", CommandFlags.Modal)]
         public void ShowPalette() => new VxtCommands().ShowPalette();
 
         [CommandMethod("HNLVXTCREATE", CommandFlags.Modal)]
