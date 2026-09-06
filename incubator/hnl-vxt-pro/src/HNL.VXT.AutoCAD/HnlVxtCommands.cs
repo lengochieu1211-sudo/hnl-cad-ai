@@ -20,7 +20,14 @@ namespace HNL.VXT.AutoCAD
         public void Create() => VxtLegacyParityCoordinator.ExecuteCreate();
 
         [CommandMethod("HNLVXTBOUNDARY", CommandFlags.Modal)]
-        public void SelectBoundary() => new VxtCommands().SelectBoundary();
+        public void SelectBoundary()
+        {
+            // A fresh Lisp ssget starts a fresh per-ceiling ask_each state. Clear the previous
+            // boundary-specific XP directions before the new selection is collected.
+            VxtSession.Current.BoundaryFurringFromFarEdges.Clear();
+            VxtSession.Current.GlobalFurringFromFarEdge = false;
+            new VxtCommands().SelectBoundary();
+        }
 
         [CommandMethod("HNLVXTDIRECTION", CommandFlags.Modal)]
         public void PickDirection() => new VxtCommands().PickDirection();
