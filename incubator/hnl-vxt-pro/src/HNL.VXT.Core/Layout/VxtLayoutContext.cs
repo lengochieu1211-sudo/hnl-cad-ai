@@ -12,7 +12,14 @@ namespace HNL.VXT.Core.Layout
         public List<Box2> GeneralObstacles { get; } = new List<Box2>();
         public List<Box2> MainObstacles { get; } = new List<Box2>();
         public List<Box2> FurringObstacles { get; } = new List<Box2>();
+
+        // Backward-compatible region list for a single boundary.
         public List<VxtLayoutRegion> Regions { get; } = new List<VxtLayoutRegion>();
+
+        // V6.7.4 parity for many selected ceiling polylines: each selected boundary owns
+        // its own rectangle-region list. Region group index == boundary selection index.
+        // This prevents rectangles drawn for ceiling area 1 from leaking into area 2.
+        public List<List<VxtLayoutRegion>> BoundaryRegionGroups { get; } = new List<List<VxtLayoutRegion>>();
 
         /// <summary>
         /// V6.7.4 ask_each does not rotate XP. It chooses which edge the fixed XP grid starts from.
