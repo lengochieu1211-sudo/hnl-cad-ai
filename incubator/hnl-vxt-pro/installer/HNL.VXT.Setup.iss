@@ -111,7 +111,7 @@ begin
   begin
     MsgBox(
       'Cài đặt HNL Tool - VXT Pro v{#MyAppVersion} hoàn tất.' + #13#10 + #13#10 +
-      'Mở AutoCAD 2023 và gõ VXT để mở giao diện HNL VXT Pro.',
+      'Mở AutoCAD 2023 và gõ HVX để mở giao diện HNL VXT Pro.',
       mbInformation, MB_OK);
   end;
 end;
