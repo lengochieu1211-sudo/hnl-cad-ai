@@ -80,16 +80,16 @@ namespace HNL.VXT.AutoCAD
 
         public void ClearPreview() => VxtTransientPreview.Instance.Clear();
 
-        public void AnalyzeDiagnostics(VxtSettings settings)
+        public string AnalyzeDiagnostics(VxtSettings settings)
         {
             VxtSession.Current.Settings = settings.Clone();
-            VxtDiagnosticService.AnalyzeAndReport(settings);
+            return VxtDiagnosticService.AnalyzeAndReport(settings);
         }
 
-        public void ExportDiagnostics(VxtSettings settings)
+        public string ExportDiagnostics(VxtSettings settings)
         {
             VxtSession.Current.Settings = settings.Clone();
-            VxtDiagnosticService.ExportInteractive(settings);
+            return VxtDiagnosticService.ExportInteractive(settings);
         }
 
         public void RequestCreate()
