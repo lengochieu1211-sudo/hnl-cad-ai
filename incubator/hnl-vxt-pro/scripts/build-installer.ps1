@@ -55,7 +55,7 @@ $hashFile = "$expected.sha256.txt"
 "$hash  $([IO.Path]::GetFileName($expected))" | Set-Content -Path $hashFile -Encoding ascii
 
 $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $expected))
-if (-not $info.FileVersion.StartsWith('7.0.0.6')) { throw "Unexpected installer FileVersion: $($info.FileVersion)" }
+if (-not $info.FileVersion.StartsWith('7.0.0.7')) { throw "Unexpected installer FileVersion: $($info.FileVersion)" }
 Write-Host "Installer: $expected"
 Write-Host "Size: $length bytes"
 Write-Host "FileVersion: $($info.FileVersion)"
