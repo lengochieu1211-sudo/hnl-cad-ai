@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices.Core;
 using Autodesk.AutoCAD.DatabaseServices;
@@ -27,7 +28,10 @@ namespace HNL.VXT.AutoCAD
                 return;
             }
 
-            if (session.Settings.AskDirectionEachRegion)
+            // Manual rectangle mode already records XP start side for every region exactly
+            // when the rectangle is defined, like V6.7.4. Do not ask it a second time here.
+            if (session.Settings.AskDirectionEachRegion &&
+                session.Settings.MainDirection != MainDirectionMode.RectangleRegions)
             {
                 if (!PromptFurringStartSides(doc.Editor, session)) return;
                 VxtTransientPreview.Instance.Refresh();
@@ -56,7 +60,8 @@ namespace HNL.VXT.AutoCAD
 
             using (var tr = doc.TransactionManager.StartTransaction())
             {
-                var accepted = new System.Collections.Generic.List<Boundary2>();
+                var accepted = new List<Boundary2>();
+                var acceptedIds = new List<ObjectId>();
                 var skippedOpen = 0;
                 var skippedUnsupported = 0;
                 foreach (var id in result.Value.GetObjectIds())
@@ -66,11 +71,13 @@ namespace HNL.VXT.AutoCAD
                     {
                         if (!pl.Closed) { skippedOpen++; continue; }
                         accepted.Add(BoundarySampler.FromPolyline(pl));
+                        acceptedIds.Add(id);
                     }
                     else if (entity is Polyline2d pl2)
                     {
                         if (!pl2.Closed) { skippedOpen++; continue; }
                         accepted.Add(BoundarySampler.FromPolyline2d(pl2, tr));
+                        acceptedIds.Add(id);
                     }
                     else
                     {
@@ -87,7 +94,10 @@ namespace HNL.VXT.AutoCAD
                 var session = VxtSession.Current;
                 session.Boundaries.Clear();
                 session.Boundaries.AddRange(accepted);
+                session.BoundaryIds.Clear();
+                session.BoundaryIds.AddRange(acceptedIds);
                 session.Regions.Clear();
+                session.BoundaryRegionGroups.Clear();
                 session.GlobalFurringFromFarEdge = false;
                 var skipped = skippedOpen + skippedUnsupported;
                 session.ViewModel?.SetBoundaryStatus(
@@ -98,7 +108,12 @@ namespace HNL.VXT.AutoCAD
                 ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận " + accepted.Count +
                     " mảng trần độc lập" + (skipped > 0 ? "; bỏ qua " + skipped + " đối tượng." : "."));
             }
-            VxtTransientPreview.Instance.Refresh();
+
+            var mode = VxtSession.Current.Settings.MainDirection;
+            if (mode == MainDirectionMode.TwoPoints || mode == MainDirectionMode.RectangleRegions)
+                VxtTransientPreview.Instance.Clear();
+            else
+                VxtTransientPreview.Instance.Refresh();
         }
 
         [CommandMethod("VXTPICKDIRECTION", CommandFlags.Modal)]
@@ -107,13 +122,21 @@ namespace HNL.VXT.AutoCAD
             var doc = Application.DocumentManager.MdiActiveDocument;
             if (doc == null) return;
             var angle = PromptAngleByTwoPoints(doc.Editor, "hướng Xương chính");
-            if (!angle.HasValue) return;
+            if (!angle.HasValue)
+            {
+                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Chưa xác định hướng 2 điểm; giữ hướng trước đó.");
+                return;
+            }
 
-            VxtSession.Current.Settings.MainDirection = MainDirectionMode.TwoPoints;
-            VxtSession.Current.Settings.DirectionDegrees = angle.Value;
-            VxtSession.Current.Regions.Clear();
-            VxtSession.Current.ViewModel?.SetDirection(angle.Value);
+            var session = VxtSession.Current;
+            session.Settings.MainDirection = MainDirectionMode.TwoPoints;
+            session.Settings.DirectionDegrees = NormalizeAngle(angle.Value);
+            session.Regions.Clear();
+            session.BoundaryRegionGroups.Clear();
+            session.ViewModel?.SetDirection(angle.Value);
             VxtTransientPreview.Instance.Refresh();
+            doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Hướng Xương chính 2 điểm = " +
+                NormalizeAngle(angle.Value).ToString("0.###") + "°.");
         }
 
         [CommandMethod("VXTRECTDIRECTION", CommandFlags.Modal)]
@@ -129,68 +152,110 @@ namespace HNL.VXT.AutoCAD
                 return;
             }
 
-            session.Regions.Clear();
-            ed.WriteMessage("\nHNL Tool - VXT Pro: Chia vùng bằng hình chữ nhật. Enter tại điểm đầu để kết thúc.");
-
-            while (true)
-            {
-                var firstOptions = new PromptPointOptions("\nChọn góc thứ nhất của vùng (Enter = kết thúc): ") { AllowNone = true };
-                var first = ed.GetPoint(firstOptions);
-                if (first.Status == PromptStatus.None) break;
-                if (first.Status != PromptStatus.OK) return;
-
-                var cornerOptions = new PromptCornerOptions("\nChọn góc đối diện của vùng: ", first.Value);
-                var second = ed.GetCorner(cornerOptions);
-                if (second.Status != PromptStatus.OK) return;
-
-                var minX = Math.Min(first.Value.X, second.Value.X);
-                var minY = Math.Min(first.Value.Y, second.Value.Y);
-                var maxX = Math.Max(first.Value.X, second.Value.X);
-                var maxY = Math.Max(first.Value.Y, second.Value.Y);
-                if (maxX - minX < 1e-6 || maxY - minY < 1e-6)
-                {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Vùng quá nhỏ, bỏ qua.");
-                    continue;
-                }
-
-                var direction = new PromptKeywordOptions("\nHướng Xương chính trong vùng [Ngang/Doc/Goc2Diem] <Ngang>: ");
-                direction.Keywords.Add("Ngang");
-                direction.Keywords.Add("Doc");
-                direction.Keywords.Add("Goc2Diem");
-                direction.Keywords.Default = "Ngang";
-                var directionResult = ed.GetKeywords(direction);
-                if (directionResult.Status != PromptStatus.OK && directionResult.Status != PromptStatus.None) return;
-                var key = directionResult.Status == PromptStatus.None ? "Ngang" : directionResult.StringResult;
-
-                double angle = 0.0;
-                if (key == "Doc") angle = 90.0;
-                else if (key == "Goc2Diem")
-                {
-                    var picked = PromptAngleByTwoPoints(ed, "hướng vùng");
-                    if (!picked.HasValue) return;
-                    angle = picked.Value;
-                }
-
-                var region = new VxtLayoutRegion(new Box2(minX, minY, maxX, maxY), angle);
-                if (session.Settings.AskDirectionEachRegion)
-                {
-                    bool fromFar;
-                    if (!PromptFurringStartSide(ed, angle, "vùng " + (session.Regions.Count + 1), out fromFar)) return;
-                    region.FurringFromFarEdge = fromFar;
-                }
-                session.Regions.Add(region);
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận vùng " + session.Regions.Count + ".");
-            }
-
-            if (session.Regions.Count == 0)
-            {
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Chưa tạo vùng nào; giữ hướng trước đó.");
-                return;
-            }
-
             session.Settings.MainDirection = MainDirectionMode.RectangleRegions;
+            session.Regions.Clear();
+            session.BoundaryRegionGroups.Clear();
+            VxtTransientPreview.Instance.Clear();
+
+            ed.WriteMessage("\nHNL Tool - VXT Pro: Chia vùng HCN theo từng Polyline, giống VXT Lisp. Enter tại góc 1 để kết thúc mảng hiện tại.");
+
+            for (var boundaryIndex = 0; boundaryIndex < session.Boundaries.Count; boundaryIndex++)
+            {
+                var boundary = session.Boundaries[boundaryIndex];
+                var group = new List<VxtLayoutRegion>();
+                var regionNumber = 1;
+                var boundaryId = boundaryIndex < session.BoundaryIds.Count
+                    ? session.BoundaryIds[boundaryIndex]
+                    : ObjectId.Null;
+
+                TryHighlight(doc, boundaryId, true);
+                try
+                {
+                    ed.WriteMessage("\nHNL Tool - VXT Pro: Mảng trần " + (boundaryIndex + 1) + "/" +
+                        session.Boundaries.Count + " đang được thiết lập.");
+
+                    while (true)
+                    {
+                        var firstOptions = new PromptPointOptions(
+                            "\nHNL Tool - -> Chọn góc 1 của HCN quét mảng " + regionNumber +
+                            " (Enter = xong mảng hiện tại): ")
+                        {
+                            AllowNone = true
+                        };
+                        var first = ed.GetPoint(firstOptions);
+                        if (first.Status == PromptStatus.None) break;
+                        if (first.Status != PromptStatus.OK) return;
+
+                        var cornerOptions = new PromptCornerOptions("\nHNL Tool - -> Chọn góc 2: ", first.Value);
+                        var second = ed.GetCorner(cornerOptions);
+                        if (second.Status != PromptStatus.OK)
+                        {
+                            ed.WriteMessage("\nHNL Tool - VXT Pro: Không chọn được góc 2. Thử lại vùng hiện tại.");
+                            continue;
+                        }
+
+                        var minX = Math.Min(first.Value.X, second.Value.X);
+                        var minY = Math.Min(first.Value.Y, second.Value.Y);
+                        var maxX = Math.Max(first.Value.X, second.Value.X);
+                        var maxY = Math.Max(first.Value.Y, second.Value.Y);
+                        if (maxX - minX < 1e-6 || maxY - minY < 1e-6)
+                        {
+                            ed.WriteMessage("\nHNL Tool - VXT Pro: Vùng quá nhỏ, bỏ qua.");
+                            continue;
+                        }
+
+                        // V6.7.4 Manual_Split offers exactly Ngang/Doc for each rectangle.
+                        var direction = new PromptKeywordOptions(
+                            "\nHNL Tool - -> Hướng rải Xương chính cho mảng " + regionNumber +
+                            " [Ngang/Doc] <Ngang>: ");
+                        direction.Keywords.Add("Ngang");
+                        direction.Keywords.Add("Doc");
+                        direction.Keywords.Default = "Ngang";
+                        var directionResult = ed.GetKeywords(direction);
+                        if (directionResult.Status != PromptStatus.OK && directionResult.Status != PromptStatus.None) return;
+                        var key = directionResult.Status == PromptStatus.None ? "Ngang" : directionResult.StringResult;
+                        var angle = key == "Doc" ? 90.0 : 0.0;
+
+                        var region = new VxtLayoutRegion(new Box2(minX, minY, maxX, maxY), angle);
+
+                        // In V6.7.4 Manual_Split, XP start side is asked immediately for every HCN,
+                        // regardless of the global ask_each toggle. Store it now and never ask twice.
+                        bool fromFar;
+                        if (!PromptFurringStartSide(ed, angle,
+                            "mảng " + regionNumber + " / Polyline " + (boundaryIndex + 1), out fromFar)) return;
+                        region.FurringFromFarEdge = fromFar;
+
+                        group.Add(region);
+                        session.Regions.Add(region);
+                        ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận HCN " + regionNumber +
+                            " cho Polyline " + (boundaryIndex + 1) + ".");
+                        regionNumber++;
+                    }
+                }
+                finally
+                {
+                    TryHighlight(doc, boundaryId, false);
+                }
+
+                if (group.Count == 0)
+                {
+                    // Safe legacy-style fallback: still process the selected ceiling instead of
+                    // silently dropping it when Enter is pressed before defining a rectangle.
+                    var bounds = boundary.GetBounds();
+                    var fallback = new VxtLayoutRegion(bounds, 0.0, false);
+                    group.Add(fallback);
+                    session.Regions.Add(fallback);
+                    ed.WriteMessage("\nHNL Tool - VXT Pro: Polyline " + (boundaryIndex + 1) +
+                        " chưa có HCN; dùng toàn bộ biên với hướng Ngang.");
+                }
+
+                session.BoundaryRegionGroups.Add(group);
+            }
+
             VxtTransientPreview.Instance.Refresh();
-            ed.WriteMessage("\nHNL Tool - VXT Pro: Đã thiết lập " + session.Regions.Count + " vùng. Preview và Tạo thật dùng đúng các vùng này.");
+            ed.WriteMessage("\nHNL Tool - VXT Pro: Đã thiết lập " + session.Regions.Count +
+                " HCN trên " + session.BoundaryRegionGroups.Count +
+                " Polyline. Preview và Tạo thật xử lý từng Polyline độc lập.");
         }
 
         [CommandMethod("VXTPICKMAINBLOCK", CommandFlags.Modal)]
@@ -286,9 +351,9 @@ namespace HNL.VXT.AutoCAD
 
         private static double? PromptAngleByTwoPoints(Editor ed, string label)
         {
-            var p1 = ed.GetPoint("\nHNL Tool - VXT Pro: Chọn điểm đầu " + label + ": ");
+            var p1 = ed.GetPoint("\nHNL Tool - VXT Pro: Chọn điểm thứ 1 xác định " + label + ": ");
             if (p1.Status != PromptStatus.OK) return null;
-            var p2opt = new PromptPointOptions("\nHNL Tool - VXT Pro: Chọn điểm cuối " + label + ": ")
+            var p2opt = new PromptPointOptions("\nHNL Tool - VXT Pro: Chọn điểm thứ 2 xác định " + label + ": ")
             {
                 BasePoint = p1.Value,
                 UseBasePoint = true
@@ -297,8 +362,34 @@ namespace HNL.VXT.AutoCAD
             if (p2.Status != PromptStatus.OK) return null;
             var dx = p2.Value.X - p1.Value.X;
             var dy = p2.Value.Y - p1.Value.Y;
-            if (Math.Sqrt(dx * dx + dy * dy) < 1e-8) return null;
+            if (Math.Sqrt(dx * dx + dy * dy) < 1e-8)
+            {
+                ed.WriteMessage("\nHNL Tool - VXT Pro: Hai điểm quá gần nhau.");
+                return null;
+            }
             return Math.Atan2(dy, dx) * 180.0 / Math.PI;
+        }
+
+        private static void TryHighlight(Document doc, ObjectId id, bool highlight)
+        {
+            if (doc == null || id.IsNull || id.IsErased || !id.IsValid) return;
+            try
+            {
+                using (var tr = doc.TransactionManager.StartOpenCloseTransaction())
+                {
+                    var entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
+                    if (entity != null)
+                    {
+                        if (highlight) entity.Highlight();
+                        else entity.Unhighlight();
+                    }
+                    tr.Commit();
+                }
+            }
+            catch
+            {
+                // Highlight is guidance only; it must never block layout.
+            }
         }
 
         private static void PickBlock(BlockTarget target)
