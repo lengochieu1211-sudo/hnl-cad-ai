@@ -34,6 +34,7 @@ namespace HNL.VXT.AutoCAD
 
         public void PickDirection(MainDirectionMode mode)
         {
+            VxtSession.Current.Settings.MainDirection = mode;
             switch (mode)
             {
                 case MainDirectionMode.TwoPoints: Send("HNLVXTDIRECTION "); break;
@@ -74,7 +75,36 @@ namespace HNL.VXT.AutoCAD
 
         public void RequestPreview(VxtSettings settings)
         {
-            VxtSession.Current.Settings = settings.Clone();
+            var session = VxtSession.Current;
+            var previousMode = session.Settings?.MainDirection ?? MainDirectionMode.Horizontal;
+            session.Settings = settings.Clone();
+
+            // Match the Lisp workflow more closely: switching to an interactive direction mode
+            // immediately starts the CAD pick instead of requiring a second "Thiết lập CAD" click.
+            // Repeated numeric edits while already in the same mode do not retrigger the command.
+            if (settings.MainDirection != previousMode)
+            {
+                if (settings.MainDirection == MainDirectionMode.TwoPoints)
+                {
+                    VxtTransientPreview.Instance.Clear();
+                    Send("HNLVXTDIRECTION ");
+                    return;
+                }
+                if (settings.MainDirection == MainDirectionMode.RectangleRegions)
+                {
+                    if (session.HasBoundary)
+                    {
+                        VxtTransientPreview.Instance.Clear();
+                        Send("HNLVXTREGION ");
+                    }
+                    else
+                    {
+                        Write("\nHNL Tool - VXT Pro: Đã chọn chế độ HCN. Hãy chọn Polyline biên trần; HNL Tool sẽ vào chia vùng ngay sau đó.");
+                    }
+                    return;
+                }
+            }
+
             VxtTransientPreview.Instance.Refresh();
         }
 
