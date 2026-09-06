@@ -17,6 +17,9 @@ namespace HNL.VXT.AutoCAD
             AddExtents(context.MainObstacles, session.MainEquipmentIds, tr);
             AddExtents(context.FurringObstacles, session.FurringEquipmentIds, tr);
 
+            foreach (var far in session.BoundaryFurringFromFarEdges)
+                context.BoundaryFurringFromFarEdges.Add(far);
+
             foreach (var region in session.Regions)
                 context.Regions.Add(region);
 
