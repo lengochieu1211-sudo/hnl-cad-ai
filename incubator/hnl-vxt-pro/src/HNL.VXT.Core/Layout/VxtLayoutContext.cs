@@ -27,6 +27,13 @@ namespace HNL.VXT.Core.Layout
         /// </summary>
         public bool GlobalFurringFromFarEdge { get; set; }
 
+        /// <summary>
+        /// Exact multi-polyline ask_each parity. When present, item N is the XP start side
+        /// selected for ceiling boundary N. This overrides GlobalFurringFromFarEdge only for
+        /// that boundary; old/single-boundary callers keep the global fallback unchanged.
+        /// </summary>
+        public List<bool> BoundaryFurringFromFarEdges { get; } = new List<bool>();
+
         public bool HasManualRegions => Regions.Count > 0;
     }
 
