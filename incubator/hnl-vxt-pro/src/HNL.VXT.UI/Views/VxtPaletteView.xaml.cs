@@ -161,7 +161,7 @@ namespace HNL.VXT.UI.Views
 
             var scope = new TextBlock
             {
-                Text = "Kiểm tra: cấu hình Min/Max • biên trần • Block XC/XP/Ty • DimStyle • tài nguyên DWG • trạng thái Runtime.",
+                Text = "Kiểm tra: cấu hình Min/Max • biên trần • Block XC/XP/Ty • DimStyle • tài nguyên DWG • Runtime Golden AutoCAD.",
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 8)
             };
@@ -185,6 +185,17 @@ namespace HNL.VXT.UI.Views
             status.SetBinding(TextBlock.TextProperty, new Binding(nameof(VxtPaletteViewModel.DiagnosticStatus)));
             statusBox.Child = status;
             panel.Children.Add(statusBox);
+
+            var golden = new Button
+            {
+                Content = "▶ Chạy Runtime Golden 6000×4000",
+                Command = ViewModel.RuntimeGoldenCommand,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Margin = new Thickness(0, 0, 0, 7),
+                ToolTip = "Tự kiểm tra Core + API AutoCAD thật bằng transaction tạm; không lưu đối tượng vào DWG"
+            };
+            if (Resources["CompactButton"] is Style goldenStyle) golden.Style = goldenStyle;
+            panel.Children.Add(golden);
 
             var buttons = new Grid { Margin = new Thickness(0, 0, 0, 7) };
             buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -231,7 +242,7 @@ namespace HNL.VXT.UI.Views
 
             var commandHint = new TextBlock
             {
-                Text = "Lệnh kỹ thuật: VXTANALYZE • VXTDIAGZIP",
+                Text = "Lệnh kỹ thuật: VXTGOLDEN • VXTANALYZE • VXTDIAGZIP",
                 FontSize = 9,
                 Foreground = (Brush)Resources["SecondaryText"],
                 Margin = new Thickness(0, 5, 0, 0)
