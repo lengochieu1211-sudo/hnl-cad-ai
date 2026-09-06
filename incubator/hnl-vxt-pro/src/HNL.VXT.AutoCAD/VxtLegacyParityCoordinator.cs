@@ -98,6 +98,25 @@ namespace HNL.VXT.AutoCAD
                 PromptManualHangerDirections(doc, session);
             }
 
+            // The original Lisp checks the Ty block globally before it starts any drawing.
+            // If Ty is enabled and its block is missing, XC/XP must not be created partially.
+            if (settings.DrawHangers && !HasBlock(doc.Database, settings.HangerBlockName))
+            {
+                ed.WriteMessage("\nHNL Tool - VXT Pro: Không tìm thấy Block Ty treo '" +
+                                settings.HangerBlockName + "'. Không tạo đối tượng nào.");
+                return;
+            }
+
+            // In the special no-boundary legacy path, Enter/Cancel at the existing-XC selection
+            // means there is simply no source member to process. Do not fall through to a misleading
+            // 'chưa chọn biên trần' message from the create engine.
+            if (!session.HasBoundary && VxtWorkflowEligibility.IsManualHangerOnlyStart(settings) &&
+                session.ManualMainIds.Length == 0)
+            {
+                ed.WriteMessage("\nHNL Tool - VXT Pro: Chưa chọn Xương Chính có sẵn để rải Ty. Không tạo đối tượng nào.");
+                return;
+            }
+
             VxtCreateEngine.Execute();
         }
 
@@ -114,6 +133,25 @@ namespace HNL.VXT.AutoCAD
             });
             var result = ed.GetSelection(options, filter);
             return result.Status == PromptStatus.OK ? result.Value.GetObjectIds() : Array.Empty<ObjectId>();
+        }
+
+        private static bool HasBlock(Database db, string blockName)
+        {
+            if (db == null || string.IsNullOrWhiteSpace(blockName)) return false;
+            try
+            {
+                using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+                {
+                    var bt = tr.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
+                    var exists = bt != null && bt.Has(blockName);
+                    tr.Commit();
+                    return exists;
+                }
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static bool PromptFurringStartSides(Document doc, VxtSession session, VxtSettings settings)
