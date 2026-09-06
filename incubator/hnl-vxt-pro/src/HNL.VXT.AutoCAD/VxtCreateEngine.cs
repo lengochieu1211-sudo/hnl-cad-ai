@@ -16,14 +16,18 @@ namespace HNL.VXT.AutoCAD
         public static void Execute()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+
             var session = VxtSession.Current;
-            if (doc == null || !session.HasBoundary)
+            var settings = session.ViewModel?.Snapshot() ?? session.Settings.Clone();
+            var manualHangerOnly = !settings.DrawMain && !settings.DrawFurring && settings.DrawHangers &&
+                                   !settings.AutoDimension && session.ManualMainIds.Length > 0;
+            if (!session.HasBoundary && !manualHangerOnly)
             {
-                doc?.Editor.WriteMessage("\nHNL Tool - VXT Pro: Chưa chọn biên trần.");
+                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Chưa chọn biên trần. Nếu chỉ rải Ty trên Xương chính có sẵn, hãy tắt XC/XP, bật Ty rồi Tạo.");
                 return;
             }
 
-            var settings = session.ViewModel?.Snapshot() ?? session.Settings.Clone();
             if (!settings.IsValid(out var error))
             {
                 doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + error);
@@ -38,9 +42,20 @@ namespace HNL.VXT.AutoCAD
             {
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
-                    var context = VxtLayoutContextFactory.Build(session, tr);
-                    var plan = VxtMultiBoundaryPlanBuilder.Build(session.Boundaries, settings, context);
-                    ValidateRequiredResources(settings, plan, db, tr);
+                    VxtPreviewPlan plan;
+                    if (session.HasBoundary)
+                    {
+                        var context = VxtLayoutContextFactory.Build(session, tr);
+                        plan = VxtMultiBoundaryPlanBuilder.Build(session.Boundaries, settings, context);
+                    }
+                    else
+                    {
+                        // Legacy V6.7.2 allows the special mode: no boundary, no XC/XP,
+                        // draw Ty only on a manually selected set of existing main members.
+                        plan = new VxtPreviewPlan();
+                    }
+
+                    ValidateRequiredResources(settings, plan, session, db, tr);
                     VxtCadResources.EnsureAll(db, tr, settings);
 
                     var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
@@ -110,6 +125,14 @@ namespace HNL.VXT.AutoCAD
                         }
                     }
 
+                    // Supplement generated geometry with the exact legacy manual-source branch.
+                    // This covers existing XC -> new Ty and existing XC/XP/Ty -> DIM when those
+                    // systems are intentionally not redrawn.
+                    var manualCounts = VxtManualExistingEngine.Append(
+                        db, tr, ms, bt, lt, dst, session, settings);
+                    counts.Hangers += manualCounts.Hangers;
+                    counts.Dimensions += manualCounts.Dimensions;
+
                     tr.Commit();
                     session.Settings = settings.Clone();
                 }
@@ -122,7 +145,8 @@ namespace HNL.VXT.AutoCAD
                     counts.Furring + " Xương phụ, " + counts.Hangers + " Ty treo, " +
                     counts.Dimensions + " DIM. Runtime Golden đã ghi PASS. Dùng UNDO để hoàn tác toàn bộ lệnh VXT.");
 
-                VxtTransientPreview.Instance.Refresh();
+                if (session.HasBoundary) VxtTransientPreview.Instance.Refresh();
+                else VxtTransientPreview.Instance.Clear();
             }
             catch (System.Exception ex)
             {
@@ -134,14 +158,15 @@ namespace HNL.VXT.AutoCAD
                     (string.IsNullOrWhiteSpace(diagnosticPath) ? string.Empty : " | Diagnostic: " + diagnosticPath));
                 session.ViewModel?.SetPreviewError(
                     "Tạo thất bại - đã rollback. Diagnostic ZIP đã được ghi tự động.");
-                try { VxtTransientPreview.Instance.Refresh(); } catch { }
+                try { if (session.HasBoundary) VxtTransientPreview.Instance.Refresh(); } catch { }
             }
         }
 
-        private static void ValidateRequiredResources(VxtSettings settings, VxtPreviewPlan plan, Database db, Transaction tr)
+        private static void ValidateRequiredResources(VxtSettings settings, VxtPreviewPlan plan, VxtSession session, Database db, Transaction tr)
         {
             var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-            if (settings.DrawHangers && plan.HangerPoints.Count > 0 &&
+            var needsManualHangers = settings.DrawHangers && !settings.DrawMain && session.ManualMainIds.Length > 0;
+            if (settings.DrawHangers && (plan.HangerPoints.Count > 0 || needsManualHangers) &&
                 (string.IsNullOrWhiteSpace(settings.HangerBlockName) || !bt.Has(settings.HangerBlockName)))
                 throw new InvalidOperationException("Không tìm thấy Block Ty treo '" + settings.HangerBlockName + "'. Hãy chọn Block Ty trước khi tạo.");
 
