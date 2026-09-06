@@ -258,7 +258,7 @@ begin
     MsgBox(
       'Cài đặt HNL Tool - VXT Pro Universal v{#MyAppVersion} hoàn tất.' + #13#10 + #13#10 +
       'Hỗ trợ: AutoCAD 2023, 2024, 2025, 2026 và 2027.' + #13#10 +
-      'Mở AutoCAD và gõ VXT để mở giao diện HNL VXT Pro.' + #13#10 + #13#10 +
+      'Mở AutoCAD và gõ HVX để mở giao diện HNL VXT Pro.' + #13#10 + #13#10 +
       'Nếu AutoCAD 2026 được nâng từ trước 2026.1.2 lên 2026.1.2+, hãy chạy lại Setup để chuyển binary NET8 sang NET10.',
       mbInformation, MB_OK);
   end;
