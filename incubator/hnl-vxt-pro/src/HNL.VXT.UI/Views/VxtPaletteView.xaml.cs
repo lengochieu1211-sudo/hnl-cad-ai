@@ -140,7 +140,6 @@ namespace HNL.VXT.UI.Views
 
             var stateBadge = new Border
             {
-                GridColumn = 1,
                 Background = (Brush)Resources["AccentSoft"],
                 BorderBrush = (Brush)Resources["AccentBorder"],
                 BorderThickness = new Thickness(1),
