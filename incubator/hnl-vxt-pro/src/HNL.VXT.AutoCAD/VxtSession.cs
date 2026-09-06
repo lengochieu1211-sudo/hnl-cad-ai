@@ -26,6 +26,7 @@ namespace HNL.VXT.AutoCAD
                 Boundaries.Clear();
                 BoundaryIds.Clear();
                 BoundaryRegionGroups.Clear();
+                BoundaryFurringFromFarEdges.Clear();
                 if (value != null) Boundaries.Add(value);
             }
         }
@@ -49,7 +50,11 @@ namespace HNL.VXT.AutoCAD
         public bool ManualHangerReverseVertical { get; set; }
 
         // V6.7.4 ask_each: false = Trái/Dưới, true = Phải/Trên.
+        // Global value stays as a fallback for old/single-boundary callers.
         public bool GlobalFurringFromFarEdge { get; set; }
+
+        // Exact ask_each parity for a multi-Polyline selection. Index matches Boundaries/BoundaryIds.
+        public List<bool> BoundaryFurringFromFarEdges { get; } = new List<bool>();
 
         // Backward-compatible flattened manual regions.
         public List<VxtLayoutRegion> Regions { get; } = new List<VxtLayoutRegion>();
