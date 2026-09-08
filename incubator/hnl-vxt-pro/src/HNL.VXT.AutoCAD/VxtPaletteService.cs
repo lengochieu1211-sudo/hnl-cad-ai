@@ -18,6 +18,7 @@ namespace HNL.VXT.AutoCAD
             {
                 var bridge = new VxtHostBridge();
                 _view = new VxtPaletteView(bridge);
+                VxtPaletteCompactTuner.Apply(_view, bridge, _view.ViewModel);
                 VxtSession.Current.ViewModel = _view.ViewModel;
 
                 _palette = new PaletteSet("HNL Tool - VXT Pro v7.0.0-beta.1", PaletteGuid)
@@ -26,8 +27,8 @@ namespace HNL.VXT.AutoCAD
                             PaletteSetStyles.ShowCloseButton |
                             PaletteSetStyles.ShowPropertiesMenu,
                     DockEnabled = DockSides.Left | DockSides.Right,
-                    MinimumSize = new Size(360, 600),
-                    Size = new Size(440, 780),
+                    MinimumSize = new Size(360, 520),
+                    Size = new Size(430, 740),
                     KeepFocus = false
                 };
 
