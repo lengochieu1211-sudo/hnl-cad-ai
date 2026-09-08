@@ -45,9 +45,9 @@ namespace HNL.VXT.AutoCAD
             // If a dynamic block exposes Array/Count/Spacing controls but no unambiguous
             // member-length property, do not XScale it. Scaling the whole reference would also
             // stretch array pitch/offsets even though we did not directly modify those properties.
-            // Returning unchanged tells Create to erase this trial BlockReference and fall back
+            // Returning "unchanged" tells Create to erase this trial BlockReference and fall back
             // to Polyline/MLINE geometry, which is safer than corrupting the user's block logic.
-            if (IsArraySensitive(br)) return "array-fallback";
+            if (IsArraySensitive(br)) return "unchanged";
 
             // Static or simple non-array block: local X scaling is a safe last resort.
             var currentLength = GetVisibleLength(br);
