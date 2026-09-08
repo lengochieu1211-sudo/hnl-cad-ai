@@ -7,9 +7,10 @@ using HNL.VXT.Core.Models;
 namespace HNL.VXT.Core.Preview
 {
     /// <summary>
-    /// V6.7.4 parity adapter: build every selected closed polyline independently,
-    /// then merge only the resulting preview/create entities. This deliberately
-    /// avoids a shared bounding box between disconnected ceiling areas.
+    /// HNL VXT V6.7.6.15 parity adapter: build every selected closed polyline independently,
+    /// run StrictMultiple/PostProcess on that ceiling area, then merge only the resulting
+    /// preview/create entities. This deliberately avoids a shared bounding box between
+    /// disconnected ceiling areas.
     /// </summary>
     public static class VxtMultiBoundaryPlanBuilder
     {
@@ -30,6 +31,7 @@ namespace HNL.VXT.Core.Preview
                 if (boundary == null) continue;
                 var boundaryContext = BuildBoundaryContext(context, count);
                 var part = builder.Build(boundary, settings, boundaryContext);
+                VxtConcaveMainPostProcessor.Apply(boundary, settings, boundaryContext, part);
                 merged.Lines.AddRange(part.Lines);
                 merged.Texts.AddRange(part.Texts);
                 merged.HangerPoints.AddRange(part.HangerPoints);
