@@ -1,6 +1,7 @@
 # HNL VXT Pro - UI Compact + Layer & DIM
 
-Head: cca67efa2ad28a2d2170ec6e13a57bd3589307d6
+Code head for the compact UI implementation: `cca67efa2ad28a2d2170ec6e13a57bd3589307d6`  
+Certified branch head after this note update: `a4d04607ce90178388a69b189315b19a896a3091`
 
 ## Runtime UI changes
 - Header reduced to a compact HNL/VXT title row; redundant subtitle is hidden in the AutoCAD palette.
@@ -13,15 +14,24 @@ Head: cca67efa2ad28a2d2170ec6e13a57bd3589307d6
 - The existing Layer & DIM editor retains XC/XP/Ty/DIM Layer, ACI Color, Linetype, Lineweight and DIM Style.
 
 ## Block -> Layer parity
-VxtCommands already reads `BlockReference.Layer` for XC/XP/Ty. The AutoCAD host now exposes that stored layer to the UI, and the compact palette synchronizes the visible Layer field whenever a CAD block pick updates the corresponding Block name. Manual Layer edits remain available after the pick.
+`VxtCommands` reads `BlockReference.Layer` for XC/XP/Ty. The AutoCAD host now exposes the stored selected-block layer to the compact palette, which synchronizes the visible Layer field whenever a CAD Block pick updates the corresponding Block name. Manual Layer edits remain available after the pick.
 
-## CI
-- Beta CI #622 / run 34249056989: PASS
-- Universal Matrix #558 / run 34249057266: PASS
+## Certified CI
+- Beta CI #624 / run `34249522898`: PASS
+- Universal Matrix #560 / run `34249522940`: PASS
 - Core / Golden / DIM / Numeric Expression: 68/68 PASS
-- AutoCAD 2023/2024/2025/2026 NET8/2026 NET10/2027: PASS
-- Universal artifact ID: 10065305486
-- Artifact ZIP SHA256: dd4523e46a79e005f9566ff13e9c9f548f5472c05499daca8104e334556c516f
-- Setup EXE SHA256: 618bc7786a1b0820ef785c11b0a44225227997d05eea6647945ccda6545b613d
+- AutoCAD 2023 / NET48: PASS
+- AutoCAD 2024 / NET48: PASS
+- AutoCAD 2025 / NET8: PASS
+- AutoCAD 2026 pre-1.2 / NET8: PASS
+- AutoCAD 2026 1.2+ / NET10: PASS
+- AutoCAD 2027 / NET10: PASS
+- Universal Setup / installer gate: PASS
+
+## Certified artifact
+- Universal artifact ID: `10065455757`
+- Artifact ZIP SHA256: `1b0956c8ac90d83c045a800eadf1c3ab79f978669af86c3484dc7bbf30bc9f8c`
+- Setup EXE SHA256: `b63154ed70075858a9a4c84526e7c0bddaad5d75d89a589e508440fcbebcc09e`
+- Drive handoff file ID: `17JFzm580svsA_h9ESqz9mNApTcB-AwF0`
 
 Runtime AutoCAD visual verification is still required before merging main.
