@@ -13,8 +13,11 @@ using HNL.VXT.Core.Preview;
 namespace HNL.VXT.AutoCAD
 {
     /// <summary>
-    /// WYSIWYG transient renderer. Preview and Create consume the exact same Core plan.
-    /// No temporary entity is appended to Model Space.
+    /// Lightweight WYSIWYG geometry renderer. Preview and Create consume the exact same
+    /// Core plan, but Preview deliberately draws XC/XP as lines and Ty as one circle each
+    /// instead of instantiating hundreds of dynamic BlockReferences. This keeps large
+    /// 300-500+ m2 ceilings responsive and avoids release-specific transient dynamic-block
+    /// stretch issues that could visually collapse many XC members into one.
     /// </summary>
     internal sealed class VxtTransientPreview
     {
@@ -44,13 +47,12 @@ namespace HNL.VXT.AutoCAD
                     var context = VxtLayoutContextFactory.Build(session, tr);
                     plan = VxtMultiBoundaryPlanBuilder.Build(session.Boundaries, settings, context);
 
-                    var blockTable = tr.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
                     var layerTable = tr.GetObject(db.LayerTableId, OpenMode.ForRead) as LayerTable;
                     var linetypeTable = tr.GetObject(db.LinetypeTableId, OpenMode.ForRead) as LinetypeTable;
                     var dimStyleTable = tr.GetObject(db.DimStyleTableId, OpenMode.ForRead) as DimStyleTable;
 
-                    RenderStructuralLines(plan, settings, db, blockTable, layerTable, linetypeTable);
-                    RenderHangers(plan, settings, db, blockTable, layerTable, linetypeTable);
+                    RenderStructuralLines(plan, settings, db, layerTable, linetypeTable);
+                    RenderHangers(plan, settings, db, layerTable, linetypeTable);
                     RenderDimensions(plan, settings, db, dimStyleTable, layerTable, linetypeTable);
                     RenderGuides(plan, db);
                     tr.Commit();
@@ -84,7 +86,6 @@ namespace HNL.VXT.AutoCAD
             VxtPreviewPlan plan,
             VxtSettings settings,
             Database db,
-            BlockTable blockTable,
             LayerTable layerTable,
             LinetypeTable linetypeTable)
         {
@@ -92,19 +93,11 @@ namespace HNL.VXT.AutoCAD
             {
                 if (item.Kind == PreviewLineKind.Main)
                 {
-                    if (settings.UseDynamicMainBlock && TryAddSegmentBlock(
-                        item, settings.MainBlockName, settings.MainLayer, settings.MainColorIndex,
-                        settings.MainLinetype, settings.MainLineweight, db, blockTable, layerTable, linetypeTable))
-                        continue;
                     AddStyledLine(item, settings.MainLayer, settings.MainColorIndex,
                         settings.MainLinetype, settings.MainLineweight, db, layerTable, linetypeTable);
                 }
                 else if (item.Kind == PreviewLineKind.Furring)
                 {
-                    if (settings.UseDynamicFurringBlock && TryAddSegmentBlock(
-                        item, settings.FurringBlockName, settings.FurringLayer, settings.FurringColorIndex,
-                        settings.FurringLinetype, settings.FurringLineweight, db, blockTable, layerTable, linetypeTable))
-                        continue;
                     AddStyledLine(item, settings.FurringLayer, settings.FurringColorIndex,
                         settings.FurringLinetype, settings.FurringLineweight, db, layerTable, linetypeTable);
                 }
@@ -115,33 +108,22 @@ namespace HNL.VXT.AutoCAD
             VxtPreviewPlan plan,
             VxtSettings settings,
             Database db,
-            BlockTable blockTable,
             LayerTable layerTable,
             LinetypeTable linetypeTable)
         {
             if (!settings.DrawHangers) return;
-            var blockAvailable = blockTable != null && !string.IsNullOrWhiteSpace(settings.HangerBlockName) && blockTable.Has(settings.HangerBlockName);
 
-            if (blockAvailable)
+            // One lightweight marker per Ty. Using the actual Ty Block in transient preview
+            // created hundreds of dynamic block evaluations on large ceilings and was the
+            // biggest source of palette lag. Create still inserts the exact selected Ty Block.
+            foreach (var point in plan.HangerPoints)
             {
-                foreach (var p in plan.HangerPoints)
-                {
-                    var br = new BlockReference(ToPoint3d(p), blockTable[settings.HangerBlockName])
-                    {
-                        Rotation = ResolveHangerRotation(plan, p)
-                    };
-                    br.SetDatabaseDefaults(db);
-                    ApplyAppearance(br, settings.HangerLayer, settings.HangerColorIndex,
-                        settings.HangerLinetype, settings.HangerLineweight, layerTable, linetypeTable);
-                    AddDrawable(br);
-                }
-                return;
+                var marker = new Circle(ToPoint3d(point), Vector3d.ZAxis, 38.0);
+                marker.SetDatabaseDefaults(db);
+                ApplyAppearance(marker, settings.HangerLayer, settings.HangerColorIndex,
+                    settings.HangerLinetype, settings.HangerLineweight, layerTable, linetypeTable);
+                AddDrawable(marker);
             }
-
-            // Same fallback marks present in the Core plan when the Ty block is unavailable.
-            foreach (var item in plan.Lines.Where(x => x.Kind == PreviewLineKind.Hanger))
-                AddStyledLine(item, settings.HangerLayer, settings.HangerColorIndex,
-                    settings.HangerLinetype, settings.HangerLineweight, db, layerTable, linetypeTable);
         }
 
         private void RenderDimensions(
@@ -182,62 +164,18 @@ namespace HNL.VXT.AutoCAD
             foreach (var text in plan.Texts) AddGuideText(text, db);
         }
 
-        private bool TryAddSegmentBlock(
-            PreviewLine item,
-            string blockName,
-            string layerName,
-            short colorIndex,
-            string linetypeName,
-            string lineweightText,
-            Database db,
-            BlockTable blockTable,
-            LayerTable layerTable,
-            LinetypeTable linetypeTable)
-        {
-            if (blockTable == null || string.IsNullOrWhiteSpace(blockName) || !blockTable.Has(blockName)) return false;
-            var start = ToPoint3d(item.A);
-            var end = ToPoint3d(item.B);
-            var vector = end - start;
-            var length = vector.Length;
-            if (length <= 1e-9) return false;
-
-            var br = new BlockReference(start, blockTable[blockName])
-            {
-                Rotation = Math.Atan2(vector.Y, vector.X)
-            };
-            br.SetDatabaseDefaults(db);
-            ApplyAppearance(br, layerName, colorIndex, linetypeName, lineweightText, layerTable, linetypeTable);
-            TryApplyDynamicLength(br, length);
-            AddDrawable(br);
-            return true;
-        }
-
+        /// <summary>
+        /// Backward-compatible entry point used by older Create code paths. New Create paths
+        /// call VxtDynamicBlockAdapter with the effective block name so the selected property
+        /// can be cached and Array/Spacing properties are never modified.
+        /// </summary>
         internal static void TryApplyDynamicLength(BlockReference br, double length)
         {
-            try
-            {
-                if (!br.IsDynamicBlock) return;
-                foreach (DynamicBlockReferenceProperty prop in br.DynamicBlockReferencePropertyCollection)
-                {
-                    if (prop.ReadOnly || !(prop.Value is double) || ShouldSkipDynamicProperty(prop.PropertyName)) continue;
-                    try { prop.Value = length; } catch { }
-                }
-            }
-            catch
-            {
-                // Non-resident transient dynamic blocks may not expose properties on every release.
-            }
+            VxtDynamicBlockAdapter.ApplyMemberLength(br, string.Empty, length);
         }
 
         internal static bool ShouldSkipDynamicProperty(string name)
-        {
-            if (string.IsNullOrWhiteSpace(name)) return false;
-            var n = name.ToUpperInvariant();
-            return n.Contains("ANG") || n.Contains("ROT") || n.Contains("POS") || n.Contains("ORI") ||
-                   n.Contains("ARRAY") || n.Contains("XOAY") || n.Contains("K.C") || n.Contains("K. C") ||
-                   n.Contains("KHOẢNG") || n.Contains("TY") || n.Contains("CHÍNH") || n.Contains("PHỤ") ||
-                   n.Contains("DÃY");
-        }
+            => HNL.VXT.Core.Layout.DynamicBlockPropertyPolicy.IsRisky(name);
 
         private void AddStyledLine(
             PreviewLine item,
@@ -265,7 +203,9 @@ namespace HNL.VXT.AutoCAD
 
         private void AddGuideText(PreviewText item, Database db)
         {
-            var bounds = VxtSession.Current.Boundary.GetBounds();
+            var boundary = VxtSession.Current.Boundary;
+            if (boundary == null) return;
+            var bounds = boundary.GetBounds();
             var diag = bounds.Min.DistanceTo(bounds.Max);
             var text = new DBText
             {
@@ -307,27 +247,6 @@ namespace HNL.VXT.AutoCAD
             if (dimStyleTable != null && !string.IsNullOrWhiteSpace(dimStyleName) && dimStyleTable.Has(dimStyleName))
                 return dimStyleTable[dimStyleName];
             return db.Dimstyle;
-        }
-
-        private static double ResolveHangerRotation(VxtPreviewPlan plan, Point2 point)
-        {
-            var nearest = plan.Lines
-                .Where(x => x.Kind == PreviewLineKind.Main)
-                .Select(x => new { Line = x, Distance = DistanceToSegment(point, x.A, x.B) })
-                .OrderBy(x => x.Distance)
-                .FirstOrDefault();
-            return nearest == null ? 0.0 : Math.Atan2(nearest.Line.B.Y - nearest.Line.A.Y, nearest.Line.B.X - nearest.Line.A.X);
-        }
-
-        private static double DistanceToSegment(Point2 p, Point2 a, Point2 b)
-        {
-            var dx = b.X - a.X;
-            var dy = b.Y - a.Y;
-            var l2 = dx * dx + dy * dy;
-            if (l2 <= 1e-12) return p.DistanceTo(a);
-            var t = ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / l2;
-            t = Math.Max(0.0, Math.Min(1.0, t));
-            return p.DistanceTo(new Point2(a.X + t * dx, a.Y + t * dy));
         }
 
         private void AddDrawable(Drawable drawable)
