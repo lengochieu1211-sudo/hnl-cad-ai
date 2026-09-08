@@ -6,25 +6,48 @@ using HNL.VXT.Core.Models;
 namespace HNL.VXT.Core.Layout
 {
     /// <summary>
-    /// Exact AutoCAD-independent port of the legacy VXT calc-smart-layout / adjust-grid rules.
-    /// Preview and Create use this same implementation so the .NET engine follows the Lisp output.
+    /// HNL Tool VXT strict-multiple layout engine.
+    /// Ported from HNL_VXT_V6.7.6.15_VXT_StrictMultiple_PostProcess:
+    /// - minimum item count first;
+    /// - every XC/Ty gap is an exact multiple of the configured balance step;
+    /// - equal gaps are preferred, otherwise only adjacent unit sizes are distributed evenly;
+    /// - dimensional remainder is absorbed by the two edge offsets;
+    /// - Max spacing and Max edge remain hard limits; a 25 mm soft-edge pass is attempted before
+    ///   dense fallback, where Min spacing may be lowered only when no normal solution exists.
+    /// Preview and Create use this same engine.
     /// </summary>
     public static class SmartLayout1D
     {
         private const double Eps = 1e-8;
+        private const double Tol = 0.1;
+        private const double DefaultEdgeTolerance = 25.0;
 
         public sealed class Result
         {
             public Result(double startOffset, IReadOnlyList<double> steps, double endOffset)
+                : this(startOffset, steps, endOffset, false, false)
+            {
+            }
+
+            internal Result(
+                double startOffset,
+                IReadOnlyList<double> steps,
+                double endOffset,
+                bool isDense,
+                bool usedSoftEdge)
             {
                 StartOffset = startOffset;
                 Steps = steps ?? Array.Empty<double>();
                 EndOffset = endOffset;
+                IsDense = isDense;
+                UsedSoftEdge = usedSoftEdge;
             }
 
             public double StartOffset { get; }
             public IReadOnlyList<double> Steps { get; }
             public double EndOffset { get; }
+            public bool IsDense { get; }
+            public bool UsedSoftEdge { get; }
             public int PointCount => Steps.Count + 1;
             public double Span => Steps.Sum();
 
@@ -43,9 +66,9 @@ namespace HNL.VXT.Core.Layout
         }
 
         /// <summary>
-        /// Legacy calc-smart-layout.
-        /// obstacleGreedy=true corresponds to Lisp is_don=T (used when XC has avoidance boxes).
-        /// mode=OneSide corresponds to Lisp is_don=2. Other modes correspond to nil.
+        /// V6.7.6.15 solve-hnl-layout parity.
+        /// obstacleGreedy=true corresponds to Lisp is_don=T.
+        /// mode=OneSide corresponds to Lisp is_don=2.
         /// </summary>
         public static Result Calculate(
             double length,
@@ -58,279 +81,240 @@ namespace HNL.VXT.Core.Layout
             bool reverse = false,
             bool obstacleGreedy = false)
         {
-            if (length <= Eps) return null;
-            increment = Math.Abs(increment);
-            if (increment <= Eps) increment = 1.0;
+            if (!BasicInputValid(length, maxSpacing, minSpacing, maxEdge, minEdge, increment))
+                return null;
 
-            var maxRounded = LispFix(maxSpacing / increment) * increment;
-            var minRounded = LispFix(minSpacing / increment + 0.9999) * increment;
-            if (maxRounded < minRounded) maxRounded = minRounded;
-            if (maxRounded <= 0.0) maxRounded = increment;
-            if (minRounded <= 0.0) minRounded = increment;
+            var oneSided = obstacleGreedy || mode == MainLayoutMode.OneSide;
 
-            Result result = obstacleGreedy
-                ? CalculateObstacleGreedy(length, maxRounded, minRounded, maxEdge, minEdge, increment)
-                : CalculateBalanced(length, maxRounded, minRounded, maxEdge, minEdge, increment, mode == MainLayoutMode.OneSide);
+            var normal = CalculateStrict(
+                length, maxSpacing, minSpacing, maxEdge, minEdge,
+                increment, oneSided, reverse, dense: false, usedSoftEdge: false);
+            if (normal != null) return normal;
 
-            if (!reverse || result == null) return result;
-            return new Result(result.EndOffset, result.Steps.Reverse().ToArray(), result.StartOffset);
+            var softMaxEdge = maxEdge + DefaultEdgeTolerance;
+            if (DefaultEdgeTolerance > Eps)
+            {
+                var soft = CalculateStrict(
+                    length, maxSpacing, minSpacing, softMaxEdge, minEdge,
+                    increment, oneSided, reverse, dense: false, usedSoftEdge: true);
+                if (soft != null) return soft;
+            }
+
+            var dense = CalculateDense(
+                length, maxSpacing, maxEdge, minEdge,
+                increment, oneSided, reverse, usedSoftEdge: false);
+            if (dense != null) return dense;
+
+            if (DefaultEdgeTolerance > Eps)
+            {
+                dense = CalculateDense(
+                    length, maxSpacing, softMaxEdge, minEdge,
+                    increment, oneSided, reverse, usedSoftEdge: true);
+            }
+            return dense;
         }
 
-        private static Result CalculateObstacleGreedy(
-            double length, double maxSpacing, double minSpacing, double maxEdge, double minEdge, double increment)
-        {
-            var plans = new List<LegacyCandidate>();
-            if (length >= 2.0 * minEdge && length <= 2.0 * maxEdge)
-            {
-                var o1 = Math.Min(maxEdge, length - minEdge);
-                o1 = LispFix(o1 / increment) * increment;
-                if (o1 < minEdge) o1 = minEdge;
-                var o2 = length - o1;
-                plans.Insert(0, new LegacyCandidate(0.0, o1, Array.Empty<double>(), o2));
-            }
-
-            var n = 1;
-            while (n * minSpacing <= length - 2.0 * minEdge + Eps)
-            {
-                var minSum = Math.Max(n * minSpacing, length - 2.0 * maxEdge);
-                var maxSum = Math.Min(n * maxSpacing, length - 2.0 * minEdge);
-                if (minSum <= maxSum + Eps)
-                {
-                    var spacingSum = LispFix(maxSum / increment) * increment;
-                    if (spacingSum < minSum - Eps) spacingSum += increment;
-                    if (spacingSum >= minSum - Eps && spacingSum <= maxSum + Eps)
-                    {
-                        var steps = new List<double>(n);
-                        var remaining = spacingSum;
-                        for (var i = 0; i < n; i++)
-                        {
-                            double take;
-                            if (i == n - 1)
-                            {
-                                take = remaining;
-                            }
-                            else
-                            {
-                                take = maxSpacing;
-                                var maxAllow = remaining - (n - 1 - i) * minSpacing;
-                                var minAllow = remaining - (n - 1 - i) * maxSpacing;
-                                if (take > maxAllow) take = maxAllow;
-                                if (take < minAllow) take = minAllow;
-                                if (take > maxSpacing) take = maxSpacing;
-                                if (take < minSpacing) take = minSpacing;
-                                remaining -= take;
-                            }
-                            steps.Add(take);
-                        }
-
-                        var o1 = Math.Min(maxEdge, length - spacingSum - minEdge);
-                        o1 = LispFix(o1 / increment) * increment;
-                        if (o1 < minEdge) o1 = minEdge;
-                        var o2 = length - spacingSum - o1;
-
-                        var penalty = 0.0;
-                        if (o1 < minEdge) penalty += 10000.0 * (minEdge - o1);
-                        if (o1 > maxEdge) penalty += 10000.0 * (o1 - maxEdge);
-                        if (o2 < minEdge) penalty += 10000.0 * (minEdge - o2);
-                        if (o2 > maxEdge) penalty += 10000.0 * (o2 - maxEdge);
-                        penalty += 5.0 * (maxEdge - o1);
-
-                        var score = -penalty - 10000.0 * n;
-                        plans.Insert(0, new LegacyCandidate(score, o1, steps.ToArray(), o2));
-                    }
-                }
-                n++;
-            }
-
-            if (plans.Count == 0)
-                return new Result(length / 2.0, Array.Empty<double>(), length / 2.0);
-
-            var best = SelectBest(plans);
-            return new Result(best.Start, best.Steps, best.End);
-        }
-
-        private static Result CalculateBalanced(
-            double length, double maxSpacing, double minSpacing, double maxEdge, double minEdge, double increment, bool oneSide)
-        {
-            if (length >= 2.0 * minEdge && length <= 2.0 * maxEdge)
-                return new Result(length / 2.0, Array.Empty<double>(), length / 2.0);
-
-            var plans = new List<LegacyCandidate>();
-            var spacing = maxSpacing;
-            while (spacing >= minSpacing - Eps)
-            {
-                var kMin = LispFix((length - 2.0 * maxEdge) / spacing + 0.9999);
-                var kMax = LispFix((length - 2.0 * minEdge) / spacing);
-                var k = Math.Min(kMin, kMax);
-                var kLimit = Math.Max(kMin, kMax);
-                var loop = true;
-                while (loop)
-                {
-                    if (k <= 0) k = 1;
-                    var edge = (length - k * spacing) / 2.0;
-                    var penalty = 0.0;
-                    if (edge < minEdge) penalty += 10000.0 * (minEdge - edge);
-                    if (edge > maxEdge) penalty += 10000.0 * (edge - maxEdge);
-                    penalty += 10000.0 * k;
-                    penalty += 2.0 * (maxSpacing - spacing);
-                    penalty += maxEdge - edge;
-                    plans.Insert(0, new LegacyCandidate(-penalty, edge, Repeat(k, spacing), edge));
-                    if (k >= kLimit) loop = false;
-                    else k++;
-                }
-                spacing -= increment;
-            }
-
-            if (plans.Count == 0)
-                return new Result(length / 2.0, Array.Empty<double>(), length / 2.0);
-
-            var best = SelectBest(plans);
-
-            // Legacy scoring treats edge-limit violations as a soft penalty. On long runs this
-            // can select e.g. 296 mm when the legal minimum is 300 mm. BuildHangerRow then keeps
-            // the first 296 mm Ty but filters the final 296 mm Ty, producing a missing end hanger.
-            // Preserve exact legacy output whenever it is legal. Only repair illegal winners.
-            if (!IsEdgeLegal(best, minEdge, maxEdge))
-            {
-                var repaired = TryRepairBalancedCandidate(
-                    length, best.Steps.Count, maxSpacing, minSpacing, maxEdge, minEdge, increment);
-                if (repaired != null)
-                {
-                    best = repaired;
-                }
-                else
-                {
-                    var legalPlans = plans.Where(p => IsEdgeLegal(p, minEdge, maxEdge)).ToList();
-                    if (legalPlans.Count > 0) best = SelectBest(legalPlans);
-                }
-            }
-
-            if (!oneSide)
-                return new Result(best.Start, best.Steps, best.End);
-
-            var sumSpacing = best.Steps.Sum();
-            var balancedEdge = best.Start;
-            var o1 = LispFix(balancedEdge / increment) * increment;
-            if (o1 < minEdge) o1 += increment;
-            var o2 = length - sumSpacing - o1;
-            if (o2 < minEdge - Eps || o2 > maxEdge + Eps)
-            {
-                o1 = LispFix(balancedEdge / increment + 0.9999) * increment;
-                if (o1 > maxEdge) o1 -= increment;
-                o2 = length - sumSpacing - o1;
-                if (o2 < minEdge - Eps || o2 > maxEdge + Eps)
-                {
-                    o1 = balancedEdge;
-                    o2 = balancedEdge;
-                }
-            }
-            return new Result(o1, best.Steps, o2);
-        }
-
-        private static LegacyCandidate TryRepairBalancedCandidate(
+        private static Result CalculateStrict(
             double length,
-            int gapCount,
             double maxSpacing,
             double minSpacing,
             double maxEdge,
             double minEdge,
-            double increment)
+            double increment,
+            bool oneSided,
+            bool reverse,
+            bool dense,
+            bool usedSoftEdge)
         {
-            if (gapCount <= 0) return null;
+            var minDiscrete = CeilMultiple(minSpacing, increment);
+            var maxDiscrete = FloorMultiple(maxSpacing, increment);
+            if (minDiscrete > maxDiscrete + Tol) return null;
 
-            // Preserve the legacy/economic gap count first. Increase only if that count cannot
-            // physically satisfy both edge bands.
-            var maxGapCount = Math.Max(
-                gapCount,
-                LispFix((length - 2.0 * minEdge) / Math.Max(minSpacing, Eps)));
-            for (var count = gapCount; count <= maxGapCount; count++)
+            var minUnits = RoundUnitCount(minDiscrete, increment);
+            var maxUnits = RoundUnitCount(maxDiscrete, increment);
+            if (minUnits <= 0 || maxUnits < minUnits) return null;
+
+            var maxK = minDiscrete > Eps
+                ? Math.Max(0, LispFix((Math.Max(0.0, length - 2.0 * minEdge) + Tol) / minDiscrete))
+                : 0;
+
+            for (var k = 0; k <= maxK; k++)
             {
-                var repaired = TryBuildMixedBalancedCandidate(
-                    length, count, maxSpacing, minSpacing, maxEdge, minEdge, increment);
-                if (repaired != null) return repaired;
+                if (k == 0)
+                {
+                    var zero = BuildEdges(length, Array.Empty<double>(), minEdge, maxEdge, oneSided, dense, usedSoftEdge);
+                    if (zero != null) return MaybeReverse(zero, reverse);
+                    continue;
+                }
+
+                var lower = Math.Max(k * minDiscrete, length - 2.0 * maxEdge);
+                var upper = Math.Min(k * maxDiscrete, length - 2.0 * minEdge);
+                var totalUnits = SelectTotalUnits(lower, upper, increment, k, minUnits, maxUnits);
+                if (!totalUnits.HasValue) continue;
+
+                var unitSteps = BuildBalancedUnits(k, totalUnits.Value, minUnits, maxUnits);
+                if (unitSteps == null) continue;
+                var steps = unitSteps.Select(u => u * increment).ToArray();
+                var candidate = BuildEdges(length, steps, minEdge, maxEdge, oneSided, dense, usedSoftEdge);
+                if (candidate != null) return MaybeReverse(candidate, reverse);
             }
             return null;
         }
 
-        private static LegacyCandidate TryBuildMixedBalancedCandidate(
+        private static Result CalculateDense(
             double length,
-            int gapCount,
+            double maxSpacing,
+            double maxEdge,
+            double minEdge,
+            double increment,
+            bool oneSided,
+            bool reverse,
+            bool usedSoftEdge)
+        {
+            if (length < 2.0 * minEdge - Tol) return null;
+
+            var maxDiscrete = FloorMultiple(maxSpacing, increment);
+            var maxUnits = RoundUnitCount(maxDiscrete, increment);
+            if (maxDiscrete < increment - Eps || maxUnits < 1) return null;
+
+            var need = Math.Max(0.0, length - 2.0 * maxEdge);
+            var k = need <= Tol ? 0 : LispFix(need / maxDiscrete + 0.999999);
+            var maxK = Math.Max(
+                k,
+                LispFix(Math.Max(0.0, length - 2.0 * minEdge) / increment));
+
+            for (; k <= maxK; k++)
+            {
+                if (k == 0)
+                {
+                    var zero = BuildEdges(length, Array.Empty<double>(), minEdge, maxEdge, oneSided, true, usedSoftEdge);
+                    if (zero != null) return MaybeReverse(zero, reverse);
+                    continue;
+                }
+
+                var lower = Math.Max(k * increment, length - 2.0 * maxEdge);
+                var upper = Math.Min(k * maxDiscrete, length - 2.0 * minEdge);
+                var totalUnits = SelectTotalUnits(lower, upper, increment, k, 1, maxUnits);
+                if (!totalUnits.HasValue) continue;
+
+                var unitSteps = BuildBalancedUnits(k, totalUnits.Value, 1, maxUnits);
+                if (unitSteps == null) continue;
+                var steps = unitSteps.Select(u => u * increment).ToArray();
+                var candidate = BuildEdges(length, steps, minEdge, maxEdge, oneSided, true, usedSoftEdge);
+                if (candidate != null) return MaybeReverse(candidate, reverse);
+            }
+            return null;
+        }
+
+        private static Result BuildEdges(
+            double length,
+            IReadOnlyList<double> steps,
+            double minEdge,
+            double maxEdge,
+            bool oneSided,
+            bool dense,
+            bool usedSoftEdge)
+        {
+            var spacingSum = (steps ?? Array.Empty<double>()).Sum();
+            var edgeSum = length - spacingSum;
+            double start;
+            double end;
+
+            if (oneSided)
+            {
+                start = Math.Min(maxEdge, edgeSum - minEdge);
+                if (start < minEdge) start = minEdge;
+                end = edgeSum - start;
+            }
+            else
+            {
+                start = edgeSum / 2.0;
+                end = start;
+            }
+
+            if (start < minEdge - Tol || start > maxEdge + Tol ||
+                end < minEdge - Tol || end > maxEdge + Tol)
+                return null;
+
+            return new Result(start, steps, end, dense, usedSoftEdge);
+        }
+
+        private static int? SelectTotalUnits(
+            double lower,
+            double upper,
+            double increment,
+            int k,
+            int minUnits,
+            int maxUnits)
+        {
+            if (increment <= 0.0 || k <= 0 || lower > upper + Tol) return null;
+
+            var lo = LispFix(Math.Max(0.0, lower - Tol) / increment + 0.999999);
+            var hi = LispFix((upper + Tol) / increment);
+            lo = Math.Max(lo, k * minUnits);
+            hi = Math.Min(hi, k * maxUnits);
+            if (lo > hi) return null;
+
+            var uniformLow = Math.Max(minUnits, LispFix((double)lo / k + 0.999999));
+            var uniformHigh = Math.Min(maxUnits, LispFix((double)hi / k));
+            return uniformHigh >= uniformLow ? k * uniformHigh : hi;
+        }
+
+        private static IReadOnlyList<int> BuildBalancedUnits(
+            int k,
+            int totalUnits,
+            int minUnits,
+            int maxUnits)
+        {
+            if (k <= 0 || totalUnits < k * minUnits || totalUnits > k * maxUnits)
+                return null;
+
+            var baseUnits = totalUnits / k;
+            var extra = totalUnits - baseUnits * k;
+            if (baseUnits < minUnits || baseUnits > maxUnits ||
+                (extra > 0 && baseUnits >= maxUnits))
+                return null;
+
+            var result = Enumerable.Repeat(baseUnits, k).ToArray();
+            if (extra <= 0) return result;
+
+            for (var j = 0; j < extra; j++)
+            {
+                var index = LispFix(((j + 0.5) * k) / extra);
+                if (index >= k) index = k - 1;
+                result[index]++;
+            }
+            return result;
+        }
+
+        private static Result MaybeReverse(Result result, bool reverse)
+        {
+            if (!reverse || result == null) return result;
+            return new Result(
+                result.EndOffset,
+                result.Steps.Reverse().ToArray(),
+                result.StartOffset,
+                result.IsDense,
+                result.UsedSoftEdge);
+        }
+
+        private static bool BasicInputValid(
+            double length,
             double maxSpacing,
             double minSpacing,
             double maxEdge,
             double minEdge,
             double increment)
-        {
-            var minSum = Math.Max(gapCount * minSpacing, length - 2.0 * maxEdge);
-            var maxSum = Math.Min(gapCount * maxSpacing, length - 2.0 * minEdge);
-            if (minSum > maxSum + Eps) return null;
+            => length > Eps &&
+               maxSpacing > Eps &&
+               minSpacing > Eps &&
+               maxSpacing + Eps >= minSpacing &&
+               minEdge >= -Eps &&
+               maxEdge + Eps >= minEdge &&
+               increment > Eps;
 
-            // Prefer a rounded total span as large as possible: fewer/smaller reductions from Max.
-            var spacingSum = FloorMultiple(maxSum, increment);
-            if (spacingSum < minSum - Eps) spacingSum = CeilMultiple(minSum, increment);
-            if (spacingSum < minSum - Eps || spacingSum > maxSum + Eps)
-                spacingSum = maxSum;
-
-            var steps = Enumerable.Repeat(maxSpacing, gapCount).ToArray();
-            var reduction = gapCount * maxSpacing - spacingSum;
-            if (reduction < -Eps) return null;
-
-            // Put residual correction near the center so both ends stay visually regular and most
-            // gaps remain at Max. Continue center-out only if more reduction is needed.
-            foreach (var index in CenterOutIndices(gapCount))
-            {
-                if (reduction <= Eps) break;
-                var capacity = steps[index] - minSpacing;
-                if (capacity <= Eps) continue;
-                var take = Math.Min(capacity, reduction);
-                steps[index] -= take;
-                reduction -= take;
-            }
-            if (reduction > Eps) return null;
-
-            var actualSum = steps.Sum();
-            var edge = (length - actualSum) / 2.0;
-            if (edge < minEdge - Eps || edge > maxEdge + Eps) return null;
-            if (steps.Any(s => s < minSpacing - Eps || s > maxSpacing + Eps)) return null;
-
-            var penalty = 10000.0 * gapCount;
-            penalty += steps.Sum(s => 2.0 * (maxSpacing - s));
-            penalty += maxEdge - edge;
-            return new LegacyCandidate(-penalty, edge, steps, edge);
-        }
-
-        private static IEnumerable<int> CenterOutIndices(int count)
-        {
-            if (count <= 0) yield break;
-            var left = (count - 1) / 2;
-            var right = left + 1;
-            yield return left;
-            while (left > 0 || right < count)
-            {
-                if (right < count) yield return right++;
-                if (left > 0) yield return --left;
-            }
-        }
-
-        private static bool IsEdgeLegal(LegacyCandidate candidate, double minEdge, double maxEdge)
-            => candidate != null &&
-               candidate.Start >= minEdge - Eps && candidate.Start <= maxEdge + Eps &&
-               candidate.End >= minEdge - Eps && candidate.End <= maxEdge + Eps;
-
-        private static LegacyCandidate SelectBest(IReadOnlyList<LegacyCandidate> plans)
-        {
-            var best = plans[0];
-            var bestScore = -999999999999.0;
-            foreach (var plan in plans)
-            {
-                if (plan.Score > bestScore)
-                {
-                    bestScore = plan.Score;
-                    best = plan;
-                }
-            }
-            return best;
-        }
+        private static int RoundUnitCount(double value, double increment)
+            => LispFix(value / increment + 0.5);
 
         public static IReadOnlyList<double> AdjustGrid(
             IEnumerable<double> idealCoordinates,
@@ -343,11 +327,20 @@ namespace HNL.VXT.Core.Layout
             double maxEdge,
             double increment)
         {
-            var x = (idealCoordinates ?? Enumerable.Empty<double>()).ToList();
+            var x = (idealCoordinates ?? Enumerable.Empty<double>()).OrderBy(v => v).ToList();
             var ideal = x.ToArray();
             var obstacles = (obstacleIntervals ?? Enumerable.Empty<Tuple<double, double>>()).ToList();
             if (x.Count == 0 || obstacles.Count == 0) return x;
             if (increment <= Eps) increment = 1.0;
+
+            var effectiveMin = minSpacing;
+            if (x.Count > 1)
+            {
+                var actualMin = double.MaxValue;
+                for (var i = 1; i < x.Count; i++)
+                    actualMin = Math.Min(actualMin, x[i] - x[i - 1]);
+                if (actualMin < effectiveMin - Tol) effectiveMin = Math.Max(0.0, actualMin);
+            }
 
             var changed = true;
             var iteration = 0;
@@ -360,7 +353,7 @@ namespace HNL.VXT.Core.Layout
                     Tuple<double, double> collision = null;
                     foreach (var box in obstacles)
                     {
-                        if (value > box.Item1 + 0.1 && value < box.Item2 - 0.1)
+                        if (value > box.Item1 + Tol && value < box.Item2 - Tol)
                             collision = box;
                     }
                     if (collision != null)
@@ -378,7 +371,7 @@ namespace HNL.VXT.Core.Layout
                     var value = x[i];
                     if (i == 0)
                     {
-                        if (value - minLimit < minEdge - 0.1)
+                        if (value - minLimit < minEdge - Tol)
                         {
                             x[i] = CeilMultiple(minLimit + minEdge, increment);
                             changed = true;
@@ -387,13 +380,13 @@ namespace HNL.VXT.Core.Layout
                     else
                     {
                         var previous = x[i - 1];
-                        if (value - previous < minSpacing - 0.1)
+                        if (value - previous < effectiveMin - Tol)
                         {
-                            value = CeilMultiple(previous + minSpacing, increment);
+                            value = CeilMultiple(previous + effectiveMin, increment);
                             x[i] = value;
                             changed = true;
                         }
-                        if (value - previous > maxSpacing + 0.1)
+                        if (value - previous > maxSpacing + Tol)
                         {
                             value = FloorMultiple(previous + maxSpacing, increment);
                             x[i] = value;
@@ -407,7 +400,7 @@ namespace HNL.VXT.Core.Layout
                     var value = x[i];
                     if (i == x.Count - 1)
                     {
-                        if (maxLimit - value < minEdge - 0.1)
+                        if (maxLimit - value < minEdge - Tol)
                         {
                             x[i] = FloorMultiple(maxLimit - minEdge, increment);
                             changed = true;
@@ -416,13 +409,13 @@ namespace HNL.VXT.Core.Layout
                     else
                     {
                         var next = x[i + 1];
-                        if (next - value < minSpacing - 0.1)
+                        if (next - value < effectiveMin - Tol)
                         {
-                            value = FloorMultiple(next - minSpacing, increment);
+                            value = FloorMultiple(next - effectiveMin, increment);
                             x[i] = value;
                             changed = true;
                         }
-                        if (next - value > maxSpacing + 0.1)
+                        if (next - value > maxSpacing + Tol)
                         {
                             value = CeilMultiple(next - maxSpacing, increment);
                             x[i] = value;
@@ -433,14 +426,6 @@ namespace HNL.VXT.Core.Layout
                 iteration++;
             }
 
-            // V7 safety fallback: the legacy forward/back repair can oscillate when an obstacle
-            // occupies the entire legal edge band (for example an equipment box from 230..470
-            // while the required first edge is 300..400). In that impossible case the legacy
-            // loop may finish with a member still crossing equipment. Preserve the legacy result
-            // whenever it is clear; otherwise move only the residual colliding coordinates to the
-            // nearest collision-free rounded position, prioritizing spacing/edge compliance and
-            // then minimum displacement. Safety (never crossing selected equipment) has priority
-            // over an impossible combination of spacing/edge constraints.
             for (var pass = 0; pass < 4; pass++)
             {
                 var anyMoved = false;
@@ -449,7 +434,7 @@ namespace HNL.VXT.Core.Layout
                     if (!Collides(x[i], obstacles)) continue;
                     var safe = FindSafetyCoordinate(
                         i, x, ideal, obstacles, minLimit, maxLimit,
-                        minSpacing, maxSpacing, minEdge, maxEdge, increment);
+                        effectiveMin, maxSpacing, minEdge, maxEdge, increment);
                     if (!double.IsNaN(safe) && Math.Abs(safe - x[i]) > Eps)
                     {
                         x[i] = safe;
@@ -459,7 +444,37 @@ namespace HNL.VXT.Core.Layout
                 if (!anyMoved || x.All(v => !Collides(v, obstacles))) break;
             }
 
+            x.Sort();
+            if (!GridLayoutValid(x, minLimit, maxLimit, effectiveMin, maxSpacing, minEdge, maxEdge))
+                return Array.Empty<double>();
+            if (x.Any(v => Collides(v, obstacles)))
+                return Array.Empty<double>();
+
             return x;
+        }
+
+        private static bool GridLayoutValid(
+            IReadOnlyList<double> values,
+            double minLimit,
+            double maxLimit,
+            double minSpacing,
+            double maxSpacing,
+            double minEdge,
+            double maxEdge)
+        {
+            if (values == null || values.Count == 0) return false;
+            var ordered = values.OrderBy(v => v).ToArray();
+            var firstEdge = ordered[0] - minLimit;
+            var lastEdge = maxLimit - ordered[ordered.Length - 1];
+            if (firstEdge < minEdge - Tol || firstEdge > maxEdge + Tol) return false;
+            if (lastEdge < minEdge - Tol || lastEdge > maxEdge + Tol) return false;
+
+            for (var i = 1; i < ordered.Length; i++)
+            {
+                var gap = ordered[i] - ordered[i - 1];
+                if (gap < minSpacing - Tol || gap > maxSpacing + Tol) return false;
+            }
+            return true;
         }
 
         private static double FindSafetyCoordinate(
@@ -520,13 +535,13 @@ namespace HNL.VXT.Core.Layout
 
         private static double ConstraintPenalty(double distance, double min, double max)
         {
-            if (distance < min - 0.1) return 100000.0 + 10000.0 * (min - distance);
-            if (distance > max + 0.1) return 100000.0 + 10000.0 * (distance - max);
+            if (distance < min - Tol) return 100000.0 + 10000.0 * (min - distance);
+            if (distance > max + Tol) return 100000.0 + 10000.0 * (distance - max);
             return 0.0;
         }
 
         private static bool Collides(double value, IEnumerable<Tuple<double, double>> obstacles)
-            => obstacles.Any(box => value > box.Item1 + 0.1 && value < box.Item2 - 0.1);
+            => obstacles.Any(box => value > box.Item1 + Tol && value < box.Item2 - Tol);
 
         public static double OptimizeOffset(
             Result layout,
@@ -537,7 +552,8 @@ namespace HNL.VXT.Core.Layout
             Func<double, bool> isCoordinateClear)
         {
             if (layout == null || isCoordinateClear == null) return layout?.StartOffset ?? 0.0;
-            if (IsLayoutClear(layout, minCoordinate, layout.StartOffset, isCoordinateClear)) return layout.StartOffset;
+            if (IsLayoutClear(layout, minCoordinate, layout.StartOffset, isCoordinateClear))
+                return layout.StartOffset;
 
             var length = layout.StartOffset + layout.Span + layout.EndOffset;
             var spacingSum = layout.Span;
@@ -547,6 +563,7 @@ namespace HNL.VXT.Core.Layout
             {
                 var delta = k * increment;
                 limitReached = true;
+
                 var plus = layout.StartOffset + delta;
                 var plusEnd = length - spacingSum - plus;
                 if (plus <= maxEdge + Eps && plusEnd >= minEdge - Eps)
@@ -554,6 +571,7 @@ namespace HNL.VXT.Core.Layout
                     limitReached = false;
                     if (IsLayoutClear(layout, minCoordinate, plus, isCoordinateClear)) return plus;
                 }
+
                 var minus = layout.StartOffset - delta;
                 var minusEnd = length - spacingSum - minus;
                 if (minus >= minEdge - Eps && minusEnd <= maxEdge + Eps)
@@ -566,7 +584,11 @@ namespace HNL.VXT.Core.Layout
             return double.NaN;
         }
 
-        private static bool IsLayoutClear(Result layout, double minCoordinate, double offset, Func<double, bool> clear)
+        private static bool IsLayoutClear(
+            Result layout,
+            double minCoordinate,
+            double offset,
+            Func<double, bool> clear)
         {
             var value = minCoordinate + offset;
             if (!clear(value)) return false;
@@ -580,33 +602,10 @@ namespace HNL.VXT.Core.Layout
 
         private static int LispFix(double value) => (int)value;
 
-        private static IReadOnlyList<double> Repeat(int count, double value)
-        {
-            if (count <= 0) return Array.Empty<double>();
-            var result = new double[count];
-            for (var i = 0; i < count; i++) result[i] = value;
-            return result;
-        }
-
         private static double FloorMultiple(double value, double increment)
             => Math.Floor((value + 1e-10) / increment) * increment;
 
         private static double CeilMultiple(double value, double increment)
             => Math.Ceiling((value - 1e-10) / increment) * increment;
-
-        private sealed class LegacyCandidate
-        {
-            public LegacyCandidate(double score, double start, IReadOnlyList<double> steps, double end)
-            {
-                Score = score;
-                Start = start;
-                Steps = steps ?? Array.Empty<double>();
-                End = end;
-            }
-            public double Score { get; }
-            public double Start { get; }
-            public IReadOnlyList<double> Steps { get; }
-            public double End { get; }
-        }
     }
 }
