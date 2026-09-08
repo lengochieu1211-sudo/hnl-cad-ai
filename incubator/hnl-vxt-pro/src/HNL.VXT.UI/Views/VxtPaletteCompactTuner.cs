@@ -1,5 +1,4 @@
 using System;
-using System.ComponentModel;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -12,9 +11,9 @@ using HNL.VXT.UI.ViewModels;
 namespace HNL.VXT.UI.Views
 {
     /// <summary>
-    /// Runtime layout pass for the production palette.  Keep the original XAML as the
+    /// Runtime layout pass for the production palette. Keep the original XAML as the
     /// stable functional template, then make the AutoCAD-hosted palette denser and align
-    /// every form row to one common label/input/button grid.  This is intentionally a
+    /// every form row to one common label/input/button grid. This is intentionally a
     /// separate pass so the legacy/Golden bindings stay untouched.
     /// </summary>
     internal static class VxtPaletteCompactTuner
@@ -31,7 +30,7 @@ namespace HNL.VXT.UI.Views
             HookBlockLayerSync(host, vm);
 
             // Some bindings/header visuals are materialized only after AutoCAD hosts the
-            // UserControl.  Re-run once at Loaded so the compact metrics are deterministic.
+            // UserControl. Re-run once at Loaded so the compact metrics are deterministic.
             view.Loaded += (sender, args) => ApplyNow(view);
         }
 
@@ -56,7 +55,7 @@ namespace HNL.VXT.UI.Views
         {
             try
             {
-                // Keep UI independent of the AutoCAD assembly.  The concrete host exposes
+                // Keep UI independent of the AutoCAD assembly. The concrete host exposes
                 // this optional method; reflection avoids widening the stable bridge contract.
                 var method = host.GetType().GetMethod(
                     "GetSelectedBlockLayer",
@@ -319,22 +318,29 @@ namespace HNL.VXT.UI.Views
         private static System.Collections.Generic.IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
         {
             if (root == null) yield break;
-            var count = 0;
-            try { count = VisualTreeHelper.GetChildrenCount(root); }
+
+            var visualCount = 0;
+            try { visualCount = VisualTreeHelper.GetChildrenCount(root); }
             catch { }
 
-            for (var i = 0; i < count; i++)
+            if (visualCount > 0)
             {
-                DependencyObject child;
-                try { child = VisualTreeHelper.GetChild(root, i); }
-                catch { continue; }
+                for (var i = 0; i < visualCount; i++)
+                {
+                    DependencyObject child;
+                    try { child = VisualTreeHelper.GetChild(root, i); }
+                    catch { continue; }
 
-                var typed = child as T;
-                if (typed != null) yield return typed;
-                foreach (var nested in Descendants<T>(child)) yield return nested;
+                    var typed = child as T;
+                    if (typed != null) yield return typed;
+                    foreach (var nested in Descendants<T>(child)) yield return nested;
+                }
+                yield break;
             }
 
-            // Dynamically-created controls can exist in the logical tree before Loaded.
+            // Before Loaded, dynamically-created controls may only be reachable through
+            // the logical tree. Never walk visual and logical copies in the same pass;
+            // doing both multiplies traversal work on every nested panel.
             foreach (var logical in LogicalTreeHelper.GetChildren(root))
             {
                 var dep = logical as DependencyObject;
