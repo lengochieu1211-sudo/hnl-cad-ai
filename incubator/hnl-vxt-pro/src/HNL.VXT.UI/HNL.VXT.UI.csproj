@@ -10,6 +10,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\HNL.VXT.Core\HNL.VXT.Core.csproj" />
-    <EmbeddedResource Include="Assets\HNL-Logo-Official.b64" LogicalName="HNL.VXT.UI.HNLLogoOfficial" />
+    <!-- One canonical HNL logo for both the AutoCAD palette and installer branding. -->
+    <Resource Include="..\..\..\..\public\hnl-logo.png" Link="Assets\HNL-Logo-Official.png" />
   </ItemGroup>
 </Project>
