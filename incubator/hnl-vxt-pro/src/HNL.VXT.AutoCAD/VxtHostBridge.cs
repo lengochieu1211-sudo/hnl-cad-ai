@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Windows.Threading;
 using Autodesk.AutoCAD.ApplicationServices.Core;
 using Autodesk.AutoCAD.DatabaseServices;
 using HNL.VXT.Core.Models;
@@ -9,6 +10,18 @@ namespace HNL.VXT.AutoCAD
 {
     internal sealed class VxtHostBridge : IVxtHostBridge
     {
+        private readonly DispatcherTimer _previewTimer;
+        private VxtSettings _pendingPreviewSettings;
+
+        public VxtHostBridge()
+        {
+            _previewTimer = new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromMilliseconds(180)
+            };
+            _previewTimer.Tick += PreviewTimer_Tick;
+        }
+
         public bool IsDarkTheme
         {
             get
@@ -32,9 +45,7 @@ namespace HNL.VXT.AutoCAD
 
         public void SelectBoundary()
         {
-            // Preserve the Lisp interaction order even when the user chooses an interactive
-            // main-direction mode before selecting the ceiling boundary. AutoCAD queues the
-            // second command and runs it only after HNLVXTBOUNDARY has finished its selection.
+            CancelPendingPreview();
             switch (VxtSession.Current.Settings.MainDirection)
             {
                 case MainDirectionMode.TwoPoints:
@@ -51,6 +62,7 @@ namespace HNL.VXT.AutoCAD
 
         public void PickDirection(MainDirectionMode mode)
         {
+            CancelPendingPreview();
             VxtSession.Current.Settings.MainDirection = mode;
             switch (mode)
             {
@@ -62,6 +74,7 @@ namespace HNL.VXT.AutoCAD
 
         public void PickBlock(BlockTarget target)
         {
+            CancelPendingPreview();
             switch (target)
             {
                 case BlockTarget.Main: Send("HNLVXTPICKMAIN "); break;
@@ -72,6 +85,7 @@ namespace HNL.VXT.AutoCAD
 
         public void PickEquipment(EquipmentTarget target)
         {
+            CancelPendingPreview();
             switch (target)
             {
                 case EquipmentTarget.General: Send("HNLVXTMEP "); break;
@@ -82,6 +96,7 @@ namespace HNL.VXT.AutoCAD
 
         public void PickDimensionPosition(DimensionTarget target)
         {
+            CancelPendingPreview();
             switch (target)
             {
                 case DimensionTarget.Main: Send("HNLVXTDIMMAIN "); break;
@@ -96,11 +111,10 @@ namespace HNL.VXT.AutoCAD
             var previousMode = session.Settings?.MainDirection ?? MainDirectionMode.Horizontal;
             session.Settings = settings.Clone();
 
-            // Match the Lisp workflow: selecting an interactive direction immediately enters
-            // the CAD pick when a boundary already exists. If the user has not selected a
-            // boundary yet, SelectBoundary() will queue the required direction/region command.
+            // Interactive CAD pick modes must start immediately and are never debounced.
             if (settings.MainDirection != previousMode)
             {
+                CancelPendingPreview();
                 if (settings.MainDirection == MainDirectionMode.TwoPoints)
                 {
                     VxtTransientPreview.Instance.Clear();
@@ -121,13 +135,23 @@ namespace HNL.VXT.AutoCAD
                 }
             }
 
-            VxtTransientPreview.Instance.Refresh();
+            // Numeric typing can produce several Value changes per second. Rebuilding hundreds
+            // of transients for every keystroke caused the palette to feel laggy on large floors.
+            // Coalesce those changes and render only the latest state after 180 ms of quiet time.
+            _pendingPreviewSettings = settings.Clone();
+            _previewTimer.Stop();
+            _previewTimer.Start();
         }
 
-        public void ClearPreview() => VxtTransientPreview.Instance.Clear();
+        public void ClearPreview()
+        {
+            CancelPendingPreview();
+            VxtTransientPreview.Instance.Clear();
+        }
 
         public string AnalyzeDiagnostics(VxtSettings settings)
         {
+            CancelPendingPreview();
             VxtSession.Current.Settings = settings.Clone();
             VxtDiagnosticService.AnalyzeAndReport(settings);
             return VxtDiagnosticService.LastAnalysis;
@@ -135,17 +159,41 @@ namespace HNL.VXT.AutoCAD
 
         public string ExportDiagnostics(VxtSettings settings)
         {
+            CancelPendingPreview();
             VxtSession.Current.Settings = settings.Clone();
             return VxtDiagnosticService.ExportInteractive(settings);
         }
 
-        public void RequestRuntimeGolden() => Send("HNLVXTGOLDEN ");
+        public void RequestRuntimeGolden()
+        {
+            CancelPendingPreview();
+            Send("HNLVXTGOLDEN ");
+        }
 
         public void RequestCreate()
         {
+            CancelPendingPreview();
             var session = VxtSession.Current;
             if (session.ViewModel != null) session.Settings = session.ViewModel.Snapshot();
             Send("HNLVXTCREATE ");
+        }
+
+        private void PreviewTimer_Tick(object sender, EventArgs e)
+        {
+            _previewTimer.Stop();
+            var settings = _pendingPreviewSettings;
+            _pendingPreviewSettings = null;
+            if (settings == null) return;
+
+            var session = VxtSession.Current;
+            session.Settings = settings.Clone();
+            if (session.HasBoundary) VxtTransientPreview.Instance.Refresh();
+        }
+
+        private void CancelPendingPreview()
+        {
+            _previewTimer.Stop();
+            _pendingPreviewSettings = null;
         }
 
         private static string[] ReadSymbolNames(Database db, ObjectId tableId)
