@@ -43,6 +43,21 @@ namespace HNL.VXT.AutoCAD
             return doc == null ? Array.Empty<string>() : ReadSymbolNames(doc.Database, doc.Database.DimStyleTableId);
         }
 
+        // Optional UI parity hook. VxtCommands already stores the source BlockReference layer
+        // in session settings; the compact palette reads it after SetBlock raises PropertyChanged.
+        public string GetSelectedBlockLayer(BlockTarget target)
+        {
+            var settings = VxtSession.Current.Settings;
+            if (settings == null) return string.Empty;
+            switch (target)
+            {
+                case BlockTarget.Main: return settings.MainLayer ?? string.Empty;
+                case BlockTarget.Furring: return settings.FurringLayer ?? string.Empty;
+                case BlockTarget.Hanger: return settings.HangerLayer ?? string.Empty;
+                default: return string.Empty;
+            }
+        }
+
         public void SelectBoundary()
         {
             CancelPendingPreview();
