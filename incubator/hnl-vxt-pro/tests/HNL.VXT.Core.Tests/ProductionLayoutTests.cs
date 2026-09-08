@@ -17,7 +17,7 @@ namespace HNL.VXT.Core.Tests
             var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), new VxtSettings());
             var main = plan.Lines.First(x => x.Kind == PreviewLineKind.Main);
             var xp = plan.Lines.First(x => x.Kind == PreviewLineKind.Furring);
-            Assert.IsTrue(Math.Abs(main.A.Y - main.B.Y) < 1e-6, "V6.7.4 Ngang must create horizontal main members.");
+            Assert.IsTrue(Math.Abs(main.A.Y - main.B.Y) < 1e-6, "V6.7.6.15 Ngang must create horizontal main members.");
             Assert.IsTrue(Math.Abs(xp.A.X - xp.B.X) < 1e-6, "Furring must be perpendicular to main members.");
         }
 
@@ -43,19 +43,17 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void SmartLayout_ExactLegacyResultFor4000Run_Is400_800x4_400()
+        public void SmartLayout_ExactV67615ResultFor4000Run_Is300_850x4_300()
         {
-            // Exact legacy calc-smart-layout tie-break for L=4000,
-            // max/min spacing=1000/700, max/min edge=400/300, multiple=50.
-            // S=850/O=300 and S=800/O=400 have the same penalty. The Lisp builds
-            // valid_plans with CONS while S descends, then keeps the first strict-best (>),
-            // therefore the later-consed S=800 candidate wins the tie.
+            // V6.7.6.15 strict-multiple policy: use the minimum K first; within that K,
+            // prefer one repeated exact multiple nearest Max, and absorb only the remainder
+            // into the two edge offsets. 4000 therefore resolves to 300 + 850x4 + 300.
             var result = SmartLayout1D.Calculate(4000, 1000, 700, 400, 300, 50, MainLayoutMode.BalancedTwoEnds);
             Assert.IsNotNull(result);
-            Assert.AreEqual(400.0, result.StartOffset, 1e-8);
-            CollectionAssert.AreEqual(new[] { 800.0, 800.0, 800.0, 800.0 }, result.Steps.ToArray());
-            Assert.AreEqual(400.0, result.EndOffset, 1e-8);
-            CollectionAssert.AreEqual(new[] { 400.0, 1200.0, 2000.0, 2800.0, 3600.0 }, result.Positions(0).ToArray());
+            Assert.AreEqual(300.0, result.StartOffset, 1e-8);
+            CollectionAssert.AreEqual(new[] { 850.0, 850.0, 850.0, 850.0 }, result.Steps.ToArray());
+            Assert.AreEqual(300.0, result.EndOffset, 1e-8);
+            CollectionAssert.AreEqual(new[] { 300.0, 1150.0, 2000.0, 2850.0, 3700.0 }, result.Positions(0).ToArray());
         }
 
         [TestMethod]
@@ -77,7 +75,7 @@ namespace HNL.VXT.Core.Tests
             Assert.IsTrue(longSide.Lines.Where(x => x.Kind == PreviewLineKind.Main)
                 .All(x => Math.Abs(x.A.Y - x.B.Y) < 1e-6), "Shadowline=Yes must follow the long side on a 6000x4000 region.");
             Assert.IsTrue(shortSide.Lines.Where(x => x.Kind == PreviewLineKind.Main)
-                .All(x => Math.Abs(x.A.X - x.B.X) < 1e-6), "Shadowline=No must follow the short side on a 6000x4000 region.");
+                .All(x => Math.Abs(x.A.X - x.B.X) < 1e-6), "Current no-Shadowline fixed-direction mode must follow the short side until ToiUu UI mode is selected.");
         }
 
         [TestMethod]
@@ -125,7 +123,7 @@ namespace HNL.VXT.Core.Tests
             var xs = plan.Lines.Where(x => x.Kind == PreviewLineKind.Furring).Select(x => x.A.X).Distinct().OrderBy(x => x).ToList();
             Assert.IsTrue(xs.Count > 0);
             Assert.AreEqual(100.0, xs.First(), 1e-6);
-            Assert.AreEqual(2000.0 - 300.0, 1700.0, 1e-6); // readability guard; far grid is 100,500,...,1700.
+            Assert.AreEqual(2000.0 - 300.0, 1700.0, 1e-6);
             Assert.AreEqual(1700.0, xs.Last(), 1e-6);
         }
 
@@ -147,8 +145,6 @@ namespace HNL.VXT.Core.Tests
         [TestMethod]
         public void OneSideHangers_ReverseWithFurringStartSide()
         {
-            // Use an asymmetric run so reversing the Golden one-side plan is observable.
-            // A 6000 run resolves symmetrically, so reversal is intentionally identical there.
             const double width = 6075.0;
             var settings = new VxtSettings
             {
@@ -162,7 +158,7 @@ namespace HNL.VXT.Core.Tests
             var far = new VxtPreviewPlanBuilder().Build(Rectangle(width, 4000), settings, farContext);
             var nearX = near.HangerPoints.OrderBy(p => p.Y).ThenBy(p => p.X).First().X;
             var farX = far.HangerPoints.OrderBy(p => p.Y).ThenBy(p => p.X).First().X;
-            Assert.AreNotEqual(nearX, farX, 1e-6, "Golden reverse must swap asymmetric edge offsets.");
+            Assert.AreNotEqual(nearX, farX, 1e-6, "Strict-multiple reverse must swap asymmetric edge offsets.");
         }
 
         [TestMethod]
@@ -194,9 +190,9 @@ namespace HNL.VXT.Core.Tests
             };
             var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings);
             var dims = plan.Dimensions.Where(d => d.Target == DimensionTarget.Main).ToList();
-            Assert.AreEqual(6, dims.Count, "Legacy process-dims must dimension boundary→first XC, every XC gap, and last XC→boundary.");
-            Assert.AreEqual(400.0, dims.First().ExtensionPoint1.DistanceTo(dims.First().ExtensionPoint2), 1e-6);
-            Assert.AreEqual(400.0, dims.Last().ExtensionPoint1.DistanceTo(dims.Last().ExtensionPoint2), 1e-6);
+            Assert.AreEqual(6, dims.Count, "process-dims must dimension boundary→first XC, every XC gap, and last XC→boundary.");
+            Assert.AreEqual(300.0, dims.First().ExtensionPoint1.DistanceTo(dims.First().ExtensionPoint2), 1e-6);
+            Assert.AreEqual(300.0, dims.Last().ExtensionPoint1.DistanceTo(dims.Last().ExtensionPoint2), 1e-6);
         }
 
         [TestMethod]
@@ -214,8 +210,6 @@ namespace HNL.VXT.Core.Tests
             var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings);
             var dim = plan.Dimensions.First(d => d.Target == DimensionTarget.Main);
 
-            // Legacy process-dims uses bound_X_min (=0) as extension base, while the dimension
-            // text/line sits at bound_X_min - dim_dist (=-500).
             Assert.AreEqual(0.0, dim.ExtensionPoint1.X, 1e-6);
             Assert.AreEqual(0.0, dim.ExtensionPoint2.X, 1e-6);
             Assert.AreEqual(-500.0, dim.DimensionLinePoint.X, 1e-6);
