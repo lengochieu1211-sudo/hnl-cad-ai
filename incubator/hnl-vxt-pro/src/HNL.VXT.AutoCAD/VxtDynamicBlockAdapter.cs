@@ -42,10 +42,14 @@ namespace HNL.VXT.AutoCAD
                 return "dynamic:" + usedProperty;
             }
 
-            // Safe fallback for static/ambiguous blocks: scale only the block's local X axis.
-            // It does not mutate Array Count/Spacing parameters and therefore cannot explode an
-            // associative/dynamic array. Dynamic blocks with a recognized length property never
-            // reach this fallback.
+            // If a dynamic block exposes Array/Count/Spacing controls but no unambiguous
+            // member-length property, do not XScale it. Scaling the whole reference would also
+            // stretch array pitch/offsets even though we did not directly modify those properties.
+            // Returning unchanged tells Create to erase this trial BlockReference and fall back
+            // to Polyline/MLINE geometry, which is safer than corrupting the user's block logic.
+            if (IsArraySensitive(br)) return "array-fallback";
+
+            // Static or simple non-array block: local X scaling is a safe last resort.
             var currentLength = GetVisibleLength(br);
             if (currentLength > 1e-8)
             {
