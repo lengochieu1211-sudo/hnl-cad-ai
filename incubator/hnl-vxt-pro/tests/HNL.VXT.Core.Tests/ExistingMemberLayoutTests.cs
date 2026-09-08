@@ -29,7 +29,7 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void ManualHangers_UseSameLegacy4000Layout()
+        public void ManualHangers_UseSameV67615Strict4000Layout()
         {
             var settings = new VxtSettings
             {
@@ -38,7 +38,7 @@ namespace HNL.VXT.Core.Tests
             };
             var axis = ExistingMemberLayout.FromBounds(new Box2(0, -5, 4000, 5));
             var xs = ExistingMemberLayout.HangerPoints(axis, settings, false).Select(p => p.X).ToArray();
-            CollectionAssert.AreEqual(new[] { 400.0, 1200.0, 2000.0, 2800.0, 3600.0 }, xs);
+            CollectionAssert.AreEqual(new[] { 300.0, 1150.0, 2000.0, 2850.0, 3700.0 }, xs);
         }
 
         [TestMethod]
