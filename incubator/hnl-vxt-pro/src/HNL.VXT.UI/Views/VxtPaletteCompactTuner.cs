@@ -16,7 +16,7 @@ namespace HNL.VXT.UI.Views
     /// every form row to one common label/input/button grid. This is intentionally a
     /// separate pass so the legacy/Golden bindings stay untouched.
     /// </summary>
-    internal static class VxtPaletteCompactTuner
+    public static class VxtPaletteCompactTuner
     {
         private const double LabelWidth = 142.0;
         private const double PickButtonWidth = 68.0;
