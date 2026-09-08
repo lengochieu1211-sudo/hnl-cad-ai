@@ -2,7 +2,7 @@ namespace HNL.VXT.Core.Models
 {
     public sealed class VxtSettings
     {
-        // Xương chính - parity V6.7.4
+        // Xương chính - parity HNL VXT V6.7.6.15 StrictMultiple/PostProcess
         public bool DrawMain = true;
         public bool UseDynamicMainBlock = true;
         public string MainBlockName { get; set; } = "AP_THANH CHINH 06.2026";
@@ -11,20 +11,23 @@ namespace HNL.VXT.Core.Models
         public double MainMinEdgeOffset { get; set; } = 300.0;
         public double MainMaxEdgeOffset { get; set; } = 400.0;
         public double MainBalanceStep { get; set; } = 50.0;
+        public double MainEdgeTolerance { get; set; } = 25.0;
+        public bool UseLocalMainAdd { get; set; } = true;
+        public double MinLocalMainLength { get; set; } = 500.0;
         public double MainSkipLimit { get; set; } = 500.0;
         public MainDirectionMode MainDirection { get; set; } = MainDirectionMode.Horizontal;
         public MainLayoutMode MainLayout { get; set; } = MainLayoutMode.BalancedTwoEnds;
         // Lisp hỏi "Trần có đi Shadowline không?" khi chọn Auto và mặc định <Yes>.
         public bool AutoShadowline { get; set; } = true;
 
-        // Xương phụ - parity V6.7.4
+        // Xương phụ - V6.7.6.15 giữ bước cố định; 1220/3 phải giữ giá trị thực, không làm tròn.
         public bool DrawFurring = true;
         public bool UseDynamicFurringBlock = true;
         public string FurringBlockName { get; set; } = "AP_THANH PHU 06.2026";
         public double FurringSpacing { get; set; } = 1220.0 / 3.0;
         public bool AskDirectionEachRegion = false;
 
-        // Ty treo - parity V6.7.4
+        // Ty treo - parity HNL VXT V6.7.6.15 StrictMultiple/PostProcess
         public bool DrawHangers = true;
         public string HangerBlockName { get; set; } = "AP_DIEM TY 06.2026";
         public double HangerMinSpacing { get; set; } = 700.0;
@@ -32,14 +35,15 @@ namespace HNL.VXT.Core.Models
         public double HangerMinEdgeOffset { get; set; } = 300.0;
         public double HangerMaxEdgeOffset { get; set; } = 400.0;
         public double HangerBalanceStep { get; set; } = 50.0;
+        public double HangerEdgeTolerance { get; set; } = 25.0;
         public HangerLayoutMode HangerLayout { get; set; } = HangerLayoutMode.BalancedTwoEnds;
 
-        // Né thiết bị - parity V6.7.4
+        // Né thiết bị
         public bool UseAvoidance = true;
         public bool ShiftAllForAvoidance = true;
         public double ClearanceDistance { get; set; } = 20.0;
 
-        // DIM - parity V6.7.4
+        // DIM
         public bool AutoDimension = false;
         public bool DimMain = false;
         public bool DimFurring = false;
@@ -53,7 +57,6 @@ namespace HNL.VXT.Core.Models
         // Hướng preview theo góc thực tế. Horizontal=0, Vertical=90, TwoPoints cập nhật runtime.
         public double DirectionDegrees { get; set; } = 0.0;
 
-        // Layer / DimStyle defaults retained from V6.7.4 for future Create engine parity.
         public string MainLayer { get; set; } = "AP_TC_THANH CHINH (KT)";
         public short MainColorIndex { get; set; } = 6;
         public string MainLinetype { get; set; } = "Continuous";
@@ -93,7 +96,17 @@ namespace HNL.VXT.Core.Models
                 }
                 if (MainBalanceStep <= 0)
                 {
-                    error = "Bù khoảng cách Xương chính phải lớn hơn 0.";
+                    error = "Bội số khoảng cách Xương chính phải lớn hơn 0.";
+                    return false;
+                }
+                if (MainEdgeTolerance < 0)
+                {
+                    error = "Dung sai biên Xương chính không được âm.";
+                    return false;
+                }
+                if (MinLocalMainLength < 0)
+                {
+                    error = "Chiều dài tối thiểu Xương chính cục bộ không được âm.";
                     return false;
                 }
                 if (MainSkipLimit < 0)
@@ -123,7 +136,12 @@ namespace HNL.VXT.Core.Models
                 }
                 if (HangerBalanceStep <= 0)
                 {
-                    error = "Bù khoảng cách Ty treo phải lớn hơn 0.";
+                    error = "Bội số khoảng cách Ty treo phải lớn hơn 0.";
+                    return false;
+                }
+                if (HangerEdgeTolerance < 0)
+                {
+                    error = "Dung sai biên Ty treo không được âm.";
                     return false;
                 }
             }
