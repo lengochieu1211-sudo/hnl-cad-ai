@@ -50,8 +50,6 @@ namespace HNL.VXT.AutoCAD
                     }
                     else
                     {
-                        // Legacy V6.7.2 allows the special mode: no boundary, no XC/XP,
-                        // draw Ty only on a manually selected set of existing main members.
                         plan = new VxtPreviewPlan();
                     }
 
@@ -72,19 +70,24 @@ namespace HNL.VXT.AutoCAD
                     {
                         if (item.Kind == PreviewLineKind.Main)
                         {
-                            if (settings.UseDynamicMainBlock && bt.Has(settings.MainBlockName))
-                                AppendMemberBlock(ms, tr, db, bt[settings.MainBlockName], item, mainLayer, ref counts.Main);
-                            else
+                            var blockDone = settings.UseDynamicMainBlock && bt.Has(settings.MainBlockName) &&
+                                            AppendMemberBlock(ms, tr, db, bt[settings.MainBlockName], settings.MainBlockName,
+                                                item, mainLayer, ref counts.Main);
+                            if (!blockDone)
                                 AppendPolyline(ms, tr, db, item, mainLayer, ref counts.Main);
                         }
                         else if (item.Kind == PreviewLineKind.Furring)
                         {
-                            if (settings.UseDynamicFurringBlock && bt.Has(settings.FurringBlockName))
-                                AppendMemberBlock(ms, tr, db, bt[settings.FurringBlockName], item, furringLayer, ref counts.Furring);
-                            else if (!TryAppendFurringMline(ms, tr, db, item, furringLayer))
-                                AppendPolyline(ms, tr, db, item, furringLayer, ref counts.Furring);
-                            else
-                                counts.Furring++;
+                            var blockDone = settings.UseDynamicFurringBlock && bt.Has(settings.FurringBlockName) &&
+                                            AppendMemberBlock(ms, tr, db, bt[settings.FurringBlockName], settings.FurringBlockName,
+                                                item, furringLayer, ref counts.Furring);
+                            if (!blockDone)
+                            {
+                                if (!TryAppendFurringMline(ms, tr, db, item, furringLayer))
+                                    AppendPolyline(ms, tr, db, item, furringLayer, ref counts.Furring);
+                                else
+                                    counts.Furring++;
+                            }
                         }
                     }
 
@@ -125,9 +128,6 @@ namespace HNL.VXT.AutoCAD
                         }
                     }
 
-                    // Supplement generated geometry with the exact legacy manual-source branch.
-                    // This covers existing XC -> new Ty and existing XC/XP/Ty -> DIM when those
-                    // systems are intentionally not redrawn.
                     var manualCounts = VxtManualExistingEngine.Append(
                         db, tr, ms, bt, lt, dst, session, settings);
                     counts.Hangers += manualCounts.Hangers;
@@ -178,11 +178,12 @@ namespace HNL.VXT.AutoCAD
             }
         }
 
-        private static void AppendMemberBlock(
+        private static bool AppendMemberBlock(
             BlockTableRecord ms,
             Transaction tr,
             Database db,
             ObjectId blockId,
+            string effectiveName,
             PreviewLine item,
             ObjectId layerId,
             ref int count)
@@ -190,7 +191,7 @@ namespace HNL.VXT.AutoCAD
             var start = ToPoint3d(item.A);
             var end = ToPoint3d(item.B);
             var vector = end - start;
-            if (vector.Length <= 1e-9) return;
+            if (vector.Length <= 1e-9) return false;
 
             var br = new BlockReference(start, blockId)
             {
@@ -200,8 +201,17 @@ namespace HNL.VXT.AutoCAD
             VxtCadResources.ApplyByLayer(br, layerId);
             ms.AppendEntity(br);
             tr.AddNewlyCreatedDBObject(br, true);
-            VxtTransientPreview.TryApplyDynamicLength(br, vector.Length);
+
+            var mode = VxtDynamicBlockAdapter.ApplyMemberLength(br, effectiveName, vector.Length);
+            if (string.Equals(mode, "unchanged", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(mode, "none", StringComparison.OrdinalIgnoreCase))
+            {
+                try { br.Erase(); } catch { }
+                return false;
+            }
+
             count++;
+            return true;
         }
 
         private static void AppendPolyline(
