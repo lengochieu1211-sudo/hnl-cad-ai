@@ -82,9 +82,9 @@ namespace HNL.VXT.AutoCAD
                     if (!string.IsNullOrWhiteSpace(lengthProperty))
                         adapterText = " • Length property: " + lengthProperty;
                     else if (arraySensitive)
-                        adapterText = " • Có Array/Spacing: dùng XScale an toàn, không bơm Array";
+                        adapterText = " • Có Array/Spacing nhưng chưa nhận diện Length: sẽ dùng Polyline/MLINE an toàn";
                     else
-                        adapterText = " • Không nhận diện Stretch rõ: dùng XScale an toàn";
+                        adapterText = " • Không nhận diện Stretch rõ: dùng XScale đơn giản";
                 }
 
                 ed.WriteMessage(
