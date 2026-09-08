@@ -145,16 +145,7 @@ namespace HNL.VXT.Core.Layout
             if (plans.Count == 0)
                 return new Result(length / 2.0, Array.Empty<double>(), length / 2.0);
 
-            var best = plans[0];
-            var bestScore = -9999999.0;
-            foreach (var plan in plans)
-            {
-                if (plan.Score > bestScore)
-                {
-                    bestScore = plan.Score;
-                    best = plan;
-                }
-            }
+            var best = SelectBest(plans);
             return new Result(best.Start, best.Steps, best.End);
         }
 
@@ -193,14 +184,24 @@ namespace HNL.VXT.Core.Layout
             if (plans.Count == 0)
                 return new Result(length / 2.0, Array.Empty<double>(), length / 2.0);
 
-            var best = plans[0];
-            var bestScore = -9999999.0;
-            foreach (var plan in plans)
+            var best = SelectBest(plans);
+
+            // Legacy scoring treats edge-limit violations as a soft penalty. On long runs this
+            // can select e.g. 296 mm when the legal minimum is 300 mm. BuildHangerRow then keeps
+            // the first 296 mm Ty but filters the final 296 mm Ty, producing a missing end hanger.
+            // Preserve exact legacy output whenever it is legal. Only repair illegal winners.
+            if (!IsEdgeLegal(best, minEdge, maxEdge))
             {
-                if (plan.Score > bestScore)
+                var repaired = TryRepairBalancedCandidate(
+                    length, best.Steps.Count, maxSpacing, minSpacing, maxEdge, minEdge, increment);
+                if (repaired != null)
                 {
-                    bestScore = plan.Score;
-                    best = plan;
+                    best = repaired;
+                }
+                else
+                {
+                    var legalPlans = plans.Where(p => IsEdgeLegal(p, minEdge, maxEdge)).ToList();
+                    if (legalPlans.Count > 0) best = SelectBest(legalPlans);
                 }
             }
 
@@ -224,6 +225,111 @@ namespace HNL.VXT.Core.Layout
                 }
             }
             return new Result(o1, best.Steps, o2);
+        }
+
+        private static LegacyCandidate TryRepairBalancedCandidate(
+            double length,
+            int gapCount,
+            double maxSpacing,
+            double minSpacing,
+            double maxEdge,
+            double minEdge,
+            double increment)
+        {
+            if (gapCount <= 0) return null;
+
+            // Preserve the legacy/economic gap count first. Increase only if that count cannot
+            // physically satisfy both edge bands.
+            var maxGapCount = Math.Max(
+                gapCount,
+                LispFix((length - 2.0 * minEdge) / Math.Max(minSpacing, Eps)));
+            for (var count = gapCount; count <= maxGapCount; count++)
+            {
+                var repaired = TryBuildMixedBalancedCandidate(
+                    length, count, maxSpacing, minSpacing, maxEdge, minEdge, increment);
+                if (repaired != null) return repaired;
+            }
+            return null;
+        }
+
+        private static LegacyCandidate TryBuildMixedBalancedCandidate(
+            double length,
+            int gapCount,
+            double maxSpacing,
+            double minSpacing,
+            double maxEdge,
+            double minEdge,
+            double increment)
+        {
+            var minSum = Math.Max(gapCount * minSpacing, length - 2.0 * maxEdge);
+            var maxSum = Math.Min(gapCount * maxSpacing, length - 2.0 * minEdge);
+            if (minSum > maxSum + Eps) return null;
+
+            // Prefer a rounded total span as large as possible: fewer/smaller reductions from Max.
+            var spacingSum = FloorMultiple(maxSum, increment);
+            if (spacingSum < minSum - Eps) spacingSum = CeilMultiple(minSum, increment);
+            if (spacingSum < minSum - Eps || spacingSum > maxSum + Eps)
+                spacingSum = maxSum;
+
+            var steps = Enumerable.Repeat(maxSpacing, gapCount).ToArray();
+            var reduction = gapCount * maxSpacing - spacingSum;
+            if (reduction < -Eps) return null;
+
+            // Put residual correction near the center so both ends stay visually regular and most
+            // gaps remain at Max. Continue center-out only if more reduction is needed.
+            foreach (var index in CenterOutIndices(gapCount))
+            {
+                if (reduction <= Eps) break;
+                var capacity = steps[index] - minSpacing;
+                if (capacity <= Eps) continue;
+                var take = Math.Min(capacity, reduction);
+                steps[index] -= take;
+                reduction -= take;
+            }
+            if (reduction > Eps) return null;
+
+            var actualSum = steps.Sum();
+            var edge = (length - actualSum) / 2.0;
+            if (edge < minEdge - Eps || edge > maxEdge + Eps) return null;
+            if (steps.Any(s => s < minSpacing - Eps || s > maxSpacing + Eps)) return null;
+
+            var penalty = 10000.0 * gapCount;
+            penalty += steps.Sum(s => 2.0 * (maxSpacing - s));
+            penalty += maxEdge - edge;
+            return new LegacyCandidate(-penalty, edge, steps, edge);
+        }
+
+        private static IEnumerable<int> CenterOutIndices(int count)
+        {
+            if (count <= 0) yield break;
+            var left = (count - 1) / 2;
+            var right = left + 1;
+            yield return left;
+            while (left > 0 || right < count)
+            {
+                if (right < count) yield return right++;
+                if (left > 0) yield return --left;
+            }
+        }
+
+        private static bool IsEdgeLegal(LegacyCandidate candidate, double minEdge, double maxEdge)
+            => candidate != null &&
+               candidate.Start >= minEdge - Eps && candidate.Start <= maxEdge + Eps &&
+               candidate.End >= minEdge - Eps && candidate.End <= maxEdge + Eps;
+
+        private static LegacyCandidate SelectBest(IReadOnlyList<LegacyCandidate> plans)
+        {
+            var best = plans[0];
+            var bestScore = -999999999999.0;
+            foreach (var plan in plans)
+            {
+                if (plan.Score > bestScore)
+                {
+                    bestScore = plan.Score;
+                    best = plan;
+                }
+            }
+            return best;
         }
 
         public static IReadOnlyList<double> AdjustGrid(
@@ -376,7 +482,6 @@ namespace HNL.VXT.Core.Layout
                 var right = CeilMultiple(box.Item2, increment);
                 candidates.Add(left);
                 candidates.Add(right);
-                // Also search a few rounded positions outward in case adjacent obstacle bands touch.
                 for (var k = 1; k <= 8; k++)
                 {
                     candidates.Add(left - k * increment);
@@ -401,8 +506,6 @@ namespace HNL.VXT.Core.Layout
                 if (index + 1 < current.Count)
                     score += ConstraintPenalty(current[index + 1] - candidate, minSpacing, maxSpacing);
 
-                // Keep the fallback as close as possible to the Lisp-produced ideal grid after
-                // satisfying as many engineering constraints as the geometry allows.
                 score += Math.Abs(candidate - ideal[index]);
                 if (score < bestScore - Eps ||
                     (Math.Abs(score - bestScore) <= Eps &&
