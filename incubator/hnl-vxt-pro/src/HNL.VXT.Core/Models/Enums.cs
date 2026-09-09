@@ -22,6 +22,18 @@ namespace HNL.VXT.Core.Models
         OneSideFollowFurring = 1
     }
 
+    /// <summary>
+    /// HNL VXT Pro solver profile. Legacy is the certified V6.7.x parity path.
+    /// Pro profiles are opt-in until their real-AutoCAD runtime gate is certified.
+    /// </summary>
+    public enum VxtOptimizationMode
+    {
+        Legacy = 0,
+        ProBalanced = 1,
+        ProEconomy = 2,
+        ProConservative = 3
+    }
+
     public enum BlockTarget
     {
         Main = 0,
