@@ -8,6 +8,8 @@ namespace HNL.VXT.Core.Layout
     /// <summary>
     /// Pro optimizer for a fixed XP spacing. Spacing itself is never changed; only the grid
     /// offset is selected. This preserves 1220/3 (or any user-entered spacing) exactly.
+    /// Obstacle-boundary candidates are evaluated analytically so narrow legal offset windows
+    /// are not missed by the normal sampled search.
     /// </summary>
     public static class VxtProFurringOffsetOptimizer
     {
@@ -59,7 +61,8 @@ namespace HNL.VXT.Core.Layout
 
             preferredOffset = NormalizeOffset(preferredOffset, spacing);
             var obstacles = NormalizeObstacles(obstacleIntervals, minLimit, maxLimit);
-            var offsets = CandidateOffsets(length, spacing, preferredOffset, sampleStep).ToArray();
+            var offsets = CandidateOffsets(
+                length, spacing, preferredOffset, sampleStep, minLimit, obstacles).ToArray();
 
             Result best = null;
             foreach (var offset in offsets)
@@ -91,7 +94,9 @@ namespace HNL.VXT.Core.Layout
             double length,
             double spacing,
             double preferredOffset,
-            double sampleStep)
+            double sampleStep,
+            double minLimit,
+            IReadOnlyList<Tuple<double, double>> obstacles)
         {
             var values = new HashSet<double>(new ToleranceComparer());
             Add(values, preferredOffset, spacing);
@@ -110,6 +115,22 @@ namespace HNL.VXT.Core.Layout
             else
             {
                 Add(values, spacing * 0.5, spacing);
+            }
+
+            // Exact obstacle-driven candidates. For a fixed periodic grid, every change in the
+            // collision set occurs when an XP coordinate crosses an obstacle interval boundary.
+            // Testing those modulo-spacing boundaries prevents a 10 mm sample from missing a
+            // narrow but perfectly legal global offset.
+            foreach (var obstacle in obstacles ?? Array.Empty<Tuple<double, double>>())
+            {
+                var a = obstacle.Item1 - minLimit;
+                var b = obstacle.Item2 - minLimit;
+                Add(values, a, spacing);
+                Add(values, b, spacing);
+                Add(values, a - Tol, spacing);
+                Add(values, a + Tol, spacing);
+                Add(values, b - Tol, spacing);
+                Add(values, b + Tol, spacing);
             }
 
             var step = sampleStep > Eps ? sampleStep : Math.Max(1.0, spacing / 40.0);
