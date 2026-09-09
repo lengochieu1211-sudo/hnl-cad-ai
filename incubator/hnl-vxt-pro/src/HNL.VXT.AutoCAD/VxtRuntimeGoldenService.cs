@@ -15,9 +15,8 @@ using HNL.VXT.Core.Preview;
 namespace HNL.VXT.AutoCAD
 {
     /// <summary>
-    /// Non-destructive Runtime Golden self-test. It exercises the real AutoCAD database API
-    /// (layers, ModelSpace entities, BlockReference and RotatedDimension) inside one transaction
-    /// that is intentionally NOT committed, so the user's DWG remains unchanged.
+    /// Non-destructive Runtime Golden self-test. Legacy and Pro Economy are tested by
+    /// separate commands but share the same real AutoCAD DB transaction/rollback contract.
     /// </summary>
     internal static class VxtRuntimeGoldenService
     {
@@ -26,12 +25,19 @@ namespace HNL.VXT.AutoCAD
         private const int ExpectedHangers = 35;
         private const int ExpectedDimensions = 29;
 
-        public static string Run()
+        public static string Run() => RunEngine(VxtOptimizationMode.Legacy);
+        public static string RunPro() => RunEngine(VxtOptimizationMode.ProEconomy);
+
+        private static string RunEngine(VxtOptimizationMode optimizationMode)
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
+            var isPro = optimizationMode != VxtOptimizationMode.Legacy;
+            var testName = isPro ? "Runtime Pro Golden" : "Runtime Golden";
+            var stageName = isPro ? "RuntimeProGoldenSelfTest" : "RuntimeGoldenSelfTest";
+
             if (doc == null)
             {
-                const string noDoc = "FAIL Runtime Golden: Không có bản vẽ AutoCAD đang hoạt động.";
+                var noDoc = "FAIL " + testName + ": Không có bản vẽ AutoCAD đang hoạt động.";
                 VxtSession.Current.ViewModel?.SetRuntimeGoldenResult(false, noDoc, null);
                 return noDoc;
             }
@@ -39,7 +45,7 @@ namespace HNL.VXT.AutoCAD
             var sw = Stopwatch.StartNew();
             var tempSuffix = Guid.NewGuid().ToString("N").Substring(0, 10).ToUpperInvariant();
             var tempBlockName = "HNL_VXT_GOLDEN_TY_" + tempSuffix;
-            var settings = BuildGoldenSettings(tempSuffix, tempBlockName);
+            var settings = BuildGoldenSettings(tempSuffix, tempBlockName, optimizationMode);
             var counts = new Dictionary<string, int>();
 
             try
@@ -52,7 +58,9 @@ namespace HNL.VXT.AutoCAD
                     new Point2(0.0, 4000.0)
                 });
 
-                var plan = new VxtPreviewPlanBuilder().Build(boundary, settings, new VxtLayoutContext());
+                var plan = isPro
+                    ? new VxtProPreviewPlanBuilder().Build(boundary, settings, new VxtLayoutContext())
+                    : new VxtPreviewPlanBuilder().Build(boundary, settings, new VxtLayoutContext());
                 ValidateCoreContract(plan, settings);
 
                 var db = doc.Database;
@@ -131,10 +139,11 @@ namespace HNL.VXT.AutoCAD
 
                 ValidateRollback(db, settings, tempBlockName);
                 sw.Stop();
-                var summary = "PASS Runtime Golden: AutoCAD DB API + Core 6000x4000 OK | XC " +
+                var engineLabel = isPro ? "Pro Economy" : "Legacy Golden";
+                var summary = "PASS " + testName + ": AutoCAD DB API + " + engineLabel + " 6000x4000 OK | XC " +
                               ExpectedMain + " • XP " + ExpectedFurring + " • Ty " + ExpectedHangers +
                               " • DIM " + ExpectedDimensions + " | " + sw.ElapsedMilliseconds + " ms | DWG không bị thay đổi.";
-                WriteGoldenLog("PASS", summary, counts, null);
+                WriteGoldenLog("PASS", stageName, optimizationMode, summary, counts, null);
                 doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
                 VxtSession.Current.ViewModel?.SetRuntimeGoldenResult(true, summary, null);
                 return summary;
@@ -142,19 +151,21 @@ namespace HNL.VXT.AutoCAD
             catch (System.Exception ex)
             {
                 sw.Stop();
-                var diagnosticPath = VxtDiagnosticService.CaptureCreateFailure(settings, ex, "VxtRuntimeGoldenService.Run");
-                var summary = "FAIL Runtime Golden: " + ex.Message +
+                var diagnosticPath = VxtDiagnosticService.CaptureCreateFailure(settings, ex, "VxtRuntimeGoldenService." + stageName);
+                var summary = "FAIL " + testName + ": " + ex.Message +
                               (string.IsNullOrWhiteSpace(diagnosticPath) ? string.Empty : " | Diagnostic: " + diagnosticPath);
+                WriteGoldenLog("FAIL", stageName, optimizationMode, summary, counts, diagnosticPath);
                 doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
                 VxtSession.Current.ViewModel?.SetRuntimeGoldenResult(false, summary, diagnosticPath);
                 return summary;
             }
         }
 
-        private static VxtSettings BuildGoldenSettings(string suffix, string hangerBlockName)
+        private static VxtSettings BuildGoldenSettings(string suffix, string hangerBlockName, VxtOptimizationMode optimizationMode)
         {
             return new VxtSettings
             {
+                OptimizationMode = optimizationMode,
                 UseDynamicMainBlock = false,
                 UseDynamicFurringBlock = false,
                 HangerBlockName = hangerBlockName,
@@ -220,7 +231,13 @@ namespace HNL.VXT.AutoCAD
             }
         }
 
-        private static void WriteGoldenLog(string result, string summary, IDictionary<string, int> counts, string diagnosticPath)
+        private static void WriteGoldenLog(
+            string result,
+            string stage,
+            VxtOptimizationMode optimizationMode,
+            string summary,
+            IDictionary<string, int> counts,
+            string diagnosticPath)
         {
             try
             {
@@ -232,7 +249,8 @@ namespace HNL.VXT.AutoCAD
                 var sb = new StringBuilder(1024);
                 sb.Append("{\"timestamp\":\"").Append(Escape(DateTimeOffset.Now.ToString("o"))).Append("\",");
                 sb.Append("\"result\":\"").Append(Escape(result)).Append("\",");
-                sb.Append("\"stage\":\"RuntimeGoldenSelfTest\",");
+                sb.Append("\"stage\":\"").Append(Escape(stage)).Append("\",");
+                sb.Append("\"engine\":\"").Append(Escape(optimizationMode.ToString())).Append("\",");
                 sb.Append("\"acadver\":\"").Append(Escape(SafeSystemVariable("ACADVER"))).Append("\",");
                 sb.Append("\"summary\":\"").Append(Escape(summary)).Append("\",");
                 sb.Append("\"diagnosticZip\":\"").Append(Escape(diagnosticPath ?? string.Empty)).Append("\",");
