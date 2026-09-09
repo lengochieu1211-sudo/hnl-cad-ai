@@ -258,6 +258,7 @@ namespace HNL.VXT.Core.Preview
                 {
                     Segment2 segment;
                     if (!TryTrimHorizontal(raw, scope.Domain, out segment)) continue;
+                    if (settings.UseAvoidance && !LocalSegmentClear(segment, obstacles)) continue;
                     AddMainLine(plan, segment, scope.Radians);
                     if (settings.DrawHangers)
                         AddHangers(plan, segment, scope, settings, obstacles);
@@ -289,6 +290,10 @@ namespace HNL.VXT.Core.Preview
                         bandGrid = RepairInterval(bandGrid, check.A, check.B, settings, maxEdge);
                 }
                 bandGrid = PruneAdded(bandGrid, baseGrid, bandChecks, settings.MainMaxSpacing, maxEdge);
+                bandGrid = ResolveAddedAgainstObstacles(
+                    bandGrid, baseGrid, bandChecks, scope, first.BandA, first.BandB,
+                    settings, obstacles, maxEdge);
+
                 foreach (var y in bandGrid)
                 {
                     if (!ContainsNear(baseGrid, y, 0.5))
@@ -305,12 +310,95 @@ namespace HNL.VXT.Core.Preview
                     if (x2 - x1 <= MinDrawLength) continue;
                     if (x2 - x1 < settings.MinLocalMainLength - Tol) continue;
                     var segment = new Segment2(new Point2(x1, spec.Y), new Point2(x2, spec.Y));
+                    if (settings.UseAvoidance && !LocalSegmentClear(segment, obstacles)) continue;
                     if (MainLineExists(plan, segment, scope.Radians)) continue;
                     AddMainLine(plan, segment, scope.Radians);
                     if (settings.DrawHangers)
                         AddHangers(plan, segment, scope, settings, obstacles);
                 }
             }
+        }
+
+        private static List<double> ResolveAddedAgainstObstacles(
+            List<double> grid,
+            List<double> baseGrid,
+            List<CheckInterval> checks,
+            Scope scope,
+            double bandA,
+            double bandB,
+            VxtSettings settings,
+            List<Box2> obstacles,
+            double maxEdge)
+        {
+            var output = UniqueSort(grid, 0.5);
+            if (!settings.UseAvoidance || obstacles == null || obstacles.Count == 0 ||
+                settings.MainBalanceStep <= Eps)
+                return output;
+
+            var added = output.Where(x => !ContainsNear(baseGrid, x, 0.5)).ToList();
+            foreach (var original in added)
+            {
+                if (LocalBandPositionClear(scope, original, bandA, bandB, settings, obstacles)) continue;
+
+                double? replacement = null;
+                var maxSteps = Math.Max(1, (int)Math.Ceiling(settings.MainMaxSpacing / settings.MainBalanceStep) + 1);
+                for (var stepIndex = 1; stepIndex <= maxSteps && !replacement.HasValue; stepIndex++)
+                {
+                    var delta = stepIndex * settings.MainBalanceStep;
+                    var candidates = new[] { original - delta, original + delta };
+                    foreach (var candidateY in candidates)
+                    {
+                        if (candidateY <= scope.Domain.MinY + 2.0 || candidateY >= scope.Domain.MaxY - 2.0) continue;
+                        if (!LocalBandPositionClear(scope, candidateY, bandA, bandB, settings, obstacles)) continue;
+
+                        var candidateGrid = ReplaceOne(output, original, candidateY);
+                        if (candidateGrid == null || candidateGrid.Count != output.Count) continue;
+                        if (!GridStepsAreMultiples(candidateGrid, settings.MainBalanceStep, Tol)) continue;
+                        if (!checks.All(c => IsMaxSafe(candidateGrid, c.A, c.B, settings.MainMaxSpacing, maxEdge))) continue;
+
+                        replacement = candidateY;
+                        break;
+                    }
+                }
+
+                if (replacement.HasValue)
+                {
+                    var moved = ReplaceOne(output, original, replacement.Value);
+                    if (moved != null) output = moved;
+                }
+            }
+
+            return output;
+        }
+
+        private static bool LocalBandPositionClear(
+            Scope scope,
+            double y,
+            double bandA,
+            double bandB,
+            VxtSettings settings,
+            List<Box2> obstacles)
+        {
+            var foundDrawable = false;
+            foreach (var raw in PolygonScanline.ClipHorizontal(scope.Polygon, y))
+            {
+                var x1 = Math.Max(Math.Min(raw.A.X, raw.B.X), Math.Max(scope.Domain.MinX, bandA));
+                var x2 = Math.Min(Math.Max(raw.A.X, raw.B.X), Math.Min(scope.Domain.MaxX, bandB));
+                if (x2 - x1 <= MinDrawLength) continue;
+                if (x2 - x1 < settings.MinLocalMainLength - Tol) continue;
+                foundDrawable = true;
+                var segment = new Segment2(new Point2(x1, y), new Point2(x2, y));
+                if (!LocalSegmentClear(segment, obstacles)) return false;
+            }
+            return foundDrawable;
+        }
+
+        private static bool LocalSegmentClear(Segment2 segment, IEnumerable<Box2> obstacles)
+        {
+            foreach (var box in obstacles ?? Enumerable.Empty<Box2>())
+                if (box.IntersectsHorizontal(segment.A.Y, segment.A.X, segment.B.X, Tol))
+                    return false;
+            return true;
         }
 
         private static List<double> RepairInterval(List<double> source, double a, double b, VxtSettings settings, double maxEdge)
