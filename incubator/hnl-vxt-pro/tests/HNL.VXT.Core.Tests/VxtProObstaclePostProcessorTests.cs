@@ -1,4 +1,5 @@
 using HNL.VXT.Core.Geometry;
+using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
 using HNL.VXT.Core.Preview;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
