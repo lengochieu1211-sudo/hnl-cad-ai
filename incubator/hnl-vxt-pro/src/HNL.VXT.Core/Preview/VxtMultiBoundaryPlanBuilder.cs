@@ -7,10 +7,9 @@ using HNL.VXT.Core.Models;
 namespace HNL.VXT.Core.Preview
 {
     /// <summary>
-    /// HNL VXT V6.7.6.15 parity adapter: build every selected closed polyline independently,
-    /// run StrictMultiple/PostProcess on that ceiling area, then merge only the resulting
-    /// preview/create entities. This deliberately avoids a shared bounding box between
-    /// disconnected ceiling areas.
+    /// Multi-boundary adapter. Legacy keeps the certified V6.7.x builder untouched;
+    /// opt-in Pro profiles use the separate VxtProPreviewPlanBuilder.
+    /// Every selected closed polyline is still solved independently before merge.
     /// </summary>
     public static class VxtMultiBoundaryPlanBuilder
     {
@@ -20,17 +19,24 @@ namespace HNL.VXT.Core.Preview
             VxtLayoutContext context)
         {
             if (boundaries == null) throw new ArgumentNullException(nameof(boundaries));
+            if (settings == null) throw new ArgumentNullException(nameof(settings));
             context = context ?? new VxtLayoutContext();
 
             var merged = new VxtPreviewPlan();
-            var builder = new VxtPreviewPlanBuilder();
+            var legacyBuilder = new VxtPreviewPlanBuilder();
+            var proBuilder = settings.OptimizationMode == VxtOptimizationMode.Legacy
+                ? null
+                : new VxtProPreviewPlanBuilder();
             var count = 0;
 
             foreach (var boundary in boundaries)
             {
                 if (boundary == null) continue;
                 var boundaryContext = BuildBoundaryContext(context, count);
-                var part = builder.Build(boundary, settings, boundaryContext);
+                var part = proBuilder == null
+                    ? legacyBuilder.Build(boundary, settings, boundaryContext)
+                    : proBuilder.Build(boundary, settings, boundaryContext);
+
                 VxtConcaveMainPostProcessor.Apply(boundary, settings, boundaryContext, part);
                 merged.Lines.AddRange(part.Lines);
                 merged.Texts.AddRange(part.Texts);
