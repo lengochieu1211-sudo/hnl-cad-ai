@@ -21,6 +21,8 @@ namespace HNL.VXT.AutoCAD
                 VxtPaletteCompactTuner.Apply(_view, bridge, _view.ViewModel);
                 VxtPaletteRuntimePolish.Apply(_view);
                 VxtPaletteView.ApplyLayerDimComboThemeFix(_view);
+                VxtPaletteSectionOrder.Apply(_view);
+                VxtPaletteToggleCompact.Apply(_view);
                 VxtSession.Current.ViewModel = _view.ViewModel;
 
                 _palette = new PaletteSet("HNL Tool - VXT Pro v7.0.0-beta.1", PaletteGuid)
