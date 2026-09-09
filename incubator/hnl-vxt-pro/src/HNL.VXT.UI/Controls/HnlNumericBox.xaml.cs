@@ -54,18 +54,6 @@ namespace HNL.VXT.UI.Controls
             control.SyncText();
         }
 
-        private void Decrease_Click(object sender, RoutedEventArgs e)
-        {
-            ClearInputError();
-            Value = Clamp(Value - Step);
-        }
-
-        private void Increase_Click(object sender, RoutedEventArgs e)
-        {
-            ClearInputError();
-            Value = Clamp(Value + Step);
-        }
-
         private void ValueTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (_syncing) return;
@@ -98,6 +86,34 @@ namespace HNL.VXT.UI.Controls
                 Keyboard.ClearFocus();
                 e.Handled = true;
             }
+            else if (e.Key == Key.Up)
+            {
+                StepValue(+1.0);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Down)
+            {
+                StepValue(-1.0);
+                e.Handled = true;
+            }
+        }
+
+        private void ValueTextBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            // Do not steal the palette scroll wheel. Numeric stepping is enabled only
+            // while this input actually owns keyboard focus.
+            if (!ValueTextBox.IsKeyboardFocusWithin) return;
+
+            StepValue(e.Delta > 0 ? +1.0 : -1.0);
+            e.Handled = true;
+        }
+
+        private void StepValue(double direction)
+        {
+            ClearInputError();
+            Value = Clamp(Value + direction * Step);
+            _lastCommittedValue = Value;
+            SyncText();
         }
 
         private bool CommitExpression(bool restoreOnError)
@@ -134,7 +150,7 @@ namespace HNL.VXT.UI.Controls
             if (ValueTextBox == null) return;
             ValueTextBox.ClearValue(Control.BorderBrushProperty);
             ValueTextBox.ClearValue(Control.BorderThicknessProperty);
-            ValueTextBox.ToolTip = "Nhập số hoặc phép tính, ví dụ: 1220/3, 600+25, 2*450, (1200-100)/2";
+            ValueTextBox.ToolTip = "Nhập số hoặc phép tính, ví dụ: 1220/3, 600+25, 2*450, (1200-100)/2. Dùng phím ↑/↓ hoặc con lăn khi ô đang được chọn.";
         }
 
         private void SyncText()
