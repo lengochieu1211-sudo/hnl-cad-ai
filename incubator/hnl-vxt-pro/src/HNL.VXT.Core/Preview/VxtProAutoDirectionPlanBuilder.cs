@@ -20,6 +20,7 @@ namespace HNL.VXT.Core.Preview
         private sealed class Candidate
         {
             public double Angle;
+            public double AxisMisalignment;
             public VxtPreviewPlan Plan;
             public VxtPlanQuality Quality;
         }
@@ -39,6 +40,7 @@ namespace HNL.VXT.Core.Preview
 
             var legacyAngle = ResolveLegacyAutoAngle(boundary, settings.AutoShadowline);
             var angles = BuildCandidateAngles(boundary, legacyAngle);
+            var boundaryAxes = BuildBoundaryAxes(boundary);
             var candidates = new List<Candidate>();
 
             foreach (var angle in angles)
@@ -54,7 +56,15 @@ namespace HNL.VXT.Core.Preview
                     var quality = VxtProPlanQualityEvaluator.Evaluate(
                         plan, candidateSettings, context, angle, angles.Count);
                     plan.Quality = quality;
-                    candidates.Add(new Candidate { Angle = angle, Plan = plan, Quality = quality });
+                    candidates.Add(new Candidate
+                    {
+                        Angle = angle,
+                        AxisMisalignment = boundaryAxes.Count == 0
+                            ? 0.0
+                            : boundaryAxes.Min(x => AngularDistance180(x, angle)),
+                        Plan = plan,
+                        Quality = quality
+                    });
                 }
                 catch
                 {
@@ -75,10 +85,15 @@ namespace HNL.VXT.Core.Preview
                 return fallback;
             }
 
+            // Geometry aligned to a real ceiling axis is preferred over an arbitrary global
+            // direction when both are legal/clear. Within the aligned family, the Pro profile's
+            // material/quality score decides the winner.
             var best = candidates
                 .OrderBy(x => x.Quality.HardViolationCount)
                 .ThenBy(x => x.Quality.CollisionCount)
+                .ThenBy(x => x.AxisMisalignment > AngleTolerance ? 1 : 0)
                 .ThenBy(x => x.Quality.SortScore)
+                .ThenBy(x => x.AxisMisalignment)
                 .ThenBy(x => AngularDistance180(x.Angle, legacyAngle))
                 .First();
 
@@ -105,10 +120,10 @@ namespace HNL.VXT.Core.Preview
                 weighted.Add(Tuple.Create(Normalize180(angle + 90.0), length));
             }
 
-            // Always include certified legacy Auto and global orthogonal directions.
-            weighted.Add(Tuple.Create(Normalize180(legacyAngle), double.MaxValue));
-            weighted.Add(Tuple.Create(0.0, 1.0));
-            weighted.Add(Tuple.Create(90.0, 1.0));
+            // Always include certified legacy Auto and global orthogonal directions as fallback.
+            weighted.Add(Tuple.Create(Normalize180(legacyAngle), 0.5));
+            weighted.Add(Tuple.Create(0.0, 0.25));
+            weighted.Add(Tuple.Create(90.0, 0.25));
 
             var result = new List<double>();
             foreach (var item in weighted.OrderByDescending(x => x.Item2))
@@ -119,6 +134,25 @@ namespace HNL.VXT.Core.Preview
                 if (result.Count >= MaxCandidates) break;
             }
 
+            return result;
+        }
+
+        private static List<double> BuildBoundaryAxes(Boundary2 boundary)
+        {
+            var result = new List<double>();
+            var vertices = boundary.Vertices;
+            for (var i = 0; i < vertices.Count; i++)
+            {
+                var a = vertices[i];
+                var b = vertices[(i + 1) % vertices.Count];
+                var dx = b.X - a.X;
+                var dy = b.Y - a.Y;
+                if (Math.Sqrt(dx * dx + dy * dy) <= Eps) continue;
+                var angle = Normalize180(Math.Atan2(dy, dx) * 180.0 / Math.PI);
+                if (!result.Any(x => AngularDistance180(x, angle) <= AngleTolerance)) result.Add(angle);
+                var perpendicular = Normalize180(angle + 90.0);
+                if (!result.Any(x => AngularDistance180(x, perpendicular) <= AngleTolerance)) result.Add(perpendicular);
+            }
             return result;
         }
 
