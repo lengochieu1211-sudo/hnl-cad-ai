@@ -2,6 +2,9 @@ namespace HNL.VXT.Core.Models
 {
     public sealed class VxtSettings
     {
+        // Solver: keep Legacy as the certified default until Pro profiles pass Runtime Golden.
+        public VxtOptimizationMode OptimizationMode { get; set; } = VxtOptimizationMode.Legacy;
+
         // Xương chính - parity HNL VXT V6.7.6.15 StrictMultiple/PostProcess
         public bool DrawMain = true;
         public bool UseDynamicMainBlock = true;
