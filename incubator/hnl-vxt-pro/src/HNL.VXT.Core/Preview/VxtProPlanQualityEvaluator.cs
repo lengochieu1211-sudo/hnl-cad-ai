@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using HNL.VXT.Core.Geometry;
+using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
 
 namespace HNL.VXT.Core.Preview
@@ -15,6 +16,7 @@ namespace HNL.VXT.Core.Preview
     public static class VxtProPlanQualityEvaluator
     {
         private const double Eps = 1e-8;
+        private const double CollisionTolerance = 0.1;
 
         public static VxtPlanQuality Evaluate(
             VxtPreviewPlan plan,
@@ -42,14 +44,14 @@ namespace HNL.VXT.Core.Preview
             {
                 foreach (var line in plan.Lines)
                 {
-                    if (line.Kind == PreviewLineKind.Main && mainObstacles.Any(b => SegmentIntersectsBox(line.A, line.B, b)))
+                    if (line.Kind == PreviewLineKind.Main && mainObstacles.Any(b => SegmentIntersectsBoxInterior(line.A, line.B, b)))
                         collisions++;
-                    else if (line.Kind == PreviewLineKind.Furring && furringObstacles.Any(b => SegmentIntersectsBox(line.A, line.B, b)))
+                    else if (line.Kind == PreviewLineKind.Furring && furringObstacles.Any(b => SegmentIntersectsBoxInterior(line.A, line.B, b)))
                         collisions++;
                 }
 
                 foreach (var point in plan.HangerPoints)
-                    if (mainObstacles.Any(b => b.Contains(point, 0.1))) collisions++;
+                    if (mainObstacles.Any(b => ContainsInterior(b, point))) collisions++;
             }
 
             var hard = 0;
@@ -132,19 +134,29 @@ namespace HNL.VXT.Core.Preview
             return Math.Sqrt(dx * dx + dy * dy);
         }
 
-        private static bool SegmentIntersectsBox(Point2 a, Point2 b, Box2 box)
+        private static bool ContainsInterior(Box2 box, Point2 point)
+            => point.X > box.MinX + CollisionTolerance && point.X < box.MaxX - CollisionTolerance &&
+               point.Y > box.MinY + CollisionTolerance && point.Y < box.MaxY - CollisionTolerance;
+
+        private static bool SegmentIntersectsBoxInterior(Point2 a, Point2 b, Box2 box)
         {
-            if (box.Contains(a, 0.1) || box.Contains(b, 0.1)) return true;
+            var minX = box.MinX + CollisionTolerance;
+            var minY = box.MinY + CollisionTolerance;
+            var maxX = box.MaxX - CollisionTolerance;
+            var maxY = box.MaxY - CollisionTolerance;
+            if (maxX <= minX + Eps || maxY <= minY + Eps) return false;
+            var inner = new Box2(minX, minY, maxX, maxY);
+            if (inner.Contains(a) || inner.Contains(b)) return true;
 
             var dx = b.X - a.X;
             var dy = b.Y - a.Y;
             var t0 = 0.0;
             var t1 = 1.0;
 
-            return Clip(-dx, a.X - box.MinX, ref t0, ref t1) &&
-                   Clip( dx, box.MaxX - a.X, ref t0, ref t1) &&
-                   Clip(-dy, a.Y - box.MinY, ref t0, ref t1) &&
-                   Clip( dy, box.MaxY - a.Y, ref t0, ref t1) &&
+            return Clip(-dx, a.X - inner.MinX, ref t0, ref t1) &&
+                   Clip( dx, inner.MaxX - a.X, ref t0, ref t1) &&
+                   Clip(-dy, a.Y - inner.MinY, ref t0, ref t1) &&
+                   Clip( dy, inner.MaxY - a.Y, ref t0, ref t1) &&
                    t1 >= t0 - Eps;
         }
 
