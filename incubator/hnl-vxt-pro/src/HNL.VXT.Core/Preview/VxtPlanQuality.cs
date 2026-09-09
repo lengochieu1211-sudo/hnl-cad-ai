@@ -16,6 +16,12 @@ namespace HNL.VXT.Core.Preview
         public double MaterialIndex { get; set; }
         public double SortScore { get; set; }
 
+        // Multi-boundary telemetry. A single-boundary Pro plan reports 1/1/100.
+        public int BoundaryCount { get; set; } = 1;
+        public int DistinctDirectionCount { get; set; } = 1;
+        public int AlignmentScore100 { get; set; } = 100;
+        public bool UsesSharedDirection { get; set; }
+
         public bool IsValid => HardViolationCount == 0;
         public bool IsClear => CollisionCount == 0;
     }
