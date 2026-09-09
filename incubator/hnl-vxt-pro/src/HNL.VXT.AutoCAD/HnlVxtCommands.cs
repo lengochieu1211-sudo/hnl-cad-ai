@@ -70,5 +70,8 @@ namespace HNL.VXT.AutoCAD
 
         [CommandMethod("HNLVXTGOLDEN", CommandFlags.Modal)]
         public void RuntimeGolden() => VxtRuntimeGoldenService.Run();
+
+        [CommandMethod("HNLVXTPROGOLDEN", CommandFlags.Modal)]
+        public void RuntimeProGolden() => VxtRuntimeGoldenService.RunPro();
     }
 }
