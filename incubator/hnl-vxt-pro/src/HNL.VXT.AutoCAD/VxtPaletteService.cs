@@ -20,6 +20,7 @@ namespace HNL.VXT.AutoCAD
                 _view = new VxtPaletteView(bridge);
                 VxtPaletteCompactTuner.Apply(_view, bridge, _view.ViewModel);
                 VxtPaletteRuntimePolish.Apply(_view);
+                VxtPaletteOptimizerUi.Apply(_view);
                 VxtPaletteView.ApplyLayerDimComboThemeFix(_view);
                 VxtPaletteSectionOrder.Apply(_view);
                 VxtPaletteToggleCompact.Apply(_view);
