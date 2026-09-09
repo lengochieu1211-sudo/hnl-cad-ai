@@ -20,7 +20,10 @@ namespace HNL.VXT.UI.Views
     {
         private const double LabelWidth = 142.0;
         private const double PickButtonWidth = 68.0;
+        private const double PairLabelWidth = 108.0;
+        private const double PairTokenWidth = 27.0;
         private static bool _blockLayerSyncHooked;
+        private static bool _pairedRowsApplied;
 
         public static void Apply(VxtPaletteView view, IVxtHostBridge host, VxtPaletteViewModel vm)
         {
@@ -93,6 +96,7 @@ namespace HNL.VXT.UI.Views
             CompactHeaderAndFooter(view);
             SurfaceLayerAndDimPanel(view);
             RemoveDuplicateDimResourceRows(view);
+            CompactMinMaxRows(view);
             CompactScrollableContent(view);
         }
 
@@ -182,6 +186,119 @@ namespace HNL.VXT.UI.Views
                 parent.Children.Remove(duplicate);
         }
 
+        private static void CompactMinMaxRows(VxtPaletteView view)
+        {
+            // This pass reparents the already-bound numeric controls; it never recreates
+            // bindings or touches VxtSettings. Apply once because ApplyNow runs pre-Loaded
+            // and again after AutoCAD materializes the palette visual tree.
+            if (_pairedRowsApplied) return;
+
+            var changed = false;
+            changed |= TryPairNumericRows(
+                view,
+                "Khoảng cách tâm Min", "Khoảng cách tâm Max", "Khoảng cách tâm",
+                "Min", "Max");
+            changed |= TryPairNumericRows(
+                view,
+                "Khoảng cách biên Min", "Khoảng cách biên Max", "Khoảng cách biên",
+                "Min", "Max");
+
+            // The labels above occur once in Xương chính and once in Ty treo. After the
+            // first pair is moved, search again to compact the second section as well.
+            changed |= TryPairNumericRows(
+                view,
+                "Khoảng cách tâm Min", "Khoảng cách tâm Max", "Khoảng cách tâm",
+                "Min", "Max");
+            changed |= TryPairNumericRows(
+                view,
+                "Khoảng cách biên Min", "Khoảng cách biên Max", "Khoảng cách biên",
+                "Min", "Max");
+
+            if (changed) _pairedRowsApplied = true;
+        }
+
+        private static bool TryPairNumericRows(
+            VxtPaletteView view,
+            string firstLabel,
+            string secondLabel,
+            string compactLabel,
+            string firstToken,
+            string secondToken)
+        {
+            var firstText = FindText(view, firstLabel);
+            var secondText = FindText(view, secondLabel);
+            if (firstText == null || secondText == null) return false;
+
+            var firstGrid = Ancestor<Grid>(firstText);
+            var secondGrid = Ancestor<Grid>(secondText);
+            if (firstGrid == null || secondGrid == null || ReferenceEquals(firstGrid, secondGrid)) return false;
+
+            var parent = firstGrid.Parent as StackPanel;
+            if (parent == null || !ReferenceEquals(secondGrid.Parent, parent)) return false;
+
+            var firstNumeric = FirstDescendant<HnlNumericBox>(firstGrid);
+            var secondNumeric = FirstDescendant<HnlNumericBox>(secondGrid);
+            if (firstNumeric == null || secondNumeric == null) return false;
+
+            var firstIndex = parent.Children.IndexOf(firstGrid);
+            var secondIndex = parent.Children.IndexOf(secondGrid);
+            if (firstIndex < 0 || secondIndex < 0) return false;
+            var insertIndex = Math.Min(firstIndex, secondIndex);
+
+            // Detach the bound controls before removing their original rows.
+            var firstOwner = firstNumeric.Parent as Panel;
+            var secondOwner = secondNumeric.Parent as Panel;
+            firstOwner?.Children.Remove(firstNumeric);
+            secondOwner?.Children.Remove(secondNumeric);
+
+            parent.Children.Remove(firstGrid);
+            parent.Children.Remove(secondGrid);
+
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(PairLabelWidth) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(PairTokenWidth) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(6) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(PairTokenWidth) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var label = NewFieldLabel(view, compactLabel);
+            var token1 = NewFieldLabel(view, firstToken);
+            var token2 = NewFieldLabel(view, secondToken);
+            token1.HorizontalAlignment = HorizontalAlignment.Center;
+            token2.HorizontalAlignment = HorizontalAlignment.Center;
+
+            Grid.SetColumn(label, 0);
+            Grid.SetColumn(token1, 1);
+            Grid.SetColumn(firstNumeric, 2);
+            Grid.SetColumn(token2, 4);
+            Grid.SetColumn(secondNumeric, 5);
+
+            firstNumeric.Height = 27.0;
+            firstNumeric.HorizontalAlignment = HorizontalAlignment.Stretch;
+            secondNumeric.Height = 27.0;
+            secondNumeric.HorizontalAlignment = HorizontalAlignment.Stretch;
+
+            row.Children.Add(label);
+            row.Children.Add(token1);
+            row.Children.Add(firstNumeric);
+            row.Children.Add(token2);
+            row.Children.Add(secondNumeric);
+            parent.Children.Insert(Math.Min(insertIndex, parent.Children.Count), row);
+            return true;
+        }
+
+        private static TextBlock NewFieldLabel(VxtPaletteView view, string text)
+        {
+            return new TextBlock
+            {
+                Text = text,
+                Style = view.Resources["FieldLabel"] as Style,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 10.5
+            };
+        }
+
         private static void CompactScrollableContent(VxtPaletteView view)
         {
             foreach (var scroll in Descendants<ScrollViewer>(view))
@@ -254,8 +371,10 @@ namespace HNL.VXT.UI.Views
             if (!first.IsAbsolute) return;
 
             // Functional form grids in the original XAML use 112 / 155 / 190 px labels.
-            // Normalize those three families to the same vertical axis.
+            // Normalize those three families to the same vertical axis. Pair rows use a
+            // 108 px first column and are intentionally excluded by this range.
             if (first.Value < 105.0 || first.Value > 195.0) return;
+            if (Math.Abs(first.Value - PairLabelWidth) < 0.1 && grid.ColumnDefinitions.Count == 6) return;
 
             grid.ColumnDefinitions[0].Width = new GridLength(LabelWidth);
 
@@ -272,6 +391,12 @@ namespace HNL.VXT.UI.Views
                 if (third.IsAbsolute && third.Value >= 60.0 && third.Value <= 105.0)
                     grid.ColumnDefinitions[2].Width = new GridLength(PickButtonWidth);
             }
+        }
+
+        private static T FirstDescendant<T>(DependencyObject root) where T : DependencyObject
+        {
+            foreach (var item in Descendants<T>(root)) return item;
+            return null;
         }
 
         private static TextBlock FindText(DependencyObject root, string value)
