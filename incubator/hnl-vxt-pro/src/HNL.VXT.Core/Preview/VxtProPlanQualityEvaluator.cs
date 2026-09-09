@@ -39,20 +39,23 @@ namespace HNL.VXT.Core.Preview
             var mainObstacles = Expand(context.GeneralObstacles.Concat(context.MainObstacles), settings.ClearanceDistance);
             var furringObstacles = Expand(context.GeneralObstacles.Concat(context.FurringObstacles), settings.ClearanceDistance);
 
-            var collisions = 0;
+            var mainCollisions = 0;
+            var furringCollisions = 0;
+            var hangerCollisions = 0;
             if (settings.UseAvoidance)
             {
                 foreach (var line in plan.Lines)
                 {
                     if (line.Kind == PreviewLineKind.Main && mainObstacles.Any(b => SegmentIntersectsBoxInterior(line.A, line.B, b)))
-                        collisions++;
+                        mainCollisions++;
                     else if (line.Kind == PreviewLineKind.Furring && furringObstacles.Any(b => SegmentIntersectsBoxInterior(line.A, line.B, b)))
-                        collisions++;
+                        furringCollisions++;
                 }
 
                 foreach (var point in plan.HangerPoints)
-                    if (mainObstacles.Any(b => ContainsInterior(b, point))) collisions++;
+                    if (mainObstacles.Any(b => ContainsInterior(b, point))) hangerCollisions++;
             }
+            var collisions = mainCollisions + furringCollisions + hangerCollisions;
 
             var hard = 0;
             if (settings.DrawMain && plan.MainSegmentCount == 0) hard++;
@@ -82,6 +85,9 @@ namespace HNL.VXT.Core.Preview
                 QualityScore100 = qualityScore,
                 HardViolationCount = hard,
                 CollisionCount = collisions,
+                MainCollisionCount = mainCollisions,
+                FurringCollisionCount = furringCollisions,
+                HangerCollisionCount = hangerCollisions,
                 AutoDirectionCandidateCount = Math.Max(1, autoDirectionCandidateCount),
                 SelectedDirectionDegrees = Normalize180(selectedDirectionDegrees),
                 MainLength = mainLength,
@@ -115,12 +121,19 @@ namespace HNL.VXT.Core.Preview
                 QualityScore100 = list.Min(x => x.QualityScore100),
                 HardViolationCount = list.Sum(x => x.HardViolationCount),
                 CollisionCount = list.Sum(x => x.CollisionCount),
+                MainCollisionCount = list.Sum(x => x.MainCollisionCount),
+                FurringCollisionCount = list.Sum(x => x.FurringCollisionCount),
+                HangerCollisionCount = list.Sum(x => x.HangerCollisionCount),
                 AutoDirectionCandidateCount = list.Sum(x => x.AutoDirectionCandidateCount),
                 SelectedDirectionDegrees = list.Count == 1 ? list[0].SelectedDirectionDegrees : 0.0,
                 MainLength = list.Sum(x => x.MainLength),
                 FurringLength = list.Sum(x => x.FurringLength),
                 MaterialIndex = list.Sum(x => x.MaterialIndex),
-                SortScore = list.Sum(x => x.SortScore)
+                SortScore = list.Sum(x => x.SortScore),
+                BoundaryCount = list.Sum(x => Math.Max(1, x.BoundaryCount)),
+                DistinctDirectionCount = list.Count == 1 ? list[0].DistinctDirectionCount : Math.Max(1, list.Sum(x => Math.Max(1, x.DistinctDirectionCount))),
+                AlignmentScore100 = list.Min(x => x.AlignmentScore100),
+                UsesSharedDirection = list.All(x => x.UsesSharedDirection)
             };
         }
 
