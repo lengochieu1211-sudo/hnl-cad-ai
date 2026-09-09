@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using HNL.VXT.Core.Geometry;
 using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
@@ -9,7 +10,7 @@ namespace HNL.VXT.Core.Preview
     /// <summary>
     /// Multi-boundary adapter. Legacy keeps the certified V6.7.x builder untouched;
     /// opt-in Pro profiles use the separate Pro builders and quality telemetry.
-    /// Every selected closed polyline is still solved independently before merge.
+    /// Pro Auto with two or more ceilings compares independent directions with a shared axis.
     /// </summary>
     public static class VxtMultiBoundaryPlanBuilder
     {
@@ -22,17 +23,27 @@ namespace HNL.VXT.Core.Preview
             if (settings == null) throw new ArgumentNullException(nameof(settings));
             context = context ?? new VxtLayoutContext();
 
+            var boundaryList = boundaries.Where(x => x != null).ToList();
+            if (boundaryList.Count == 0)
+                throw new InvalidOperationException("Không có Polyline kín hợp lệ để rải xương.");
+
+            if (settings.OptimizationMode != VxtOptimizationMode.Legacy &&
+                settings.MainDirection == MainDirectionMode.Auto &&
+                boundaryList.Count > 1)
+            {
+                return VxtProMultiBoundaryCoordinator.Build(boundaryList, settings, context);
+            }
+
             var merged = new VxtPreviewPlan();
             var legacyBuilder = new VxtPreviewPlanBuilder();
             var proBuilder = settings.OptimizationMode == VxtOptimizationMode.Legacy
                 ? null
                 : new VxtProPreviewPlanBuilder();
             var qualities = new List<VxtPlanQuality>();
-            var count = 0;
 
-            foreach (var boundary in boundaries)
+            for (var count = 0; count < boundaryList.Count; count++)
             {
-                if (boundary == null) continue;
+                var boundary = boundaryList[count];
                 var boundaryContext = BuildBoundaryContext(context, count);
                 VxtPreviewPlan part;
 
@@ -43,8 +54,8 @@ namespace HNL.VXT.Core.Preview
                 }
                 else if (settings.MainDirection == MainDirectionMode.Auto)
                 {
-                    // Auto Pro tries dominant polygon directions and applies concave post-process
-                    // before scoring each candidate. Do not post-process the winner a second time.
+                    // Single-boundary Auto Pro tries dominant polygon directions and applies
+                    // concave post-process before scoring each candidate.
                     part = VxtProAutoDirectionPlanBuilder.Build(boundary, settings, boundaryContext);
                 }
                 else
@@ -66,11 +77,7 @@ namespace HNL.VXT.Core.Preview
                 merged.FurringSegmentCount += part.FurringSegmentCount;
                 merged.HangerCount += part.HangerCount;
                 merged.DimensionSegmentCount += part.DimensionSegmentCount;
-                count++;
             }
-
-            if (count == 0)
-                throw new InvalidOperationException("Không có Polyline kín hợp lệ để rải xương.");
 
             if (qualities.Count > 0)
                 merged.Quality = VxtProPlanQualityEvaluator.Aggregate(qualities);
