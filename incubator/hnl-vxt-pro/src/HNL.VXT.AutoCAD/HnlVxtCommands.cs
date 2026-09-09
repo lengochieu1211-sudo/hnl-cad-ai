@@ -76,5 +76,8 @@ namespace HNL.VXT.AutoCAD
 
         [CommandMethod("HNLVXTPROAUTOQA", CommandFlags.Modal)]
         public void RuntimeProAutoQa() => VxtProAutoRuntimeQaService.Run();
+
+        [CommandMethod("HNLVXTPROMULTIQA", CommandFlags.Modal)]
+        public void RuntimeProMultiQa() => VxtProMultiRuntimeQaService.Run();
     }
 }
