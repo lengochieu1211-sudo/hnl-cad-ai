@@ -27,25 +27,21 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void ProEconomy_GoldenRectangle_DoesNotIncreaseMaterialCounts()
+        public void ProEconomy_GoldenRectangle_PreservesRuntimeGoldenCounts()
         {
-            var legacy = VxtMultiBoundaryPlanBuilder.Build(
-                new[] { Rectangle(6000.0, 4000.0) },
-                GoldenSettings(VxtOptimizationMode.Legacy),
-                new VxtLayoutContext());
             var pro = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { Rectangle(6000.0, 4000.0) },
                 GoldenSettings(VxtOptimizationMode.ProEconomy),
                 new VxtLayoutContext());
 
-            Assert.AreEqual(legacy.MainSegmentCount, pro.MainSegmentCount,
+            Assert.AreEqual(5, pro.MainSegmentCount,
                 "Pro Economy must not add XC on a clear Golden rectangle.");
-            Assert.AreEqual(legacy.FurringSegmentCount, pro.FurringSegmentCount,
+            Assert.AreEqual(14, pro.FurringSegmentCount,
                 "Pro Economy must preserve the economical XP member count.");
-            Assert.AreEqual(legacy.HangerCount, pro.HangerCount,
+            Assert.AreEqual(35, pro.HangerCount,
                 "Pro Economy must not add Ty when the Legacy chain is already clear and legal.");
-            Assert.IsTrue(pro.DimensionSegmentCount <= legacy.DimensionSegmentCount,
-                "DIM packer may remove duplicates but must never add redundant DIM segments.");
+            Assert.AreEqual(29, pro.DimensionSegmentCount,
+                "Pro Runtime Golden uses the same deterministic 5/14/35/29 DB contract.");
         }
 
         [TestMethod]
