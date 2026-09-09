@@ -9,9 +9,9 @@ using HNL.VXT.Core.Models;
 namespace HNL.VXT.Core.Preview
 {
     /// <summary>
-    /// Scores an already-built Pro plan without changing geometry. The score is intentionally
-    /// conservative: hard failures and MEP collisions dominate; material index is used mainly
-    /// to rank Auto-direction candidates inside the same ceiling boundary.
+    /// Scores an already-built Pro plan without changing geometry. The score uses the same
+    /// local-frame obstacle/clearance convention as the Pro solvers so QA never reports a
+    /// collision against a different clearance geometry than the one used to place XC/XP/Ty.
     /// </summary>
     public static class VxtProPlanQualityEvaluator
     {
@@ -36,8 +36,11 @@ namespace HNL.VXT.Core.Preview
                 .Where(x => x.Kind == PreviewLineKind.Furring)
                 .Sum(LineLength);
 
-            var mainObstacles = Expand(context.GeneralObstacles.Concat(context.MainObstacles), settings.ClearanceDistance);
-            var furringObstacles = Expand(context.GeneralObstacles.Concat(context.FurringObstacles), settings.ClearanceDistance);
+            var radians = Normalize180(selectedDirectionDegrees) * Math.PI / 180.0;
+            var mainObstacles = TransformAndExpand(
+                context.GeneralObstacles.Concat(context.MainObstacles), radians, settings.ClearanceDistance);
+            var furringObstacles = TransformAndExpand(
+                context.GeneralObstacles.Concat(context.FurringObstacles), radians, settings.ClearanceDistance);
 
             var mainCollisions = 0;
             var furringCollisions = 0;
@@ -46,14 +49,20 @@ namespace HNL.VXT.Core.Preview
             {
                 foreach (var line in plan.Lines)
                 {
-                    if (line.Kind == PreviewLineKind.Main && mainObstacles.Any(b => SegmentIntersectsBoxInterior(line.A, line.B, b)))
+                    if (line.Kind != PreviewLineKind.Main && line.Kind != PreviewLineKind.Furring) continue;
+                    var a = Transform2.ToLocal(line.A, radians);
+                    var b = Transform2.ToLocal(line.B, radians);
+                    if (line.Kind == PreviewLineKind.Main && mainObstacles.Any(box => SegmentIntersectsBoxInterior(a, b, box)))
                         mainCollisions++;
-                    else if (line.Kind == PreviewLineKind.Furring && furringObstacles.Any(b => SegmentIntersectsBoxInterior(line.A, line.B, b)))
+                    else if (line.Kind == PreviewLineKind.Furring && furringObstacles.Any(box => SegmentIntersectsBoxInterior(a, b, box)))
                         furringCollisions++;
                 }
 
                 foreach (var point in plan.HangerPoints)
-                    if (mainObstacles.Any(b => ContainsInterior(b, point))) hangerCollisions++;
+                {
+                    var local = Transform2.ToLocal(point, radians);
+                    if (mainObstacles.Any(box => ContainsInterior(box, local))) hangerCollisions++;
+                }
             }
             var collisions = mainCollisions + furringCollisions + hangerCollisions;
 
@@ -137,8 +146,26 @@ namespace HNL.VXT.Core.Preview
             };
         }
 
-        private static List<Box2> Expand(IEnumerable<Box2> boxes, double clearance)
-            => (boxes ?? Enumerable.Empty<Box2>()).Select(x => x.Expand(Math.Max(0.0, clearance))).ToList();
+        private static List<Box2> TransformAndExpand(
+            IEnumerable<Box2> boxes,
+            double radians,
+            double clearance)
+        {
+            var result = new List<Box2>();
+            foreach (var box in boxes ?? Enumerable.Empty<Box2>())
+                result.Add(TransformBox(box, radians).Expand(Math.Max(0.0, clearance)));
+            return result;
+        }
+
+        private static Box2 TransformBox(Box2 box, double radians)
+        {
+            var points = new[]
+            {
+                new Point2(box.MinX, box.MinY), new Point2(box.MaxX, box.MinY),
+                new Point2(box.MaxX, box.MaxY), new Point2(box.MinX, box.MaxY)
+            }.Select(point => Transform2.ToLocal(point, radians));
+            return Box2.FromPoints(points);
+        }
 
         private static double LineLength(PreviewLine line)
         {
