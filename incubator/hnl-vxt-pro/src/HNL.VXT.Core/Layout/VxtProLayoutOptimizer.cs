@@ -124,19 +124,24 @@ namespace HNL.VXT.Core.Layout
             }
 
             var candidates = new List<Candidate>();
+            var allowEdgeShift = mode != MainLayoutMode.OneSide;
             foreach (var candidateMax in CandidateMaxSpacings(maxSpacing, minSpacing, increment, optimizationMode))
             {
                 AddLayoutFamily(
                     candidates,
                     SmartLayout1D.Calculate(length, candidateMax, minSpacing, maxEdge, minEdge, increment, mode, reverse: false),
                     length, minSpacing, maxSpacing, minEdge, maxEdge, increment,
-                    obstacles, optimizationMode, edgeTolerance);
+                    obstacles, optimizationMode, edgeTolerance, allowEdgeShift);
 
-                AddLayoutFamily(
-                    candidates,
-                    SmartLayout1D.Calculate(length, candidateMax, minSpacing, maxEdge, minEdge, increment, mode, reverse: true),
-                    length, minSpacing, maxSpacing, minEdge, maxEdge, increment,
-                    obstacles, optimizationMode, edgeTolerance);
+                // OneSide has directional meaning. Never silently flip the user's requested side.
+                if (mode != MainLayoutMode.OneSide)
+                {
+                    AddLayoutFamily(
+                        candidates,
+                        SmartLayout1D.Calculate(length, candidateMax, minSpacing, maxEdge, minEdge, increment, mode, reverse: true),
+                        length, minSpacing, maxSpacing, minEdge, maxEdge, increment,
+                        obstacles, optimizationMode, edgeTolerance, allowEdgeShift);
+                }
             }
 
             if (candidates.Count == 0)
@@ -217,7 +222,8 @@ namespace HNL.VXT.Core.Layout
             double increment,
             IReadOnlyList<Tuple<double, double>> obstacles,
             VxtOptimizationMode optimizationMode,
-            double edgeTolerance)
+            double edgeTolerance,
+            bool allowEdgeShift)
         {
             if (baseLayout == null) return;
 
@@ -227,15 +233,16 @@ namespace HNL.VXT.Core.Layout
             var startMax = Math.Min(allowedMax, edgeSum - minEdge);
             if (startMin > startMax + Tol) return;
 
-            var starts = new HashSet<double>();
-            starts.Add(baseLayout.StartOffset);
-            starts.Add(edgeSum / 2.0);
-
-            if (increment > Eps)
+            var starts = new HashSet<double> { baseLayout.StartOffset };
+            if (allowEdgeShift)
             {
-                var first = Math.Ceiling((startMin - Eps) / increment) * increment;
-                for (var value = first; value <= startMax + Eps; value += increment)
-                    starts.Add(value);
+                starts.Add(edgeSum / 2.0);
+                if (increment > Eps)
+                {
+                    var first = Math.Ceiling((startMin - Eps) / increment) * increment;
+                    for (var value = first; value <= startMax + Eps; value += increment)
+                        starts.Add(value);
+                }
             }
 
             foreach (var start in starts.OrderBy(x => x))
