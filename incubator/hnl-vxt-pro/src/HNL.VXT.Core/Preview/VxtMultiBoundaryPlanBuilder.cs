@@ -8,7 +8,7 @@ namespace HNL.VXT.Core.Preview
 {
     /// <summary>
     /// Multi-boundary adapter. Legacy keeps the certified V6.7.x builder untouched;
-    /// opt-in Pro profiles use the separate VxtProPreviewPlanBuilder.
+    /// opt-in Pro profiles use the separate Pro builders and quality telemetry.
     /// Every selected closed polyline is still solved independently before merge.
     /// </summary>
     public static class VxtMultiBoundaryPlanBuilder
@@ -27,17 +27,37 @@ namespace HNL.VXT.Core.Preview
             var proBuilder = settings.OptimizationMode == VxtOptimizationMode.Legacy
                 ? null
                 : new VxtProPreviewPlanBuilder();
+            var qualities = new List<VxtPlanQuality>();
             var count = 0;
 
             foreach (var boundary in boundaries)
             {
                 if (boundary == null) continue;
                 var boundaryContext = BuildBoundaryContext(context, count);
-                var part = proBuilder == null
-                    ? legacyBuilder.Build(boundary, settings, boundaryContext)
-                    : proBuilder.Build(boundary, settings, boundaryContext);
+                VxtPreviewPlan part;
 
-                VxtConcaveMainPostProcessor.Apply(boundary, settings, boundaryContext, part);
+                if (proBuilder == null)
+                {
+                    part = legacyBuilder.Build(boundary, settings, boundaryContext);
+                    VxtConcaveMainPostProcessor.Apply(boundary, settings, boundaryContext, part);
+                }
+                else if (settings.MainDirection == MainDirectionMode.Auto)
+                {
+                    // Auto Pro tries dominant polygon directions and applies concave post-process
+                    // before scoring each candidate. Do not post-process the winner a second time.
+                    part = VxtProAutoDirectionPlanBuilder.Build(boundary, settings, boundaryContext);
+                }
+                else
+                {
+                    part = proBuilder.Build(boundary, settings, boundaryContext);
+                    VxtConcaveMainPostProcessor.Apply(boundary, settings, boundaryContext, part);
+                    var angle = ResolveDirectionDegrees(settings);
+                    part.Quality = VxtProPlanQualityEvaluator.Evaluate(
+                        part, settings, boundaryContext, angle, 1);
+                    VxtProPlanQualityEvaluator.AttachCompactPreviewLabel(boundary, part);
+                }
+
+                if (part.Quality != null) qualities.Add(part.Quality);
                 merged.Lines.AddRange(part.Lines);
                 merged.Texts.AddRange(part.Texts);
                 merged.HangerPoints.AddRange(part.HangerPoints);
@@ -51,7 +71,22 @@ namespace HNL.VXT.Core.Preview
 
             if (count == 0)
                 throw new InvalidOperationException("Không có Polyline kín hợp lệ để rải xương.");
+
+            if (qualities.Count > 0)
+                merged.Quality = VxtProPlanQualityEvaluator.Aggregate(qualities);
             return merged;
+        }
+
+        private static double ResolveDirectionDegrees(VxtSettings settings)
+        {
+            switch (settings.MainDirection)
+            {
+                case MainDirectionMode.Vertical: return 90.0;
+                case MainDirectionMode.TwoPoints:
+                case MainDirectionMode.RectangleRegions:
+                    return settings.DirectionDegrees;
+                default: return 0.0;
+            }
         }
 
         private static VxtLayoutContext BuildBoundaryContext(VxtLayoutContext source, int boundaryIndex)
