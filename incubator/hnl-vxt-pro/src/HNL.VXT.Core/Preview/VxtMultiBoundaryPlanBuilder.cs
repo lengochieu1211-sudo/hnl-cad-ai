@@ -80,7 +80,21 @@ namespace HNL.VXT.Core.Preview
             }
 
             if (qualities.Count > 0)
+            {
                 merged.Quality = VxtProPlanQualityEvaluator.Aggregate(qualities);
+                if (merged.Quality != null)
+                {
+                    merged.Quality.BoundaryCount = boundaryList.Count;
+                    // A manually selected/fixed direction is inherently shared by all boundaries.
+                    if (settings.OptimizationMode != VxtOptimizationMode.Legacy &&
+                        settings.MainDirection != MainDirectionMode.Auto)
+                    {
+                        merged.Quality.DistinctDirectionCount = 1;
+                        merged.Quality.AlignmentScore100 = 100;
+                        merged.Quality.UsesSharedDirection = boundaryList.Count > 1;
+                    }
+                }
+            }
             return merged;
         }
 
