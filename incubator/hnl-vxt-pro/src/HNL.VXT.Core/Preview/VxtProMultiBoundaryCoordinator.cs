@@ -58,7 +58,12 @@ namespace HNL.VXT.Core.Preview
             for (var i = 0; i < boundaries.Count; i++)
             {
                 var context = BuildBoundaryContext(sourceContext, i);
-                parts.Add(VxtProAutoDirectionPlanBuilder.Build(boundaries[i], settings, context));
+                var part = VxtProAutoDirectionPlanBuilder.Build(boundaries[i], settings, context);
+                // Multi-ceiling Preview uses one global Quality line only. Remove the per-ceiling
+                // labels produced by the single-boundary Auto builder before the plans are merged.
+                part.Texts.RemoveAll(x =>
+                    x.Text != null && x.Text.StartsWith("HNL Pro Q", StringComparison.Ordinal));
+                parts.Add(part);
             }
 
             var merged = Merge(parts);
