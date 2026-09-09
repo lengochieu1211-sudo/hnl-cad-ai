@@ -17,5 +17,8 @@ namespace HNL.VXT.Core.Preview
         public int FurringSegmentCount { get; set; }
         public int HangerCount { get; set; }
         public int DimensionSegmentCount { get; set; }
+
+        // Pro-only informational telemetry. Legacy plans leave this null by design.
+        public VxtPlanQuality Quality { get; set; }
     }
 }
