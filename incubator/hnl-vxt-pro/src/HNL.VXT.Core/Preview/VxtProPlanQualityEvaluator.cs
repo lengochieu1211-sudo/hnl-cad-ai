@@ -9,9 +9,10 @@ using HNL.VXT.Core.Models;
 namespace HNL.VXT.Core.Preview
 {
     /// <summary>
-    /// Scores an already-built Pro plan without changing geometry. The score uses the same
-    /// local-frame obstacle/clearance convention as the Pro solvers so QA never reports a
-    /// collision against a different clearance geometry than the one used to place XC/XP/Ty.
+    /// Finalizes and scores an already-built Pro plan. Residual MEP crossings that remain after
+    /// whole-grid shift / coordinate repair are split at the exact solver clearance envelope
+    /// before scoring. Fallback fragmentation is explicitly penalized so Auto never mistakes
+    /// shortened members for a free material improvement.
     /// </summary>
     public static class VxtProPlanQualityEvaluator
     {
@@ -28,6 +29,9 @@ namespace HNL.VXT.Core.Preview
             if (plan == null) throw new ArgumentNullException(nameof(plan));
             if (settings == null) throw new ArgumentNullException(nameof(settings));
             context = context ?? new VxtLayoutContext();
+
+            var obstacleSplitFallbackCount = VxtProObstaclePostProcessor.Apply(
+                plan, settings, context, selectedDirectionDegrees);
 
             var mainLength = plan.Lines
                 .Where(x => x.Kind == PreviewLineKind.Main)
@@ -84,10 +88,16 @@ namespace HNL.VXT.Core.Preview
 
             var sortScore = hard * 1_000_000_000_000.0
                           + collisions * 1_000_000_000.0
+                          + obstacleSplitFallbackCount * 5_000_000.0
                           + materialIndex * modeWeight
                           + (plan.MainSegmentCount + plan.FurringSegmentCount) * 20.0;
 
-            var qualityScore = Math.Max(0, 100 - hard * 40 - Math.Min(60, collisions * 15));
+            var qualityScore = Math.Max(
+                0,
+                100
+                - hard * 40
+                - Math.Min(60, collisions * 15)
+                - Math.Min(20, obstacleSplitFallbackCount * 2));
 
             return new VxtPlanQuality
             {
@@ -97,6 +107,7 @@ namespace HNL.VXT.Core.Preview
                 MainCollisionCount = mainCollisions,
                 FurringCollisionCount = furringCollisions,
                 HangerCollisionCount = hangerCollisions,
+                ObstacleSplitFallbackCount = obstacleSplitFallbackCount,
                 AutoDirectionCandidateCount = Math.Max(1, autoDirectionCandidateCount),
                 SelectedDirectionDegrees = Normalize180(selectedDirectionDegrees),
                 MainLength = mainLength,
@@ -116,6 +127,8 @@ namespace HNL.VXT.Core.Preview
                        " | H\u01B0\u1EDBng " + q.SelectedDirectionDegrees.ToString("0.#", CultureInfo.InvariantCulture) + "\u00B0" +
                        " | VT " + (q.MaterialIndex / 1000.0).ToString("0.0", CultureInfo.InvariantCulture) +
                        " | VC " + q.CollisionCount.ToString(CultureInfo.InvariantCulture);
+            if (q.ObstacleSplitFallbackCount > 0)
+                text += " | MEP-S " + q.ObstacleSplitFallbackCount.ToString(CultureInfo.InvariantCulture);
             if (q.AutoDirectionCandidateCount > 1)
                 text += " | " + q.AutoDirectionCandidateCount.ToString(CultureInfo.InvariantCulture) + " PA";
             plan.Texts.Add(new PreviewText(position, text, PreviewLineKind.Direction));
@@ -133,6 +146,7 @@ namespace HNL.VXT.Core.Preview
                 MainCollisionCount = list.Sum(x => x.MainCollisionCount),
                 FurringCollisionCount = list.Sum(x => x.FurringCollisionCount),
                 HangerCollisionCount = list.Sum(x => x.HangerCollisionCount),
+                ObstacleSplitFallbackCount = list.Sum(x => x.ObstacleSplitFallbackCount),
                 AutoDirectionCandidateCount = list.Sum(x => x.AutoDirectionCandidateCount),
                 SelectedDirectionDegrees = list.Count == 1 ? list[0].SelectedDirectionDegrees : 0.0,
                 MainLength = list.Sum(x => x.MainLength),
