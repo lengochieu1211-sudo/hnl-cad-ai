@@ -9,6 +9,9 @@ namespace HNL.VXT.Core.Preview
         public int QualityScore100 { get; set; }
         public int HardViolationCount { get; set; }
         public int CollisionCount { get; set; }
+        public int MainCollisionCount { get; set; }
+        public int FurringCollisionCount { get; set; }
+        public int HangerCollisionCount { get; set; }
         public int AutoDirectionCandidateCount { get; set; }
         public double SelectedDirectionDegrees { get; set; }
         public double MainLength { get; set; }
