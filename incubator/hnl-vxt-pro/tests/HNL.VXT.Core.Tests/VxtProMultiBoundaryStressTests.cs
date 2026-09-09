@@ -81,11 +81,12 @@ namespace HNL.VXT.Core.Tests
             Assert.IsNotNull(plan.Quality);
             Assert.AreEqual(2, plan.Quality.BoundaryCount);
             Assert.IsTrue(plan.Quality.AlignmentScore100 >= 75);
-            Assert.IsTrue(plan.Texts.Any(x => x.Text != null && x.Text.StartsWith("HNL Pro Tổng Q", StringComparison.Ordinal)));
+            Assert.AreEqual(1, plan.Texts.Count(x => x.Text != null && x.Text.StartsWith("HNL Pro Tổng Q", StringComparison.Ordinal)));
+            Assert.AreEqual(0, plan.Texts.Count(x => x.Text != null && x.Text.StartsWith("HNL Pro Q", StringComparison.Ordinal)));
         }
 
         [TestMethod]
-        public void Stress_ConcaveCeiling_WithManyMepBands_RemainsHardValid()
+        public void Stress_ConcaveCeiling_WithManyMepBands_RemainsClearAndHardValid()
         {
             var settings = BaseSettings(VxtOptimizationMode.ProConservative);
             settings.MainDirection = MainDirectionMode.Auto;
@@ -128,6 +129,8 @@ namespace HNL.VXT.Core.Tests
 
             Assert.IsNotNull(plan.Quality);
             Assert.AreEqual(0, plan.Quality.HardViolationCount);
+            Assert.AreEqual(0, plan.Quality.CollisionCount,
+                "Dense MEP stress must remain collision-free when a legal Pro layout exists.");
             Assert.IsTrue(plan.MainSegmentCount > 0);
             Assert.IsTrue(plan.FurringSegmentCount > 0);
             Assert.IsTrue(plan.HangerCount > 0);
