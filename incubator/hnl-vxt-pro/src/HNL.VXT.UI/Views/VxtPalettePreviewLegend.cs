@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -10,18 +9,28 @@ using HNL.VXT.UI.ViewModels;
 namespace HNL.VXT.UI.Views
 {
     /// <summary>
-    /// Keeps the palette preview legend in sync with the exact ACI settings consumed by
-    /// VxtTransientPreview / Create resources. The old XAML swatches were hard-coded and
-    /// could therefore disagree with the dynamic blocks and CAD preview.
+    /// Keeps every user-facing XC / XP / Ty / DIM color marker in sync with the same
+    /// ACI settings consumed by CAD Preview / Create resources.
+    ///
+    /// This covers both:
+    /// - the short swatches inside the Preview legend; and
+    /// - the tall markers beside the main section titles.
+    ///
+    /// The old XAML colors were hard-coded and could disagree with the actual layer/ACI.
     /// </summary>
     public static class VxtPalettePreviewLegend
     {
         private sealed class Swatches
         {
-            public Rectangle Main;
-            public Rectangle Furring;
-            public Rectangle Hanger;
-            public Rectangle Dimension;
+            public Rectangle PreviewMain;
+            public Rectangle PreviewFurring;
+            public Rectangle PreviewHanger;
+            public Rectangle PreviewDimension;
+
+            public Rectangle SectionMain;
+            public Rectangle SectionFurring;
+            public Rectangle SectionHanger;
+            public Rectangle SectionDimension;
         }
 
         public static void Apply(VxtPaletteView view)
@@ -47,24 +56,39 @@ namespace HNL.VXT.UI.Views
 
         private static void UpdateAll(Swatches swatches, VxtPaletteViewModel vm, FrameworkElement resourceRoot)
         {
-            SetSwatch(swatches.Main, vm.MainColorIndex, "XC", resourceRoot);
-            SetSwatch(swatches.Furring, vm.FurringColorIndex, "XP", resourceRoot);
-            SetSwatch(swatches.Hanger, vm.HangerColorIndex, "Ty", resourceRoot);
-            SetSwatch(swatches.Dimension, vm.DimensionColorIndex, "DIM", resourceRoot);
+            SetRole(swatches.PreviewMain, swatches.SectionMain, vm.MainColorIndex, "XC", resourceRoot);
+            SetRole(swatches.PreviewFurring, swatches.SectionFurring, vm.FurringColorIndex, "XP", resourceRoot);
+            SetRole(swatches.PreviewHanger, swatches.SectionHanger, vm.HangerColorIndex, "Ty", resourceRoot);
+            SetRole(swatches.PreviewDimension, swatches.SectionDimension, vm.DimensionColorIndex, "DIM", resourceRoot);
         }
 
-        private static void SetSwatch(Rectangle rectangle, double value, string label, FrameworkElement resourceRoot)
+        private static void SetRole(
+            Rectangle preview,
+            Rectangle section,
+            double value,
+            string label,
+            FrameworkElement resourceRoot)
         {
-            if (rectangle == null) return;
             var index = (short)Math.Max(0, Math.Min(256, Math.Round(value)));
-            rectangle.Fill = ResolveAciBrush(index, resourceRoot);
-            rectangle.ToolTip = label + " • ACI " + index;
+            var brush = ResolveAciBrush(index, resourceRoot);
+
+            if (preview != null)
+            {
+                preview.Fill = brush;
+                preview.ToolTip = label + " • ACI " + index;
+            }
+
+            if (section != null)
+            {
+                section.Fill = brush;
+                section.ToolTip = label + " • ACI " + index + " • cùng màu Preview/CAD";
+            }
         }
 
         private static Brush ResolveAciBrush(short index, FrameworkElement resourceRoot)
         {
             // ByBlock/ByLayer are context-dependent inside AutoCAD. Use the active HNL
-            // foreground as a neutral swatch instead of inventing a misleading fixed color.
+            // foreground as a neutral marker instead of inventing a misleading fixed color.
             if (index == 0 || index == 256)
                 return resourceRoot.TryFindResource("PrimaryText") as Brush ?? Brushes.White;
 
@@ -104,8 +128,8 @@ namespace HNL.VXT.UI.Views
 
         private static void ResolveHueShade(short index, out byte r, out byte g, out byte b)
         {
-            var group = (index - 10) / 10;          // 24 hue groups, 0..23
-            var shade = (index - 10) % 10;          // 0..9
+            var group = (index - 10) / 10;
+            var shade = (index - 10) % 10;
             var hue = group * 15.0;
             var saturation = (shade % 2 == 0) ? 1.0 : 0.5;
 
@@ -154,29 +178,46 @@ namespace HNL.VXT.UI.Views
             {
                 if (text == null || string.IsNullOrWhiteSpace(text.Text)) continue;
                 var label = text.Text.Trim();
-                Rectangle rectangle;
+                var rectangle = FindSiblingRectangle(text);
+                if (rectangle == null) continue;
+
+                var isPreview = rectangle.Height <= 6.0;
+                var isSection = rectangle.Height >= 12.0;
+
                 switch (label)
                 {
+                    case "XƯƠNG CHÍNH":
                     case "Xương chính":
-                        rectangle = FindSiblingRectangle(text);
-                        if (rectangle != null) result.Main = rectangle;
+                        if (isPreview) result.PreviewMain = rectangle;
+                        else if (isSection) result.SectionMain = rectangle;
                         break;
+
+                    case "XƯƠNG PHỤ":
                     case "Xương phụ":
-                        rectangle = FindSiblingRectangle(text);
-                        if (rectangle != null) result.Furring = rectangle;
+                        if (isPreview) result.PreviewFurring = rectangle;
+                        else if (isSection) result.SectionFurring = rectangle;
                         break;
+
+                    case "TY TREO":
+                    case "Ty treo":
                     case "Ty":
-                        rectangle = FindSiblingRectangle(text);
-                        if (rectangle != null) result.Hanger = rectangle;
+                        if (isPreview) result.PreviewHanger = rectangle;
+                        else if (isSection) result.SectionHanger = rectangle;
                         break;
+
+                    case "KÍCH THƯỚC DIM":
+                    case "Kích thước DIM":
                     case "DIM":
-                        rectangle = FindSiblingRectangle(text);
-                        if (rectangle != null) result.Dimension = rectangle;
+                        if (isPreview) result.PreviewDimension = rectangle;
+                        else if (isSection) result.SectionDimension = rectangle;
                         break;
                 }
             }
 
-            return result.Main == null && result.Furring == null && result.Hanger == null && result.Dimension == null
+            return result.PreviewMain == null && result.PreviewFurring == null &&
+                   result.PreviewHanger == null && result.PreviewDimension == null &&
+                   result.SectionMain == null && result.SectionFurring == null &&
+                   result.SectionHanger == null && result.SectionDimension == null
                 ? null
                 : result;
         }
@@ -188,7 +229,7 @@ namespace HNL.VXT.UI.Views
             foreach (UIElement child in panel.Children)
             {
                 var rectangle = child as Rectangle;
-                if (rectangle != null && rectangle.Height <= 6.0) return rectangle;
+                if (rectangle != null) return rectangle;
             }
             return null;
         }
