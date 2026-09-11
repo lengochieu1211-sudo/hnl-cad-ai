@@ -11,11 +11,17 @@ namespace HNL.VXT.Core.Preview
     /// Pro-only Auto direction search. Legacy Auto remains untouched.
     /// Candidate angles come from dominant polygon edges, their perpendiculars, and 0/90.
     /// Each candidate is solved by the normal Pro builder and scored after concave post-process.
+    ///
+    /// Pro optimization must not silently rotate the construction direction just to improve
+    /// material score. When legal/clear candidates exist, Auto stays in the same orientation
+    /// family as the natural polygon axis implied by the legacy Shadowline rule. A perpendicular
+    /// family may still win when it is required to eliminate a hard violation or collision.
     /// </summary>
     public static class VxtProAutoDirectionPlanBuilder
     {
         private const double Eps = 1e-8;
         private const double AngleTolerance = 1.5;
+        private const double OrientationFamilyLimit = 45.0;
         private const int MaxCandidates = 16;
 
         private sealed class Candidate
@@ -24,6 +30,12 @@ namespace HNL.VXT.Core.Preview
             public double AxisMisalignment;
             public VxtPreviewPlan Plan;
             public VxtPlanQuality Quality;
+        }
+
+        private sealed class WeightedAxis
+        {
+            public double Angle;
+            public double Weight;
         }
 
         public static VxtPreviewPlan Build(
@@ -40,6 +52,7 @@ namespace HNL.VXT.Core.Preview
                 return new VxtProPreviewPlanBuilder().Build(boundary, settings, context);
 
             var legacyAngle = ResolveLegacyAutoAngle(boundary, settings.AutoShadowline);
+            var preferredAngle = ResolvePreferredAutoAngle(boundary, settings.AutoShadowline, legacyAngle);
             var angles = BuildCandidateAngles(boundary, legacyAngle);
             var boundaryAxes = BuildBoundaryAxes(boundary);
             var candidates = new List<Candidate>();
@@ -86,14 +99,17 @@ namespace HNL.VXT.Core.Preview
                 return fallback;
             }
 
-            // Geometry aligned to a real ceiling axis is preferred over an arbitrary global
-            // direction when both are legal/clear. Within the aligned family, the Pro profile's
-            // material/quality score decides the winner.
+            // Safety always wins first. After hard violations/collisions and real-axis alignment
+            // are equal, keep the natural construction orientation family before comparing
+            // material score. This prevents Economy/Balanced/Conservative from flipping XC/XP
+            // by 90 degrees merely because the perpendicular candidate is slightly cheaper.
             var best = candidates
                 .OrderBy(x => x.Quality.HardViolationCount)
                 .ThenBy(x => x.Quality.CollisionCount)
                 .ThenBy(x => x.AxisMisalignment > AngleTolerance ? 1 : 0)
+                .ThenBy(x => OrientationFamilyPenalty(x.Angle, preferredAngle))
                 .ThenBy(x => x.Quality.SortScore)
+                .ThenBy(x => AngularDistance180(x.Angle, preferredAngle))
                 .ThenBy(x => x.AxisMisalignment)
                 .ThenBy(x => AngularDistance180(x.Angle, legacyAngle))
                 .First();
@@ -137,6 +153,45 @@ namespace HNL.VXT.Core.Preview
 
             return result;
         }
+
+        public static double ResolvePreferredAutoAngle(Boundary2 boundary, bool shadowline, double legacyAngle)
+        {
+            if (boundary == null) return Normalize180(legacyAngle);
+
+            // Group parallel polygon edges and use accumulated real edge length rather than
+            // axis-aligned bounding-box size. This keeps a rotated ceiling aligned to its real
+            // construction axis while preserving the legacy long-side/short-side Shadowline rule.
+            var axes = new List<WeightedAxis>();
+            var vertices = boundary.Vertices;
+            for (var i = 0; i < vertices.Count; i++)
+            {
+                var a = vertices[i];
+                var b = vertices[(i + 1) % vertices.Count];
+                var dx = b.X - a.X;
+                var dy = b.Y - a.Y;
+                var length = Math.Sqrt(dx * dx + dy * dy);
+                if (length <= Eps) continue;
+
+                var angle = Normalize180(Math.Atan2(dy, dx) * 180.0 / Math.PI);
+                var axis = axes.FirstOrDefault(x => AngularDistance180(x.Angle, angle) <= AngleTolerance);
+                if (axis == null)
+                    axes.Add(new WeightedAxis { Angle = angle, Weight = length });
+                else
+                    axis.Weight += length;
+            }
+
+            if (axes.Count == 0) return Normalize180(legacyAngle);
+            var dominant = axes
+                .OrderByDescending(x => x.Weight)
+                .ThenBy(x => AngularDistance180(x.Angle, legacyAngle))
+                .First()
+                .Angle;
+
+            return shadowline ? Normalize180(dominant) : Normalize180(dominant + 90.0);
+        }
+
+        private static int OrientationFamilyPenalty(double angle, double preferredAngle)
+            => AngularDistance180(angle, preferredAngle) > OrientationFamilyLimit + AngleTolerance ? 1 : 0;
 
         private static List<double> BuildBoundaryAxes(Boundary2 boundary)
         {
