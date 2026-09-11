@@ -51,6 +51,8 @@ namespace HNL.VXT.Core.Preview
                 {
                     part = legacyBuilder.Build(boundary, settings, boundaryContext);
                     VxtConcaveMainPostProcessor.Apply(boundary, settings, boundaryContext, part);
+                    VxtPostProcessDimensionSynchronizer.Synchronize(
+                        boundary, settings, part, ResolveDirectionDegrees(settings, boundary));
                 }
                 else if (settings.MainDirection == MainDirectionMode.Auto)
                 {
@@ -62,7 +64,8 @@ namespace HNL.VXT.Core.Preview
                 {
                     part = proBuilder.Build(boundary, settings, boundaryContext);
                     VxtConcaveMainPostProcessor.Apply(boundary, settings, boundaryContext, part);
-                    var angle = ResolveDirectionDegrees(settings);
+                    var angle = ResolveDirectionDegrees(settings, boundary);
+                    VxtPostProcessDimensionSynchronizer.Synchronize(boundary, settings, part, angle);
                     part.Quality = VxtProPlanQualityEvaluator.Evaluate(
                         part, settings, boundaryContext, angle, 1);
                     VxtProPlanQualityEvaluator.AttachCompactPreviewLabel(boundary, part);
@@ -98,7 +101,7 @@ namespace HNL.VXT.Core.Preview
             return merged;
         }
 
-        private static double ResolveDirectionDegrees(VxtSettings settings)
+        private static double ResolveDirectionDegrees(VxtSettings settings, Boundary2 boundary)
         {
             switch (settings.MainDirection)
             {
@@ -106,6 +109,12 @@ namespace HNL.VXT.Core.Preview
                 case MainDirectionMode.TwoPoints:
                 case MainDirectionMode.RectangleRegions:
                     return settings.DirectionDegrees;
+                case MainDirectionMode.Auto:
+                    var bounds = boundary.GetBounds();
+                    var wide = bounds.Max.X - bounds.Min.X > bounds.Max.Y - bounds.Min.Y;
+                    return settings.AutoShadowline
+                        ? (wide ? 0.0 : 90.0)
+                        : (wide ? 90.0 : 0.0);
                 default: return 0.0;
             }
         }
