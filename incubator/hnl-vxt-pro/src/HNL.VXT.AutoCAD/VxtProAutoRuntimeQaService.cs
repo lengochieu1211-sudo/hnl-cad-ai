@@ -28,11 +28,13 @@ namespace HNL.VXT.AutoCAD
             try
             {
                 var rotated = CheckRotatedRectangle();
+                var stable = CheckStableAutoOrientation();
                 var concave = CheckConcaveCeiling();
                 var mep = CheckMepAvoidance();
                 var legacy = CheckLegacyIsolation();
 
                 var summary = "PASS Pro Auto QA: HCN xoay=" + rotated +
+                              " | Ổn định hướng=" + stable +
                               " | Trần lõm=" + concave +
                               " | MEP=" + mep +
                               " | Legacy=" + legacy +
@@ -59,6 +61,7 @@ namespace HNL.VXT.AutoCAD
         {
             var settings = BaseSettings(VxtOptimizationMode.ProEconomy);
             settings.MainDirection = MainDirectionMode.Auto;
+            settings.AutoShadowline = true;
             var plan = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { RotatedRectangle(6000.0, 4000.0, 30.0) },
                 settings,
@@ -68,11 +71,44 @@ namespace HNL.VXT.AutoCAD
             if (plan.Quality.AutoDirectionCandidateCount < 4)
                 throw new InvalidOperationException("HCN xoay không quét đủ phương án Auto.");
             var angle = plan.Quality.SelectedDirectionDegrees;
-            if (AngularDistance180(angle, 30.0) > 2.0 && AngularDistance180(angle, 120.0) > 2.0)
-                throw new InvalidOperationException("Auto không bám trục HCN xoay. Hướng=" + angle.ToString("0.###", CultureInfo.InvariantCulture));
+            if (AngularDistance180(angle, 30.0) > 2.0)
+                throw new InvalidOperationException(
+                    "Auto Shadowline đã đổi sai họ hướng HCN xoay; phải bám trục dài 30°. Hướng=" +
+                    angle.ToString("0.###", CultureInfo.InvariantCulture));
             if (!plan.Texts.Any(x => x.Text != null && x.Text.StartsWith("HNL Pro Q", StringComparison.Ordinal)))
                 throw new InvalidOperationException("Preview thiếu Quality label HNL Pro.");
             return angle.ToString("0.#", CultureInfo.InvariantCulture) + "°/Q" + plan.Quality.QualityScore100;
+        }
+
+        private static string CheckStableAutoOrientation()
+        {
+            var modes = new[]
+            {
+                VxtOptimizationMode.ProBalanced,
+                VxtOptimizationMode.ProEconomy,
+                VxtOptimizationMode.ProConservative
+            };
+
+            foreach (var mode in modes)
+            {
+                var withShadowline = BaseSettings(mode);
+                withShadowline.MainDirection = MainDirectionMode.Auto;
+                withShadowline.AutoShadowline = true;
+                var longAxis = VxtMultiBoundaryPlanBuilder.Build(
+                    new[] { Rectangle(6000.0, 4000.0) }, withShadowline, new VxtLayoutContext());
+                if (longAxis.Quality == null || AngularDistance180(longAxis.Quality.SelectedDirectionDegrees, 0.0) > 2.0)
+                    throw new InvalidOperationException(mode + " đã xoay sai hướng Auto có Shadowline; phải giữ 0°.");
+
+                var withoutShadowline = BaseSettings(mode);
+                withoutShadowline.MainDirection = MainDirectionMode.Auto;
+                withoutShadowline.AutoShadowline = false;
+                var shortAxis = VxtMultiBoundaryPlanBuilder.Build(
+                    new[] { Rectangle(6000.0, 4000.0) }, withoutShadowline, new VxtLayoutContext());
+                if (shortAxis.Quality == null || AngularDistance180(shortAxis.Quality.SelectedDirectionDegrees, 90.0) > 2.0)
+                    throw new InvalidOperationException(mode + " đã xoay sai hướng Auto không Shadowline; phải giữ 90°.");
+            }
+
+            return "3 mode: 0°/90°";
         }
 
         private static string CheckConcaveCeiling()
