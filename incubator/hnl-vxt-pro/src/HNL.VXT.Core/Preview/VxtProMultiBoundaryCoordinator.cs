@@ -13,17 +13,21 @@ namespace HNL.VXT.Core.Preview
     /// It compares independent Auto directions against a shared construction axis.
     /// Economy never accepts a shared axis with a higher aggregate material index;
     /// Balanced/Conservative allow a very small material premium for cleaner alignment.
+    /// A shared direction is rejected when it would rotate any ceiling into the perpendicular
+    /// orientation family relative to that ceiling's own stable Auto result.
     /// </summary>
     public static class VxtProMultiBoundaryCoordinator
     {
         private const double Eps = 1e-8;
         private const double AngleTolerance = 1.5;
+        private const double SharedOrientationLimit = 45.0;
         private const int MaxSharedCandidates = 24;
 
         private sealed class Strategy
         {
             public VxtPreviewPlan Plan;
             public double GlobalSortScore;
+            public List<double> Directions = new List<double>();
         }
 
         public static VxtPreviewPlan Build(
@@ -55,6 +59,7 @@ namespace HNL.VXT.Core.Preview
             VxtLayoutContext sourceContext)
         {
             var parts = new List<VxtPreviewPlan>();
+            var directions = new List<double>();
             for (var i = 0; i < boundaries.Count; i++)
             {
                 var context = BuildBoundaryContext(sourceContext, i);
@@ -64,6 +69,8 @@ namespace HNL.VXT.Core.Preview
                 part.Texts.RemoveAll(x =>
                     x.Text != null && x.Text.StartsWith("HNL Pro Q", StringComparison.Ordinal));
                 parts.Add(part);
+                if (part.Quality != null)
+                    directions.Add(Normalize180(part.Quality.SelectedDirectionDegrees));
             }
 
             var merged = Merge(parts);
@@ -71,7 +78,8 @@ namespace HNL.VXT.Core.Preview
             return new Strategy
             {
                 Plan = merged,
-                GlobalSortScore = GlobalScore(merged.Quality, settings.OptimizationMode)
+                GlobalSortScore = GlobalScore(merged.Quality, settings.OptimizationMode),
+                Directions = directions
             };
         }
 
@@ -116,7 +124,8 @@ namespace HNL.VXT.Core.Preview
                 var strategy = new Strategy
                 {
                     Plan = merged,
-                    GlobalSortScore = GlobalScore(merged.Quality, settings.OptimizationMode)
+                    GlobalSortScore = GlobalScore(merged.Quality, settings.OptimizationMode),
+                    Directions = Enumerable.Repeat(Normalize180(angle), boundaries.Count).ToList()
                 };
 
                 if (best == null || IsLexicographicallyBetter(strategy, best))
@@ -137,6 +146,18 @@ namespace HNL.VXT.Core.Preview
             if (b.HardViolationCount > a.HardViolationCount) return independent;
             if (b.CollisionCount < a.CollisionCount) return shared;
             if (b.CollisionCount > a.CollisionCount) return independent;
+
+            // Never trade a ceiling's natural construction orientation for a shared 90-degree
+            // family merely to improve alignment/material score. Shared direction remains useful
+            // when all independent Auto results are already reasonably close to that axis.
+            if (independent.Directions != null && independent.Directions.Count > 0 &&
+                shared.Directions != null && shared.Directions.Count > 0)
+            {
+                var sharedAngle = shared.Directions[0];
+                if (independent.Directions.Any(x =>
+                        AngularDistance180(x, sharedAngle) > SharedOrientationLimit + AngleTolerance))
+                    return independent;
+            }
 
             var allowance = mode == VxtOptimizationMode.ProEconomy ? 1.0000001
                           : mode == VxtOptimizationMode.ProConservative ? 1.05
