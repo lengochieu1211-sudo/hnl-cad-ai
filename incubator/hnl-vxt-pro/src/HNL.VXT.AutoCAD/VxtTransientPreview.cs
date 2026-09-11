@@ -55,7 +55,9 @@ namespace HNL.VXT.AutoCAD
                     RenderHangers(plan, settings, db, layerTable, linetypeTable);
                     RenderDimensions(plan, settings, db, dimStyleTable, layerTable, linetypeTable);
                     RenderGuides(plan, db);
-                    tr.Commit();
+
+                    // Preview is a strict read-only DB operation. Disposing an uncommitted read
+                    // transaction guarantees no helper can accidentally persist drawing changes.
                 }
 
                 session.ViewModel?.SetPreviewStats(
