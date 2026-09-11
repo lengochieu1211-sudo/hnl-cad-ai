@@ -109,6 +109,29 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void ProAuto_MultiBoundary_ThirtyDegreeDifference_DoesNotForceSharedAxis()
+        {
+            var settings = BaseSettings(VxtOptimizationMode.ProBalanced);
+            settings.MainDirection = MainDirectionMode.Auto;
+            settings.AutoShadowline = true;
+
+            var boundaries = new[]
+            {
+                RotatedRectangle(6000.0, 4000.0, 0.0, 0.0, 0.0),
+                RotatedRectangle(6000.0, 4000.0, 30.0, 9000.0, 0.0)
+            };
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(boundaries, settings, new VxtLayoutContext());
+
+            Assert.IsNotNull(plan.Quality);
+            Assert.AreEqual(2, plan.Quality.BoundaryCount);
+            Assert.IsFalse(plan.Quality.UsesSharedDirection,
+                "Ceilings whose natural construction axes differ by 30 degrees must keep independent Auto directions when both are clear.");
+            Assert.AreEqual(2, plan.Quality.DistinctDirectionCount,
+                "A moderate angular difference is not a cosmetic alignment case; Pro must not rotate an otherwise valid ceiling merely to share one axis.");
+        }
+
+        [TestMethod]
         public void Stress_ConcaveCeiling_WithManyMepBands_RemainsClearAndHardValid()
         {
             var settings = BaseSettings(VxtOptimizationMode.ProConservative);
