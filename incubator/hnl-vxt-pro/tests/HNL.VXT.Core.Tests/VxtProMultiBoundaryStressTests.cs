@@ -86,6 +86,29 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void ProAuto_MultiBoundary_PerpendicularCeilings_DoNotForceOneSharedAxis()
+        {
+            var settings = BaseSettings(VxtOptimizationMode.ProBalanced);
+            settings.MainDirection = MainDirectionMode.Auto;
+            settings.AutoShadowline = true;
+
+            var boundaries = new[]
+            {
+                RotatedRectangle(6000.0, 4000.0, 0.0, 0.0, 0.0),
+                RotatedRectangle(6000.0, 4000.0, 90.0, 9000.0, 0.0)
+            };
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(boundaries, settings, new VxtLayoutContext());
+
+            Assert.IsNotNull(plan.Quality);
+            Assert.AreEqual(2, plan.Quality.BoundaryCount);
+            Assert.IsFalse(plan.Quality.UsesSharedDirection,
+                "Two ceilings with perpendicular natural axes must not be forced onto one shared Pro Auto direction.");
+            Assert.AreEqual(2, plan.Quality.DistinctDirectionCount,
+                "Perpendicular ceilings should retain their own stable orientation families when both are clear.");
+        }
+
+        [TestMethod]
         public void Stress_ConcaveCeiling_WithManyMepBands_RemainsClearAndHardValid()
         {
             var settings = BaseSettings(VxtOptimizationMode.ProConservative);
