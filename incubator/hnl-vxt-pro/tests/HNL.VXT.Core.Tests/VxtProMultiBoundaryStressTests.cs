@@ -180,6 +180,26 @@ namespace HNL.VXT.Core.Tests
             Assert.IsTrue(plan.MainSegmentCount > 0);
             Assert.IsTrue(plan.FurringSegmentCount > 0);
             Assert.IsTrue(plan.HangerCount > 0);
+
+            var finalMain = plan.Lines.Where(x => x.Kind == PreviewLineKind.Main).ToList();
+            Assert.IsTrue(finalMain.Count > 0);
+            foreach (var hanger in plan.HangerPoints)
+            {
+                Assert.IsTrue(finalMain.Any(x => DistanceToSegment(hanger, x.A, x.B) <= 0.5),
+                    "Every final Ty must remain supported by a surviving final XC segment after MEP split; unsupported Ty=" +
+                    hanger.X.ToString("0.###") + "," + hanger.Y.ToString("0.###"));
+            }
+        }
+
+        private static double DistanceToSegment(Point2 p, Point2 a, Point2 b)
+        {
+            var dx = b.X - a.X;
+            var dy = b.Y - a.Y;
+            var lengthSquared = dx * dx + dy * dy;
+            if (lengthSquared <= 1e-12) return p.DistanceTo(a);
+            var t = ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / lengthSquared;
+            t = Math.Max(0.0, Math.Min(1.0, t));
+            return p.DistanceTo(new Point2(a.X + t * dx, a.Y + t * dy));
         }
 
         private static VxtSettings BaseSettings(VxtOptimizationMode mode)
