@@ -14,6 +14,7 @@ namespace HNL.VXT.UI.Views
     /// Rules:
     /// - Sentence/title case for section names; keep technical acronyms such as DIM/HNL/ACI/CAD.
     /// - One deterministic type scale for XAML and dynamically-created panels.
+    /// - Section titles use the dynamic HNL accent so theme/accent changes stay synchronized.
     /// - Preserve the existing user TextScale preference (90/100/110/120%).
     ///
     /// This class changes presentation only. It never reads or mutates VxtSettings.
@@ -51,20 +52,22 @@ namespace HNL.VXT.UI.Views
             if (view == null) return;
 
             // Normalize base metrics before Loaded. VxtPaletteEnhancer captures these metrics
-            // and therefore keeps the user's live TextScale feature deterministic.
-            ApplyNow(view, 1.0);
+            // and therefore keeps the user's live TextScale feature deterministic. Do not
+            // rename section text yet because older runtime layout passes still locate cards by
+            // their original captions during Loaded.
+            ApplyNow(view, 1.0, normalizeSectionText: false);
 
-            // Other legacy/runtime polish passes also run during Loaded. Re-assert one final
-            // typography scale after those passes have completed, without touching layout logic.
+            // Run after all layout/runtime polish passes. At this point it is safe to apply the
+            // final user-facing captions and re-assert the common typography scale.
             view.Loaded += (sender, args) =>
             {
                 view.Dispatcher.BeginInvoke(
-                    new Action(() => ApplyNow(view, LoadTextScale())),
+                    new Action(() => ApplyNow(view, LoadTextScale(), normalizeSectionText: true)),
                     DispatcherPriority.ApplicationIdle);
             };
         }
 
-        private static void ApplyNow(VxtPaletteView view, double scale)
+        private static void ApplyNow(VxtPaletteView view, double scale, bool normalizeSectionText)
         {
             var sectionStyle = view.TryFindResource("SectionTitle") as Style;
             var fieldStyle = view.TryFindResource("FieldLabel") as Style;
@@ -76,12 +79,15 @@ namespace HNL.VXT.UI.Views
                 var text = node as TextBlock;
                 if (text != null)
                 {
-                    NormalizeSectionText(text);
+                    if (normalizeSectionText)
+                        NormalizeSectionText(text);
 
                     if (sectionStyle != null && ReferenceEquals(text.Style, sectionStyle))
                     {
                         text.FontSize = SectionTitleSize * scale;
                         text.FontWeight = FontWeights.SemiBold;
+                        // DynamicResource semantics: section titles follow theme/accent changes.
+                        text.SetResourceReference(TextBlock.ForegroundProperty, "AccentStrong");
                     }
                     else if (fieldStyle != null && ReferenceEquals(text.Style, fieldStyle))
                     {
