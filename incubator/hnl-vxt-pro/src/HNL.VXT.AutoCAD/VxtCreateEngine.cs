@@ -68,23 +68,38 @@ namespace HNL.VXT.AutoCAD
                         ? lt[settings.DimensionLayer]
                         : ObjectId.Null;
 
+                    var mainBlockRequested = settings.DrawMain && settings.UseDynamicMainBlock;
+                    var furringBlockRequested = settings.DrawFurring && settings.UseDynamicFurringBlock;
+                    var mainBlockAvailable = mainBlockRequested &&
+                                             !string.IsNullOrWhiteSpace(settings.MainBlockName) &&
+                                             bt.Has(settings.MainBlockName);
+                    var furringBlockAvailable = furringBlockRequested &&
+                                                !string.IsNullOrWhiteSpace(settings.FurringBlockName) &&
+                                                bt.Has(settings.FurringBlockName);
+                    var mainBlockId = mainBlockAvailable ? bt[settings.MainBlockName] : ObjectId.Null;
+                    var furringBlockId = furringBlockAvailable ? bt[settings.FurringBlockName] : ObjectId.Null;
+
                     foreach (var item in plan.Lines)
                     {
                         if (item.Kind == PreviewLineKind.Main)
                         {
-                            var blockDone = settings.UseDynamicMainBlock && bt.Has(settings.MainBlockName) &&
-                                            AppendMemberBlock(ms, tr, db, bt[settings.MainBlockName], settings.MainBlockName,
+                            var blockDone = mainBlockAvailable &&
+                                            AppendMemberBlock(ms, tr, db, mainBlockId, settings.MainBlockName,
                                                 item, mainLayer, ref counts.Main);
                             if (!blockDone)
+                            {
+                                if (mainBlockRequested) counts.MainFallbacks++;
                                 AppendPolyline(ms, tr, db, item, mainLayer, ref counts.Main);
+                            }
                         }
                         else if (item.Kind == PreviewLineKind.Furring)
                         {
-                            var blockDone = settings.UseDynamicFurringBlock && bt.Has(settings.FurringBlockName) &&
-                                            AppendMemberBlock(ms, tr, db, bt[settings.FurringBlockName], settings.FurringBlockName,
+                            var blockDone = furringBlockAvailable &&
+                                            AppendMemberBlock(ms, tr, db, furringBlockId, settings.FurringBlockName,
                                                 item, furringLayer, ref counts.Furring);
                             if (!blockDone)
                             {
+                                if (furringBlockRequested) counts.FurringFallbacks++;
                                 if (!TryAppendFurringMline(ms, tr, db, item, furringLayer))
                                     AppendPolyline(ms, tr, db, item, furringLayer, ref counts.Furring);
                                 else
@@ -142,10 +157,11 @@ namespace HNL.VXT.AutoCAD
                 VxtDiagnosticService.RecordCreateSuccess(
                     settings, counts.Main, counts.Furring, counts.Hangers, counts.Dimensions);
 
+                var fallbackWarning = BuildFallbackWarning(counts);
                 doc.Editor.WriteMessage(
                     "\nHNL Tool - VXT Pro: Đã tạo thành công " + counts.Main + " Xương chính, " +
                     counts.Furring + " Xương phụ, " + counts.Hangers + " Ty treo, " +
-                    counts.Dimensions + " DIM. Dùng UNDO để hoàn tác toàn bộ thao tác tạo.");
+                    counts.Dimensions + " DIM. Dùng UNDO để hoàn tác toàn bộ thao tác tạo." + fallbackWarning);
 
                 if (session.HasBoundary) VxtTransientPreview.Instance.Refresh();
                 else VxtTransientPreview.Instance.Clear();
@@ -162,6 +178,20 @@ namespace HNL.VXT.AutoCAD
                     "Tạo thất bại - đã rollback. Diagnostic ZIP đã được ghi tự động.");
                 try { if (session.HasBoundary) VxtTransientPreview.Instance.Refresh(); } catch { }
             }
+        }
+
+        private static string BuildFallbackWarning(CreateCounts counts)
+        {
+            if (counts == null || (counts.MainFallbacks <= 0 && counts.FurringFallbacks <= 0))
+                return string.Empty;
+
+            var parts = new List<string>();
+            if (counts.MainFallbacks > 0)
+                parts.Add("XC " + counts.MainFallbacks);
+            if (counts.FurringFallbacks > 0)
+                parts.Add("XP " + counts.FurringFallbacks);
+            return " Cảnh báo: Block động không dùng được cho " + string.Join(", ", parts) +
+                   "; HNL Tool đã dùng hình học dự phòng an toàn.";
         }
 
         private static void ValidateRequiredResources(VxtSettings settings, VxtPreviewPlan plan, VxtSession session, Database db, Transaction tr)
@@ -331,6 +361,8 @@ namespace HNL.VXT.AutoCAD
             public int Furring;
             public int Hangers;
             public int Dimensions;
+            public int MainFallbacks;
+            public int FurringFallbacks;
         }
     }
 }
