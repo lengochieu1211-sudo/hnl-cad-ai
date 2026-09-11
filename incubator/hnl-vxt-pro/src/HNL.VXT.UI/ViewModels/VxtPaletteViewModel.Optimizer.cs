@@ -6,10 +6,10 @@ namespace HNL.VXT.UI.ViewModels
     {
         public string[] OptimizationModeOptions { get; } =
         {
-            "Tiêu chuẩn - Tương thích VXT",
-            "Nâng cao - Cân đối",
-            "Nâng cao - Tiết kiệm vật tư",
-            "Nâng cao - Ưu tiên ổn định"
+            "Bố trí truyền thống",
+            "Cân đối",
+            "Tiết kiệm vật tư",
+            "Ưu tiên ổn định"
         };
 
         public string SelectedOptimizationMode
@@ -30,10 +30,10 @@ namespace HNL.VXT.UI.ViewModels
         {
             switch (mode)
             {
-                case VxtOptimizationMode.ProBalanced: return "Nâng cao - Cân đối";
-                case VxtOptimizationMode.ProEconomy: return "Nâng cao - Tiết kiệm vật tư";
-                case VxtOptimizationMode.ProConservative: return "Nâng cao - Ưu tiên ổn định";
-                default: return "Tiêu chuẩn - Tương thích VXT";
+                case VxtOptimizationMode.ProBalanced: return "Cân đối";
+                case VxtOptimizationMode.ProEconomy: return "Tiết kiệm vật tư";
+                case VxtOptimizationMode.ProConservative: return "Ưu tiên ổn định";
+                default: return "Bố trí truyền thống";
             }
         }
 
@@ -41,9 +41,9 @@ namespace HNL.VXT.UI.ViewModels
         {
             switch (value)
             {
-                case "Nâng cao - Cân đối": return VxtOptimizationMode.ProBalanced;
-                case "Nâng cao - Tiết kiệm vật tư": return VxtOptimizationMode.ProEconomy;
-                case "Nâng cao - Ưu tiên ổn định": return VxtOptimizationMode.ProConservative;
+                case "Cân đối": return VxtOptimizationMode.ProBalanced;
+                case "Tiết kiệm vật tư": return VxtOptimizationMode.ProEconomy;
+                case "Ưu tiên ổn định": return VxtOptimizationMode.ProConservative;
                 default: return VxtOptimizationMode.Legacy;
             }
         }
