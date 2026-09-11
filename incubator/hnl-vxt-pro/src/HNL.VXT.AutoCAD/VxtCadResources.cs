@@ -9,16 +9,33 @@ namespace HNL.VXT.AutoCAD
     {
         public static void EnsureAll(Database db, Transaction tr, VxtSettings s)
         {
-            EnsureLinetype(db, s.MainLinetype);
-            EnsureLinetype(db, s.FurringLinetype);
-            EnsureLinetype(db, s.HangerLinetype);
-            EnsureLinetype(db, s.DimensionLinetype);
+            if (s.DrawMain)
+            {
+                EnsureLinetype(db, s.MainLinetype);
+                EnsureLayer(db, tr, s.MainLayer, s.MainColorIndex, s.MainLinetype, s.MainLineweight);
+            }
 
-            EnsureLayer(db, tr, s.MainLayer, s.MainColorIndex, s.MainLinetype, s.MainLineweight);
-            EnsureLayer(db, tr, s.FurringLayer, s.FurringColorIndex, s.FurringLinetype, s.FurringLineweight);
-            EnsureLayer(db, tr, s.HangerLayer, s.HangerColorIndex, s.HangerLinetype, s.HangerLineweight);
-            EnsureLayer(db, tr, s.DimensionLayer, s.DimensionColorIndex, s.DimensionLinetype, s.DimensionLineweight);
+            if (s.DrawFurring)
+            {
+                EnsureLinetype(db, s.FurringLinetype);
+                EnsureLayer(db, tr, s.FurringLayer, s.FurringColorIndex, s.FurringLinetype, s.FurringLineweight);
+            }
+
+            if (s.DrawHangers)
+            {
+                EnsureLinetype(db, s.HangerLinetype);
+                EnsureLayer(db, tr, s.HangerLayer, s.HangerColorIndex, s.HangerLinetype, s.HangerLineweight);
+            }
+
+            if (NeedsDimensionResources(s))
+            {
+                EnsureLinetype(db, s.DimensionLinetype);
+                EnsureLayer(db, tr, s.DimensionLayer, s.DimensionColorIndex, s.DimensionLinetype, s.DimensionLineweight);
+            }
         }
+
+        public static bool NeedsDimensionResources(VxtSettings s)
+            => s != null && s.AutoDimension && (s.DimMain || s.DimFurring || s.DimHanger);
 
         private static void EnsureLinetype(Database db, string name)
         {
