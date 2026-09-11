@@ -37,7 +37,7 @@ namespace HNL.VXT.UI.Views
                 { "XƯƠNG PHỤ", "Xương phụ" },
                 { "TY TREO", "Ty treo" },
                 { "NÉ THIẾT BỊ", "Né thiết bị" },
-                { "KÍCH THƯỚC DIM", "Kích thước DIM" },
+                { "KÍCH THƯỚC DIM", "DIM" },
                 { "CÀI ĐẶT LAYER & DIM", "Cài đặt Layer & DIM" },
                 { "LAYER & DIM", "Layer & DIM" },
                 { "LAYER & KIỂU NÉT", "Layer & kiểu nét" },
