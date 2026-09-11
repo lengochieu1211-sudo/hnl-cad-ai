@@ -29,11 +29,13 @@ namespace HNL.VXT.AutoCAD
             {
                 var economy = CheckEconomyNoMaterialRegression();
                 var alignment = CheckSharedAlignment();
+                var independence = CheckModerateAngleIndependence();
                 var mep = CheckDenseMepStress();
                 var legacy = CheckLegacyIsolation();
 
                 var summary = "PASS Pro Multi QA: VT=" + economy +
                               " | Căn trục=" + alignment +
+                              " | Độc lập=" + independence +
                               " | MEP=" + mep +
                               " | Legacy=" + legacy +
                               " | DWG không thay đổi.";
@@ -115,6 +117,29 @@ namespace HNL.VXT.AutoCAD
                 throw new InvalidOperationException("Preview nhiều mảng không giữ đúng 1 Quality tổng.");
 
             return "A100/1 hướng/3 mảng";
+        }
+
+        private static string CheckModerateAngleIndependence()
+        {
+            var settings = BaseSettings(VxtOptimizationMode.ProBalanced);
+            settings.MainDirection = MainDirectionMode.Auto;
+            settings.AutoShadowline = true;
+            var boundaries = new[]
+            {
+                RotatedRectangle(6000.0, 4000.0, 0.0, 0.0, 0.0),
+                RotatedRectangle(6000.0, 4000.0, 30.0, 9000.0, 0.0)
+            };
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(boundaries, settings, new VxtLayoutContext());
+            if (plan.Quality == null)
+                throw new InvalidOperationException("Thiếu Quality cho bài test 2 mảng lệch 30°.");
+            if (plan.Quality.HardViolationCount != 0 || plan.Quality.CollisionCount != 0)
+                throw new InvalidOperationException("2 mảng lệch 30° có Hard/VC khác 0.");
+            if (plan.Quality.UsesSharedDirection || plan.Quality.DistinctDirectionCount != 2)
+                throw new InvalidOperationException(
+                    "Pro Multi đã ép 2 mảng lệch 30° về một hướng chung dù cả hai đều hợp lệ.");
+
+            return "30°=2 hướng";
         }
 
         private static string CheckDenseMepStress()
