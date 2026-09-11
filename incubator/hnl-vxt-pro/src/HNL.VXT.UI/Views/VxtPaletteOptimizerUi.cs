@@ -7,7 +7,7 @@ using System.Windows.Data;
 namespace HNL.VXT.UI.Views
 {
     /// <summary>
-    /// Adds one compact engine selector to the existing CẤU HÌNH card without expanding
+    /// Adds one compact optimization selector to the existing CẤU HÌNH card without expanding
     /// the XC/XP/Ty/DIM sections. Created before the final ComboBox theme pass.
     /// </summary>
     public static class VxtPaletteOptimizerUi
@@ -34,19 +34,19 @@ namespace HNL.VXT.UI.Views
             stack.Children.Add(original);
 
             var row = new Grid { Margin = new Thickness(0, 5, 0, 0) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(72.0) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(122.0) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.0, GridUnitType.Star) });
 
             var label = new TextBlock
             {
-                Text = "CHẾ ĐỘ",
+                Text = "CHẾ ĐỘ TỐI ƯU",
                 Style = view.TryFindResource("SectionTitle") as Style,
                 VerticalAlignment = VerticalAlignment.Center
             };
             var combo = new ComboBox
             {
                 Height = 27.0,
-                ToolTip = "Legacy giữ đúng Golden VXT cũ. Các chế độ Pro dùng solver C# mới cho XC, XP, Ty và DIM."
+                ToolTip = "Bố trí truyền thống: giữ cách bố trí đã kiểm chứng. Cân đối: ưu tiên bố trí đều và hợp lý. Tiết kiệm vật tư: ưu tiên giảm tổng vật tư. Ưu tiên ổn định: ưu tiên khoảng cách an toàn, tính đều và né thiết bị."
             };
             combo.SetBinding(ItemsControl.ItemsSourceProperty, new Binding("OptimizationModeOptions"));
             combo.SetBinding(ComboBox.SelectedItemProperty, new Binding("SelectedOptimizationMode")
