@@ -61,10 +61,12 @@ namespace HNL.VXT.AutoCAD
                     var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
                     var dst = (DimStyleTable)tr.GetObject(db.DimStyleTableId, OpenMode.ForRead);
 
-                    var mainLayer = lt[settings.MainLayer];
-                    var furringLayer = lt[settings.FurringLayer];
-                    var hangerLayer = lt[settings.HangerLayer];
-                    var dimLayer = lt[settings.DimensionLayer];
+                    var mainLayer = settings.DrawMain ? lt[settings.MainLayer] : ObjectId.Null;
+                    var furringLayer = settings.DrawFurring ? lt[settings.FurringLayer] : ObjectId.Null;
+                    var hangerLayer = settings.DrawHangers ? lt[settings.HangerLayer] : ObjectId.Null;
+                    var dimLayer = VxtCadResources.NeedsDimensionResources(settings)
+                        ? lt[settings.DimensionLayer]
+                        : ObjectId.Null;
 
                     foreach (var item in plan.Lines)
                     {
@@ -170,7 +172,12 @@ namespace HNL.VXT.AutoCAD
                 (string.IsNullOrWhiteSpace(settings.HangerBlockName) || !bt.Has(settings.HangerBlockName)))
                 throw new InvalidOperationException("Không tìm thấy Block Ty treo '" + settings.HangerBlockName + "'. Hãy chọn Block Ty trước khi tạo.");
 
-            if (!string.IsNullOrWhiteSpace(settings.DimensionStyle))
+            var needsPlanDimensions = settings.AutoDimension && plan.Dimensions.Count > 0;
+            var needsManualDimensions = settings.AutoDimension && session.HasBoundary &&
+                                        ((settings.DimMain && !settings.DrawMain && session.ManualMainIds.Length > 0) ||
+                                         (settings.DimFurring && !settings.DrawFurring && session.ManualFurringIds.Length > 0) ||
+                                         (settings.DimHanger && !settings.DrawHangers && session.ManualHangerIds.Length > 0));
+            if ((needsPlanDimensions || needsManualDimensions) && !string.IsNullOrWhiteSpace(settings.DimensionStyle))
             {
                 var dst = (DimStyleTable)tr.GetObject(db.DimStyleTableId, OpenMode.ForRead);
                 if (!dst.Has(settings.DimensionStyle))
