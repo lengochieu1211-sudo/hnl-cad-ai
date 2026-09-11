@@ -13,9 +13,9 @@ namespace HNL.VXT.Core.Preview
     /// Each candidate is solved by the normal Pro builder and scored after concave post-process.
     ///
     /// Pro optimization must not silently rotate the construction direction just to improve
-    /// material score. When legal/clear candidates exist, Auto stays in the same orientation
-    /// family as the natural polygon axis implied by the legacy Shadowline rule. A perpendicular
-    /// family may still win when it is required to eliminate a hard violation or collision.
+    /// material score. When legal/clear candidates exist, Auto stays on the natural polygon axis
+    /// implied by the Shadowline rule. Another orientation may win only when it improves a hard
+    /// violation or collision; material score then optimizes inside the stable direction.
     /// </summary>
     public static class VxtProAutoDirectionPlanBuilder
     {
@@ -53,7 +53,7 @@ namespace HNL.VXT.Core.Preview
 
             var legacyAngle = ResolveLegacyAutoAngle(boundary, settings.AutoShadowline);
             var preferredAngle = ResolvePreferredAutoAngle(boundary, settings.AutoShadowline, legacyAngle);
-            var angles = BuildCandidateAngles(boundary, legacyAngle);
+            var angles = EnsurePreferredCandidate(BuildCandidateAngles(boundary, legacyAngle), preferredAngle);
             var boundaryAxes = BuildBoundaryAxes(boundary);
             var candidates = new List<Candidate>();
 
@@ -99,18 +99,18 @@ namespace HNL.VXT.Core.Preview
                 return fallback;
             }
 
-            // Safety always wins first. After hard violations/collisions and real-axis alignment
-            // are equal, keep the natural construction orientation family before comparing
-            // material score. This prevents Economy/Balanced/Conservative from flipping XC/XP
-            // by 90 degrees merely because the perpendicular candidate is slightly cheaper.
+            // Safety wins first. If multiple candidates are equally hard-valid and clear, keep the
+            // exact natural construction axis before looking at material score. This is stricter
+            // than merely staying in the same 90-degree family: changing optimization profile must
+            // not silently rotate the whole framing system by 6/15/30 degrees for a cheaper score.
             var best = candidates
                 .OrderBy(x => x.Quality.HardViolationCount)
                 .ThenBy(x => x.Quality.CollisionCount)
-                .ThenBy(x => x.AxisMisalignment > AngleTolerance ? 1 : 0)
                 .ThenBy(x => OrientationFamilyPenalty(x.Angle, preferredAngle))
-                .ThenBy(x => x.Quality.SortScore)
                 .ThenBy(x => AngularDistance180(x.Angle, preferredAngle))
+                .ThenBy(x => x.AxisMisalignment > AngleTolerance ? 1 : 0)
                 .ThenBy(x => x.AxisMisalignment)
+                .ThenBy(x => x.Quality.SortScore)
                 .ThenBy(x => AngularDistance180(x.Angle, legacyAngle))
                 .First();
 
@@ -150,6 +150,29 @@ namespace HNL.VXT.Core.Preview
                 result.Add(angle);
                 if (result.Count >= MaxCandidates) break;
             }
+
+            return result;
+        }
+
+        private static IReadOnlyList<double> EnsurePreferredCandidate(
+            IReadOnlyList<double> candidates,
+            double preferredAngle)
+        {
+            var result = (candidates ?? new double[0])
+                .Select(Normalize180)
+                .ToList();
+            var preferred = Normalize180(preferredAngle);
+
+            if (result.Any(x => AngularDistance180(x, preferred) <= AngleTolerance))
+                return result;
+
+            // A segmented/chamfered polyline can have the largest accumulated construction axis
+            // made of many short edges. The old per-segment top-16 truncation could omit that axis.
+            // Reserve one candidate slot for the preferred accumulated axis so Auto can remain stable.
+            if (result.Count >= MaxCandidates && result.Count > 0)
+                result[result.Count - 1] = preferred;
+            else
+                result.Add(preferred);
 
             return result;
         }
