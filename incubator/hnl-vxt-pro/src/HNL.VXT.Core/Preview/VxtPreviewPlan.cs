@@ -18,6 +18,11 @@ namespace HNL.VXT.Core.Preview
         public int HangerCount { get; set; }
         public int DimensionSegmentCount { get; set; }
 
+        // Cumulative Pro finalizer telemetry belongs to the plan geometry, not to one Evaluate call.
+        // Keeping it here makes repeated Quality evaluation idempotent after residual MEP segments
+        // have already been split on an earlier pass.
+        internal int ObstacleSplitFallbackCount { get; set; }
+
         // Pro-only informational telemetry. Legacy plans leave this null by design.
         public VxtPlanQuality Quality { get; set; }
     }
