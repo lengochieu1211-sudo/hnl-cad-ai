@@ -13,14 +13,14 @@ namespace HNL.VXT.Core.Preview
     /// It compares independent Auto directions against a shared construction axis.
     /// Economy never accepts a shared axis with a higher aggregate material index;
     /// Balanced/Conservative allow a very small material premium for cleaner alignment.
-    /// A shared direction is rejected when it would rotate any ceiling into the perpendicular
-    /// orientation family relative to that ceiling's own stable Auto result.
+    /// A shared direction is accepted only when every ceiling's own stable Auto direction is
+    /// already nearly parallel to that axis. Moderate/large angular differences stay independent.
     /// </summary>
     public static class VxtProMultiBoundaryCoordinator
     {
         private const double Eps = 1e-8;
         private const double AngleTolerance = 1.5;
-        private const double SharedOrientationLimit = 45.0;
+        private const double SharedOrientationLimit = 5.0;
         private const int MaxSharedCandidates = 24;
 
         private sealed class Strategy
@@ -147,9 +147,10 @@ namespace HNL.VXT.Core.Preview
             if (b.CollisionCount < a.CollisionCount) return shared;
             if (b.CollisionCount > a.CollisionCount) return independent;
 
-            // Never trade a ceiling's natural construction orientation for a shared 90-degree
-            // family merely to improve alignment/material score. Shared direction remains useful
-            // when all independent Auto results are already reasonably close to that axis.
+            // Alignment is only cosmetic/organizational after both strategies are equally safe.
+            // Do not rotate a clear ceiling by a noticeable angle merely to share one axis.
+            // Shared Auto is therefore limited to ceilings already nearly parallel (5° + numeric
+            // candidate tolerance); otherwise each ceiling retains its independently solved axis.
             if (independent.Directions != null && independent.Directions.Count > 0 &&
                 shared.Directions != null && shared.Directions.Count > 0)
             {
