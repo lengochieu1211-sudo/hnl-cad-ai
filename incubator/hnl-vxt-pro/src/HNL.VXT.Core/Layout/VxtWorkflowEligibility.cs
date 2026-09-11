@@ -11,8 +11,10 @@ namespace HNL.VXT.Core.Layout
     {
         public static bool HasAnyTask(VxtSettings settings)
         {
-            return settings != null &&
-                   (settings.DrawMain || settings.DrawFurring || settings.DrawHangers || settings.AutoDimension);
+            if (settings == null) return false;
+            var hasDimensionTask = settings.AutoDimension &&
+                                   (settings.DimMain || settings.DimFurring || settings.DimHanger);
+            return settings.DrawMain || settings.DrawFurring || settings.DrawHangers || hasDimensionTask;
         }
 
         public static bool IsManualHangerOnlyStart(VxtSettings settings)
