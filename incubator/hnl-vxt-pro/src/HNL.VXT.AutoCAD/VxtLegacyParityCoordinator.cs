@@ -92,19 +92,22 @@ namespace HNL.VXT.AutoCAD
             if (!settings.DrawMain && (settings.DrawHangers || (settings.AutoDimension && settings.DimMain)))
             {
                 ed.WriteMessage("\nHNL Tool - VXT Pro: Đã tắt Rải Xương Chính. Quét chọn Xương Chính có sẵn để rải Ty hoặc DIM.");
-                session.ManualMainIds = SelectExisting(ed, "LINE,LWPOLYLINE,POLYLINE,INSERT");
+                if (!TrySelectExisting(ed, "LINE,LWPOLYLINE,POLYLINE,INSERT", out var ids)) return;
+                session.ManualMainIds = ids;
             }
 
             if (!settings.DrawFurring && settings.AutoDimension && settings.DimFurring)
             {
                 ed.WriteMessage("\nHNL Tool - VXT Pro: Đã tắt Rải Xương Phụ. Quét chọn Xương Phụ có sẵn để ghi kích thước.");
-                session.ManualFurringIds = SelectExisting(ed, "LINE,LWPOLYLINE,POLYLINE,INSERT");
+                if (!TrySelectExisting(ed, "LINE,LWPOLYLINE,POLYLINE,INSERT", out var ids)) return;
+                session.ManualFurringIds = ids;
             }
 
             if (!settings.DrawHangers && settings.AutoDimension && settings.DimHanger)
             {
                 ed.WriteMessage("\nHNL Tool - VXT Pro: Đã tắt Rải Ty. Quét chọn Ty treo có sẵn để ghi kích thước.");
-                session.ManualHangerIds = SelectExisting(ed, "INSERT");
+                if (!TrySelectExisting(ed, "INSERT", out var ids)) return;
+                session.ManualHangerIds = ids;
             }
 
             if (!settings.DrawMain && settings.DrawHangers &&
@@ -122,9 +125,8 @@ namespace HNL.VXT.AutoCAD
                 return;
             }
 
-            // In the special no-boundary legacy path, Enter/Cancel at the existing-XC selection
-            // means there is simply no source member to process. Do not fall through to a misleading
-            // 'chưa chọn biên trần' message from the create engine.
+            // In the special no-boundary legacy path, Enter at the existing-XC selection means
+            // there is no source member to process. Esc has already aborted in TrySelectExisting.
             if (!session.HasBoundary && VxtWorkflowEligibility.IsManualHangerOnlyStart(settings) &&
                 session.ManualMainIds.Length == 0)
             {
@@ -135,11 +137,12 @@ namespace HNL.VXT.AutoCAD
             VxtCreateEngine.Execute();
         }
 
-        private static ObjectId[] SelectExisting(Editor ed, string dxfNames)
+        private static bool TrySelectExisting(Editor ed, string dxfNames, out ObjectId[] ids)
         {
+            ids = Array.Empty<ObjectId>();
             var options = new PromptSelectionOptions
             {
-                MessageForAdding = "\nHNL Tool - VXT Pro: Chọn đối tượng có sẵn <Enter = bỏ qua>: ",
+                MessageForAdding = "\nHNL Tool - VXT Pro: Chọn đối tượng có sẵn <Enter = bỏ qua, Esc = hủy>: ",
                 MessageForRemoval = "\nHNL Tool - VXT Pro: Bỏ đối tượng khỏi tập chọn: "
             };
             var filter = new SelectionFilter(new[]
@@ -147,7 +150,9 @@ namespace HNL.VXT.AutoCAD
                 new TypedValue((int)DxfCode.Start, dxfNames)
             });
             var result = ed.GetSelection(options, filter);
-            return result.Status == PromptStatus.OK ? result.Value.GetObjectIds() : Array.Empty<ObjectId>();
+            if (result.Status == PromptStatus.Cancel) return false;
+            if (result.Status == PromptStatus.OK) ids = result.Value.GetObjectIds();
+            return true;
         }
 
         private static bool HasBlock(Database db, string blockName)
