@@ -141,9 +141,9 @@ namespace HNL.VXT.AutoCAD
                     settings, counts.Main, counts.Furring, counts.Hangers, counts.Dimensions);
 
                 doc.Editor.WriteMessage(
-                    "\nHNL Tool - VXT Pro: Đã tạo " + counts.Main + " Xương chính, " +
+                    "\nHNL Tool - VXT Pro: Đã tạo thành công " + counts.Main + " Xương chính, " +
                     counts.Furring + " Xương phụ, " + counts.Hangers + " Ty treo, " +
-                    counts.Dimensions + " DIM. Runtime Golden đã ghi PASS. Dùng UNDO để hoàn tác toàn bộ lệnh VXT.");
+                    counts.Dimensions + " DIM. Dùng UNDO để hoàn tác toàn bộ thao tác tạo.");
 
                 if (session.HasBoundary) VxtTransientPreview.Instance.Refresh();
                 else VxtTransientPreview.Instance.Clear();
