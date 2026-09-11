@@ -25,10 +25,16 @@ namespace HNL.VXT.Core.Preview
             VxtLayoutContext context,
             double selectedDirectionDegrees)
         {
-            if (plan == null || settings == null ||
+            if (plan == null) return 0;
+
+            // Split telemetry belongs to the finalized plan geometry. Once a prior evaluation has
+            // split a residual crossing, evaluating the same plan again must not erase that cost.
+            var existingFallbackCount = Math.Max(0, plan.ObstacleSplitFallbackCount);
+
+            if (settings == null ||
                 settings.OptimizationMode == VxtOptimizationMode.Legacy ||
                 !settings.UseAvoidance)
-                return 0;
+                return existingFallbackCount;
 
             context = context ?? new VxtLayoutContext();
             var radians = Normalize180(selectedDirectionDegrees) * Math.PI / 180.0;
@@ -37,7 +43,8 @@ namespace HNL.VXT.Core.Preview
             var furringObstacles = TransformAndExpand(
                 context.GeneralObstacles.Concat(context.FurringObstacles), radians, settings.ClearanceDistance);
 
-            if (mainObstacles.Count == 0 && furringObstacles.Count == 0) return 0;
+            if (mainObstacles.Count == 0 && furringObstacles.Count == 0)
+                return existingFallbackCount;
 
             var output = new List<PreviewLine>(plan.Lines.Count + 8);
             var fallbackCount = 0;
@@ -72,13 +79,15 @@ namespace HNL.VXT.Core.Preview
                 }
             }
 
-            if (fallbackCount == 0) return 0;
+            if (fallbackCount == 0)
+                return existingFallbackCount;
 
             plan.Lines.Clear();
             plan.Lines.AddRange(output);
             plan.MainSegmentCount = plan.Lines.Count(x => x.Kind == PreviewLineKind.Main);
             plan.FurringSegmentCount = plan.Lines.Count(x => x.Kind == PreviewLineKind.Furring);
-            return fallbackCount;
+            plan.ObstacleSplitFallbackCount = existingFallbackCount + fallbackCount;
+            return plan.ObstacleSplitFallbackCount;
         }
 
         private static IReadOnlyList<Segment2> SplitHorizontal(Segment2 source, IReadOnlyList<Box2> boxes)
