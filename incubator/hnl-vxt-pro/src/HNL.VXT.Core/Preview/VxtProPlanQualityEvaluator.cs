@@ -33,6 +33,13 @@ namespace HNL.VXT.Core.Preview
             var obstacleSplitFallbackCount = VxtProObstaclePostProcessor.Apply(
                 plan, settings, context, selectedDirectionDegrees);
 
+            // DIM must describe the final framing geometry, not the pre-MEP geometry. The normal
+            // builders already create/synchronize DIM before Quality evaluation; however this final
+            // MEP safety pass may split or completely remove an XC/XP segment. Rebuild Auto DIM once
+            // more from the surviving geometry before material/SortScore is calculated. Boundary
+            // lines are retained in every single-boundary plan, so no AutoCAD/runtime state is needed.
+            SynchronizeDimensionsAfterFinalGeometry(plan, settings, context, selectedDirectionDegrees);
+
             var mainLength = plan.Lines
                 .Where(x => x.Kind == PreviewLineKind.Main)
                 .Sum(LineLength);
@@ -158,6 +165,37 @@ namespace HNL.VXT.Core.Preview
                 AlignmentScore100 = list.Min(x => x.AlignmentScore100),
                 UsesSharedDirection = list.All(x => x.UsesSharedDirection)
             };
+        }
+
+        private static void SynchronizeDimensionsAfterFinalGeometry(
+            VxtPreviewPlan plan,
+            VxtSettings settings,
+            VxtLayoutContext context,
+            double selectedDirectionDegrees)
+        {
+            if (!settings.AutoDimension ||
+                (!settings.DimMain && !settings.DimFurring && !settings.DimHanger))
+                return;
+
+            var boundaryLines = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Boundary)
+                .ToList();
+            if (boundaryLines.Count < 3) return;
+
+            try
+            {
+                // AddBoundary writes these lines in polygon order. Taking A from each edge restores
+                // the original vertex sequence without depending on CAD ObjectIds or model-space state.
+                var vertices = boundaryLines.Select(x => x.A).ToList();
+                var boundary = new Boundary2(vertices);
+                VxtPostProcessDimensionSynchronizer.Synchronize(
+                    boundary, settings, context, plan, selectedDirectionDegrees);
+            }
+            catch
+            {
+                // Quality scoring must remain available for diagnostic/manual plans that do not carry
+                // a reconstructable boundary. Normal Preview/Create plans always contain boundary lines.
+            }
         }
 
         private static List<Box2> TransformAndExpand(
