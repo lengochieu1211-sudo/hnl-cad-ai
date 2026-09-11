@@ -29,23 +29,22 @@ namespace HNL.VXT.Core.Tests
                 UseDynamicFurringBlock = false
             };
 
-            // The lower construction edge is deliberately split into many short collinear
-            // segments. The upper return uses fewer, individually longer chamfer/arc segments.
-            // Total horizontal edge length is still dominant. Auto must not lose the 0-degree
-            // construction axis merely because candidate truncation sees the longer individual
-            // chamfer segments first.
+            // Production-scale version of a segmented/chamfered ceiling. The lower construction
+            // edge is split into many short collinear pieces while the upper return uses fewer,
+            // individually longer chamfer/arc segments. Horizontal accumulated edge length is
+            // still dominant and the 5.1 m depth is large enough for a legal XC grid at 0 degrees.
             var boundary = new Boundary2(new[]
             {
-                new Point2(0, 0), new Point2(50, 0), new Point2(100, 0), new Point2(150, 0),
-                new Point2(200, 0), new Point2(250, 0), new Point2(300, 0), new Point2(350, 0),
-                new Point2(400, 0), new Point2(450, 0), new Point2(500, 0), new Point2(550, 0),
-                new Point2(600, 0), new Point2(650, 0), new Point2(700, 0), new Point2(750, 0),
-                new Point2(800, 0), new Point2(850, 0), new Point2(900, 0), new Point2(950, 0),
-                new Point2(1000, 0),
-                new Point2(1050, 100), new Point2(1020, 220), new Point2(950, 340),
-                new Point2(830, 430), new Point2(680, 490), new Point2(500, 510),
-                new Point2(320, 490), new Point2(170, 430), new Point2(50, 340),
-                new Point2(-20, 220), new Point2(-50, 100)
+                new Point2(0, 0), new Point2(500, 0), new Point2(1000, 0), new Point2(1500, 0),
+                new Point2(2000, 0), new Point2(2500, 0), new Point2(3000, 0), new Point2(3500, 0),
+                new Point2(4000, 0), new Point2(4500, 0), new Point2(5000, 0), new Point2(5500, 0),
+                new Point2(6000, 0), new Point2(6500, 0), new Point2(7000, 0), new Point2(7500, 0),
+                new Point2(8000, 0), new Point2(8500, 0), new Point2(9000, 0), new Point2(9500, 0),
+                new Point2(10000, 0),
+                new Point2(10500, 1000), new Point2(10200, 2200), new Point2(9500, 3400),
+                new Point2(8300, 4300), new Point2(6800, 4900), new Point2(5000, 5100),
+                new Point2(3200, 4900), new Point2(1700, 4300), new Point2(500, 3400),
+                new Point2(-200, 2200), new Point2(-500, 1000)
             });
 
             var preferred = VxtProAutoDirectionPlanBuilder.ResolvePreferredAutoAngle(boundary, true, 0.0);
@@ -56,6 +55,8 @@ namespace HNL.VXT.Core.Tests
                 new[] { boundary }, settings, new VxtLayoutContext());
 
             Assert.IsNotNull(plan.Quality);
+            Assert.AreEqual(0, plan.Quality.HardViolationCount,
+                "Audit fixture must keep the preferred horizontal direction hard-valid.");
             Assert.IsTrue(
                 AngularDistance180(plan.Quality.SelectedDirectionDegrees, preferred) <= 2.0,
                 "Pro Auto must keep the accumulated dominant construction axis even when it is composed of many short segments.");
