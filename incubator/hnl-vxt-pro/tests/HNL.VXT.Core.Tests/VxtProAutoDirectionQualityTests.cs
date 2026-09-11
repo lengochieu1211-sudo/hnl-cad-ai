@@ -26,6 +26,38 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void ProAuto_Shadowline_KeepsLongSideOrientationInsteadOfMaterialFlip()
+        {
+            var settings = BaseSettings(VxtOptimizationMode.ProEconomy);
+            settings.MainDirection = MainDirectionMode.Auto;
+            settings.AutoShadowline = true;
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { Rectangle(6000.0, 4000.0) }, settings, new VxtLayoutContext());
+
+            Assert.IsNotNull(plan.Quality);
+            Assert.IsTrue(
+                AngularDistance180(plan.Quality.SelectedDirectionDegrees, 0.0) <= 2.0,
+                "Pro Auto must keep the legacy Shadowline long-side orientation when legal/clear; material score alone must not flip XC by 90 degrees.");
+        }
+
+        [TestMethod]
+        public void ProAuto_NoShadowline_KeepsShortSideOrientationInsteadOfMaterialFlip()
+        {
+            var settings = BaseSettings(VxtOptimizationMode.ProEconomy);
+            settings.MainDirection = MainDirectionMode.Auto;
+            settings.AutoShadowline = false;
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { Rectangle(6000.0, 4000.0) }, settings, new VxtLayoutContext());
+
+            Assert.IsNotNull(plan.Quality);
+            Assert.IsTrue(
+                AngularDistance180(plan.Quality.SelectedDirectionDegrees, 90.0) <= 2.0,
+                "Pro Auto must keep the legacy no-Shadowline short-side orientation when legal/clear.");
+        }
+
+        [TestMethod]
         public void ProAuto_RotatedRectangle_UsesPolygonAxisCandidate_NotOnlyGlobalZeroNinety()
         {
             var settings = BaseSettings(VxtOptimizationMode.ProEconomy);
@@ -41,6 +73,23 @@ namespace HNL.VXT.Core.Tests
             var aligned = AngularDistance180(angle, 30.0) <= 2.0 || AngularDistance180(angle, 120.0) <= 2.0;
             Assert.IsTrue(aligned, "Pro Auto should discover a dominant rotated polygon axis.");
             Assert.IsTrue(plan.Texts.Any(x => x.Text != null && x.Text.StartsWith("HNL Pro Q", StringComparison.Ordinal)));
+        }
+
+        [TestMethod]
+        public void ProAuto_RotatedRectangle_ShadowlinePrefersActualLongAxisFamily()
+        {
+            var settings = BaseSettings(VxtOptimizationMode.ProEconomy);
+            settings.MainDirection = MainDirectionMode.Auto;
+            settings.AutoShadowline = true;
+            var boundary = RotatedRectangle(6000.0, 4000.0, 30.0);
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, settings, new VxtLayoutContext());
+
+            Assert.IsNotNull(plan.Quality);
+            Assert.IsTrue(
+                AngularDistance180(plan.Quality.SelectedDirectionDegrees, 30.0) <= 2.0,
+                "Rotated ceiling must stay on its actual long-axis family instead of flipping to the perpendicular axis for material score.");
         }
 
         [TestMethod]
