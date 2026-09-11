@@ -189,7 +189,16 @@ namespace HNL.VXT.AutoCAD
         {
             CancelPendingPreview();
             var session = VxtSession.Current;
-            if (session.ViewModel != null) session.Settings = session.ViewModel.Snapshot();
+            if (session.ViewModel != null)
+                session.Settings = session.ViewModel.Snapshot();
+
+            // WYSIWYG flush: Preview normally waits 180 ms after typing. If the user changes a
+            // setting and immediately clicks Create, render the exact Snapshot synchronously before
+            // the AutoCAD command is queued. This guarantees the last visible Preview uses the same
+            // settings that HNLVXTCREATE is about to consume.
+            if (session.HasBoundary)
+                VxtTransientPreview.Instance.Refresh();
+
             Send("HNLVXTCREATE ");
         }
 
