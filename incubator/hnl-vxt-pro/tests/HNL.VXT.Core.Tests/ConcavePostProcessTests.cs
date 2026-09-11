@@ -124,6 +124,40 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void RectangleRegion_ConcaveLocalFallbackRefreshesMainAndHangerDimensions()
+        {
+            var settings = new VxtSettings
+            {
+                MainDirection = MainDirectionMode.RectangleRegions,
+                DrawFurring = false,
+                DrawHangers = true,
+                AutoDimension = true,
+                DimMain = true,
+                DimFurring = false,
+                DimHanger = true,
+                UseLocalMainAdd = true,
+                MinLocalMainLength = 500.0
+            };
+            var context = new VxtLayoutContext();
+            context.Regions.Add(new VxtLayoutRegion(new Box2(0.0, 0.0, 6000.0, 4000.0), 0.0));
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { LowerLeftNotch() }, settings, context);
+
+            Assert.IsTrue(plan.Lines.Any(x => x.Kind == PreviewLineKind.Main &&
+                Math.Abs((x.A.Y + x.B.Y) * 0.5 - 1800.0) < 0.1),
+                "Rectangle-region audit fixture must produce the local concave XC at Y=1800.");
+            Assert.IsTrue(plan.HangerPoints.Any(p => Math.Abs(p.Y - 1800.0) < 0.1),
+                "Rectangle-region audit fixture must produce Ty on the local concave XC at Y=1800.");
+            Assert.IsTrue(plan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&
+                (Math.Abs(d.ExtensionPoint1.Y - 1800.0) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - 1800.0) < 0.1)),
+                "Rectangle-region DIM Xương chính must include the local XC after post-process repair.");
+            Assert.IsTrue(plan.Dimensions.Any(d => d.Target == DimensionTarget.Hanger &&
+                Math.Abs(d.ExtensionPoint1.Y - 1800.0) < 0.1 && Math.Abs(d.ExtensionPoint2.Y - 1800.0) < 0.1),
+                "Rectangle-region DIM Ty must include the repaired local Ty row.");
+        }
+
+        [TestMethod]
         public void ConcaveBand_LocalBarBelowConfiguredMinimumLengthIsSuppressed()
         {
             var settings = new VxtSettings
