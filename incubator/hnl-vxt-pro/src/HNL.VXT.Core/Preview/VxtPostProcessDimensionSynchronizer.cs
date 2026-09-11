@@ -9,13 +9,13 @@ using HNL.VXT.Core.Models;
 namespace HNL.VXT.Core.Preview
 {
     /// <summary>
-    /// Keeps Auto DIM synchronized with the final framing geometry after concave/local XC repair.
-    /// The initial Legacy/Pro builders create dimensions before the concave post-processor runs;
-    /// local XC/Ty added afterwards would otherwise be missing from DIM chains.
+    /// Keeps Auto DIM synchronized with final framing geometry after concave/local XC repair.
+    /// Initial builders create dimensions before the concave post-processor; local XC/Ty added
+    /// afterwards would otherwise be absent from the dimension chains.
     ///
-    /// This helper intentionally does not change any layout solver. It only reconstructs the same
-    /// DIM chains from the final XC/XP/Ty geometry. Rectangle-region mode is left to its per-region
-    /// builder because one merged plan can contain several independent local coordinate systems.
+    /// No spacing/layout solver is changed here. The helper only reconstructs the same DIM chains
+    /// from the final XC/XP/Ty geometry. Rectangle-region mode is rebuilt scope-by-scope so each
+    /// HCN keeps its own local axis and domain.
     /// </summary>
     public static class VxtPostProcessDimensionSynchronizer
     {
@@ -27,49 +27,50 @@ namespace HNL.VXT.Core.Preview
             VxtSettings settings,
             VxtPreviewPlan plan,
             double angleDegrees)
+            => Synchronize(boundary, settings, null, plan, angleDegrees);
+
+        public static void Synchronize(
+            Boundary2 boundary,
+            VxtSettings settings,
+            VxtLayoutContext context,
+            VxtPreviewPlan plan,
+            double angleDegrees)
         {
             if (boundary == null || settings == null || plan == null) return;
             if (!settings.AutoDimension) return;
             if (!settings.DimMain && !settings.DimFurring && !settings.DimHanger) return;
-            if (settings.MainDirection == MainDirectionMode.RectangleRegions) return;
-
-            var radians = NormalizeDegrees(angleDegrees) * Math.PI / 180.0;
-            var localBoundary = boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)).ToList();
-            if (localBoundary.Count < 3) return;
-            var domain = Box2.FromPoints(localBoundary);
-            if (domain.Width <= Tol || domain.Height <= Tol) return;
-
-            var mainSegments = FinalSegments(plan, PreviewLineKind.Main, radians, horizontal: true);
-            var furringSegments = FinalSegments(plan, PreviewLineKind.Furring, radians, horizontal: false);
-            var mainCoords = DistinctSorted(mainSegments.Select(s => (s.A.Y + s.B.Y) * 0.5));
-            var furringCoords = DistinctSorted(furringSegments.Select(s => (s.A.X + s.B.X) * 0.5));
-            var hangerRows = BuildFinalHangerRows(plan, mainSegments, radians);
 
             var rebuilt = new List<PreviewDimension>();
-            var stack = new Dictionary<string, int>(StringComparer.Ordinal);
 
-            if (settings.DimMain && mainCoords.Count > 0)
-                AddVerticalChain(rebuilt, WithBounds(mainCoords, domain.MinY, domain.MaxY),
-                    settings.MainDimPosition, DimensionTarget.Main, radians, domain,
-                    settings.DimensionDistance, settings.DimensionSpacing, stack);
-
-            if (settings.DimFurring && furringCoords.Count > 0)
-                AddHorizontalChain(rebuilt, WithBounds(furringCoords, domain.MinX, domain.MaxX),
-                    settings.FurringDimPosition, DimensionTarget.Furring, radians, domain,
-                    settings.DimensionDistance, settings.DimensionSpacing, stack);
-
-            if (settings.DimHanger)
+            if (settings.MainDirection == MainDirectionMode.RectangleRegions &&
+                context != null && context.HasManualRegions)
             {
-                var uniquePatterns = new HashSet<string>(StringComparer.Ordinal);
-                foreach (var row in hangerRows)
+                foreach (var region in context.Regions)
                 {
-                    var xs = DistinctSorted(row.Select(p => p.X));
-                    if (xs.Count == 0) continue;
-                    if (!uniquePatterns.Add(PatternKey(xs))) continue;
-                    AddHorizontalChain(rebuilt, WithBounds(xs, domain.MinX, domain.MaxX),
-                        settings.HangerDimPosition, DimensionTarget.Hanger, radians, domain,
-                        settings.DimensionDistance, settings.DimensionSpacing, stack, row[0].Y);
+                    var radians = NormalizeDegrees(region.MainAngleDegrees) * Math.PI / 180.0;
+                    var localBoundary = boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)).ToList();
+                    if (localBoundary.Count < 3) continue;
+                    var polygonBounds = Box2.FromPoints(localBoundary);
+                    var regionLocal = TransformBox(region.WorldBounds, radians);
+                    Box2 domain;
+                    if (!TryIntersect(polygonBounds, regionLocal, out domain)) continue;
+                    if (domain.Width <= Tol || domain.Height <= Tol) continue;
+                    AddScopeDimensions(plan, settings, radians, domain, rebuilt);
                 }
+
+                rebuilt = rebuilt
+                    .GroupBy(DimensionKey, StringComparer.Ordinal)
+                    .Select(g => g.First())
+                    .ToList();
+            }
+            else
+            {
+                var radians = NormalizeDegrees(angleDegrees) * Math.PI / 180.0;
+                var localBoundary = boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)).ToList();
+                if (localBoundary.Count < 3) return;
+                var domain = Box2.FromPoints(localBoundary);
+                if (domain.Width <= Tol || domain.Height <= Tol) return;
+                AddScopeDimensions(plan, settings, radians, domain, rebuilt);
             }
 
             if (settings.OptimizationMode != VxtOptimizationMode.Legacy && rebuilt.Count > 0)
@@ -86,11 +87,51 @@ namespace HNL.VXT.Core.Preview
             plan.DimensionSegmentCount = rebuilt.Count;
         }
 
+        private static void AddScopeDimensions(
+            VxtPreviewPlan plan,
+            VxtSettings settings,
+            double radians,
+            Box2 domain,
+            ICollection<PreviewDimension> target)
+        {
+            var mainSegments = FinalSegments(plan, PreviewLineKind.Main, radians, horizontal: true, domain);
+            var furringSegments = FinalSegments(plan, PreviewLineKind.Furring, radians, horizontal: false, domain);
+            var mainCoords = DistinctSorted(mainSegments.Select(s => (s.A.Y + s.B.Y) * 0.5));
+            var furringCoords = DistinctSorted(furringSegments.Select(s => (s.A.X + s.B.X) * 0.5));
+            var hangerRows = BuildFinalHangerRows(plan, mainSegments, radians, domain);
+            var stack = new Dictionary<string, int>(StringComparer.Ordinal);
+
+            if (settings.DimMain && mainCoords.Count > 0)
+                AddVerticalChain(target, WithBounds(mainCoords, domain.MinY, domain.MaxY),
+                    settings.MainDimPosition, DimensionTarget.Main, radians, domain,
+                    settings.DimensionDistance, settings.DimensionSpacing, stack);
+
+            if (settings.DimFurring && furringCoords.Count > 0)
+                AddHorizontalChain(target, WithBounds(furringCoords, domain.MinX, domain.MaxX),
+                    settings.FurringDimPosition, DimensionTarget.Furring, radians, domain,
+                    settings.DimensionDistance, settings.DimensionSpacing, stack);
+
+            if (settings.DimHanger)
+            {
+                var uniquePatterns = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var row in hangerRows)
+                {
+                    var xs = DistinctSorted(row.Select(p => p.X));
+                    if (xs.Count == 0) continue;
+                    if (!uniquePatterns.Add(PatternKey(xs))) continue;
+                    AddHorizontalChain(target, WithBounds(xs, domain.MinX, domain.MaxX),
+                        settings.HangerDimPosition, DimensionTarget.Hanger, radians, domain,
+                        settings.DimensionDistance, settings.DimensionSpacing, stack, row[0].Y);
+                }
+            }
+        }
+
         private static List<Segment2> FinalSegments(
             VxtPreviewPlan plan,
             PreviewLineKind kind,
             double radians,
-            bool horizontal)
+            bool horizontal,
+            Box2 domain)
         {
             var result = new List<Segment2>();
             foreach (var line in plan.Lines.Where(x => x.Kind == kind))
@@ -100,10 +141,18 @@ namespace HNL.VXT.Core.Preview
                 if (horizontal)
                 {
                     if (Math.Abs(a.Y - b.Y) > AxisTol) continue;
+                    var y = (a.Y + b.Y) * 0.5;
+                    if (y < domain.MinY - AxisTol || y > domain.MaxY + AxisTol) continue;
+                    if (Math.Max(a.X, b.X) < domain.MinX + AxisTol ||
+                        Math.Min(a.X, b.X) > domain.MaxX - AxisTol) continue;
                 }
                 else
                 {
                     if (Math.Abs(a.X - b.X) > AxisTol) continue;
+                    var x = (a.X + b.X) * 0.5;
+                    if (x < domain.MinX - AxisTol || x > domain.MaxX + AxisTol) continue;
+                    if (Math.Max(a.Y, b.Y) < domain.MinY + AxisTol ||
+                        Math.Min(a.Y, b.Y) > domain.MaxY - AxisTol) continue;
                 }
                 result.Add(new Segment2(a, b));
             }
@@ -113,18 +162,21 @@ namespace HNL.VXT.Core.Preview
         private static List<List<Point2>> BuildFinalHangerRows(
             VxtPreviewPlan plan,
             IReadOnlyList<Segment2> mainSegments,
-            double radians)
+            double radians,
+            Box2 domain)
         {
             var localHangers = plan.HangerPoints
                 .Select(p => Transform2.ToLocal(p, radians))
+                .Where(p => p.X >= domain.MinX - AxisTol && p.X <= domain.MaxX + AxisTol &&
+                            p.Y >= domain.MinY - AxisTol && p.Y <= domain.MaxY + AxisTol)
                 .ToList();
             var rows = new List<List<Point2>>();
 
             foreach (var main in mainSegments)
             {
                 var y = (main.A.Y + main.B.Y) * 0.5;
-                var minX = Math.Min(main.A.X, main.B.X) - AxisTol;
-                var maxX = Math.Max(main.A.X, main.B.X) + AxisTol;
+                var minX = Math.Max(domain.MinX, Math.Min(main.A.X, main.B.X)) - AxisTol;
+                var maxX = Math.Min(domain.MaxX, Math.Max(main.A.X, main.B.X)) + AxisTol;
                 var row = localHangers
                     .Where(p => Math.Abs(p.Y - y) <= AxisTol && p.X >= minX && p.X <= maxX)
                     .OrderBy(p => p.X)
@@ -297,6 +349,31 @@ namespace HNL.VXT.Core.Preview
         private static string PointKey(Point2 p)
             => Math.Round(p.X, 2).ToString("0.00", CultureInfo.InvariantCulture) + "," +
                Math.Round(p.Y, 2).ToString("0.00", CultureInfo.InvariantCulture);
+
+        private static Box2 TransformBox(Box2 box, double radians)
+        {
+            var points = new[]
+            {
+                new Point2(box.MinX, box.MinY), new Point2(box.MaxX, box.MinY),
+                new Point2(box.MaxX, box.MaxY), new Point2(box.MinX, box.MaxY)
+            }.Select(p => Transform2.ToLocal(p, radians));
+            return Box2.FromPoints(points);
+        }
+
+        private static bool TryIntersect(Box2 a, Box2 b, out Box2 result)
+        {
+            var minX = Math.Max(a.MinX, b.MinX);
+            var minY = Math.Max(a.MinY, b.MinY);
+            var maxX = Math.Min(a.MaxX, b.MaxX);
+            var maxY = Math.Min(a.MaxY, b.MaxY);
+            if (maxX <= minX + Tol || maxY <= minY + Tol)
+            {
+                result = default(Box2);
+                return false;
+            }
+            result = new Box2(minX, minY, maxX, maxY);
+            return true;
+        }
 
         private static double NormalizeDegrees(double degrees)
         {
