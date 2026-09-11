@@ -20,6 +20,8 @@ namespace HNL.VXT.UI.ViewModels
                 var mode = TextToOptimizationMode(value);
                 if (_settings.OptimizationMode == mode) return;
                 _settings.OptimizationMode = mode;
+                if (HasBoundary)
+                    PreviewStatus = "Đang tính lại theo " + OptimizationModeToText(mode) + "...";
                 Changed();
             }
         }
