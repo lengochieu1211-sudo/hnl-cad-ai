@@ -6,6 +6,7 @@ using Autodesk.AutoCAD.EditorInput;
 using HNL.VXT.Core.Geometry;
 using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
+using HNL.VXT.Core.Preview;
 
 namespace HNL.VXT.AutoCAD
 {
@@ -35,6 +36,7 @@ namespace HNL.VXT.AutoCAD
             if (settings.MainDirection == MainDirectionMode.Auto &&
                 (settings.DrawMain || settings.DrawFurring || settings.AutoDimension))
             {
+                var previousShadowline = settings.AutoShadowline;
                 var options = new PromptKeywordOptions("\nHNL Tool - VXT Pro: Trần có đi Shadowline không? [Yes/No] <Yes>: ")
                 {
                     AllowNone = true
@@ -48,6 +50,19 @@ namespace HNL.VXT.AutoCAD
                                           string.Equals(result.StringResult, "Yes", StringComparison.OrdinalIgnoreCase);
                 session.ViewModel?.SetAutoShadowlineFromHost(settings.AutoShadowline);
                 session.Settings = settings;
+
+                // WYSIWYG gate: changing Shadowline changes the Auto construction direction.
+                // Never create geometry from a direction that the user has not yet seen in Preview.
+                // If this create-time legacy question changes the setting, refresh synchronously
+                // and require an explicit second Create after visual confirmation.
+                if (settings.AutoShadowline != previousShadowline && session.HasBoundary)
+                {
+                    VxtTransientPreview.Instance.Refresh();
+                    ed.WriteMessage(
+                        "\nHNL Tool - VXT Pro: Shadowline đã làm thay đổi hướng Auto. " +
+                        "Preview đã được cập nhật; hãy kiểm tra rồi bấm Tạo khung xương trần lần nữa.");
+                    return;
+                }
             }
 
             // V6.7.2 ask_each is per selected ceiling Polyline/region and only applies when XP
@@ -227,9 +242,18 @@ namespace HNL.VXT.AutoCAD
             {
                 var bounds = boundary.GetBounds();
                 var wide = bounds.Max.X - bounds.Min.X > bounds.Max.Y - bounds.Min.Y;
-                return settings.AutoShadowline
+                var legacyAngle = settings.AutoShadowline
                     ? (wide ? 0.0 : 90.0)
                     : (wide ? 90.0 : 0.0);
+
+                // Legacy must keep exact V6.7.x bbox semantics. Pro Auto, however, can follow a
+                // rotated real polygon axis; use the same preferred-axis resolver as the Pro solver
+                // so the XP side prompt is oriented consistently with the visible Preview.
+                if (settings.OptimizationMode != VxtOptimizationMode.Legacy)
+                    return VxtProAutoDirectionPlanBuilder.ResolvePreferredAutoAngle(
+                        boundary, settings.AutoShadowline, legacyAngle);
+
+                return legacyAngle;
             }
             return 0.0;
         }
