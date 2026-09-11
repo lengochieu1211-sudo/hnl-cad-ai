@@ -91,6 +91,39 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void ConcaveBand_LocalFallbackRefreshesMainAndHangerDimensions()
+        {
+            var settings = new VxtSettings
+            {
+                DrawFurring = false,
+                DrawHangers = true,
+                AutoDimension = true,
+                DimMain = true,
+                DimFurring = false,
+                DimHanger = true,
+                UseLocalMainAdd = true,
+                MinLocalMainLength = 500.0
+            };
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { LowerLeftNotch() }, settings, new VxtLayoutContext());
+
+            Assert.IsTrue(plan.Lines.Any(x => x.Kind == PreviewLineKind.Main &&
+                Math.Abs((x.A.Y + x.B.Y) * 0.5 - 1800.0) < 0.1),
+                "Audit fixture must produce the local concave XC at Y=1800.");
+            Assert.IsTrue(plan.HangerPoints.Any(p => Math.Abs(p.Y - 1800.0) < 0.1),
+                "Audit fixture must produce Ty on the local concave XC at Y=1800.");
+
+            Assert.IsTrue(plan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&
+                (Math.Abs(d.ExtensionPoint1.Y - 1800.0) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - 1800.0) < 0.1)),
+                "DIM Xương chính must be rebuilt from final post-processed geometry and include the local XC at Y=1800.");
+
+            Assert.IsTrue(plan.Dimensions.Any(d => d.Target == DimensionTarget.Hanger &&
+                Math.Abs(d.ExtensionPoint1.Y - 1800.0) < 0.1 && Math.Abs(d.ExtensionPoint2.Y - 1800.0) < 0.1),
+                "DIM Ty must be rebuilt from final post-processed Ty rows and include the local row at Y=1800.");
+        }
+
+        [TestMethod]
         public void ConcaveBand_LocalBarBelowConfiguredMinimumLengthIsSuppressed()
         {
             var settings = new VxtSettings
