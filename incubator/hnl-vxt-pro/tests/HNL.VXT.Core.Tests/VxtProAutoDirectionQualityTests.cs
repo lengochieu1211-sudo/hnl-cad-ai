@@ -58,6 +58,42 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void ProAuto_AllProModes_KeepNaturalOrientationFamilyWhenClear()
+        {
+            var modes = new[]
+            {
+                VxtOptimizationMode.ProBalanced,
+                VxtOptimizationMode.ProEconomy,
+                VxtOptimizationMode.ProConservative
+            };
+
+            foreach (var mode in modes)
+            {
+                var shadowline = BaseSettings(mode);
+                shadowline.MainDirection = MainDirectionMode.Auto;
+                shadowline.AutoShadowline = true;
+                var longSide = VxtMultiBoundaryPlanBuilder.Build(
+                    new[] { Rectangle(6000.0, 4000.0) }, shadowline, new VxtLayoutContext());
+
+                Assert.IsNotNull(longSide.Quality, mode + " should return Pro quality telemetry.");
+                Assert.IsTrue(
+                    AngularDistance180(longSide.Quality.SelectedDirectionDegrees, 0.0) <= 2.0,
+                    mode + " must not rotate a clear Shadowline ceiling 90 degrees for scoring/material reasons.");
+
+                var noShadowline = BaseSettings(mode);
+                noShadowline.MainDirection = MainDirectionMode.Auto;
+                noShadowline.AutoShadowline = false;
+                var shortSide = VxtMultiBoundaryPlanBuilder.Build(
+                    new[] { Rectangle(6000.0, 4000.0) }, noShadowline, new VxtLayoutContext());
+
+                Assert.IsNotNull(shortSide.Quality, mode + " should return Pro quality telemetry.");
+                Assert.IsTrue(
+                    AngularDistance180(shortSide.Quality.SelectedDirectionDegrees, 90.0) <= 2.0,
+                    mode + " must preserve the no-Shadowline short-side orientation when clear.");
+            }
+        }
+
+        [TestMethod]
         public void ProAuto_RotatedRectangle_UsesPolygonAxisCandidate_NotOnlyGlobalZeroNinety()
         {
             var settings = BaseSettings(VxtOptimizationMode.ProEconomy);
@@ -90,6 +126,23 @@ namespace HNL.VXT.Core.Tests
             Assert.IsTrue(
                 AngularDistance180(plan.Quality.SelectedDirectionDegrees, 30.0) <= 2.0,
                 "Rotated ceiling must stay on its actual long-axis family instead of flipping to the perpendicular axis for material score.");
+        }
+
+        [TestMethod]
+        public void ProAuto_RotatedRectangle_NoShadowlinePrefersActualShortAxisFamily()
+        {
+            var settings = BaseSettings(VxtOptimizationMode.ProEconomy);
+            settings.MainDirection = MainDirectionMode.Auto;
+            settings.AutoShadowline = false;
+            var boundary = RotatedRectangle(6000.0, 4000.0, 30.0);
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, settings, new VxtLayoutContext());
+
+            Assert.IsNotNull(plan.Quality);
+            Assert.IsTrue(
+                AngularDistance180(plan.Quality.SelectedDirectionDegrees, 120.0) <= 2.0,
+                "Rotated ceiling without Shadowline must stay on its actual short-axis family instead of reverting to a global 0/90 axis.");
         }
 
         [TestMethod]
