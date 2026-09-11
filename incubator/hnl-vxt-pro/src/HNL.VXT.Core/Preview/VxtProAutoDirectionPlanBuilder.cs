@@ -67,6 +67,7 @@ namespace HNL.VXT.Core.Preview
 
                     var plan = new VxtProPreviewPlanBuilder().Build(boundary, candidateSettings, context);
                     VxtConcaveMainPostProcessor.Apply(boundary, candidateSettings, context, plan);
+                    VxtPostProcessDimensionSynchronizer.Synchronize(boundary, candidateSettings, plan, angle);
                     var quality = VxtProPlanQualityEvaluator.Evaluate(
                         plan, candidateSettings, context, angle, angles.Count);
                     plan.Quality = quality;
@@ -93,6 +94,7 @@ namespace HNL.VXT.Core.Preview
                 fallbackSettings.DirectionDegrees = legacyAngle;
                 var fallback = new VxtProPreviewPlanBuilder().Build(boundary, fallbackSettings, context);
                 VxtConcaveMainPostProcessor.Apply(boundary, fallbackSettings, context, fallback);
+                VxtPostProcessDimensionSynchronizer.Synchronize(boundary, fallbackSettings, fallback, legacyAngle);
                 fallback.Quality = VxtProPlanQualityEvaluator.Evaluate(
                     fallback, fallbackSettings, context, legacyAngle, 1);
                 VxtProPlanQualityEvaluator.AttachCompactPreviewLabel(boundary, fallback);
