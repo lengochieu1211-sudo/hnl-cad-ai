@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using HNL.VXT.Core.Models;
 
 namespace HNL.VXT.Core.Preview
 {
