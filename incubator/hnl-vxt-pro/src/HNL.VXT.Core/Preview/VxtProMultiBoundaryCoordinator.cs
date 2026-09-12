@@ -167,9 +167,32 @@ namespace HNL.VXT.Core.Preview
             if (b.MaterialIndex > a.MaterialIndex * allowance + 0.1)
                 return independent;
 
-            return shared.GlobalSortScore + Eps < independent.GlobalSortScore
-                ? shared
-                : independent;
+            if (shared.GlobalSortScore + Eps < independent.GlobalSortScore)
+                return shared;
+
+            // Balanced/Conservative are allowed a small material premium specifically so ceilings
+            // whose natural Auto axes already belong to one direction family can be coordinated on
+            // one exact construction axis. Previously an equal/near-equal strategy score fell back
+            // to the independently-built plan, leaving UsesSharedDirection=false even though the
+            // geometry reported Alignment=100. Prefer the explicit shared strategy only when it does
+            // not worsen fallback fragmentation/quality and every independent direction is already
+            // within the shared-axis candidate tolerance. Pro Economy keeps the old material-first
+            // tie behavior unchanged.
+            if (mode != VxtOptimizationMode.ProEconomy &&
+                a.DistinctDirectionCount == 1 &&
+                b.DistinctDirectionCount == 1 &&
+                b.ObstacleSplitFallbackCount <= a.ObstacleSplitFallbackCount &&
+                b.QualityScore100 >= a.QualityScore100 &&
+                independent.Directions != null && independent.Directions.Count > 0 &&
+                shared.Directions != null && shared.Directions.Count > 0)
+            {
+                var sharedAngle = shared.Directions[0];
+                if (independent.Directions.All(x =>
+                        AngularDistance180(x, sharedAngle) <= AngleTolerance))
+                    return shared;
+            }
+
+            return independent;
         }
 
         private static bool IsLexicographicallyBetter(Strategy candidate, Strategy current)
