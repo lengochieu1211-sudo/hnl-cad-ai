@@ -1,7 +1,6 @@
-using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.ApplicationServices.Core;
-using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Runtime;
+using DocumentCollectionEventArgs = Autodesk.AutoCAD.ApplicationServices.DocumentCollectionEventArgs;
 
 [assembly: ExtensionApplication(typeof(HNL.VXT.AutoCAD.PluginEntry))]
 [assembly: CommandClass(typeof(HNL.VXT.AutoCAD.HnlVxtCommands))]
