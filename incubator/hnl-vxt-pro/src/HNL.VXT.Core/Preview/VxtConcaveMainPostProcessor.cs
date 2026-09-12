@@ -41,6 +41,14 @@ namespace HNL.VXT.Core.Preview
                 if (grid.Count > 0 && checks.Count > 0)
                 {
                     var obstacles = TransformMainObstacles(context, scope, settings);
+                    List<Segment2> regionSegments;
+                    if (VxtOrthogonalNotchRegionPlanner.TryBuild(
+                        scope.Polygon, scope.Domain, settings, obstacles, out regionSegments))
+                    {
+                        RebuildRegionalMains(plan, scope, regionSegments, settings, obstacles);
+                        return;
+                    }
+
                     var moved = RebalanceGlobalGrid(grid, checks, scope.Domain, settings, obstacles);
                     if (!SameGrid(grid, moved))
                     {
@@ -238,6 +246,28 @@ namespace HNL.VXT.Core.Preview
                 }
             }
             return best;
+        }
+
+        private static void RebuildRegionalMains(
+            VxtPreviewPlan plan,
+            Scope scope,
+            IReadOnlyList<Segment2> segments,
+            VxtSettings settings,
+            List<Box2> obstacles)
+        {
+            plan.Lines.RemoveAll(x => x.Kind == PreviewLineKind.Main || x.Kind == PreviewLineKind.Hanger);
+            plan.HangerPoints.Clear();
+            plan.MainSegmentCount = 0;
+            plan.HangerCount = 0;
+
+            foreach (var segment in segments ?? new Segment2[0])
+            {
+                if (segment == null || Math.Abs(segment.B.X - segment.A.X) <= MinDrawLength) continue;
+                if (settings.UseAvoidance && !LocalSegmentClear(segment, obstacles)) continue;
+                AddMainLine(plan, segment, scope.Radians);
+                if (settings.DrawHangers)
+                    AddHangers(plan, segment, scope, settings, obstacles);
+            }
         }
 
         private static void RebuildGlobalMains(
