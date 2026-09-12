@@ -1,0 +1,103 @@
+name: TEMP HNL VXT concave XC Lisp parity patch
+
+on:
+  push:
+    branches:
+      - research/vxt-pro-v7-bootstrap
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research/vxt-pro-v7-bootstrap
+          fetch-depth: 0
+
+      - name: Apply exact concave XC parity patch
+        shell: python
+        run: |
+          from pathlib import Path
+
+          root = Path('.')
+
+          # 1) Root cause: AutoDimension must not disable global XC rebalance.
+          p = root / 'incubator/hnl-vxt-pro/src/HNL.VXT.Core/Preview/VxtConcaveMainPostProcessor.cs'
+          s = p.read_text(encoding='utf-8')
+          old = 'if (scopes.Count == 1 && settings.MainDirection != MainDirectionMode.RectangleRegions && !settings.AutoDimension)'
+          new = 'if (scopes.Count == 1 && settings.MainDirection != MainDirectionMode.RectangleRegions)'
+          assert s.count(old) == 1, f'Expected one root condition, got {s.count(old)}'
+          s = s.replace(old, new)
+          old_comment = '''// Exact Lisp priority: try to repair a normal single-direction ceiling by shifting\n            // global XC first. Rectangle-region mode owns several independent grids, therefore\n            // each region is kept isolated and uses local fallback only.'''
+          new_comment = '''// Exact Lisp priority: try to repair a normal single-direction ceiling by shifting\n            // global XC first, regardless of Auto DIM. Final DIM is rebuilt from the post-processed\n            // geometry by VxtPostProcessDimensionSynchronizer. Rectangle-region mode owns several\n            // independent grids, therefore each region stays isolated and uses local fallback only.'''
+          assert s.count(old_comment) == 1, 'Root parity comment changed unexpectedly'
+          s = s.replace(old_comment, new_comment)
+          p.write_text(s, encoding='utf-8')
+
+          # 2) Regression contract: Auto DIM ON must still rebalance the existing global XC.
+          p = root / 'incubator/hnl-vxt-pro/tests/HNL.VXT.Core.Tests/ConcavePostProcessTests.cs'
+          s = p.read_text(encoding='utf-8')
+          old = 'public void ConcaveBand_RebalancesGlobalXcBeforeAddingLocalBar()'
+          new = 'public void ConcaveBand_AutoDimensionStillRebalancesGlobalXcBeforeAddingLocalBar()'
+          assert s.count(old) == 1
+          s = s.replace(old, new)
+
+          old = '''DrawFurring = false,\n                DrawHangers = false,\n                AutoDimension = false,\n                UseLocalMainAdd = true'''
+          new = '''DrawFurring = false,\n                DrawHangers = false,\n                AutoDimension = true,\n                DimMain = true,\n                UseLocalMainAdd = true'''
+          assert s.count(old) == 1, 'Could not locate rebalance regression settings'
+          s = s.replace(old, new, 1)
+
+          # Local-fallback tests must exercise the isolated RectangleRegions family instead of
+          # relying on the obsolete "AutoDimension freezes global XC" behavior.
+          old = '''DrawFurring = false,\n                DrawHangers = true,\n                AutoDimension = true, // preserves the already-built DIM grid; forces local fallback instead of moving it.'''
+          new = '''MainDirection = MainDirectionMode.RectangleRegions,\n                DrawFurring = false,\n                DrawHangers = true,\n                AutoDimension = true, // RectangleRegions stays isolated and uses local fallback.'''
+          assert s.count(old) == 1, 'Could not locate local fallback Ty fixture'
+          s = s.replace(old, new, 1)
+
+          marker = '''public void ConcaveBand_LocalFallbackRefreshesMainAndHangerDimensions()\n        {\n            var settings = new VxtSettings\n            {\n                DrawFurring = false,'''
+          replacement = '''public void ConcaveBand_LocalFallbackRefreshesMainAndHangerDimensions()\n        {\n            var settings = new VxtSettings\n            {\n                MainDirection = MainDirectionMode.RectangleRegions,\n                DrawFurring = false,'''
+          assert s.count(marker) == 1, 'Could not locate local fallback DIM fixture'
+          s = s.replace(marker, replacement, 1)
+
+          marker = '''public void ConcaveBand_LocalBarBelowConfiguredMinimumLengthIsSuppressed()\n        {\n            var settings = new VxtSettings\n            {\n                DrawFurring = false,'''
+          replacement = '''public void ConcaveBand_LocalBarBelowConfiguredMinimumLengthIsSuppressed()\n        {\n            var settings = new VxtSettings\n            {\n                MainDirection = MainDirectionMode.RectangleRegions,\n                DrawFurring = false,'''
+          assert s.count(marker) == 1, 'Could not locate minimum local bar fixture'
+          s = s.replace(marker, replacement, 1)
+
+          # Explicitly verify final DIM tracks the moved XC at Y=1900 when AutoDimension is ON.
+          anchor = '''Assert.IsTrue(Math.Abs(moved.A.X - moved.B.X) > 5900.0,\n                "Rebalance must remain a global XC, not silently turn into a short local bar.");'''
+          addition = anchor + '''\n            Assert.IsTrue(plan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&\n                (Math.Abs(d.ExtensionPoint1.Y - 1900.0) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - 1900.0) < 0.1)),\n                "Auto DIM must be rebuilt from the moved global XC at Y=1900.");\n            Assert.IsFalse(plan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&\n                (Math.Abs(d.ExtensionPoint1.Y - 2000.0) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - 2000.0) < 0.1)),\n                "Auto DIM must not retain the pre-rebalance XC coordinate Y=2000.");'''
+          assert s.count(anchor) == 1, 'Could not locate rebalance assertion anchor'
+          s = s.replace(anchor, addition, 1)
+          p.write_text(s, encoding='utf-8')
+
+          # 3) UI toggle regression remains meaningful by pinning it to the true local-fallback family.
+          p = root / 'incubator/hnl-vxt-pro/tests/HNL.VXT.Core.Tests/LocalMainSettingTests.cs'
+          s = p.read_text(encoding='utf-8')
+          old = '''DrawFurring = false,\n                DrawHangers = false,\n                AutoDimension = true, // keep global XC grid fixed so the notch needs local fallback'''
+          new = '''MainDirection = MainDirectionMode.RectangleRegions,\n                DrawFurring = false,\n                DrawHangers = false,\n                AutoDimension = true, // isolated region family intentionally uses local fallback'''
+          assert s.count(old) == 1, 'Could not locate LocalMain toggle fixture'
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+
+          print('Concave XC Lisp parity patch applied successfully.')
+
+      - name: Commit parity patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add incubator/hnl-vxt-pro/src/HNL.VXT.Core/Preview/VxtConcaveMainPostProcessor.cs \
+                  incubator/hnl-vxt-pro/tests/HNL.VXT.Core.Tests/ConcavePostProcessTests.cs \
+                  incubator/hnl-vxt-pro/tests/HNL.VXT.Core.Tests/LocalMainSettingTests.cs
+          if git diff --cached --quiet; then
+            echo "No patch changes to commit."
+            exit 0
+          fi
+          git commit -m "HNL VXT: restore Lisp-first concave XC rebalance with Auto DIM"
+          git push origin HEAD:research/vxt-pro-v7-bootstrap
