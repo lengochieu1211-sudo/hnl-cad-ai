@@ -5,43 +5,49 @@ using HNL.VXT.Core.Geometry;
 using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
 using HNL.VXT.UI.ViewModels;
+using Document = Autodesk.AutoCAD.ApplicationServices.Document;
 
 namespace HNL.VXT.AutoCAD
 {
     internal sealed class VxtSession
     {
         private static readonly VxtSession Instance = new VxtSession();
-        private Database _ownerDatabase;
+        private Document _ownerDocument;
 
         public static VxtSession Current
         {
             get
             {
                 var doc = Application.DocumentManager.MdiActiveDocument;
-                Instance.EnsureDatabase(doc?.Database);
+
+                // AutoCAD can briefly expose no active MDI document while focus/modal state is
+                // changing. That is not a DWG switch and must never erase a valid VXT selection.
+                if (doc != null)
+                    Instance.EnsureDocument(doc);
                 return Instance;
             }
         }
 
-        // The palette/settings are application-wide, but every geometry/ObjectId below belongs
-        // to exactly one AutoCAD Database. Switching DWG must never reuse ids or geometry from
-        // the previous drawing. The DocumentActivated hook calls this eagerly; the Current getter
-        // repeats the guard defensively for command/timer paths that may run after a document switch.
-        internal static bool SynchronizeDatabase(Database database) => Instance.EnsureDatabase(database);
+        // Palette/settings are application-wide, but geometry/ObjectIds below belong to one
+        // AutoCAD Document only. Track the Document itself instead of comparing Database wrapper
+        // references: DocumentActivated can fire redundant notifications for the same drawing.
+        internal static bool SynchronizeDocument(Document document) => Instance.EnsureDocument(document);
 
-        internal static bool ReleaseDatabase(Database database)
+        internal static bool ReleaseDocument(Document document)
         {
-            if (database != null && !ReferenceEquals(Instance._ownerDatabase, database)) return false;
-            if (Instance._ownerDatabase == null && database != null) return false;
-            Instance._ownerDatabase = null;
+            if (document != null && !ReferenceEquals(Instance._ownerDocument, document)) return false;
+            if (Instance._ownerDocument == null && document != null) return false;
+            Instance._ownerDocument = null;
             Instance.ClearDrawingState();
             return true;
         }
 
-        private bool EnsureDatabase(Database database)
+        private bool EnsureDocument(Document document)
         {
-            if (ReferenceEquals(_ownerDatabase, database)) return false;
-            _ownerDatabase = database;
+            if (document == null) return false;
+            if (ReferenceEquals(_ownerDocument, document)) return false;
+
+            _ownerDocument = document;
             ClearDrawingState();
             return true;
         }

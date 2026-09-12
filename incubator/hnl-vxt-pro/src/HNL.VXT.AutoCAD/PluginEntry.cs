@@ -16,7 +16,7 @@ namespace HNL.VXT.AutoCAD
             documents.DocumentToBeDestroyed += OnDocumentToBeDestroyed;
 
             var doc = documents.MdiActiveDocument;
-            if (doc != null) VxtSession.SynchronizeDatabase(doc.Database);
+            if (doc != null) VxtSession.SynchronizeDocument(doc);
             doc?.Editor.WriteMessage("\nHNL Tool - Vẽ Xương Trần | VXT Pro v7.0.0-beta.1 | Lệnh: HVX");
         }
 
@@ -26,7 +26,7 @@ namespace HNL.VXT.AutoCAD
             documents.DocumentActivated -= OnDocumentActivated;
             documents.DocumentToBeDestroyed -= OnDocumentToBeDestroyed;
             VxtTransientPreview.Instance.Clear();
-            VxtSession.ReleaseDatabase(null);
+            VxtSession.ReleaseDocument(null);
         }
 
         private static void OnDocumentActivated(object sender, DocumentCollectionEventArgs e)
@@ -34,10 +34,10 @@ namespace HNL.VXT.AutoCAD
             var doc = e?.Document;
             if (doc == null) return;
 
-            // Transients and ObjectIds are owned by the drawing that created them. When a new
-            // DWG becomes active, clear the old preview and reset only drawing-specific session
-            // state. Settings and the palette/view-model intentionally survive the switch.
-            if (VxtSession.SynchronizeDatabase(doc.Database))
+            // AutoCAD can fire DocumentActivated again for the same drawing when focus/modal
+            // state changes. VxtSession filters that redundant notification by Document identity,
+            // so only a real DWG switch clears drawing-specific selection/transient state.
+            if (VxtSession.SynchronizeDocument(doc))
                 VxtTransientPreview.Instance.Clear();
         }
 
@@ -45,7 +45,7 @@ namespace HNL.VXT.AutoCAD
         {
             var doc = e?.Document;
             if (doc == null) return;
-            if (VxtSession.ReleaseDatabase(doc.Database))
+            if (VxtSession.ReleaseDocument(doc))
                 VxtTransientPreview.Instance.Clear();
         }
     }
