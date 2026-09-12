@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using HNL.VXT.Core.Geometry;
@@ -13,6 +14,10 @@ namespace HNL.VXT.AutoCAD
     /// </summary>
     internal static class VxtExistingMemberAxisResolver
     {
+        private const double MinimumAxisLength = 1e-8;
+        private const double StraightnessRelativeTolerance = 1e-4;
+        private const double StraightnessAbsoluteTolerance = 0.1;
+
         internal sealed class ResolvedAxis
         {
             public ResolvedAxis(Point2 start, Point2 end, double angleRadians, bool verticalLike)
@@ -41,8 +46,10 @@ namespace HNL.VXT.AutoCAD
             var curve = entity as Curve;
             if (curve != null)
             {
-                var curveAxis = ResolveCurve(curve);
-                if (curveAxis != null) return curveAxis;
+                // Pro must not turn a bent/curved/closed polyline into a fake 0/90 member by
+                // falling back to its world AABB. A manual XC is valid only when its actual
+                // curve length agrees with the endpoint chord within drafting tolerance.
+                return ResolveStraightCurve(curve);
             }
 
             var block = entity as BlockReference;
@@ -52,19 +59,34 @@ namespace HNL.VXT.AutoCAD
                 if (blockAxis != null) return blockAxis;
             }
 
-            // Fail closed to the certified legacy interpretation for unsupported CAD entity shapes.
+            // Unsupported entity types keep the certified legacy interpretation. The selection
+            // filter normally limits manual members to Curve/BlockReference, so this is only a
+            // compatibility fallback for unusual proxy/entity subclasses.
             return ResolveLegacy(entity);
         }
 
-        private static ResolvedAxis ResolveCurve(Curve curve)
+        private static ResolvedAxis ResolveStraightCurve(Curve curve)
         {
             try
             {
                 var start = curve.StartPoint;
                 var end = curve.EndPoint;
-                return FromWorldEndpoints(
-                    new Point2(start.X, start.Y),
-                    new Point2(end.X, end.Y));
+                var a = new Point2(start.X, start.Y);
+                var b = new Point2(end.X, end.Y);
+                var chord = a.DistanceTo(b);
+                if (chord <= MinimumAxisLength) return null;
+
+                var startDistance = curve.GetDistanceAtParameter(curve.StartParam);
+                var endDistance = curve.GetDistanceAtParameter(curve.EndParam);
+                var pathLength = Math.Abs(endDistance - startDistance);
+                if (pathLength <= MinimumAxisLength) return null;
+
+                var tolerance = Math.Max(
+                    StraightnessAbsoluteTolerance,
+                    pathLength * StraightnessRelativeTolerance);
+                if (Math.Abs(pathLength - chord) > tolerance) return null;
+
+                return FromWorldEndpoints(a, b);
             }
             catch
             {
@@ -129,9 +151,58 @@ namespace HNL.VXT.AutoCAD
                 var matrix = block.BlockTransform;
                 var worldStart = localStart.TransformBy(matrix);
                 var worldEnd = localEnd.TransformBy(matrix);
-                return FromWorldEndpoints(
+                var definitionAxis = FromWorldEndpoints(
                     new Point2(worldStart.X, worldStart.Y),
                     new Point2(worldEnd.X, worldEnd.Y));
+                if (definitionAxis == null) return null;
+
+                // Dynamic blocks may have a length/stretch action whose current instance is much
+                // longer than the base definition. Preserve the definition's true direction but
+                // project the visible instance extents onto that direction so Ty spans the actual
+                // stretched member instead of being truncated to the authoring length.
+                return ExtendAxisToVisibleInstance(block, definitionAxis) ?? definitionAxis;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static ResolvedAxis ExtendAxisToVisibleInstance(BlockReference block, ResolvedAxis axis)
+        {
+            try
+            {
+                var dx = axis.End.X - axis.Start.X;
+                var dy = axis.End.Y - axis.Start.Y;
+                var length = Math.Sqrt(dx * dx + dy * dy);
+                if (length <= MinimumAxisLength) return null;
+                var ux = dx / length;
+                var uy = dy / length;
+
+                var ext = block.GeometricExtents;
+                var corners = new[]
+                {
+                    new Point2(ext.MinPoint.X, ext.MinPoint.Y),
+                    new Point2(ext.MinPoint.X, ext.MaxPoint.Y),
+                    new Point2(ext.MaxPoint.X, ext.MinPoint.Y),
+                    new Point2(ext.MaxPoint.X, ext.MaxPoint.Y)
+                };
+                var projections = corners.Select(point => point.X * ux + point.Y * uy).ToArray();
+                var minProjection = projections.Min();
+                var maxProjection = projections.Max();
+                if (maxProjection - minProjection <= MinimumAxisLength) return null;
+
+                var center = new Point2(
+                    (axis.Start.X + axis.End.X) * 0.5,
+                    (axis.Start.Y + axis.End.Y) * 0.5);
+                var centerProjection = center.X * ux + center.Y * uy;
+                var start = new Point2(
+                    center.X + (minProjection - centerProjection) * ux,
+                    center.Y + (minProjection - centerProjection) * uy);
+                var end = new Point2(
+                    center.X + (maxProjection - centerProjection) * ux,
+                    center.Y + (maxProjection - centerProjection) * uy);
+                return FromWorldEndpoints(start, end);
             }
             catch
             {
@@ -163,7 +234,7 @@ namespace HNL.VXT.AutoCAD
             var dx = b.X - a.X;
             var dy = b.Y - a.Y;
             var length = Math.Sqrt(dx * dx + dy * dy);
-            if (length <= 1e-8) return null;
+            if (length <= MinimumAxisLength) return null;
 
             var verticalLike = Math.Abs(dy) > Math.Abs(dx);
             var mustFlip = verticalLike ? dy < 0.0 : dx < 0.0;
