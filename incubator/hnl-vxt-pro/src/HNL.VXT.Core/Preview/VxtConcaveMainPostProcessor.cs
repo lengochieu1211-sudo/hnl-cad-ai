@@ -42,13 +42,11 @@ namespace HNL.VXT.Core.Preview
                 {
                     var obstacles = TransformMainObstacles(context, scope, settings);
                     List<Segment2> regionSegments;
-                    if (VxtOrthogonalNotchRegionPlanner.TryBuild(
-                        scope.Polygon, scope.Domain, settings, obstacles, out regionSegments))
-                    {
-                        RebuildRegionalMains(plan, scope, regionSegments, settings, obstacles);
-                        return;
-                    }
+                    var hasRegionalCandidate = VxtOrthogonalNotchRegionPlanner.TryBuild(
+                        scope.Polygon, scope.Domain, settings, obstacles, out regionSegments);
 
+                    // Candidate A: Lisp-first global rebalance, then the minimum local fallback only
+                    // when the global grid still cannot satisfy a real concave band.
                     var moved = RebalanceGlobalGrid(grid, checks, scope.Domain, settings, obstacles);
                     if (!SameGrid(grid, moved))
                     {
@@ -56,6 +54,20 @@ namespace HNL.VXT.Core.Preview
                         grid = moved;
                     }
                     AddLocalRepairs(plan, scope, grid, settings, obstacles);
+
+                    // Candidate B: automatic orthogonal-notch rectangle decomposition. Never choose
+                    // it blindly: safety is mandatory, then construction economy wins lexicographically
+                    // by fewer XC segments, fewer Ty, shorter total XC, and finally spacing nearer Max.
+                    // XP is not rebuilt by either candidate, so its one-side chase phase is preserved.
+                    if (hasRegionalCandidate)
+                    {
+                        var globalScore = ScoreMainStrategy(plan, scope, settings, obstacles);
+                        var regionalPlan = CloneForMainStrategy(plan);
+                        RebuildRegionalMains(regionalPlan, scope, regionSegments, settings, obstacles);
+                        var regionalScore = ScoreMainStrategy(regionalPlan, scope, settings, obstacles);
+                        if (regionalScore.IsBetterThan(globalScore))
+                            CopyMainAndHangers(plan, regionalPlan);
+                    }
                 }
                 return;
             }
@@ -246,6 +258,177 @@ namespace HNL.VXT.Core.Preview
                 }
             }
             return best;
+        }
+
+        private static VxtPreviewPlan CloneForMainStrategy(VxtPreviewPlan source)
+        {
+            var clone = new VxtPreviewPlan();
+            clone.Lines.AddRange(source.Lines);
+            clone.Texts.AddRange(source.Texts);
+            clone.HangerPoints.AddRange(source.HangerPoints);
+            clone.Dimensions.AddRange(source.Dimensions);
+            clone.MainSegmentCount = source.MainSegmentCount;
+            clone.FurringSegmentCount = source.FurringSegmentCount;
+            clone.HangerCount = source.HangerCount;
+            clone.DimensionSegmentCount = source.DimensionSegmentCount;
+            clone.Quality = source.Quality;
+            return clone;
+        }
+
+        private static void CopyMainAndHangers(VxtPreviewPlan target, VxtPreviewPlan source)
+        {
+            target.Lines.RemoveAll(x => x.Kind == PreviewLineKind.Main || x.Kind == PreviewLineKind.Hanger);
+            target.Lines.AddRange(source.Lines.Where(x =>
+                x.Kind == PreviewLineKind.Main || x.Kind == PreviewLineKind.Hanger));
+            target.HangerPoints.Clear();
+            target.HangerPoints.AddRange(source.HangerPoints);
+            target.MainSegmentCount = source.MainSegmentCount;
+            target.HangerCount = source.HangerCount;
+        }
+
+        private static StrategyScore ScoreMainStrategy(
+            VxtPreviewPlan candidate,
+            Scope scope,
+            VxtSettings settings,
+            List<Box2> obstacles)
+        {
+            var mains = candidate.Lines.Where(x => x.Kind == PreviewLineKind.Main).ToList();
+            var violations = CountMainConstraintViolations(candidate, scope, settings);
+
+            if (settings.UseAvoidance && obstacles != null && obstacles.Count > 0)
+            {
+                foreach (var line in mains)
+                {
+                    var a = Transform2.ToLocal(line.A, scope.Radians);
+                    var b = Transform2.ToLocal(line.B, scope.Radians);
+                    if (Math.Abs(a.Y - b.Y) > 0.5 ||
+                        !LocalSegmentClear(new Segment2(a, b), obstacles))
+                        violations++;
+                }
+            }
+
+            var totalLength = mains.Sum(x => x.A.DistanceTo(x.B));
+            var spacingSlack = CalculateSpacingSlack(candidate, scope, settings);
+            return new StrategyScore(
+                violations,
+                mains.Count,
+                candidate.HangerPoints.Count,
+                totalLength,
+                spacingSlack);
+        }
+
+        private static int CountMainConstraintViolations(
+            VxtPreviewPlan candidate,
+            Scope scope,
+            VxtSettings settings)
+        {
+            var violations = 0;
+            foreach (var check in CollectChecks(scope))
+            {
+                var sampleX = (check.BandA + check.BandB) * 0.5;
+                var ys = UniqueSort(candidate.Lines
+                    .Where(x => x.Kind == PreviewLineKind.Main)
+                    .Select(x => new
+                    {
+                        A = Transform2.ToLocal(x.A, scope.Radians),
+                        B = Transform2.ToLocal(x.B, scope.Radians)
+                    })
+                    .Where(x => Math.Abs(x.A.Y - x.B.Y) <= 0.5 &&
+                                sampleX >= Math.Min(x.A.X, x.B.X) - Tol &&
+                                sampleX <= Math.Max(x.A.X, x.B.X) + Tol)
+                    .Select(x => (x.A.Y + x.B.Y) * 0.5)
+                    .Where(y => y >= check.A - Tol && y <= check.B + Tol), 0.5);
+                violations += CountIntervalViolations(ys, check.A, check.B, settings);
+            }
+            return violations;
+        }
+
+        private static int CountIntervalViolations(
+            IReadOnlyList<double> grid,
+            double a,
+            double b,
+            VxtSettings settings)
+        {
+            if (grid == null || grid.Count == 0) return 1;
+            var violations = 0;
+            var maxEdge = settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance);
+            var firstEdge = grid[0] - a;
+            var lastEdge = b - grid[grid.Count - 1];
+            if (firstEdge < settings.MainMinEdgeOffset - Tol || firstEdge > maxEdge + Tol) violations++;
+            if (lastEdge < settings.MainMinEdgeOffset - Tol || lastEdge > maxEdge + Tol) violations++;
+            for (var i = 0; i + 1 < grid.Count; i++)
+            {
+                var gap = grid[i + 1] - grid[i];
+                if (gap < settings.MainMinSpacing - Tol || gap > settings.MainMaxSpacing + Tol)
+                    violations++;
+            }
+            return violations;
+        }
+
+        private static double CalculateSpacingSlack(
+            VxtPreviewPlan candidate,
+            Scope scope,
+            VxtSettings settings)
+        {
+            var slack = 0.0;
+            foreach (var check in CollectChecks(scope))
+            {
+                var sampleX = (check.BandA + check.BandB) * 0.5;
+                var ys = UniqueSort(candidate.Lines
+                    .Where(x => x.Kind == PreviewLineKind.Main)
+                    .Select(x => new
+                    {
+                        A = Transform2.ToLocal(x.A, scope.Radians),
+                        B = Transform2.ToLocal(x.B, scope.Radians)
+                    })
+                    .Where(x => Math.Abs(x.A.Y - x.B.Y) <= 0.5 &&
+                                sampleX >= Math.Min(x.A.X, x.B.X) - Tol &&
+                                sampleX <= Math.Max(x.A.X, x.B.X) + Tol)
+                    .Select(x => (x.A.Y + x.B.Y) * 0.5)
+                    .Where(y => y >= check.A - Tol && y <= check.B + Tol), 0.5);
+                for (var i = 0; i + 1 < ys.Count; i++)
+                    slack += Math.Max(0.0, settings.MainMaxSpacing - (ys[i + 1] - ys[i]));
+            }
+            return slack;
+        }
+
+        private sealed class StrategyScore
+        {
+            public StrategyScore(
+                int violationCount,
+                int mainCount,
+                int hangerCount,
+                double mainLength,
+                double spacingSlack)
+            {
+                ViolationCount = violationCount;
+                MainCount = mainCount;
+                HangerCount = hangerCount;
+                MainLength = mainLength;
+                SpacingSlack = spacingSlack;
+            }
+
+            public int ViolationCount { get; }
+            public int MainCount { get; }
+            public int HangerCount { get; }
+            public double MainLength { get; }
+            public double SpacingSlack { get; }
+
+            public bool IsBetterThan(StrategyScore other)
+            {
+                if (other == null) return true;
+                if (ViolationCount != other.ViolationCount)
+                    return ViolationCount < other.ViolationCount;
+                if (MainCount != other.MainCount)
+                    return MainCount < other.MainCount;
+                if (HangerCount != other.HangerCount)
+                    return HangerCount < other.HangerCount;
+                if (Math.Abs(MainLength - other.MainLength) > Tol)
+                    return MainLength < other.MainLength;
+                if (Math.Abs(SpacingSlack - other.SpacingSlack) > Tol)
+                    return SpacingSlack < other.SpacingSlack;
+                return false;
+            }
         }
 
         private static void RebuildRegionalMains(

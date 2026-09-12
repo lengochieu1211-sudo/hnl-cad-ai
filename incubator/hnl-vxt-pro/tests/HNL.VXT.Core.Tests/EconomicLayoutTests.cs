@@ -64,6 +64,38 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void OrthogonalNotch_EconomyPrefersFewerMainSegmentsThenHangers()
+        {
+            var settings = new VxtSettings
+            {
+                DrawFurring = false,
+                DrawHangers = true,
+                AutoDimension = true,
+                DimMain = true,
+                DimHanger = true,
+                UseLocalMainAdd = true
+            };
+
+            var notch = new Boundary2(new[]
+            {
+                new Point2(0, 1500),
+                new Point2(2500, 1500),
+                new Point2(2500, 0),
+                new Point2(6000, 0),
+                new Point2(6000, 4000),
+                new Point2(0, 4000)
+            });
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { notch }, settings, new VxtLayoutContext());
+
+            Assert.AreEqual(5, plan.Lines.Count(x => x.Kind == PreviewLineKind.Main),
+                "When global rebalance and rectangular decomposition are both valid, the strategy with fewer XC segments must win.");
+            Assert.AreEqual(29, plan.HangerPoints.Count,
+                "After minimizing XC, the selected strategy must keep the corresponding minimum legal Ty layout.");
+        }
+
+        [TestMethod]
         public void Furring_DefaultIsExact1220Div3_ButRemainsUserEditable()
         {
             var defaults = new VxtSettings();
