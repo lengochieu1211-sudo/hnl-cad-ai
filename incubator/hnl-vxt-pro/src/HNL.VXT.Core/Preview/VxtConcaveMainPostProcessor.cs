@@ -262,7 +262,7 @@ namespace HNL.VXT.Core.Preview
 
             foreach (var segment in segments ?? new Segment2[0])
             {
-                if (segment == null || Math.Abs(segment.B.X - segment.A.X) <= MinDrawLength) continue;
+                if (Math.Abs(segment.B.X - segment.A.X) <= MinDrawLength) continue;
                 if (settings.UseAvoidance && !LocalSegmentClear(segment, obstacles)) continue;
                 AddMainLine(plan, segment, scope.Radians);
                 if (settings.DrawHangers)
