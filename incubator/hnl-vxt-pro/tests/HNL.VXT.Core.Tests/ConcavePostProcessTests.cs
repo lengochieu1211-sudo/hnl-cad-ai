@@ -24,7 +24,7 @@ namespace HNL.VXT.Core.Tests
             };
 
             var plan = VxtMultiBoundaryPlanBuilder.Build(
-                new[] { LowerLeftNotch() }, settings, new VxtLayoutContext());
+                new[] { NonOrthogonalLowerLeftNotch() }, settings, new VxtLayoutContext());
 
             var ys = plan.Lines
                 .Where(x => x.Kind == PreviewLineKind.Main)
@@ -203,6 +203,18 @@ namespace HNL.VXT.Core.Tests
 
             CollectionAssert.AreEqual(new[] { 300.0, 1150.0, 2000.0, 2850.0, 3700.0 }, ys);
         }
+
+        private static Boundary2 NonOrthogonalLowerLeftNotch()
+            => new Boundary2(new[]
+            {
+                new Point2(0, 1500),
+                new Point2(2500, 1500),
+                new Point2(2500, 0),
+                new Point2(6000, 0),
+                new Point2(6000, 3900),
+                new Point2(5900, 4000),
+                new Point2(0, 4000)
+            });
 
         private static Boundary2 LowerLeftNotch()
             => new Boundary2(new[]
