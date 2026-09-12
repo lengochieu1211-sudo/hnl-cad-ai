@@ -1,4 +1,4 @@
-name: TEMP HNL VXT concave XC Lisp parity patch
+name: TEMP HNL VXT orthogonal notch region optimizer
 
 on:
   push:
@@ -18,86 +18,467 @@ jobs:
           ref: research/vxt-pro-v7-bootstrap
           fetch-depth: 0
 
-      - name: Apply exact concave XC parity patch
+      - name: Apply orthogonal notch region optimizer
         shell: python
         run: |
           from pathlib import Path
 
           root = Path('.')
 
-          # 1) Root cause: AutoDimension must not disable global XC rebalance.
+          helper = r'''using System;
+          using System.Collections.Generic;
+          using System.Linq;
+          using HNL.VXT.Core.Geometry;
+          using HNL.VXT.Core.Layout;
+          using HNL.VXT.Core.Models;
+
+          namespace HNL.VXT.Core.Preview
+          {
+              /// <summary>
+              /// Decomposes an orthogonal concave ceiling, already transformed to the XC local axis,
+              /// into maximal vertical rectangular regions. Each region receives a normal SmartLayout1D
+              /// XC layout; collinear rows are merged afterwards. XP is intentionally outside this
+              /// planner and therefore keeps one global chase direction. Ty is rebuilt later from the
+              /// final XC segments so every short/long XC receives its own valid hanger distribution.
+              /// </summary>
+              internal static class VxtOrthogonalNotchRegionPlanner
+              {
+                  private const double Tol = 0.5;
+                  private const double MinDrawLength = 5.0;
+
+                  public static bool TryBuild(
+                      IReadOnlyList<Point2> polygon,
+                      Box2 domain,
+                      VxtSettings settings,
+                      IReadOnlyList<Box2> obstacles,
+                      out List<Segment2> mainSegments)
+                  {
+                      mainSegments = null;
+                      if (polygon == null || polygon.Count < 4 || settings == null) return false;
+                      if (!IsOrthogonal(polygon)) return false;
+
+                      var regions = BuildMaximalRegions(polygon, domain);
+                      if (regions.Count <= 1) return false;
+
+                      var segments = new List<Segment2>();
+                      foreach (var region in regions)
+                      {
+                          List<double> grid;
+                          if (!TryBuildRegionGrid(region, settings, obstacles, out grid)) return false;
+                          foreach (var y in grid)
+                          {
+                              if (region.X2 - region.X1 <= MinDrawLength) continue;
+                              segments.Add(new Segment2(new Point2(region.X1, y), new Point2(region.X2, y)));
+                          }
+                      }
+
+                      segments = MergeCollinear(segments);
+                      if (segments.Count == 0) return false;
+                      mainSegments = segments;
+                      return true;
+                  }
+
+                  private static bool IsOrthogonal(IReadOnlyList<Point2> polygon)
+                  {
+                      for (var i = 0; i < polygon.Count; i++)
+                      {
+                          var a = polygon[i];
+                          var b = polygon[(i + 1) % polygon.Count];
+                          var dx = Math.Abs(b.X - a.X);
+                          var dy = Math.Abs(b.Y - a.Y);
+                          if (dx <= Tol && dy <= Tol) continue;
+                          if (dx > Tol && dy > Tol) return false;
+                      }
+                      return true;
+                  }
+
+                  private static List<RectRegion> BuildMaximalRegions(IReadOnlyList<Point2> polygon, Box2 domain)
+                  {
+                      var xs = UniqueSort(polygon.Select(p => p.X)
+                          .Concat(new[] { domain.MinX, domain.MaxX }));
+                      var cells = new List<RectRegion>();
+
+                      for (var i = 0; i + 1 < xs.Count; i++)
+                      {
+                          var x1 = Math.Max(domain.MinX, xs[i]);
+                          var x2 = Math.Min(domain.MaxX, xs[i + 1]);
+                          if (x2 - x1 <= MinDrawLength) continue;
+                          var x = (x1 + x2) * 0.5;
+                          foreach (var raw in PolygonScanline.ClipVertical(polygon, x))
+                          {
+                              var y1 = Math.Max(domain.MinY, Math.Min(raw.A.Y, raw.B.Y));
+                              var y2 = Math.Min(domain.MaxY, Math.Max(raw.A.Y, raw.B.Y));
+                              if (y2 - y1 <= MinDrawLength) continue;
+                              cells.Add(new RectRegion(x1, x2, y1, y2));
+                          }
+                      }
+
+                      var result = new List<RectRegion>();
+                      foreach (var verticalGroup in cells
+                          .GroupBy(c => SpanKey(c.Y1, c.Y2), StringComparer.Ordinal))
+                      {
+                          RectRegion current = null;
+                          foreach (var cell in verticalGroup.OrderBy(c => c.X1).ThenBy(c => c.X2))
+                          {
+                              if (current == null)
+                              {
+                                  current = cell;
+                                  continue;
+                              }
+                              if (cell.X1 <= current.X2 + Tol)
+                              {
+                                  current = new RectRegion(
+                                      current.X1,
+                                      Math.Max(current.X2, cell.X2),
+                                      current.Y1,
+                                      current.Y2);
+                              }
+                              else
+                              {
+                                  result.Add(current);
+                                  current = cell;
+                              }
+                          }
+                          if (current != null) result.Add(current);
+                      }
+
+                      return result
+                          .OrderBy(r => r.X1)
+                          .ThenBy(r => r.Y1)
+                          .ToList();
+                  }
+
+                  private static bool TryBuildRegionGrid(
+                      RectRegion region,
+                      VxtSettings settings,
+                      IReadOnlyList<Box2> obstacles,
+                      out List<double> grid)
+                  {
+                      grid = null;
+                      var mode = settings.MainLayout == MainLayoutMode.Auto
+                          ? MainLayoutMode.BalancedTwoEnds
+                          : settings.MainLayout;
+                      var layout = SmartLayout1D.Calculate(
+                          region.Height,
+                          settings.MainMaxSpacing,
+                          settings.MainMinSpacing,
+                          settings.MainMaxEdgeOffset,
+                          settings.MainMinEdgeOffset,
+                          settings.MainBalanceStep,
+                          mode);
+                      if (layout == null) return false;
+
+                      IReadOnlyList<double> coordinates = layout.Positions(region.Y1);
+                      if (settings.UseAvoidance && obstacles != null && obstacles.Count > 0)
+                      {
+                          var intervals = obstacles
+                              .Where(b => b.MaxX >= region.X1 + Tol && b.MinX <= region.X2 - Tol &&
+                                          b.MaxY >= region.Y1 + Tol && b.MinY <= region.Y2 - Tol)
+                              .Select(b => Tuple.Create(
+                                  Math.Max(region.Y1, b.MinY),
+                                  Math.Min(region.Y2, b.MaxY)))
+                              .Where(x => x.Item2 - x.Item1 > Tol)
+                              .ToList();
+                          if (intervals.Count > 0)
+                          {
+                              coordinates = SmartLayout1D.AdjustGrid(
+                                  coordinates,
+                                  intervals,
+                                  region.Y1,
+                                  region.Y2,
+                                  settings.MainMinSpacing,
+                                  settings.MainMaxSpacing,
+                                  settings.MainMinEdgeOffset,
+                                  settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance),
+                                  settings.MainBalanceStep);
+                          }
+                      }
+
+                      var values = UniqueSort(coordinates);
+                      if (!GridValid(values, region.Y1, region.Y2, settings)) return false;
+                      grid = values;
+                      return true;
+                  }
+
+                  private static bool GridValid(
+                      IReadOnlyList<double> grid,
+                      double min,
+                      double max,
+                      VxtSettings settings)
+                  {
+                      if (grid == null || grid.Count == 0) return false;
+                      var maxEdge = settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance);
+                      if (grid[0] - min < settings.MainMinEdgeOffset - Tol || grid[0] - min > maxEdge + Tol)
+                          return false;
+                      if (max - grid[grid.Count - 1] < settings.MainMinEdgeOffset - Tol ||
+                          max - grid[grid.Count - 1] > maxEdge + Tol)
+                          return false;
+                      for (var i = 0; i + 1 < grid.Count; i++)
+                      {
+                          var d = grid[i + 1] - grid[i];
+                          if (d < settings.MainMinSpacing - Tol || d > settings.MainMaxSpacing + Tol)
+                              return false;
+                      }
+                      return true;
+                  }
+
+                  private static List<Segment2> MergeCollinear(IEnumerable<Segment2> source)
+                  {
+                      var groups = new List<List<Segment2>>();
+                      foreach (var segment in source
+                          .OrderBy(s => (s.A.Y + s.B.Y) * 0.5)
+                          .ThenBy(s => Math.Min(s.A.X, s.B.X)))
+                      {
+                          var y = (segment.A.Y + segment.B.Y) * 0.5;
+                          var group = groups.FirstOrDefault(g =>
+                              Math.Abs(((g[0].A.Y + g[0].B.Y) * 0.5) - y) <= Tol);
+                          if (group == null)
+                          {
+                              group = new List<Segment2>();
+                              groups.Add(group);
+                          }
+                          group.Add(segment);
+                      }
+
+                      var output = new List<Segment2>();
+                      foreach (var group in groups)
+                      {
+                          var y = group.Average(s => (s.A.Y + s.B.Y) * 0.5);
+                          double? x1 = null;
+                          var x2 = 0.0;
+                          foreach (var segment in group.OrderBy(s => Math.Min(s.A.X, s.B.X)))
+                          {
+                              var a = Math.Min(segment.A.X, segment.B.X);
+                              var b = Math.Max(segment.A.X, segment.B.X);
+                              if (!x1.HasValue)
+                              {
+                                  x1 = a;
+                                  x2 = b;
+                              }
+                              else if (a <= x2 + Tol)
+                              {
+                                  x2 = Math.Max(x2, b);
+                              }
+                              else
+                              {
+                                  output.Add(new Segment2(new Point2(x1.Value, y), new Point2(x2, y)));
+                                  x1 = a;
+                                  x2 = b;
+                              }
+                          }
+                          if (x1.HasValue)
+                              output.Add(new Segment2(new Point2(x1.Value, y), new Point2(x2, y)));
+                      }
+                      return output;
+                  }
+
+                  private static List<double> UniqueSort(IEnumerable<double> values)
+                  {
+                      var result = new List<double>();
+                      foreach (var value in (values ?? Enumerable.Empty<double>()).OrderBy(x => x))
+                      {
+                          if (result.Count == 0 || Math.Abs(result[result.Count - 1] - value) > Tol)
+                              result.Add(value);
+                      }
+                      return result;
+                  }
+
+                  private static string SpanKey(double a, double b)
+                      => Math.Round(a, 2).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + "|" +
+                         Math.Round(b, 2).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+
+                  private sealed class RectRegion
+                  {
+                      public RectRegion(double x1, double x2, double y1, double y2)
+                      {
+                          X1 = Math.Min(x1, x2);
+                          X2 = Math.Max(x1, x2);
+                          Y1 = Math.Min(y1, y2);
+                          Y2 = Math.Max(y1, y2);
+                      }
+                      public double X1 { get; }
+                      public double X2 { get; }
+                      public double Y1 { get; }
+                      public double Y2 { get; }
+                      public double Height => Y2 - Y1;
+                  }
+              }
+          }
+          '''
+          helper = '\n'.join(line[10:] if line.startswith('          ') else line for line in helper.splitlines()) + '\n'
+          helper_path = root / 'incubator/hnl-vxt-pro/src/HNL.VXT.Core/Preview/VxtOrthogonalNotchRegionPlanner.cs'
+          assert not helper_path.exists(), 'Region planner already exists; abort instead of overwriting unexpectedly.'
+          helper_path.write_text(helper, encoding='utf-8')
+
           p = root / 'incubator/hnl-vxt-pro/src/HNL.VXT.Core/Preview/VxtConcaveMainPostProcessor.cs'
           s = p.read_text(encoding='utf-8')
-          old = 'if (scopes.Count == 1 && settings.MainDirection != MainDirectionMode.RectangleRegions && !settings.AutoDimension)'
-          new = 'if (scopes.Count == 1 && settings.MainDirection != MainDirectionMode.RectangleRegions)'
-          assert s.count(old) == 1, f'Expected one root condition, got {s.count(old)}'
-          s = s.replace(old, new)
-          old_comment = '''// Exact Lisp priority: try to repair a normal single-direction ceiling by shifting\n            // global XC first. Rectangle-region mode owns several independent grids, therefore\n            // each region is kept isolated and uses local fallback only.'''
-          new_comment = '''// Exact Lisp priority: try to repair a normal single-direction ceiling by shifting\n            // global XC first, regardless of Auto DIM. Final DIM is rebuilt from the post-processed\n            // geometry by VxtPostProcessDimensionSynchronizer. Rectangle-region mode owns several\n            // independent grids, therefore each region stays isolated and uses local fallback only.'''
-          assert s.count(old_comment) == 1, 'Root parity comment changed unexpectedly'
-          s = s.replace(old_comment, new_comment)
-          p.write_text(s, encoding='utf-8')
-
-          # 2) Regression contract: Auto DIM ON must still rebalance the existing global XC.
-          p = root / 'incubator/hnl-vxt-pro/tests/HNL.VXT.Core.Tests/ConcavePostProcessTests.cs'
-          s = p.read_text(encoding='utf-8')
-          old = 'public void ConcaveBand_RebalancesGlobalXcBeforeAddingLocalBar()'
-          new = 'public void ConcaveBand_AutoDimensionStillRebalancesGlobalXcBeforeAddingLocalBar()'
-          assert s.count(old) == 1
-          s = s.replace(old, new)
-
-          old = '''DrawFurring = false,\n                DrawHangers = false,\n                AutoDimension = false,\n                UseLocalMainAdd = true'''
-          new = '''DrawFurring = false,\n                DrawHangers = false,\n                AutoDimension = true,\n                DimMain = true,\n                UseLocalMainAdd = true'''
-          assert s.count(old) == 1, 'Could not locate rebalance regression settings'
+          old = '''var obstacles = TransformMainObstacles(context, scope, settings);\n                    var moved = RebalanceGlobalGrid(grid, checks, scope.Domain, settings, obstacles);'''
+          new = '''var obstacles = TransformMainObstacles(context, scope, settings);\n                    List<Segment2> regionSegments;\n                    if (VxtOrthogonalNotchRegionPlanner.TryBuild(\n                        scope.Polygon, scope.Domain, settings, obstacles, out regionSegments))\n                    {\n                        RebuildRegionalMains(plan, scope, regionSegments, settings, obstacles);\n                        return;\n                    }\n\n                    var moved = RebalanceGlobalGrid(grid, checks, scope.Domain, settings, obstacles);'''
+          assert s.count(old) == 1, f'Expected one single-scope optimizer anchor, got {s.count(old)}'
           s = s.replace(old, new, 1)
 
-          # Local-fallback tests must exercise the isolated RectangleRegions family instead of
-          # relying on the obsolete "AutoDimension freezes global XC" behavior.
-          old = '''DrawFurring = false,\n                DrawHangers = true,\n                AutoDimension = true, // preserves the already-built DIM grid; forces local fallback instead of moving it.'''
-          new = '''MainDirection = MainDirectionMode.RectangleRegions,\n                DrawFurring = false,\n                DrawHangers = true,\n                AutoDimension = true, // RectangleRegions stays isolated and uses local fallback.'''
-          assert s.count(old) == 1, 'Could not locate local fallback Ty fixture'
-          s = s.replace(old, new, 1)
-
-          marker = '''public void ConcaveBand_LocalFallbackRefreshesMainAndHangerDimensions()\n        {\n            var settings = new VxtSettings\n            {\n                DrawFurring = false,'''
-          replacement = '''public void ConcaveBand_LocalFallbackRefreshesMainAndHangerDimensions()\n        {\n            var settings = new VxtSettings\n            {\n                MainDirection = MainDirectionMode.RectangleRegions,\n                DrawFurring = false,'''
-          assert s.count(marker) == 1, 'Could not locate local fallback DIM fixture'
-          s = s.replace(marker, replacement, 1)
-
-          marker = '''public void ConcaveBand_LocalBarBelowConfiguredMinimumLengthIsSuppressed()\n        {\n            var settings = new VxtSettings\n            {\n                DrawFurring = false,'''
-          replacement = '''public void ConcaveBand_LocalBarBelowConfiguredMinimumLengthIsSuppressed()\n        {\n            var settings = new VxtSettings\n            {\n                MainDirection = MainDirectionMode.RectangleRegions,\n                DrawFurring = false,'''
-          assert s.count(marker) == 1, 'Could not locate minimum local bar fixture'
-          s = s.replace(marker, replacement, 1)
-
-          # Explicitly verify final DIM tracks the moved XC at Y=1900 when AutoDimension is ON.
-          anchor = '''Assert.IsTrue(Math.Abs(moved.A.X - moved.B.X) > 5900.0,\n                "Rebalance must remain a global XC, not silently turn into a short local bar.");'''
-          addition = anchor + '''\n            Assert.IsTrue(plan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&\n                (Math.Abs(d.ExtensionPoint1.Y - 1900.0) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - 1900.0) < 0.1)),\n                "Auto DIM must be rebuilt from the moved global XC at Y=1900.");\n            Assert.IsFalse(plan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&\n                (Math.Abs(d.ExtensionPoint1.Y - 2000.0) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - 2000.0) < 0.1)),\n                "Auto DIM must not retain the pre-rebalance XC coordinate Y=2000.");'''
-          assert s.count(anchor) == 1, 'Could not locate rebalance assertion anchor'
-          s = s.replace(anchor, addition, 1)
+          anchor = '''private static void RebuildGlobalMains(\n            VxtPreviewPlan plan,'''
+          method = '''private static void RebuildRegionalMains(\n            VxtPreviewPlan plan,\n            Scope scope,\n            IReadOnlyList<Segment2> segments,\n            VxtSettings settings,\n            List<Box2> obstacles)\n        {\n            plan.Lines.RemoveAll(x => x.Kind == PreviewLineKind.Main || x.Kind == PreviewLineKind.Hanger);\n            plan.HangerPoints.Clear();\n            plan.MainSegmentCount = 0;\n            plan.HangerCount = 0;\n\n            foreach (var segment in segments ?? new Segment2[0])\n            {\n                if (segment == null || Math.Abs(segment.B.X - segment.A.X) <= MinDrawLength) continue;\n                if (settings.UseAvoidance && !LocalSegmentClear(segment, obstacles)) continue;\n                AddMainLine(plan, segment, scope.Radians);\n                if (settings.DrawHangers)\n                    AddHangers(plan, segment, scope, settings, obstacles);\n            }\n        }\n\n        private static void RebuildGlobalMains(\n            VxtPreviewPlan plan,'''
+          assert s.count(anchor) == 1, 'Could not locate RebuildGlobalMains anchor'
+          s = s.replace(anchor, method, 1)
           p.write_text(s, encoding='utf-8')
 
-          # 3) UI toggle regression remains meaningful by pinning it to the true local-fallback family.
-          p = root / 'incubator/hnl-vxt-pro/tests/HNL.VXT.Core.Tests/LocalMainSettingTests.cs'
-          s = p.read_text(encoding='utf-8')
-          old = '''DrawFurring = false,\n                DrawHangers = false,\n                AutoDimension = true, // keep global XC grid fixed so the notch needs local fallback'''
-          new = '''MainDirection = MainDirectionMode.RectangleRegions,\n                DrawFurring = false,\n                DrawHangers = false,\n                AutoDimension = true, // isolated region family intentionally uses local fallback'''
-          assert s.count(old) == 1, 'Could not locate LocalMain toggle fixture'
-          s = s.replace(old, new, 1)
-          p.write_text(s, encoding='utf-8')
+          tests = r'''using System;
+          using System.Collections.Generic;
+          using System.Linq;
+          using HNL.VXT.Core.Geometry;
+          using HNL.VXT.Core.Layout;
+          using HNL.VXT.Core.Models;
+          using HNL.VXT.Core.Preview;
+          using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-          print('Concave XC Lisp parity patch applied successfully.')
+          namespace HNL.VXT.Core.Tests
+          {
+              [TestClass]
+              public sealed class OrthogonalNotchRegionPlannerTests
+              {
+                  [TestMethod]
+                  public void LowerLeftNotch_AutoSplitsIntoRectangularMainRegions_AndKeepsFurringUnchanged()
+                  {
+                      var settings = Settings(autoDimension: true);
+                      var context = new VxtLayoutContext { GlobalFurringFromFarEdge = false };
+                      var boundary = LowerLeftNotch();
 
-      - name: Commit parity patch
+                      var before = new VxtPreviewPlanBuilder().Build(boundary, settings, context);
+                      var after = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, settings, context);
+
+                      CollectionAssert.AreEqual(
+                          FurringKeys(before).ToArray(),
+                          FurringKeys(after).ToArray(),
+                          "Auto notch regions must not change XP positions or the single global chase direction.");
+
+                      CollectionAssert.AreEqual(
+                          new[] { 1800.0, 2750.0, 3700.0 },
+                          MainYsAtX(after, 1250.0),
+                          "Left notch rectangle must solve its own strict-multiple XC layout.");
+                      CollectionAssert.AreEqual(
+                          new[] { 300.0, 1150.0, 2000.0, 2850.0, 3700.0 },
+                          MainYsAtX(after, 4250.0),
+                          "Long right rectangle must solve its own strict-multiple XC layout.");
+                  }
+
+                  [TestMethod]
+                  public void LowerLeftNotch_HangersAreRebuiltFromEachFinalMainSegment()
+                  {
+                      var settings = Settings(autoDimension: false);
+                      settings.DrawFurring = false;
+                      var plan = VxtMultiBoundaryPlanBuilder.Build(
+                          new[] { LowerLeftNotch() }, settings, new VxtLayoutContext());
+
+                      foreach (var main in plan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
+                      {
+                          var minX = Math.Min(main.A.X, main.B.X);
+                          var maxX = Math.Max(main.A.X, main.B.X);
+                          var length = maxX - minX;
+                          if (length < 1000.0) continue;
+                          var y = (main.A.Y + main.B.Y) * 0.5;
+                          var row = plan.HangerPoints
+                              .Where(p => Math.Abs(p.Y - y) <= 0.1 && p.X >= minX - 0.1 && p.X <= maxX + 0.1)
+                              .OrderBy(p => p.X)
+                              .ToArray();
+                          Assert.IsTrue(row.Length > 0, "Every final XC segment must receive its own Ty row.");
+                          Assert.IsTrue(row[0].X - minX <= 425.1, "Ty first edge exceeds configured max edge.");
+                          Assert.IsTrue(maxX - row[row.Length - 1].X <= 425.1, "Ty last edge exceeds configured max edge.");
+                          for (var i = 0; i + 1 < row.Length; i++)
+                              Assert.IsTrue(row[i + 1].X - row[i].X <= 1000.1,
+                                  "Ty on a rebuilt XC segment exceeds configured max spacing.");
+                      }
+                  }
+
+                  [TestMethod]
+                  public void LowerLeftNotch_AutoDimensionDoesNotChangeFinalMainGeometry()
+                  {
+                      var noDim = Settings(autoDimension: false);
+                      var withDim = Settings(autoDimension: true);
+                      var boundary = LowerLeftNotch();
+                      var a = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, noDim, new VxtLayoutContext());
+                      var b = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, withDim, new VxtLayoutContext());
+                      CollectionAssert.AreEqual(MainKeys(a).ToArray(), MainKeys(b).ToArray(),
+                          "Auto DIM must follow final XC geometry; it must never freeze or alter the notch optimizer.");
+                  }
+
+                  private static VxtSettings Settings(bool autoDimension)
+                      => new VxtSettings
+                      {
+                          OptimizationMode = VxtOptimizationMode.Legacy,
+                          MainDirection = MainDirectionMode.Horizontal,
+                          DrawMain = true,
+                          DrawFurring = true,
+                          DrawHangers = true,
+                          AutoDimension = autoDimension,
+                          DimMain = autoDimension,
+                          DimFurring = autoDimension,
+                          DimHanger = autoDimension,
+                          UseAvoidance = false,
+                          UseDynamicMainBlock = false,
+                          UseDynamicFurringBlock = false,
+                          MainSkipLimit = 0.0,
+                          UseLocalMainAdd = true
+                      };
+
+                  private static double[] MainYsAtX(VxtPreviewPlan plan, double x)
+                      => plan.Lines
+                          .Where(l => l.Kind == PreviewLineKind.Main &&
+                                      Math.Min(l.A.X, l.B.X) <= x + 0.1 &&
+                                      Math.Max(l.A.X, l.B.X) >= x - 0.1)
+                          .Select(l => Math.Round((l.A.Y + l.B.Y) * 0.5, 3))
+                          .Distinct()
+                          .OrderBy(v => v)
+                          .ToArray();
+
+                  private static List<string> FurringKeys(VxtPreviewPlan plan)
+                      => plan.Lines.Where(l => l.Kind == PreviewLineKind.Furring)
+                          .Select(LineKey).OrderBy(x => x, StringComparer.Ordinal).ToList();
+
+                  private static List<string> MainKeys(VxtPreviewPlan plan)
+                      => plan.Lines.Where(l => l.Kind == PreviewLineKind.Main)
+                          .Select(LineKey).OrderBy(x => x, StringComparer.Ordinal).ToList();
+
+                  private static string LineKey(PreviewLine l)
+                  {
+                      var ax = Math.Round(l.A.X, 2); var ay = Math.Round(l.A.Y, 2);
+                      var bx = Math.Round(l.B.X, 2); var by = Math.Round(l.B.Y, 2);
+                      if (ax > bx || (Math.Abs(ax - bx) < 0.01 && ay > by))
+                      { var tx = ax; ax = bx; bx = tx; var ty = ay; ay = by; by = ty; }
+                      return ax.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + "," +
+                             ay.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + "|" +
+                             bx.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + "," +
+                             by.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+                  }
+
+                  private static Boundary2 LowerLeftNotch()
+                      => new Boundary2(new[]
+                      {
+                          new Point2(0, 1500),
+                          new Point2(2500, 1500),
+                          new Point2(2500, 0),
+                          new Point2(6000, 0),
+                          new Point2(6000, 4000),
+                          new Point2(0, 4000)
+                      });
+              }
+          }
+          '''
+          tests = '\n'.join(line[10:] if line.startswith('          ') else line for line in tests.splitlines()) + '\n'
+          test_path = root / 'incubator/hnl-vxt-pro/tests/HNL.VXT.Core.Tests/OrthogonalNotchRegionPlannerTests.cs'
+          assert not test_path.exists(), 'Orthogonal notch tests already exist unexpectedly.'
+          test_path.write_text(tests, encoding='utf-8')
+
+          print('Orthogonal notch region optimizer staged.')
+
+      - name: Commit region optimizer
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add incubator/hnl-vxt-pro/src/HNL.VXT.Core/Preview/VxtConcaveMainPostProcessor.cs \
-                  incubator/hnl-vxt-pro/tests/HNL.VXT.Core.Tests/ConcavePostProcessTests.cs \
-                  incubator/hnl-vxt-pro/tests/HNL.VXT.Core.Tests/LocalMainSettingTests.cs
-          if git diff --cached --quiet; then
-            echo "No patch changes to commit."
-            exit 0
-          fi
-          git commit -m "HNL VXT: restore Lisp-first concave XC rebalance with Auto DIM"
+          git add incubator/hnl-vxt-pro/src/HNL.VXT.Core/Preview/VxtOrthogonalNotchRegionPlanner.cs \
+                  incubator/hnl-vxt-pro/src/HNL.VXT.Core/Preview/VxtConcaveMainPostProcessor.cs \
+                  incubator/hnl-vxt-pro/tests/HNL.VXT.Core.Tests/OrthogonalNotchRegionPlannerTests.cs
+          git commit -m "HNL VXT: optimize orthogonal notch as rectangular XC regions"
           git push origin HEAD:research/vxt-pro-v7-bootstrap
