@@ -7,6 +7,8 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
+using HNL.VXT.UI.Controls;
+using HNL.VXT.UI.ViewModels;
 
 namespace HNL.VXT.UI.Views
 {
@@ -16,10 +18,10 @@ namespace HNL.VXT.UI.Views
 
         /// <summary>
         /// The fixed Layer/DIM card is created by the runtime polish pass after the original
-        /// XAML tree exists. Linetype/Lineweight used editable system ComboBoxes, which caused
-        /// the AutoCAD/Windows white chrome to leak through in dark themes. Convert those
-        /// resource selectors to deterministic HNL dropdowns and re-apply the shared HNL combo
-        /// template after the card exists and again after PaletteSet materializes the visual tree.
+        /// XAML tree exists. Upgrade its raw CAD resource inputs to the friendly selectors already
+        /// exposed by the ViewModel, then apply the deterministic HNL dropdown chrome. The model
+        /// still stores the original ACI/LineWeight values, so Preview/Create and existing settings
+        /// remain compatible.
         /// </summary>
         public static void ApplyLayerDimComboThemeFix(VxtPaletteView view)
         {
@@ -39,11 +41,15 @@ namespace HNL.VXT.UI.Views
             var card = FindFixedLayerDimCard(view);
             if (card == null) return;
 
+            UpgradeFriendlySelectors(view, card);
+
             foreach (var node in WalkLayerDimLogicalTree(card))
             {
                 var combo = node as ComboBox;
                 if (combo == null) continue;
 
+                // Friendly color/lineweight selectors are already deterministic dropdowns.
+                // Remaining editable resource selectors are Linetype controls.
                 if (combo.IsEditable)
                     ConvertResourceComboToHnlDropdown(combo);
 
@@ -54,6 +60,151 @@ namespace HNL.VXT.UI.Views
                 var selected = FindBrush(combo, "AccentSoft", Brushes.DimGray);
                 FixCombo(combo, primary, secondary, input, border, selected);
             }
+        }
+
+        private static void UpgradeFriendlySelectors(VxtPaletteView view, Border card)
+        {
+            var rows = WalkLayerDimLogicalTree(card).OfType<Grid>().ToArray();
+            foreach (var row in rows)
+            {
+                var label = row.Children.OfType<TextBlock>()
+                    .FirstOrDefault(x => Grid.GetColumn(x) == 0);
+                if (label == null) continue;
+
+                if (string.Equals(label.Text, "Màu ACI", StringComparison.Ordinal) ||
+                    string.Equals(label.Text, "Màu", StringComparison.Ordinal))
+                {
+                    UpgradeColorRow(view, row, label);
+                    continue;
+                }
+
+                if (string.Equals(label.Text, "Lineweight", StringComparison.Ordinal) ||
+                    string.Equals(label.Text, "Độ dày nét", StringComparison.Ordinal))
+                {
+                    UpgradeLineweightRow(view, row, label);
+                    continue;
+                }
+
+                if (string.Equals(label.Text, "Linetype", StringComparison.Ordinal))
+                    label.Text = "Kiểu nét";
+            }
+        }
+
+        private static void UpgradeColorRow(VxtPaletteView view, Grid row, TextBlock label)
+        {
+            var numeric = row.Children.OfType<HnlNumericBox>().FirstOrDefault();
+            if (numeric == null)
+            {
+                label.Text = "Màu";
+                return;
+            }
+
+            var rawBinding = BindingOperations.GetBinding(numeric, HnlNumericBox.ValueProperty);
+            var friendlyPath = FriendlyColorProperty(rawBinding?.Path?.Path);
+            if (string.IsNullOrWhiteSpace(friendlyPath)) return;
+
+            var current = ReadFriendlyValue(view.ViewModel, friendlyPath);
+            var combo = new ComboBox
+            {
+                IsEditable = false,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                ItemsSource = BuildOptions(view.ViewModel.QuickColorOptions, current)
+            };
+            combo.SetBinding(ComboBox.SelectedItemProperty, new Binding(friendlyPath)
+            {
+                Mode = BindingMode.TwoWay,
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+            });
+
+            Grid.SetColumn(combo, Grid.GetColumn(numeric));
+            Grid.SetColumnSpan(combo, Grid.GetColumnSpan(numeric));
+            BindingOperations.ClearBinding(numeric, HnlNumericBox.ValueProperty);
+            row.Children.Remove(numeric);
+            row.Children.Add(combo);
+            label.Text = "Màu";
+        }
+
+        private static void UpgradeLineweightRow(VxtPaletteView view, Grid row, TextBlock label)
+        {
+            var combo = row.Children.OfType<ComboBox>().FirstOrDefault();
+            if (combo == null)
+            {
+                label.Text = "Độ dày nét";
+                return;
+            }
+
+            var rawBinding = BindingOperations.GetBinding(combo, ComboBox.TextProperty);
+            var friendlyPath = FriendlyLineweightProperty(rawBinding?.Path?.Path);
+            if (string.IsNullOrWhiteSpace(friendlyPath))
+            {
+                label.Text = "Độ dày nét";
+                return;
+            }
+
+            var current = ReadFriendlyValue(view.ViewModel, friendlyPath);
+            BindingOperations.ClearBinding(combo, ComboBox.TextProperty);
+            BindingOperations.ClearBinding(combo, ComboBox.SelectedItemProperty);
+            combo.IsEditable = false;
+            combo.ItemsSource = BuildOptions(view.ViewModel.LineweightOptions, current);
+            combo.SetBinding(ComboBox.SelectedItemProperty, new Binding(friendlyPath)
+            {
+                Mode = BindingMode.TwoWay,
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+            });
+            label.Text = "Độ dày nét";
+        }
+
+        private static string FriendlyColorProperty(string rawPath)
+        {
+            switch (rawPath)
+            {
+                case nameof(VxtPaletteViewModel.MainColorIndex): return nameof(VxtPaletteViewModel.SelectedMainColor);
+                case nameof(VxtPaletteViewModel.FurringColorIndex): return nameof(VxtPaletteViewModel.SelectedFurringColor);
+                case nameof(VxtPaletteViewModel.HangerColorIndex): return nameof(VxtPaletteViewModel.SelectedHangerColor);
+                case nameof(VxtPaletteViewModel.DimensionColorIndex): return nameof(VxtPaletteViewModel.SelectedDimensionColor);
+                default: return string.Empty;
+            }
+        }
+
+        private static string FriendlyLineweightProperty(string rawPath)
+        {
+            switch (rawPath)
+            {
+                case nameof(VxtPaletteViewModel.MainLineweight): return nameof(VxtPaletteViewModel.SelectedMainLineweight);
+                case nameof(VxtPaletteViewModel.FurringLineweight): return nameof(VxtPaletteViewModel.SelectedFurringLineweight);
+                case nameof(VxtPaletteViewModel.HangerLineweight): return nameof(VxtPaletteViewModel.SelectedHangerLineweight);
+                case nameof(VxtPaletteViewModel.DimensionLineweight): return nameof(VxtPaletteViewModel.SelectedDimensionLineweight);
+                default: return string.Empty;
+            }
+        }
+
+        private static string ReadFriendlyValue(VxtPaletteViewModel vm, string propertyName)
+        {
+            if (vm == null || string.IsNullOrWhiteSpace(propertyName)) return string.Empty;
+            var property = typeof(VxtPaletteViewModel).GetProperty(propertyName);
+            return property?.GetValue(vm, null) as string ?? string.Empty;
+        }
+
+        private static string[] BuildOptions(IEnumerable<string> source, string current)
+        {
+            var values = new List<string>();
+            if (source != null)
+            {
+                foreach (var value in source)
+                {
+                    if (!string.IsNullOrWhiteSpace(value) &&
+                        !values.Any(x => string.Equals(x, value, StringComparison.OrdinalIgnoreCase)))
+                        values.Add(value);
+                }
+            }
+
+            // Preserve legacy/custom ACI and lineweight values. They stay visible and unchanged
+            // until the user deliberately picks one of the compact HNL choices.
+            if (!string.IsNullOrWhiteSpace(current) &&
+                !values.Any(x => string.Equals(x, current, StringComparison.OrdinalIgnoreCase)))
+                values.Insert(0, current);
+
+            return values.ToArray();
         }
 
         private static void ConvertResourceComboToHnlDropdown(ComboBox combo)
