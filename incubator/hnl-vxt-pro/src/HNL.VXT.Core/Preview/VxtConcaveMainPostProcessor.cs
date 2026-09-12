@@ -30,9 +30,10 @@ namespace HNL.VXT.Core.Preview
             if (scopes.Count == 0) return;
 
             // Exact Lisp priority: try to repair a normal single-direction ceiling by shifting
-            // global XC first. Rectangle-region mode owns several independent grids, therefore
-            // each region is kept isolated and uses local fallback only.
-            if (scopes.Count == 1 && settings.MainDirection != MainDirectionMode.RectangleRegions && !settings.AutoDimension)
+            // global XC first, regardless of Auto DIM. Final DIM is rebuilt from the post-processed
+            // geometry by VxtPostProcessDimensionSynchronizer. Rectangle-region mode owns several
+            // independent grids, therefore each region stays isolated and uses local fallback only.
+            if (scopes.Count == 1 && settings.MainDirection != MainDirectionMode.RectangleRegions)
             {
                 var scope = scopes[0];
                 var grid = ExtractMainGrid(plan, scope);

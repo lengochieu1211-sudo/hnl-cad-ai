@@ -16,9 +16,10 @@ namespace HNL.VXT.Core.Tests
         {
             var enabled = new VxtSettings
             {
+                MainDirection = MainDirectionMode.RectangleRegions,
                 DrawFurring = false,
                 DrawHangers = false,
-                AutoDimension = true, // keep global XC grid fixed so the notch needs local fallback
+                AutoDimension = true, // isolated region family intentionally uses local fallback
                 DimMain = false,
                 DimFurring = false,
                 DimHanger = false,

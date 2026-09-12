@@ -12,13 +12,14 @@ namespace HNL.VXT.Core.Tests
     public sealed class ConcavePostProcessTests
     {
         [TestMethod]
-        public void ConcaveBand_RebalancesGlobalXcBeforeAddingLocalBar()
+        public void ConcaveBand_AutoDimensionStillRebalancesGlobalXcBeforeAddingLocalBar()
         {
             var settings = new VxtSettings
             {
                 DrawFurring = false,
                 DrawHangers = false,
-                AutoDimension = false,
+                AutoDimension = true,
+                DimMain = true,
                 UseLocalMainAdd = true
             };
 
@@ -40,6 +41,12 @@ namespace HNL.VXT.Core.Tests
                 Math.Abs((x.A.Y + x.B.Y) * 0.5 - 1900.0) < 0.1);
             Assert.IsTrue(Math.Abs(moved.A.X - moved.B.X) > 5900.0,
                 "Rebalance must remain a global XC, not silently turn into a short local bar.");
+            Assert.IsTrue(plan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&
+                (Math.Abs(d.ExtensionPoint1.Y - 1900.0) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - 1900.0) < 0.1)),
+                "Auto DIM must be rebuilt from the moved global XC at Y=1900.");
+            Assert.IsFalse(plan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&
+                (Math.Abs(d.ExtensionPoint1.Y - 2000.0) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - 2000.0) < 0.1)),
+                "Auto DIM must not retain the pre-rebalance XC coordinate Y=2000.");
         }
 
         [TestMethod]
@@ -47,9 +54,10 @@ namespace HNL.VXT.Core.Tests
         {
             var settings = new VxtSettings
             {
+                MainDirection = MainDirectionMode.RectangleRegions,
                 DrawFurring = false,
                 DrawHangers = true,
-                AutoDimension = true, // preserves the already-built DIM grid; forces local fallback instead of moving it.
+                AutoDimension = true, // RectangleRegions stays isolated and uses local fallback.
                 DimMain = false,
                 DimHanger = false,
                 UseLocalMainAdd = true,
@@ -95,6 +103,7 @@ namespace HNL.VXT.Core.Tests
         {
             var settings = new VxtSettings
             {
+                MainDirection = MainDirectionMode.RectangleRegions,
                 DrawFurring = false,
                 DrawHangers = true,
                 AutoDimension = true,
@@ -162,6 +171,7 @@ namespace HNL.VXT.Core.Tests
         {
             var settings = new VxtSettings
             {
+                MainDirection = MainDirectionMode.RectangleRegions,
                 DrawFurring = false,
                 DrawHangers = false,
                 AutoDimension = true,
