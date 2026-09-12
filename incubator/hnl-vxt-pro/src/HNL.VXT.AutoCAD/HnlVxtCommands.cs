@@ -17,7 +17,15 @@ namespace HNL.VXT.AutoCAD
         public void ShowPalette() => new VxtCommands().ShowPalette();
 
         [CommandMethod("HNLVXTCREATE", CommandFlags.Modal)]
-        public void Create() => VxtLegacyParityCoordinator.ExecuteCreate();
+        public void Create()
+        {
+            // PickFirst parity: if the user already selected closed ceiling polylines in AutoCAD,
+            // consume them as boundaries instead of reporting "Chưa chọn biên trần".
+            if (!VxtSession.Current.HasBoundary)
+                VxtBoundarySelectionAdapter.TryAdoptImpliedSelection(refreshPreview: true, writeMessage: true);
+
+            VxtLegacyParityCoordinator.ExecuteCreate();
+        }
 
         [CommandMethod("HNLVXTBOUNDARY", CommandFlags.Modal)]
         public void SelectBoundary()
@@ -26,6 +34,13 @@ namespace HNL.VXT.AutoCAD
             // boundary-specific XP directions before the new selection is collected.
             VxtSession.Current.BoundaryFurringFromFarEdges.Clear();
             VxtSession.Current.GlobalFurringFromFarEdge = false;
+
+            // AutoCAD PickFirst/preselection is authoritative when it contains at least one valid
+            // closed Polyline. Only fall back to an interactive GetSelection when there is no
+            // reusable ceiling boundary in the current implied selection.
+            if (VxtBoundarySelectionAdapter.TryAdoptImpliedSelection(refreshPreview: true, writeMessage: true))
+                return;
+
             new VxtCommands().SelectBoundary();
         }
 
