@@ -45,7 +45,7 @@ namespace HNL.VXT.Core.Preview
             sourceContext = sourceContext ?? new VxtLayoutContext();
 
             var independent = BuildIndependent(boundaries, settings, sourceContext);
-            var shared = BuildBestShared(boundaries, settings, sourceContext);
+            var shared = BuildBestShared(boundaries, settings, sourceContext, independent?.Directions);
             var chosen = Choose(independent, shared, settings.OptimizationMode);
 
             if (chosen?.Plan?.Quality != null)
@@ -86,11 +86,22 @@ namespace HNL.VXT.Core.Preview
         private static Strategy BuildBestShared(
             IReadOnlyList<Boundary2> boundaries,
             VxtSettings settings,
-            VxtLayoutContext sourceContext)
+            VxtLayoutContext sourceContext,
+            IReadOnlyList<double> referenceDirections)
         {
             Strategy best = null;
             foreach (var angle in BuildSharedCandidates(boundaries, settings))
             {
+                // Compare shared candidates inside the same natural direction family first. The old
+                // flow could pick a cheaper perpendicular shared axis as the single "best shared"
+                // strategy, reject it later in Choose(), and accidentally hide an exact compatible
+                // shared candidate (for example three coaxial 27-degree ceilings).
+                var normalizedAngle = Normalize180(angle);
+                if (referenceDirections != null && referenceDirections.Count > 0 &&
+                    referenceDirections.Any(x =>
+                        AngularDistance180(x, normalizedAngle) > SharedOrientationLimit + AngleTolerance))
+                    continue;
+
                 var parts = new List<VxtPreviewPlan>();
                 var failed = false;
 
