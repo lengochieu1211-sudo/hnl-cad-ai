@@ -51,10 +51,6 @@ namespace HNL.VXT.AutoCAD
                 session.ViewModel?.SetAutoShadowlineFromHost(settings.AutoShadowline);
                 session.Settings = settings;
 
-                // WYSIWYG gate: changing Shadowline changes the Auto construction direction.
-                // Never create geometry from a direction that the user has not yet seen in Preview.
-                // If this create-time legacy question changes the setting, refresh synchronously
-                // and require an explicit second Create after visual confirmation.
                 if (settings.AutoShadowline != previousShadowline && session.HasBoundary)
                 {
                     VxtTransientPreview.Instance.Refresh();
@@ -65,9 +61,6 @@ namespace HNL.VXT.AutoCAD
                 }
             }
 
-            // V6.7.2 ask_each is per selected ceiling Polyline/region and only applies when XP
-            // itself is drawn or XP DIM needs an existing/generated XP direction. Rectangle mode
-            // already asks and stores the XP side immediately for each HCN, so never ask twice.
             if (session.HasBoundary && settings.AskDirectionEachRegion &&
                 settings.MainDirection != MainDirectionMode.RectangleRegions &&
                 (settings.DrawFurring || (settings.AutoDimension && settings.DimFurring)))
@@ -77,12 +70,9 @@ namespace HNL.VXT.AutoCAD
             }
             else if (!settings.AskDirectionEachRegion || settings.MainDirection == MainDirectionMode.RectangleRegions)
             {
-                // Prevent an earlier multi-boundary ask_each selection from leaking into a later run.
                 session.BoundaryFurringFromFarEdges.Clear();
             }
 
-            // The Lisp creates fresh selection sets every run. Clearing them here also prevents
-            // a cancelled selection from silently reusing stale CAD objects from an earlier run.
             session.ManualMainIds = Array.Empty<ObjectId>();
             session.ManualFurringIds = Array.Empty<ObjectId>();
             session.ManualHangerIds = Array.Empty<ObjectId>();
@@ -113,11 +103,9 @@ namespace HNL.VXT.AutoCAD
             if (!settings.DrawMain && settings.DrawHangers &&
                 settings.HangerLayout == HangerLayoutMode.OneSideFollowFurring && session.ManualMainIds.Length > 0)
             {
-                PromptManualHangerDirections(doc, session);
+                PromptManualHangerDirections(doc, session, settings);
             }
 
-            // The original Lisp checks the Ty block globally before it starts any drawing.
-            // If Ty is enabled and its block is missing, XC/XP must not be created partially.
             if (settings.DrawHangers && !HasBlock(doc.Database, settings.HangerBlockName))
             {
                 ed.WriteMessage("\nHNL Tool - VXT Pro: Không tìm thấy Block Ty treo '" +
@@ -125,8 +113,6 @@ namespace HNL.VXT.AutoCAD
                 return;
             }
 
-            // In the special no-boundary legacy path, Enter at the existing-XC selection means
-            // there is no source member to process. Esc has already aborted in TrySelectExisting.
             if (!session.HasBoundary && VxtWorkflowEligibility.IsManualHangerOnlyStart(settings) &&
                 session.ManualMainIds.Length == 0)
             {
@@ -251,9 +237,6 @@ namespace HNL.VXT.AutoCAD
                     ? (wide ? 0.0 : 90.0)
                     : (wide ? 90.0 : 0.0);
 
-                // Legacy must keep exact V6.7.x bbox semantics. Pro Auto, however, can follow a
-                // rotated real polygon axis; use the same preferred-axis resolver as the Pro solver
-                // so the XP side prompt is oriented consistently with the visible Preview.
                 if (settings.OptimizationMode != VxtOptimizationMode.Legacy)
                     return VxtProAutoDirectionPlanBuilder.ResolvePreferredAutoAngle(
                         boundary, settings.AutoShadowline, legacyAngle);
@@ -291,7 +274,7 @@ namespace HNL.VXT.AutoCAD
             }
         }
 
-        private static void PromptManualHangerDirections(Document doc, VxtSession session)
+        private static void PromptManualHangerDirections(Document doc, VxtSession session, VxtSettings settings)
         {
             var hasHorizontal = false;
             var hasVertical = false;
@@ -303,15 +286,14 @@ namespace HNL.VXT.AutoCAD
                     if (entity == null) continue;
                     try
                     {
-                        var ext = entity.GeometricExtents;
-                        var axis = ExistingMemberLayout.FromBounds(new Box2(
-                            ext.MinPoint.X, ext.MinPoint.Y, ext.MaxPoint.X, ext.MaxPoint.Y));
-                        if (axis.IsHorizontal) hasHorizontal = true;
+                        var axis = VxtExistingMemberAxisResolver.Resolve(entity, tr, settings);
+                        if (axis == null) continue;
+                        if (axis.IsHorizontalLike) hasHorizontal = true;
                         else hasVertical = true;
                     }
                     catch
                     {
-                        // Match the Lisp's GetBoundingBox failure tolerance: skip that object.
+                        // Match the Lisp's failure tolerance: skip that object.
                     }
                 }
                 tr.Commit();

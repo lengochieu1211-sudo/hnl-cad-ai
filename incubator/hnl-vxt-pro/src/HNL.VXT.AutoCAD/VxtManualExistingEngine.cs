@@ -69,20 +69,33 @@ namespace HNL.VXT.AutoCAD
             {
                 var entity = TryGetEntity(id, tr);
                 if (entity == null) continue;
-                Box2 box;
-                try { box = ToBox(entity.GeometricExtents); }
-                catch { continue; }
 
-                var axis = ExistingMemberLayout.FromBounds(box);
-                var reverse = axis.IsHorizontal
+                var resolved = VxtExistingMemberAxisResolver.Resolve(entity, tr, settings);
+                if (resolved == null || resolved.Length <= 1e-8) continue;
+
+                var reverse = resolved.IsHorizontalLike
                     ? session.ManualHangerReverseHorizontal
                     : session.ManualHangerReverseVertical;
-                var points = ExistingMemberLayout.HangerPoints(axis, settings, reverse, obstacles);
+                IReadOnlyList<Point2> points;
+                if (settings.OptimizationMode == VxtOptimizationMode.Legacy)
+                {
+                    // Exact V6.7.x behavior: bbox axis + world AABB avoidance.
+                    var legacyAxis = new ExistingMemberLayout.Axis(
+                        resolved.IsHorizontalLike, resolved.Start, resolved.End);
+                    points = ExistingMemberLayout.HangerPoints(legacyAxis, settings, reverse, obstacles);
+                }
+                else
+                {
+                    points = HangerPointsOnResolvedAxis(resolved, settings, reverse, obstacles);
+                }
+
                 foreach (var point in points)
                 {
                     var br = new BlockReference(new Point3d(point.X, point.Y, 0.0), hangerBlockId)
                     {
-                        Rotation = axis.IsHorizontal ? 0.0 : Math.PI * 0.5
+                        Rotation = settings.OptimizationMode == VxtOptimizationMode.Legacy
+                            ? (resolved.IsHorizontalLike ? 0.0 : Math.PI * 0.5)
+                            : resolved.AngleRadians
                     };
                     br.SetDatabaseDefaults(db);
                     VxtCadResources.ApplyByLayer(br, hangerLayerId);
@@ -92,6 +105,30 @@ namespace HNL.VXT.AutoCAD
                 }
             }
             return count;
+        }
+
+        private static IReadOnlyList<Point2> HangerPointsOnResolvedAxis(
+            VxtExistingMemberAxisResolver.ResolvedAxis axis,
+            VxtSettings settings,
+            bool reverse,
+            IEnumerable<Box2> worldObstacles)
+        {
+            var radians = axis.AngleRadians;
+            var localStart = Transform2.ToLocal(axis.Start, radians);
+            var localEnd = Transform2.ToLocal(axis.End, radians);
+            var fixedY = (localStart.Y + localEnd.Y) * 0.5;
+            var minX = Math.Min(localStart.X, localEnd.X);
+            var maxX = Math.Max(localStart.X, localEnd.X);
+            var localAxis = new ExistingMemberLayout.Axis(
+                true,
+                new Point2(minX, fixedY),
+                new Point2(maxX, fixedY));
+            var localObstacles = (worldObstacles ?? Enumerable.Empty<Box2>())
+                .Select(box => ToLocalBox(box, radians))
+                .ToList();
+            var localPoints = ExistingMemberLayout.HangerPoints(
+                localAxis, settings, reverse, localObstacles);
+            return localPoints.Select(point => Transform2.ToWorld(point, radians)).ToArray();
         }
 
         private static int AppendManualDimensions(
@@ -121,7 +158,7 @@ namespace HNL.VXT.AutoCAD
                 foreach (var domain in ResolveDomains(session, settings, boundary, boundaryIndex))
                 {
                     var radians = domain.AngleDegrees * Math.PI / 180.0;
-                    var localBox = ToLocalBox(domain.WorldBounds, radians);
+                    var localBox = domain.LocalBounds;
                     var localMain = FilterLocal(mainCenters, localBox, radians);
                     var localFurring = FilterLocal(furringCenters, localBox, radians);
                     var localHangers = FilterLocal(hangerCenters, localBox, radians);
@@ -182,12 +219,12 @@ namespace HNL.VXT.AutoCAD
 
         private sealed class ManualDomain
         {
-            public ManualDomain(Box2 worldBounds, double angleDegrees)
+            public ManualDomain(Box2 localBounds, double angleDegrees)
             {
-                WorldBounds = worldBounds;
+                LocalBounds = localBounds;
                 AngleDegrees = angleDegrees;
             }
-            public Box2 WorldBounds { get; }
+            public Box2 LocalBounds { get; }
             public double AngleDegrees { get; }
         }
 
@@ -202,16 +239,22 @@ namespace HNL.VXT.AutoCAD
                 session.BoundaryRegionGroups[boundaryIndex].Count > 0)
             {
                 foreach (var region in session.BoundaryRegionGroups[boundaryIndex])
-                    yield return new ManualDomain(region.WorldBounds, region.MainAngleDegrees);
+                {
+                    var radians = region.MainAngleDegrees * Math.PI / 180.0;
+                    yield return new ManualDomain(ToLocalBox(region.WorldBounds, radians), region.MainAngleDegrees);
+                }
                 yield break;
             }
 
             var points = boundary.Vertices;
             var worldBox = Box2.FromPoints(points);
-            yield return new ManualDomain(worldBox, ResolveMainAngle(settings, worldBox));
+            var angle = ResolveMainAngle(settings, worldBox, boundary);
+            var angleRadians = angle * Math.PI / 180.0;
+            var localBounds = Box2.FromPoints(points.Select(point => Transform2.ToLocal(point, angleRadians)));
+            yield return new ManualDomain(localBounds, angle);
         }
 
-        private static double ResolveMainAngle(VxtSettings settings, Box2 worldBox)
+        private static double ResolveMainAngle(VxtSettings settings, Box2 worldBox, Boundary2 boundary)
         {
             switch (settings.MainDirection)
             {
@@ -220,7 +263,11 @@ namespace HNL.VXT.AutoCAD
                 case MainDirectionMode.Auto:
                     var longHorizontal = worldBox.Width >= worldBox.Height;
                     if (!settings.AutoShadowline) longHorizontal = !longHorizontal;
-                    return longHorizontal ? 0.0 : 90.0;
+                    var legacyAngle = longHorizontal ? 0.0 : 90.0;
+                    if (settings.OptimizationMode != VxtOptimizationMode.Legacy && boundary != null)
+                        return NormalizeAngle(VxtProAutoDirectionPlanBuilder.ResolvePreferredAutoAngle(
+                            boundary, settings.AutoShadowline, legacyAngle));
+                    return legacyAngle;
                 default: return 0.0;
             }
         }
