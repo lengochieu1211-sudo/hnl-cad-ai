@@ -1,0 +1,29 @@
+using System.Collections.Generic;
+using HNL.VXT.Core.Geometry;
+
+namespace HNL.VXT.Core.Preview
+{
+    public sealed class VxtPreviewPlan
+    {
+        public List<PreviewLine> Lines { get; } = new List<PreviewLine>();
+        public List<PreviewText> Texts { get; } = new List<PreviewText>();
+
+        // WYSIWYG bridge data. These let the AutoCAD renderer use the same Block/DimStyle
+        // that Create will use without polluting Model Space with temporary DB entities.
+        public List<Point2> HangerPoints { get; } = new List<Point2>();
+        public List<PreviewDimension> Dimensions { get; } = new List<PreviewDimension>();
+
+        public int MainSegmentCount { get; set; }
+        public int FurringSegmentCount { get; set; }
+        public int HangerCount { get; set; }
+        public int DimensionSegmentCount { get; set; }
+
+        // Cumulative Pro finalizer telemetry belongs to the plan geometry, not to one Evaluate call.
+        // Keeping it here makes repeated Quality evaluation idempotent after residual MEP segments
+        // have already been split on an earlier pass.
+        internal int ObstacleSplitFallbackCount { get; set; }
+
+        // Pro-only informational telemetry. Legacy plans leave this null by design.
+        public VxtPlanQuality Quality { get; set; }
+    }
+}

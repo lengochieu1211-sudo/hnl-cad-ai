@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net48;net8.0-windows;net10.0-windows</TargetFrameworks>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>HNL.VXT.UI</RootNamespace>
+    <AssemblyName>HNL.VXT.UI</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\HNL.VXT.Core\HNL.VXT.Core.csproj" />
+    <!-- One canonical HNL logo for both the AutoCAD palette and installer branding. -->
+    <Resource Include="..\..\..\..\public\hnl-logo.png" Link="Assets\HNL-Logo-Official.png" />
+  </ItemGroup>
+</Project>
