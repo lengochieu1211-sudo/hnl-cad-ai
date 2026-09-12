@@ -16,7 +16,7 @@ namespace HNL.VXT.AutoCAD
         [CommandMethod("HVX", CommandFlags.Modal)]
         public void ShowPalette() => new VxtCommands().ShowPalette();
 
-        [CommandMethod("HNLVXTCREATE", CommandFlags.Modal)]
+        [CommandMethod("HNLVXTCREATE", CommandFlags.Modal | CommandFlags.UsePickSet)]
         public void Create()
         {
             // PickFirst parity: if the user already selected closed ceiling polylines in AutoCAD,
@@ -27,7 +27,7 @@ namespace HNL.VXT.AutoCAD
             VxtLegacyParityCoordinator.ExecuteCreate();
         }
 
-        [CommandMethod("HNLVXTBOUNDARY", CommandFlags.Modal)]
+        [CommandMethod("HNLVXTBOUNDARY", CommandFlags.Modal | CommandFlags.UsePickSet)]
         public void SelectBoundary()
         {
             // A fresh Lisp ssget starts a fresh per-ceiling ask_each state. Clear the previous
