@@ -5,7 +5,6 @@ using HNL.VXT.Core.Geometry;
 using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
 using HNL.VXT.UI.ViewModels;
-using Document = Autodesk.AutoCAD.ApplicationServices.Document;
 
 namespace HNL.VXT.AutoCAD
 {
