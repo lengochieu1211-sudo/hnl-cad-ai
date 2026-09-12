@@ -122,7 +122,7 @@ namespace HNL.VXT.AutoCAD
         private static void RunQaStep(
             Autodesk.AutoCAD.EditorInput.Editor ed,
             string commandName,
-            System.Action action)
+            System.Func<string> action)
         {
             try
             {
