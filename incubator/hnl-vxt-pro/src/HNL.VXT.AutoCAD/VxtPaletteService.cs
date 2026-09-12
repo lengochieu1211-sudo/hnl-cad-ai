@@ -18,6 +18,10 @@ namespace HNL.VXT.AutoCAD
             {
                 var bridge = new VxtHostBridge();
                 _view = new VxtPaletteView(bridge);
+
+                // Restore the Lisp-parity concave/notch controls before the compact pass so
+                // their label/input columns are normalized together with the original XƯƠNG CHÍNH rows.
+                VxtPaletteLocalMainUi.Apply(_view);
                 VxtPaletteCompactTuner.Apply(_view, bridge, _view.ViewModel);
                 VxtPaletteRuntimePolish.Apply(_view);
                 VxtPaletteOptimizerUi.Apply(_view);
