@@ -60,11 +60,10 @@ namespace HNL.VXT.AutoCAD
                     // transaction guarantees no helper can accidentally persist drawing changes.
                 }
 
-                session.ViewModel?.SetPreviewStats(
-                    plan.MainSegmentCount,
-                    plan.FurringSegmentCount,
-                    plan.HangerCount,
-                    plan.DimensionSegmentCount);
+                // Measure the exact final post-processed geometry shared with Create. Do not use
+                // builder bookkeeping counters here because concave split/merge and MEP finalizers
+                // may change the actual entity set after those counters were first populated.
+                session.ViewModel?.SetPreviewActualStats(VxtFinalPlanMetrics.FromPlan(plan));
             }
             catch (System.Exception ex)
             {
