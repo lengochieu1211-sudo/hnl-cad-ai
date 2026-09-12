@@ -4,6 +4,7 @@ using HNL.VXT.Core.Geometry;
 using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
 using HNL.VXT.Core.Preview;
+using HNL.VXT.Core.Utilities;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace HNL.VXT.Core.Tests
@@ -54,6 +55,36 @@ namespace HNL.VXT.Core.Tests
                     Assert.IsTrue(gap >= settings.HangerMinSpacing - 1e-8 && gap <= settings.HangerMaxSpacing + 1e-8);
                 }
             }
+        }
+
+        [TestMethod]
+        public void RuntimeGoldenResourcePolicy_PrefersIsoProbeWhenAvailable()
+        {
+            var selected = VxtRuntimeResourcePolicy.SelectMlineProbeLinetype(
+                name => name == VxtRuntimeResourcePolicy.PreferredProbeLinetype ||
+                        name == VxtRuntimeResourcePolicy.ContinuousLinetype);
+
+            Assert.AreEqual(VxtRuntimeResourcePolicy.PreferredProbeLinetype, selected);
+        }
+
+        [TestMethod]
+        public void RuntimeGoldenResourcePolicy_MissingIsoProbeFallsBackToContinuous()
+        {
+            var selected = VxtRuntimeResourcePolicy.SelectMlineProbeLinetype(
+                name => name == VxtRuntimeResourcePolicy.ContinuousLinetype ||
+                        name == VxtRuntimeResourcePolicy.ByLayerLinetype);
+
+            Assert.AreEqual(VxtRuntimeResourcePolicy.ContinuousLinetype, selected,
+                "Runtime Golden must not fail only because ACAD_ISO10W100/acadiso.lin is unavailable on a machine.");
+        }
+
+        [TestMethod]
+        public void RuntimeGoldenResourcePolicy_UsesByLayerAsLastNamedFallback()
+        {
+            var selected = VxtRuntimeResourcePolicy.SelectMlineProbeLinetype(
+                name => name == VxtRuntimeResourcePolicy.ByLayerLinetype);
+
+            Assert.AreEqual(VxtRuntimeResourcePolicy.ByLayerLinetype, selected);
         }
     }
 }
