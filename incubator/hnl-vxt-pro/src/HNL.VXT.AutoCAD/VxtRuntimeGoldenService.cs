@@ -11,6 +11,7 @@ using HNL.VXT.Core.Geometry;
 using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
 using HNL.VXT.Core.Preview;
+using HNL.VXT.Core.Utilities;
 
 namespace HNL.VXT.AutoCAD
 {
@@ -24,7 +25,7 @@ namespace HNL.VXT.AutoCAD
         private const int ExpectedFurring = 14;
         private const int ExpectedHangers = 35;
         private const int ExpectedDimensions = 29;
-        private const string ProbeLinetypeName = "ACAD_ISO10W100";
+        private const string ProbeLinetypeName = VxtRuntimeResourcePolicy.PreferredProbeLinetype;
         private const string MlineStyleDictionaryName = "ACAD_MLINESTYLE";
 
         public static string Run() => RunEngine(VxtOptimizationMode.Legacy);
@@ -71,7 +72,7 @@ namespace HNL.VXT.AutoCAD
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
                     VxtCadResources.EnsureAll(db, tr, settings);
-                    EnsureTemporaryMlineStyle(db, tr, tempMlineStyleName);
+                    EnsureTemporaryMlineStyle(db, tr, tempMlineStyleName, probeLinetypeExistedBefore);
 
                     var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForWrite);
                     if (bt.Has(tempBlockName))
@@ -224,7 +225,11 @@ namespace HNL.VXT.AutoCAD
             return id;
         }
 
-        private static void EnsureTemporaryMlineStyle(Database db, Transaction tr, string styleName)
+        private static void EnsureTemporaryMlineStyle(
+            Database db,
+            Transaction tr,
+            string styleName,
+            bool probeLinetypeExistedBefore)
         {
             var nod = (DBDictionary)tr.GetObject(db.NamedObjectsDictionaryId, OpenMode.ForRead);
             if (!nod.Contains(MlineStyleDictionaryName))
@@ -234,17 +239,30 @@ namespace HNL.VXT.AutoCAD
             if (dict.Contains(styleName))
                 throw new InvalidOperationException("Tên MlineStyle Runtime Golden tạm thời đã tồn tại ngoài dự kiến.");
 
-            try { db.LoadLineTypeFile(ProbeLinetypeName, "acadiso.lin"); }
-            catch (System.Exception ex)
+            // ACAD_ISO10W100 is only a rollback probe, not a functional requirement. Some AutoCAD
+            // installations/language packs do not expose acadiso.lin on the active support path.
+            // Try both Autodesk standard files, then continue with a built-in linetype if absent.
+            if (!probeLinetypeExistedBefore)
             {
-                throw new InvalidOperationException("Runtime Golden không nạp được linetype " + ProbeLinetypeName + ".", ex);
+                try { db.LoadLineTypeFile(ProbeLinetypeName, "acadiso.lin"); }
+                catch
+                {
+                    try { db.LoadLineTypeFile(ProbeLinetypeName, "acad.lin"); }
+                    catch { }
+                }
             }
 
             var ltypes = (LinetypeTable)tr.GetObject(db.LinetypeTableId, OpenMode.ForRead);
-            var byLayerId = ltypes.Has("ByLayer") ? ltypes["ByLayer"] : db.Celtype;
-            var centerId = ltypes.Has(ProbeLinetypeName) ? ltypes[ProbeLinetypeName] : ObjectId.Null;
+            var byLayerId = ltypes.Has(VxtRuntimeResourcePolicy.ByLayerLinetype)
+                ? ltypes[VxtRuntimeResourcePolicy.ByLayerLinetype]
+                : db.Celtype;
+            var selectedCenterName = VxtRuntimeResourcePolicy.SelectMlineProbeLinetype(name => ltypes.Has(name));
+            var centerId = !string.IsNullOrWhiteSpace(selectedCenterName) && ltypes.Has(selectedCenterName)
+                ? ltypes[selectedCenterName]
+                : byLayerId;
+
             if (centerId.IsNull)
-                throw new InvalidOperationException("Runtime Golden nạp linetype nhưng không tìm thấy " + ProbeLinetypeName + ".");
+                throw new InvalidOperationException("Runtime Golden không tìm thấy linetype hệ thống khả dụng cho MlineStyle tạm.");
 
             dict.UpgradeOpen();
             var style = new MlineStyle
@@ -307,6 +325,8 @@ namespace HNL.VXT.AutoCAD
                         throw new InvalidOperationException("Runtime Golden để lại MlineStyle tạm trong DWG.");
                 }
 
+                // Only the optional ISO probe may have been introduced by this test. Built-in
+                // Continuous/ByLayer fallbacks pre-exist and therefore are never treated as leaks.
                 if (!probeLinetypeExistedBefore && ltypes.Has(ProbeLinetypeName))
                     throw new InvalidOperationException("Runtime Golden để lại linetype tạm trong DWG.");
 
