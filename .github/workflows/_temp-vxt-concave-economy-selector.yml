@@ -17,209 +17,35 @@ jobs:
         with:
           ref: research/vxt-pro-v7-bootstrap
           fetch-depth: 0
-
-      - name: Apply concave economy strategy selector
-        shell: python
+      - name: Apply economy selector
+        shell: bash
         run: |
+          python - <<'PY'
+          import base64
           from pathlib import Path
+          dec = lambda x: base64.b64decode(x).decode('utf-8')
+          old = dec("ICAgICAgICAgICAgICAgICAgICB2YXIgb2JzdGFjbGVzID0gVHJhbnNmb3JtTWFpbk9ic3RhY2xlcyhjb250ZXh0LCBzY29wZSwgc2V0dGluZ3MpOwogICAgICAgICAgICAgICAgICAgIExpc3Q8U2VnbWVudDI+IHJlZ2lvblNlZ21lbnRzOwogICAgICAgICAgICAgICAgICAgIGlmIChWeHRPcnRob2dvbmFsTm90Y2hSZWdpb25QbGFubmVyLlRyeUJ1aWxkKAogICAgICAgICAgICAgICAgICAgICAgICBzY29wZS5Qb2x5Z29uLCBzY29wZS5Eb21haW4sIHNldHRpbmdzLCBvYnN0YWNsZXMsIG91dCByZWdpb25TZWdtZW50cykpCiAgICAgICAgICAgICAgICAgICAgewogICAgICAgICAgICAgICAgICAgICAgICBSZWJ1aWxkUmVnaW9uYWxNYWlucyhwbGFuLCBzY29wZSwgcmVnaW9uU2VnbWVudHMsIHNldHRpbmdzLCBvYnN0YWNsZXMpOwogICAgICAgICAgICAgICAgICAgICAgICByZXR1cm47CiAgICAgICAgICAgICAgICAgICAgfQoKICAgICAgICAgICAgICAgICAgICB2YXIgbW92ZWQgPSBSZWJhbGFuY2VHbG9iYWxHcmlkKGdyaWQsIGNoZWNrcywgc2NvcGUuRG9tYWluLCBzZXR0aW5ncywgb2JzdGFjbGVzKTsKICAgICAgICAgICAgICAgICAgICBpZiAoIVNhbWVHcmlkKGdyaWQsIG1vdmVkKSkKICAgICAgICAgICAgICAgICAgICB7CiAgICAgICAgICAgICAgICAgICAgICAgIFJlYnVpbGRHbG9iYWxNYWlucyhwbGFuLCBzY29wZSwgbW92ZWQsIHNldHRpbmdzLCBvYnN0YWNsZXMpOwogICAgICAgICAgICAgICAgICAgICAgICBncmlkID0gbW92ZWQ7CiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgIEFkZExvY2FsUmVwYWlycyhwbGFuLCBzY29wZSwgZ3JpZCwgc2V0dGluZ3MsIG9ic3RhY2xlcyk7")
+          new = dec("ICAgICAgICAgICAgICAgICAgICB2YXIgb2JzdGFjbGVzID0gVHJhbnNmb3JtTWFpbk9ic3RhY2xlcyhjb250ZXh0LCBzY29wZSwgc2V0dGluZ3MpOwogICAgICAgICAgICAgICAgICAgIExpc3Q8U2VnbWVudDI+IHJlZ2lvblNlZ21lbnRzOwogICAgICAgICAgICAgICAgICAgIHZhciBoYXNSZWdpb25hbENhbmRpZGF0ZSA9IFZ4dE9ydGhvZ29uYWxOb3RjaFJlZ2lvblBsYW5uZXIuVHJ5QnVpbGQoCiAgICAgICAgICAgICAgICAgICAgICAgIHNjb3BlLlBvbHlnb24sIHNjb3BlLkRvbWFpbiwgc2V0dGluZ3MsIG9ic3RhY2xlcywgb3V0IHJlZ2lvblNlZ21lbnRzKTsKCiAgICAgICAgICAgICAgICAgICAgLy8gQ2FuZGlkYXRlIEE6IExpc3AtZmlyc3QgZ2xvYmFsIHJlYmFsYW5jZSwgdGhlbiB0aGUgbWluaW11bSBsb2NhbCBmYWxsYmFjayBvbmx5CiAgICAgICAgICAgICAgICAgICAgLy8gd2hlbiB0aGUgZ2xvYmFsIGdyaWQgc3RpbGwgY2Fubm90IHNhdGlzZnkgYSByZWFsIGNvbmNhdmUgYmFuZC4KICAgICAgICAgICAgICAgICAgICB2YXIgbW92ZWQgPSBSZWJhbGFuY2VHbG9iYWxHcmlkKGdyaWQsIGNoZWNrcywgc2NvcGUuRG9tYWluLCBzZXR0aW5ncywgb2JzdGFjbGVzKTsKICAgICAgICAgICAgICAgICAgICBpZiAoIVNhbWVHcmlkKGdyaWQsIG1vdmVkKSkKICAgICAgICAgICAgICAgICAgICB7CiAgICAgICAgICAgICAgICAgICAgICAgIFJlYnVpbGRHbG9iYWxNYWlucyhwbGFuLCBzY29wZSwgbW92ZWQsIHNldHRpbmdzLCBvYnN0YWNsZXMpOwogICAgICAgICAgICAgICAgICAgICAgICBncmlkID0gbW92ZWQ7CiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgIEFkZExvY2FsUmVwYWlycyhwbGFuLCBzY29wZSwgZ3JpZCwgc2V0dGluZ3MsIG9ic3RhY2xlcyk7CgogICAgICAgICAgICAgICAgICAgIC8vIENhbmRpZGF0ZSBCOiBhdXRvbWF0aWMgb3J0aG9nb25hbC1ub3RjaCByZWN0YW5nbGUgZGVjb21wb3NpdGlvbi4gTmV2ZXIgY2hvb3NlCiAgICAgICAgICAgICAgICAgICAgLy8gaXQgYmxpbmRseTogc2FmZXR5IGlzIG1hbmRhdG9yeSwgdGhlbiBjb25zdHJ1Y3Rpb24gZWNvbm9teSB3aW5zIGxleGljb2dyYXBoaWNhbGx5CiAgICAgICAgICAgICAgICAgICAgLy8gYnkgZmV3ZXIgWEMgc2VnbWVudHMsIGZld2VyIFR5LCBzaG9ydGVyIHRvdGFsIFhDLCBhbmQgZmluYWxseSBzcGFjaW5nIG5lYXJlciBNYXguCiAgICAgICAgICAgICAgICAgICAgLy8gWFAgaXMgbm90IHJlYnVpbHQgYnkgZWl0aGVyIGNhbmRpZGF0ZSwgc28gaXRzIG9uZS1zaWRlIGNoYXNlIHBoYXNlIGlzIHByZXNlcnZlZC4KICAgICAgICAgICAgICAgICAgICBpZiAoaGFzUmVnaW9uYWxDYW5kaWRhdGUpCiAgICAgICAgICAgICAgICAgICAgewogICAgICAgICAgICAgICAgICAgICAgICB2YXIgZ2xvYmFsU2NvcmUgPSBTY29yZU1haW5TdHJhdGVneShwbGFuLCBzY29wZSwgc2V0dGluZ3MsIG9ic3RhY2xlcyk7CiAgICAgICAgICAgICAgICAgICAgICAgIHZhciByZWdpb25hbFBsYW4gPSBDbG9uZUZvck1haW5TdHJhdGVneShwbGFuKTsKICAgICAgICAgICAgICAgICAgICAgICAgUmVidWlsZFJlZ2lvbmFsTWFpbnMocmVnaW9uYWxQbGFuLCBzY29wZSwgcmVnaW9uU2VnbWVudHMsIHNldHRpbmdzLCBvYnN0YWNsZXMpOwogICAgICAgICAgICAgICAgICAgICAgICB2YXIgcmVnaW9uYWxTY29yZSA9IFNjb3JlTWFpblN0cmF0ZWd5KHJlZ2lvbmFsUGxhbiwgc2NvcGUsIHNldHRpbmdzLCBvYnN0YWNsZXMpOwogICAgICAgICAgICAgICAgICAgICAgICBpZiAocmVnaW9uYWxTY29yZS5Jc0JldHRlclRoYW4oZ2xvYmFsU2NvcmUpKQogICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29weU1haW5BbmRIYW5nZXJzKHBsYW4sIHJlZ2lvbmFsUGxhbik7CiAgICAgICAgICAgICAgICAgICAgfQ==")
+          helpers = dec("ICAgICAgICBwcml2YXRlIHN0YXRpYyBWeHRQcmV2aWV3UGxhbiBDbG9uZUZvck1haW5TdHJhdGVneShWeHRQcmV2aWV3UGxhbiBzb3VyY2UpCiAgICAgICAgewogICAgICAgICAgICB2YXIgY2xvbmUgPSBuZXcgVnh0UHJldmlld1BsYW4oKTsKICAgICAgICAgICAgY2xvbmUuTGluZXMuQWRkUmFuZ2Uoc291cmNlLkxpbmVzKTsKICAgICAgICAgICAgY2xvbmUuVGV4dHMuQWRkUmFuZ2Uoc291cmNlLlRleHRzKTsKICAgICAgICAgICAgY2xvbmUuSGFuZ2VyUG9pbnRzLkFkZFJhbmdlKHNvdXJjZS5IYW5nZXJQb2ludHMpOwogICAgICAgICAgICBjbG9uZS5EaW1lbnNpb25zLkFkZFJhbmdlKHNvdXJjZS5EaW1lbnNpb25zKTsKICAgICAgICAgICAgY2xvbmUuTWFpblNlZ21lbnRDb3VudCA9IHNvdXJjZS5NYWluU2VnbWVudENvdW50OwogICAgICAgICAgICBjbG9uZS5GdXJyaW5nU2VnbWVudENvdW50ID0gc291cmNlLkZ1cnJpbmdTZWdtZW50Q291bnQ7CiAgICAgICAgICAgIGNsb25lLkhhbmdlckNvdW50ID0gc291cmNlLkhhbmdlckNvdW50OwogICAgICAgICAgICBjbG9uZS5EaW1lbnNpb25TZWdtZW50Q291bnQgPSBzb3VyY2UuRGltZW5zaW9uU2VnbWVudENvdW50OwogICAgICAgICAgICBjbG9uZS5RdWFsaXR5ID0gc291cmNlLlF1YWxpdHk7CiAgICAgICAgICAgIHJldHVybiBjbG9uZTsKICAgICAgICB9CgogICAgICAgIHByaXZhdGUgc3RhdGljIHZvaWQgQ29weU1haW5BbmRIYW5nZXJzKFZ4dFByZXZpZXdQbGFuIHRhcmdldCwgVnh0UHJldmlld1BsYW4gc291cmNlKQogICAgICAgIHsKICAgICAgICAgICAgdGFyZ2V0LkxpbmVzLlJlbW92ZUFsbCh4ID0+IHguS2luZCA9PSBQcmV2aWV3TGluZUtpbmQuTWFpbiB8fCB4LktpbmQgPT0gUHJldmlld0xpbmVLaW5kLkhhbmdlcik7CiAgICAgICAgICAgIHRhcmdldC5MaW5lcy5BZGRSYW5nZShzb3VyY2UuTGluZXMuV2hlcmUoeCA9PgogICAgICAgICAgICAgICAgeC5LaW5kID09IFByZXZpZXdMaW5lS2luZC5NYWluIHx8IHguS2luZCA9PSBQcmV2aWV3TGluZUtpbmQuSGFuZ2VyKSk7CiAgICAgICAgICAgIHRhcmdldC5IYW5nZXJQb2ludHMuQ2xlYXIoKTsKICAgICAgICAgICAgdGFyZ2V0LkhhbmdlclBvaW50cy5BZGRSYW5nZShzb3VyY2UuSGFuZ2VyUG9pbnRzKTsKICAgICAgICAgICAgdGFyZ2V0Lk1haW5TZWdtZW50Q291bnQgPSBzb3VyY2UuTWFpblNlZ21lbnRDb3VudDsKICAgICAgICAgICAgdGFyZ2V0LkhhbmdlckNvdW50ID0gc291cmNlLkhhbmdlckNvdW50OwogICAgICAgIH0KCiAgICAgICAgcHJpdmF0ZSBzdGF0aWMgU3RyYXRlZ3lTY29yZSBTY29yZU1haW5TdHJhdGVneSgKICAgICAgICAgICAgVnh0UHJldmlld1BsYW4gY2FuZGlkYXRlLAogICAgICAgICAgICBTY29wZSBzY29wZSwKICAgICAgICAgICAgVnh0U2V0dGluZ3Mgc2V0dGluZ3MsCiAgICAgICAgICAgIExpc3Q8Qm94Mj4gb2JzdGFjbGVzKQogICAgICAgIHsKICAgICAgICAgICAgdmFyIG1haW5zID0gY2FuZGlkYXRlLkxpbmVzLldoZXJlKHggPT4geC5LaW5kID09IFByZXZpZXdMaW5lS2luZC5NYWluKS5Ub0xpc3QoKTsKICAgICAgICAgICAgdmFyIHZpb2xhdGlvbnMgPSBDb3VudE1haW5Db25zdHJhaW50VmlvbGF0aW9ucyhjYW5kaWRhdGUsIHNjb3BlLCBzZXR0aW5ncyk7CgogICAgICAgICAgICBpZiAoc2V0dGluZ3MuVXNlQXZvaWRhbmNlICYmIG9ic3RhY2xlcyAhPSBudWxsICYmIG9ic3RhY2xlcy5Db3VudCA+IDApCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgIGZvcmVhY2ggKHZhciBsaW5lIGluIG1haW5zKQogICAgICAgICAgICAgICAgewogICAgICAgICAgICAgICAgICAgIHZhciBhID0gVHJhbnNmb3JtMi5Ub0xvY2FsKGxpbmUuQSwgc2NvcGUuUmFkaWFucyk7CiAgICAgICAgICAgICAgICAgICAgdmFyIGIgPSBUcmFuc2Zvcm0yLlRvTG9jYWwobGluZS5CLCBzY29wZS5SYWRpYW5zKTsKICAgICAgICAgICAgICAgICAgICBpZiAoTWF0aC5BYnMoYS5ZIC0gYi5ZKSA+IDAuNSB8fAogICAgICAgICAgICAgICAgICAgICAgICAhTG9jYWxTZWdtZW50Q2xlYXIobmV3IFNlZ21lbnQyKGEsIGIpLCBvYnN0YWNsZXMpKQogICAgICAgICAgICAgICAgICAgICAgICB2aW9sYXRpb25zKys7CiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIH0KCiAgICAgICAgICAgIHZhciB0b3RhbExlbmd0aCA9IG1haW5zLlN1bSh4ID0+IHguQS5EaXN0YW5jZVRvKHguQikpOwogICAgICAgICAgICB2YXIgc3BhY2luZ1NsYWNrID0gQ2FsY3VsYXRlU3BhY2luZ1NsYWNrKGNhbmRpZGF0ZSwgc2NvcGUsIHNldHRpbmdzKTsKICAgICAgICAgICAgcmV0dXJuIG5ldyBTdHJhdGVneVNjb3JlKAogICAgICAgICAgICAgICAgdmlvbGF0aW9ucywKICAgICAgICAgICAgICAgIG1haW5zLkNvdW50LAogICAgICAgICAgICAgICAgY2FuZGlkYXRlLkhhbmdlclBvaW50cy5Db3VudCwKICAgICAgICAgICAgICAgIHRvdGFsTGVuZ3RoLAogICAgICAgICAgICAgICAgc3BhY2luZ1NsYWNrKTsKICAgICAgICB9CgogICAgICAgIHByaXZhdGUgc3RhdGljIGludCBDb3VudE1haW5Db25zdHJhaW50VmlvbGF0aW9ucygKICAgICAgICAgICAgVnh0UHJldmlld1BsYW4gY2FuZGlkYXRlLAogICAgICAgICAgICBTY29wZSBzY29wZSwKICAgICAgICAgICAgVnh0U2V0dGluZ3Mgc2V0dGluZ3MpCiAgICAgICAgewogICAgICAgICAgICB2YXIgdmlvbGF0aW9ucyA9IDA7CiAgICAgICAgICAgIGZvcmVhY2ggKHZhciBjaGVjayBpbiBDb2xsZWN0Q2hlY2tzKHNjb3BlKSkKICAgICAgICAgICAgewogICAgICAgICAgICAgICAgdmFyIHNhbXBsZVggPSAoY2hlY2suQmFuZEEgKyBjaGVjay5CYW5kQikgKiAwLjU7CiAgICAgICAgICAgICAgICB2YXIgeXMgPSBVbmlxdWVTb3J0KGNhbmRpZGF0ZS5MaW5lcwogICAgICAgICAgICAgICAgICAgIC5XaGVyZSh4ID0+IHguS2luZCA9PSBQcmV2aWV3TGluZUtpbmQuTWFpbikKICAgICAgICAgICAgICAgICAgICAuU2VsZWN0KHggPT4gbmV3CiAgICAgICAgICAgICAgICAgICAgewogICAgICAgICAgICAgICAgICAgICAgICBBID0gVHJhbnNmb3JtMi5Ub0xvY2FsKHguQSwgc2NvcGUuUmFkaWFucyksCiAgICAgICAgICAgICAgICAgICAgICAgIEIgPSBUcmFuc2Zvcm0yLlRvTG9jYWwoeC5CLCBzY29wZS5SYWRpYW5zKQogICAgICAgICAgICAgICAgICAgIH0pCiAgICAgICAgICAgICAgICAgICAgLldoZXJlKHggPT4gTWF0aC5BYnMoeC5BLlkgLSB4LkIuWSkgPD0gMC41ICYmCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc2FtcGxlWCA+PSBNYXRoLk1pbih4LkEuWCwgeC5CLlgpIC0gVG9sICYmCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc2FtcGxlWCA8PSBNYXRoLk1heCh4LkEuWCwgeC5CLlgpICsgVG9sKQogICAgICAgICAgICAgICAgICAgIC5TZWxlY3QoeCA9PiAoeC5BLlkgKyB4LkIuWSkgKiAwLjUpCiAgICAgICAgICAgICAgICAgICAgLldoZXJlKHkgPT4geSA+PSBjaGVjay5BIC0gVG9sICYmIHkgPD0gY2hlY2suQiArIFRvbCksIDAuNSk7CiAgICAgICAgICAgICAgICB2aW9sYXRpb25zICs9IENvdW50SW50ZXJ2YWxWaW9sYXRpb25zKHlzLCBjaGVjay5BLCBjaGVjay5CLCBzZXR0aW5ncyk7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgcmV0dXJuIHZpb2xhdGlvbnM7CiAgICAgICAgfQoKICAgICAgICBwcml2YXRlIHN0YXRpYyBpbnQgQ291bnRJbnRlcnZhbFZpb2xhdGlvbnMoCiAgICAgICAgICAgIElSZWFkT25seUxpc3Q8ZG91YmxlPiBncmlkLAogICAgICAgICAgICBkb3VibGUgYSwKICAgICAgICAgICAgZG91YmxlIGIsCiAgICAgICAgICAgIFZ4dFNldHRpbmdzIHNldHRpbmdzKQogICAgICAgIHsKICAgICAgICAgICAgaWYgKGdyaWQgPT0gbnVsbCB8fCBncmlkLkNvdW50ID09IDApIHJldHVybiAxOwogICAgICAgICAgICB2YXIgdmlvbGF0aW9ucyA9IDA7CiAgICAgICAgICAgIHZhciBtYXhFZGdlID0gc2V0dGluZ3MuTWFpbk1heEVkZ2VPZmZzZXQgKyBNYXRoLk1heCgwLjAsIHNldHRpbmdzLk1haW5FZGdlVG9sZXJhbmNlKTsKICAgICAgICAgICAgdmFyIGZpcnN0RWRnZSA9IGdyaWRbMF0gLSBhOwogICAgICAgICAgICB2YXIgbGFzdEVkZ2UgPSBiIC0gZ3JpZFtncmlkLkNvdW50IC0gMV07CiAgICAgICAgICAgIGlmIChmaXJzdEVkZ2UgPCBzZXR0aW5ncy5NYWluTWluRWRnZU9mZnNldCAtIFRvbCB8fCBmaXJzdEVkZ2UgPiBtYXhFZGdlICsgVG9sKSB2aW9sYXRpb25zKys7CiAgICAgICAgICAgIGlmIChsYXN0RWRnZSA8IHNldHRpbmdzLk1haW5NaW5FZGdlT2Zmc2V0IC0gVG9sIHx8IGxhc3RFZGdlID4gbWF4RWRnZSArIFRvbCkgdmlvbGF0aW9ucysrOwogICAgICAgICAgICBmb3IgKHZhciBpID0gMDsgaSArIDEgPCBncmlkLkNvdW50OyBpKyspCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgIHZhciBnYXAgPSBncmlkW2kgKyAxXSAtIGdyaWRbaV07CiAgICAgICAgICAgICAgICBpZiAoZ2FwIDwgc2V0dGluZ3MuTWFpbk1pblNwYWNpbmcgLSBUb2wgfHwgZ2FwID4gc2V0dGluZ3MuTWFpbk1heFNwYWNpbmcgKyBUb2wpCiAgICAgICAgICAgICAgICAgICAgdmlvbGF0aW9ucysrOwogICAgICAgICAgICB9CiAgICAgICAgICAgIHJldHVybiB2aW9sYXRpb25zOwogICAgICAgIH0KCiAgICAgICAgcHJpdmF0ZSBzdGF0aWMgZG91YmxlIENhbGN1bGF0ZVNwYWNpbmdTbGFjaygKICAgICAgICAgICAgVnh0UHJldmlld1BsYW4gY2FuZGlkYXRlLAogICAgICAgICAgICBTY29wZSBzY29wZSwKICAgICAgICAgICAgVnh0U2V0dGluZ3Mgc2V0dGluZ3MpCiAgICAgICAgewogICAgICAgICAgICB2YXIgc2xhY2sgPSAwLjA7CiAgICAgICAgICAgIGZvcmVhY2ggKHZhciBjaGVjayBpbiBDb2xsZWN0Q2hlY2tzKHNjb3BlKSkKICAgICAgICAgICAgewogICAgICAgICAgICAgICAgdmFyIHNhbXBsZVggPSAoY2hlY2suQmFuZEEgKyBjaGVjay5CYW5kQikgKiAwLjU7CiAgICAgICAgICAgICAgICB2YXIgeXMgPSBVbmlxdWVTb3J0KGNhbmRpZGF0ZS5MaW5lcwogICAgICAgICAgICAgICAgICAgIC5XaGVyZSh4ID0+IHguS2luZCA9PSBQcmV2aWV3TGluZUtpbmQuTWFpbikKICAgICAgICAgICAgICAgICAgICAuU2VsZWN0KHggPT4gbmV3CiAgICAgICAgICAgICAgICAgICAgewogICAgICAgICAgICAgICAgICAgICAgICBBID0gVHJhbnNmb3JtMi5Ub0xvY2FsKHguQSwgc2NvcGUuUmFkaWFucyksCiAgICAgICAgICAgICAgICAgICAgICAgIEIgPSBUcmFuc2Zvcm0yLlRvTG9jYWwoeC5CLCBzY29wZS5SYWRpYW5zKQogICAgICAgICAgICAgICAgICAgIH0pCiAgICAgICAgICAgICAgICAgICAgLldoZXJlKHggPT4gTWF0aC5BYnMoeC5BLlkgLSB4LkIuWSkgPD0gMC41ICYmCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc2FtcGxlWCA+PSBNYXRoLk1pbih4LkEuWCwgeC5CLlgpIC0gVG9sICYmCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc2FtcGxlWCA8PSBNYXRoLk1heCh4LkEuWCwgeC5CLlgpICsgVG9sKQogICAgICAgICAgICAgICAgICAgIC5TZWxlY3QoeCA9PiAoeC5BLlkgKyB4LkIuWSkgKiAwLjUpCiAgICAgICAgICAgICAgICAgICAgLldoZXJlKHkgPT4geSA+PSBjaGVjay5BIC0gVG9sICYmIHkgPD0gY2hlY2suQiArIFRvbCksIDAuNSk7CiAgICAgICAgICAgICAgICBmb3IgKHZhciBpID0gMDsgaSArIDEgPCB5cy5Db3VudDsgaSsrKQogICAgICAgICAgICAgICAgICAgIHNsYWNrICs9IE1hdGguTWF4KDAuMCwgc2V0dGluZ3MuTWFpbk1heFNwYWNpbmcgLSAoeXNbaSArIDFdIC0geXNbaV0pKTsKICAgICAgICAgICAgfQogICAgICAgICAgICByZXR1cm4gc2xhY2s7CiAgICAgICAgfQoKICAgICAgICBwcml2YXRlIHNlYWxlZCBjbGFzcyBTdHJhdGVneVNjb3JlCiAgICAgICAgewogICAgICAgICAgICBwdWJsaWMgU3RyYXRlZ3lTY29yZSgKICAgICAgICAgICAgICAgIGludCB2aW9sYXRpb25Db3VudCwKICAgICAgICAgICAgICAgIGludCBtYWluQ291bnQsCiAgICAgICAgICAgICAgICBpbnQgaGFuZ2VyQ291bnQsCiAgICAgICAgICAgICAgICBkb3VibGUgbWFpbkxlbmd0aCwKICAgICAgICAgICAgICAgIGRvdWJsZSBzcGFjaW5nU2xhY2spCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgIFZpb2xhdGlvbkNvdW50ID0gdmlvbGF0aW9uQ291bnQ7CiAgICAgICAgICAgICAgICBNYWluQ291bnQgPSBtYWluQ291bnQ7CiAgICAgICAgICAgICAgICBIYW5nZXJDb3VudCA9IGhhbmdlckNvdW50OwogICAgICAgICAgICAgICAgTWFpbkxlbmd0aCA9IG1haW5MZW5ndGg7CiAgICAgICAgICAgICAgICBTcGFjaW5nU2xhY2sgPSBzcGFjaW5nU2xhY2s7CiAgICAgICAgICAgIH0KCiAgICAgICAgICAgIHB1YmxpYyBpbnQgVmlvbGF0aW9uQ291bnQgeyBnZXQ7IH0KICAgICAgICAgICAgcHVibGljIGludCBNYWluQ291bnQgeyBnZXQ7IH0KICAgICAgICAgICAgcHVibGljIGludCBIYW5nZXJDb3VudCB7IGdldDsgfQogICAgICAgICAgICBwdWJsaWMgZG91YmxlIE1haW5MZW5ndGggeyBnZXQ7IH0KICAgICAgICAgICAgcHVibGljIGRvdWJsZSBTcGFjaW5nU2xhY2sgeyBnZXQ7IH0KCiAgICAgICAgICAgIHB1YmxpYyBib29sIElzQmV0dGVyVGhhbihTdHJhdGVneVNjb3JlIG90aGVyKQogICAgICAgICAgICB7CiAgICAgICAgICAgICAgICBpZiAob3RoZXIgPT0gbnVsbCkgcmV0dXJuIHRydWU7CiAgICAgICAgICAgICAgICBpZiAoVmlvbGF0aW9uQ291bnQgIT0gb3RoZXIuVmlvbGF0aW9uQ291bnQpCiAgICAgICAgICAgICAgICAgICAgcmV0dXJuIFZpb2xhdGlvbkNvdW50IDwgb3RoZXIuVmlvbGF0aW9uQ291bnQ7CiAgICAgICAgICAgICAgICBpZiAoTWFpbkNvdW50ICE9IG90aGVyLk1haW5Db3VudCkKICAgICAgICAgICAgICAgICAgICByZXR1cm4gTWFpbkNvdW50IDwgb3RoZXIuTWFpbkNvdW50OwogICAgICAgICAgICAgICAgaWYgKEhhbmdlckNvdW50ICE9IG90aGVyLkhhbmdlckNvdW50KQogICAgICAgICAgICAgICAgICAgIHJldHVybiBIYW5nZXJDb3VudCA8IG90aGVyLkhhbmdlckNvdW50OwogICAgICAgICAgICAgICAgaWYgKE1hdGguQWJzKE1haW5MZW5ndGggLSBvdGhlci5NYWluTGVuZ3RoKSA+IFRvbCkKICAgICAgICAgICAgICAgICAgICByZXR1cm4gTWFpbkxlbmd0aCA8IG90aGVyLk1haW5MZW5ndGg7CiAgICAgICAgICAgICAgICBpZiAoTWF0aC5BYnMoU3BhY2luZ1NsYWNrIC0gb3RoZXIuU3BhY2luZ1NsYWNrKSA+IFRvbCkKICAgICAgICAgICAgICAgICAgICByZXR1cm4gU3BhY2luZ1NsYWNrIDwgb3RoZXIuU3BhY2luZ1NsYWNrOwogICAgICAgICAgICAgICAgcmV0dXJuIGZhbHNlOwogICAgICAgICAgICB9CiAgICAgICAgfQoK")
+          tanchor = dec("ICAgICAgICBbVGVzdE1ldGhvZF0KICAgICAgICBwdWJsaWMgdm9pZCBGdXJyaW5nX0RlZmF1bHRJc0V4YWN0MTIyMERpdjNfQnV0UmVtYWluc1VzZXJFZGl0YWJsZSgp")
+          tblock = dec("ICAgICAgICBbVGVzdE1ldGhvZF0KICAgICAgICBwdWJsaWMgdm9pZCBPcnRob2dvbmFsTm90Y2hfRWNvbm9teVByZWZlcnNGZXdlck1haW5TZWdtZW50c1RoZW5IYW5nZXJzKCkKICAgICAgICB7CiAgICAgICAgICAgIHZhciBzZXR0aW5ncyA9IG5ldyBWeHRTZXR0aW5ncwogICAgICAgICAgICB7CiAgICAgICAgICAgICAgICBEcmF3RnVycmluZyA9IGZhbHNlLAogICAgICAgICAgICAgICAgRHJhd0hhbmdlcnMgPSB0cnVlLAogICAgICAgICAgICAgICAgQXV0b0RpbWVuc2lvbiA9IHRydWUsCiAgICAgICAgICAgICAgICBEaW1NYWluID0gdHJ1ZSwKICAgICAgICAgICAgICAgIERpbUhhbmdlciA9IHRydWUsCiAgICAgICAgICAgICAgICBVc2VMb2NhbE1haW5BZGQgPSB0cnVlCiAgICAgICAgICAgIH07CgogICAgICAgICAgICB2YXIgbm90Y2ggPSBuZXcgQm91bmRhcnkyKG5ld1tdCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgIG5ldyBQb2ludDIoMCwgMTUwMCksCiAgICAgICAgICAgICAgICBuZXcgUG9pbnQyKDI1MDAsIDE1MDApLAogICAgICAgICAgICAgICAgbmV3IFBvaW50MigyNTAwLCAwKSwKICAgICAgICAgICAgICAgIG5ldyBQb2ludDIoNjAwMCwgMCksCiAgICAgICAgICAgICAgICBuZXcgUG9pbnQyKDYwMDAsIDQwMDApLAogICAgICAgICAgICAgICAgbmV3IFBvaW50MigwLCA0MDAwKQogICAgICAgICAgICB9KTsKCiAgICAgICAgICAgIHZhciBwbGFuID0gVnh0TXVsdGlCb3VuZGFyeVBsYW5CdWlsZGVyLkJ1aWxkKAogICAgICAgICAgICAgICAgbmV3W10geyBub3RjaCB9LCBzZXR0aW5ncywgbmV3IFZ4dExheW91dENvbnRleHQoKSk7CgogICAgICAgICAgICBBc3NlcnQuQXJlRXF1YWwoNSwgcGxhbi5MaW5lcy5Db3VudCh4ID0+IHguS2luZCA9PSBQcmV2aWV3TGluZUtpbmQuTWFpbiksCiAgICAgICAgICAgICAgICAiV2hlbiBnbG9iYWwgcmViYWxhbmNlIGFuZCByZWN0YW5ndWxhciBkZWNvbXBvc2l0aW9uIGFyZSBib3RoIHZhbGlkLCB0aGUgc3RyYXRlZ3kgd2l0aCBmZXdlciBYQyBzZWdtZW50cyBtdXN0IHdpbi4iKTsKICAgICAgICAgICAgQXNzZXJ0LkFyZUVxdWFsKDI5LCBwbGFuLkhhbmdlclBvaW50cy5Db3VudCwKICAgICAgICAgICAgICAgICJBZnRlciBtaW5pbWl6aW5nIFhDLCB0aGUgc2VsZWN0ZWQgc3RyYXRlZ3kgbXVzdCBrZWVwIHRoZSBjb3JyZXNwb25kaW5nIG1pbmltdW0gbGVnYWwgVHkgbGF5b3V0LiIpOwogICAgICAgIH0KCg==")
 
           p = Path('incubator/hnl-vxt-pro/src/HNL.VXT.Core/Preview/VxtConcaveMainPostProcessor.cs')
           s = p.read_text(encoding='utf-8')
-
-          old = '''                    var obstacles = TransformMainObstacles(context, scope, settings);\n                    List<Segment2> regionSegments;\n                    if (VxtOrthogonalNotchRegionPlanner.TryBuild(\n                        scope.Polygon, scope.Domain, settings, obstacles, out regionSegments))\n                    {\n                        RebuildRegionalMains(plan, scope, regionSegments, settings, obstacles);\n                        return;\n                    }\n\n                    var moved = RebalanceGlobalGrid(grid, checks, scope.Domain, settings, obstacles);\n                    if (!SameGrid(grid, moved))\n                    {\n                        RebuildGlobalMains(plan, scope, moved, settings, obstacles);\n                        grid = moved;\n                    }\n                    AddLocalRepairs(plan, scope, grid, settings, obstacles);'''
-
-          new = '''                    var obstacles = TransformMainObstacles(context, scope, settings);\n                    List<Segment2> regionSegments;\n                    var hasRegionalCandidate = VxtOrthogonalNotchRegionPlanner.TryBuild(\n                        scope.Polygon, scope.Domain, settings, obstacles, out regionSegments);\n\n                    // Candidate A: Lisp-first global rebalance, then the minimum local fallback only\n                    // when the global grid still cannot satisfy a real concave band.\n                    var moved = RebalanceGlobalGrid(grid, checks, scope.Domain, settings, obstacles);\n                    if (!SameGrid(grid, moved))\n                    {\n                        RebuildGlobalMains(plan, scope, moved, settings, obstacles);\n                        grid = moved;\n                    }\n                    AddLocalRepairs(plan, scope, grid, settings, obstacles);\n\n                    // Candidate B: automatic orthogonal-notch rectangle decomposition. Never choose\n                    // it blindly: safety is mandatory, then construction economy wins lexicographically\n                    // by fewer XC segments, fewer Ty, shorter total XC, and finally spacing nearer Max.\n                    // XP is not rebuilt by either candidate, so its one-side chase phase is preserved.\n                    if (hasRegionalCandidate)\n                    {\n                        var globalScore = ScoreMainStrategy(plan, scope, settings, obstacles);\n                        var regionalPlan = CloneForMainStrategy(plan);\n                        RebuildRegionalMains(regionalPlan, scope, regionSegments, settings, obstacles);\n                        var regionalScore = ScoreMainStrategy(regionalPlan, scope, settings, obstacles);\n                        if (regionalScore.IsBetterThan(globalScore))\n                            CopyMainAndHangers(plan, regionalPlan);\n                    }'''
-
           assert s.count(old) == 1, f'Expected one strategy block, got {s.count(old)}'
           s = s.replace(old, new, 1)
-
-          anchor = '''        private static void RebuildRegionalMains(\n'''
-          assert s.count(anchor) == 1, 'Could not locate RebuildRegionalMains anchor.'
-          helpers = r'''        private static VxtPreviewPlan CloneForMainStrategy(VxtPreviewPlan source)
-        {
-            var clone = new VxtPreviewPlan();
-            clone.Lines.AddRange(source.Lines);
-            clone.Texts.AddRange(source.Texts);
-            clone.HangerPoints.AddRange(source.HangerPoints);
-            clone.Dimensions.AddRange(source.Dimensions);
-            clone.MainSegmentCount = source.MainSegmentCount;
-            clone.FurringSegmentCount = source.FurringSegmentCount;
-            clone.HangerCount = source.HangerCount;
-            clone.DimensionSegmentCount = source.DimensionSegmentCount;
-            clone.Quality = source.Quality;
-            return clone;
-        }
-
-        private static void CopyMainAndHangers(VxtPreviewPlan target, VxtPreviewPlan source)
-        {
-            target.Lines.RemoveAll(x => x.Kind == PreviewLineKind.Main || x.Kind == PreviewLineKind.Hanger);
-            target.Lines.AddRange(source.Lines.Where(x =>
-                x.Kind == PreviewLineKind.Main || x.Kind == PreviewLineKind.Hanger));
-            target.HangerPoints.Clear();
-            target.HangerPoints.AddRange(source.HangerPoints);
-            target.MainSegmentCount = source.MainSegmentCount;
-            target.HangerCount = source.HangerCount;
-        }
-
-        private static StrategyScore ScoreMainStrategy(
-            VxtPreviewPlan candidate,
-            Scope scope,
-            VxtSettings settings,
-            List<Box2> obstacles)
-        {
-            var mains = candidate.Lines.Where(x => x.Kind == PreviewLineKind.Main).ToList();
-            var violations = CountMainConstraintViolations(candidate, scope, settings);
-
-            if (settings.UseAvoidance && obstacles != null && obstacles.Count > 0)
-            {
-                foreach (var line in mains)
-                {
-                    var a = Transform2.ToLocal(line.A, scope.Radians);
-                    var b = Transform2.ToLocal(line.B, scope.Radians);
-                    if (Math.Abs(a.Y - b.Y) > 0.5 ||
-                        !LocalSegmentClear(new Segment2(a, b), obstacles))
-                        violations++;
-                }
-            }
-
-            var totalLength = mains.Sum(x => x.A.DistanceTo(x.B));
-            var spacingSlack = CalculateSpacingSlack(candidate, scope, settings);
-            return new StrategyScore(
-                violations,
-                mains.Count,
-                candidate.HangerPoints.Count,
-                totalLength,
-                spacingSlack);
-        }
-
-        private static int CountMainConstraintViolations(
-            VxtPreviewPlan candidate,
-            Scope scope,
-            VxtSettings settings)
-        {
-            var violations = 0;
-            foreach (var check in CollectChecks(scope))
-            {
-                var sampleX = (check.BandA + check.BandB) * 0.5;
-                var ys = UniqueSort(candidate.Lines
-                    .Where(x => x.Kind == PreviewLineKind.Main)
-                    .Select(x => new
-                    {
-                        A = Transform2.ToLocal(x.A, scope.Radians),
-                        B = Transform2.ToLocal(x.B, scope.Radians)
-                    })
-                    .Where(x => Math.Abs(x.A.Y - x.B.Y) <= 0.5 &&
-                                sampleX >= Math.Min(x.A.X, x.B.X) - Tol &&
-                                sampleX <= Math.Max(x.A.X, x.B.X) + Tol)
-                    .Select(x => (x.A.Y + x.B.Y) * 0.5)
-                    .Where(y => y >= check.A - Tol && y <= check.B + Tol), 0.5);
-                violations += CountIntervalViolations(ys, check.A, check.B, settings);
-            }
-            return violations;
-        }
-
-        private static int CountIntervalViolations(
-            IReadOnlyList<double> grid,
-            double a,
-            double b,
-            VxtSettings settings)
-        {
-            if (grid == null || grid.Count == 0) return 1;
-            var violations = 0;
-            var maxEdge = settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance);
-            var firstEdge = grid[0] - a;
-            var lastEdge = b - grid[grid.Count - 1];
-            if (firstEdge < settings.MainMinEdgeOffset - Tol || firstEdge > maxEdge + Tol) violations++;
-            if (lastEdge < settings.MainMinEdgeOffset - Tol || lastEdge > maxEdge + Tol) violations++;
-            for (var i = 0; i + 1 < grid.Count; i++)
-            {
-                var gap = grid[i + 1] - grid[i];
-                if (gap < settings.MainMinSpacing - Tol || gap > settings.MainMaxSpacing + Tol)
-                    violations++;
-            }
-            return violations;
-        }
-
-        private static double CalculateSpacingSlack(
-            VxtPreviewPlan candidate,
-            Scope scope,
-            VxtSettings settings)
-        {
-            var slack = 0.0;
-            foreach (var check in CollectChecks(scope))
-            {
-                var sampleX = (check.BandA + check.BandB) * 0.5;
-                var ys = UniqueSort(candidate.Lines
-                    .Where(x => x.Kind == PreviewLineKind.Main)
-                    .Select(x => new
-                    {
-                        A = Transform2.ToLocal(x.A, scope.Radians),
-                        B = Transform2.ToLocal(x.B, scope.Radians)
-                    })
-                    .Where(x => Math.Abs(x.A.Y - x.B.Y) <= 0.5 &&
-                                sampleX >= Math.Min(x.A.X, x.B.X) - Tol &&
-                                sampleX <= Math.Max(x.A.X, x.B.X) + Tol)
-                    .Select(x => (x.A.Y + x.B.Y) * 0.5)
-                    .Where(y => y >= check.A - Tol && y <= check.B + Tol), 0.5);
-                for (var i = 0; i + 1 < ys.Count; i++)
-                    slack += Math.Max(0.0, settings.MainMaxSpacing - (ys[i + 1] - ys[i]));
-            }
-            return slack;
-        }
-
-        private sealed class StrategyScore
-        {
-            public StrategyScore(
-                int violationCount,
-                int mainCount,
-                int hangerCount,
-                double mainLength,
-                double spacingSlack)
-            {
-                ViolationCount = violationCount;
-                MainCount = mainCount;
-                HangerCount = hangerCount;
-                MainLength = mainLength;
-                SpacingSlack = spacingSlack;
-            }
-
-            public int ViolationCount { get; }
-            public int MainCount { get; }
-            public int HangerCount { get; }
-            public double MainLength { get; }
-            public double SpacingSlack { get; }
-
-            public bool IsBetterThan(StrategyScore other)
-            {
-                if (other == null) return true;
-                if (ViolationCount != other.ViolationCount)
-                    return ViolationCount < other.ViolationCount;
-                if (MainCount != other.MainCount)
-                    return MainCount < other.MainCount;
-                if (HangerCount != other.HangerCount)
-                    return HangerCount < other.HangerCount;
-                if (Math.Abs(MainLength - other.MainLength) > Tol)
-                    return MainLength < other.MainLength;
-                if (Math.Abs(SpacingSlack - other.SpacingSlack) > Tol)
-                    return SpacingSlack < other.SpacingSlack;
-                return false;
-            }
-        }
-
-'''
+          anchor = '        private static void RebuildRegionalMains(\n'
+          assert s.count(anchor) == 1, 'Could not locate RebuildRegionalMains anchor'
           s = s.replace(anchor, helpers + anchor, 1)
           p.write_text(s, encoding='utf-8')
 
           p = Path('incubator/hnl-vxt-pro/tests/HNL.VXT.Core.Tests/EconomicLayoutTests.cs')
           s = p.read_text(encoding='utf-8')
-          anchor = '''        [TestMethod]\n        public void Furring_DefaultIsExact1220Div3_ButRemainsUserEditable()'''
-          assert s.count(anchor) == 1, 'Could not locate EconomicLayoutTests insertion anchor.'
-          test = '''        [TestMethod]\n        public void OrthogonalNotch_EconomyPrefersFewerMainSegmentsThenHangers()\n        {\n            var settings = new VxtSettings\n            {\n                DrawFurring = false,\n                DrawHangers = true,\n                AutoDimension = true,\n                DimMain = true,\n                DimHanger = true,\n                UseLocalMainAdd = true\n            };\n\n            var notch = new Boundary2(new[]\n            {\n                new Point2(0, 1500),\n                new Point2(2500, 1500),\n                new Point2(2500, 0),\n                new Point2(6000, 0),\n                new Point2(6000, 4000),\n                new Point2(0, 4000)\n            });\n\n            var plan = VxtMultiBoundaryPlanBuilder.Build(\n                new[] { notch }, settings, new VxtLayoutContext());\n\n            Assert.AreEqual(5, plan.Lines.Count(x => x.Kind == PreviewLineKind.Main),\n                "When global rebalance and rectangular decomposition are both valid, the strategy with fewer XC segments must win.");\n            Assert.AreEqual(29, plan.HangerPoints.Count,\n                "After minimizing XC, the selected strategy must keep the corresponding minimum legal Ty layout.");\n        }\n\n'''
-          s = s.replace(anchor, test + anchor, 1)
+          assert s.count(tanchor) == 1, 'Could not locate EconomicLayoutTests anchor'
+          s = s.replace(tanchor, tblock + tanchor, 1)
           p.write_text(s, encoding='utf-8')
-
-          print('Concave economy strategy selector patch applied.')
-
+          print('Economy selector applied')
+          PY
       - name: Commit economy selector
         shell: bash
         run: |
