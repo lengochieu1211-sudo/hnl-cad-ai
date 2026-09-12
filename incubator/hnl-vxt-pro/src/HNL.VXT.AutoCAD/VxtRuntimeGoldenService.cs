@@ -24,6 +24,8 @@ namespace HNL.VXT.AutoCAD
         private const int ExpectedFurring = 14;
         private const int ExpectedHangers = 35;
         private const int ExpectedDimensions = 29;
+        private const string ProbeLinetypeName = "ACAD_ISO10W100";
+        private const string MlineStyleDictionaryName = "ACAD_MLINESTYLE";
 
         public static string Run() => RunEngine(VxtOptimizationMode.Legacy);
         public static string RunPro() => RunEngine(VxtOptimizationMode.ProEconomy);
@@ -45,6 +47,7 @@ namespace HNL.VXT.AutoCAD
             var sw = Stopwatch.StartNew();
             var tempSuffix = Guid.NewGuid().ToString("N").Substring(0, 10).ToUpperInvariant();
             var tempBlockName = "HNL_VXT_GOLDEN_TY_" + tempSuffix;
+            var tempMlineStyleName = "HNL_VXT_GOLDEN_XP35_" + tempSuffix;
             var settings = BuildGoldenSettings(tempSuffix, tempBlockName, optimizationMode);
             var counts = new Dictionary<string, int>();
 
@@ -64,9 +67,11 @@ namespace HNL.VXT.AutoCAD
                 ValidateCoreContract(plan, settings);
 
                 var db = doc.Database;
+                var probeLinetypeExistedBefore = HasLinetype(db, ProbeLinetypeName);
                 using (var tr = db.TransactionManager.StartTransaction())
                 {
                     VxtCadResources.EnsureAll(db, tr, settings);
+                    EnsureTemporaryMlineStyle(db, tr, tempMlineStyleName);
 
                     var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForWrite);
                     if (bt.Has(tempBlockName))
@@ -134,15 +139,17 @@ namespace HNL.VXT.AutoCAD
                     counts["dimensions"] = dimensions;
                     ValidateCreatedCounts(main, furring, hangers, dimensions);
 
-                    // Intentionally no Commit(): Dispose() aborts all temporary DB changes.
+                    // Intentionally no Commit(): Dispose() aborts all temporary DB changes,
+                    // including layers, block, MlineStyle, model entities and any newly loaded linetype.
                 }
 
-                ValidateRollback(db, settings, tempBlockName);
+                ValidateRollback(db, settings, tempBlockName, tempMlineStyleName, probeLinetypeExistedBefore);
                 sw.Stop();
                 var engineLabel = isPro ? "Pro Economy" : "Legacy Golden";
                 var summary = "PASS " + testName + ": AutoCAD DB API + " + engineLabel + " 6000x4000 OK | XC " +
                               ExpectedMain + " • XP " + ExpectedFurring + " • Ty " + ExpectedHangers +
-                              " • DIM " + ExpectedDimensions + " | " + sw.ElapsedMilliseconds + " ms | DWG không bị thay đổi.";
+                              " • DIM " + ExpectedDimensions + " | Resource rollback OK | " + sw.ElapsedMilliseconds +
+                              " ms | DWG không bị thay đổi.";
                 WriteGoldenLog("PASS", stageName, optimizationMode, summary, counts, null);
                 doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
                 VxtSession.Current.ViewModel?.SetRuntimeGoldenResult(true, summary, null);
@@ -217,16 +224,92 @@ namespace HNL.VXT.AutoCAD
             return id;
         }
 
-        private static void ValidateRollback(Database db, VxtSettings settings, string tempBlockName)
+        private static void EnsureTemporaryMlineStyle(Database db, Transaction tr, string styleName)
+        {
+            var nod = (DBDictionary)tr.GetObject(db.NamedObjectsDictionaryId, OpenMode.ForRead);
+            if (!nod.Contains(MlineStyleDictionaryName))
+                throw new InvalidOperationException("Runtime Golden không tìm thấy ACAD_MLINESTYLE.");
+
+            var dict = (DBDictionary)tr.GetObject(nod.GetAt(MlineStyleDictionaryName), OpenMode.ForRead);
+            if (dict.Contains(styleName))
+                throw new InvalidOperationException("Tên MlineStyle Runtime Golden tạm thời đã tồn tại ngoài dự kiến.");
+
+            try { db.LoadLineTypeFile(ProbeLinetypeName, "acadiso.lin"); }
+            catch (System.Exception ex)
+            {
+                throw new InvalidOperationException("Runtime Golden không nạp được linetype " + ProbeLinetypeName + ".", ex);
+            }
+
+            var ltypes = (LinetypeTable)tr.GetObject(db.LinetypeTableId, OpenMode.ForRead);
+            var byLayerId = ltypes.Has("ByLayer") ? ltypes["ByLayer"] : db.Celtype;
+            var centerId = ltypes.Has(ProbeLinetypeName) ? ltypes[ProbeLinetypeName] : ObjectId.Null;
+            if (centerId.IsNull)
+                throw new InvalidOperationException("Runtime Golden nạp linetype nhưng không tìm thấy " + ProbeLinetypeName + ".");
+
+            dict.UpgradeOpen();
+            var style = new MlineStyle
+            {
+                Name = styleName,
+                Description = "HNL Tool - Runtime Golden rollback probe",
+                StartAngle = Math.PI * 0.5,
+                EndAngle = Math.PI * 0.5
+            };
+            style.Elements.Add(new MlineStyleElement(
+                17.5,
+                Autodesk.AutoCAD.Colors.Color.FromColorIndex(Autodesk.AutoCAD.Colors.ColorMethod.ByAci, 256),
+                byLayerId), true);
+            style.Elements.Add(new MlineStyleElement(
+                0.0,
+                Autodesk.AutoCAD.Colors.Color.FromColorIndex(Autodesk.AutoCAD.Colors.ColorMethod.ByAci, 9),
+                centerId), false);
+            style.Elements.Add(new MlineStyleElement(
+                -17.5,
+                Autodesk.AutoCAD.Colors.Color.FromColorIndex(Autodesk.AutoCAD.Colors.ColorMethod.ByAci, 256),
+                byLayerId), false);
+            dict.SetAt(styleName, style);
+            tr.AddNewlyCreatedDBObject(style, true);
+        }
+
+        private static bool HasLinetype(Database db, string name)
+        {
+            using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+            {
+                var ltypes = (LinetypeTable)tr.GetObject(db.LinetypeTableId, OpenMode.ForRead);
+                var exists = ltypes.Has(name);
+                tr.Commit();
+                return exists;
+            }
+        }
+
+        private static void ValidateRollback(
+            Database db,
+            VxtSettings settings,
+            string tempBlockName,
+            string tempMlineStyleName,
+            bool probeLinetypeExistedBefore)
         {
             using (var tr = db.TransactionManager.StartOpenCloseTransaction())
             {
                 var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                 var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                var ltypes = (LinetypeTable)tr.GetObject(db.LinetypeTableId, OpenMode.ForRead);
+                var nod = (DBDictionary)tr.GetObject(db.NamedObjectsDictionaryId, OpenMode.ForRead);
+
                 if (bt.Has(tempBlockName))
                     throw new InvalidOperationException("Runtime Golden để lại Block tạm trong DWG.");
                 if (lt.Has(settings.MainLayer) || lt.Has(settings.FurringLayer) || lt.Has(settings.HangerLayer) || lt.Has(settings.DimensionLayer))
                     throw new InvalidOperationException("Runtime Golden để lại Layer tạm trong DWG.");
+
+                if (nod.Contains(MlineStyleDictionaryName))
+                {
+                    var dict = (DBDictionary)tr.GetObject(nod.GetAt(MlineStyleDictionaryName), OpenMode.ForRead);
+                    if (dict.Contains(tempMlineStyleName))
+                        throw new InvalidOperationException("Runtime Golden để lại MlineStyle tạm trong DWG.");
+                }
+
+                if (!probeLinetypeExistedBefore && ltypes.Has(ProbeLinetypeName))
+                    throw new InvalidOperationException("Runtime Golden để lại linetype tạm trong DWG.");
+
                 tr.Commit();
             }
         }
