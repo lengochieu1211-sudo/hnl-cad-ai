@@ -35,30 +35,19 @@ namespace HNL.VXT.Core.Tests
             };
             var boundary = SteppedNotch();
 
-            // Raw builder = geometry before the concave/notch post-process.
             var raw = new VxtPreviewPlanBuilder().Build(boundary, settings, context);
             var final = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, settings, context);
 
-            var rawFurring = raw.Lines
-                .Where(x => x.Kind == PreviewLineKind.Furring)
-                .Select(LineKey)
-                .OrderBy(x => x, StringComparer.Ordinal)
-                .ToArray();
-            var finalFurring = final.Lines
-                .Where(x => x.Kind == PreviewLineKind.Furring)
-                .Select(LineKey)
-                .OrderBy(x => x, StringComparer.Ordinal)
-                .ToArray();
+            var rawFurring = raw.Lines.Where(x => x.Kind == PreviewLineKind.Furring)
+                .Select(LineKey).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+            var finalFurring = final.Lines.Where(x => x.Kind == PreviewLineKind.Furring)
+                .Select(LineKey).OrderBy(x => x, StringComparer.Ordinal).ToArray();
 
             CollectionAssert.AreEqual(rawFurring, finalFurring,
                 "Auto notch processing must not restart/re-phase XP per rectangle. XP keeps the original one-side chase direction across the whole ceiling.");
 
             Assert.IsTrue(final.MainSegmentCount > 0,
                 "The final continuity-first notch strategy must retain valid XC geometry.");
-
-            // Local edge XC may legitimately be below MainMinSpacing when it is needed to satisfy
-            // the maximum distance to a nearby notch edge. The hard contract for a notch band is
-            // therefore MaxEdge + MainMaxSpacing coverage, not a blanket global MinSpacing ban.
             AssertHardMaxCoverage(final, boundary, settings);
 
             foreach (var main in final.Lines.Where(x => x.Kind == PreviewLineKind.Main))
@@ -82,13 +71,10 @@ namespace HNL.VXT.Core.Tests
 
                 var expected = layout.Positions(minX)
                     .Where(x => x > minX + 2.0 && x < maxX - 2.0)
-                    .OrderBy(x => x)
-                    .ToArray();
+                    .OrderBy(x => x).ToArray();
                 var actual = final.HangerPoints
                     .Where(p => Math.Abs(p.Y - y) <= 0.1 && p.X >= minX - 0.1 && p.X <= maxX + 0.1)
-                    .Select(p => p.X)
-                    .OrderBy(x => x)
-                    .ToArray();
+                    .Select(p => p.X).OrderBy(x => x).ToArray();
 
                 Assert.AreEqual(expected.Length, actual.Length,
                     "Ty must be recalculated from the final XC segment length after any rebalance/extend/local decision.");
@@ -106,7 +92,7 @@ namespace HNL.VXT.Core.Tests
             {
                 if (xs[i + 1] - xs[i] <= 2.0) continue;
                 var sampleX = (xs[i] + xs[i + 1]) * 0.5;
-                foreach (var interval in PolygonScanline.ClipVertical(boundary.Vertices, sampleX))
+                foreach (var interval in TestPolygonScanline.ClipVertical(boundary.Vertices, sampleX))
                 {
                     var minY = Math.Min(interval.A.Y, interval.B.Y);
                     var maxY = Math.Max(interval.A.Y, interval.B.Y);
@@ -116,9 +102,7 @@ namespace HNL.VXT.Core.Tests
                                        sampleX <= Math.Max(line.A.X, line.B.X) + 0.1)
                         .Select(line => (line.A.Y + line.B.Y) * 0.5)
                         .Where(y => y >= minY - 0.1 && y <= maxY + 0.1)
-                        .Distinct()
-                        .OrderBy(y => y)
-                        .ToArray();
+                        .Distinct().OrderBy(y => y).ToArray();
 
                     Assert.IsTrue(ys.Length > 0, "Every real notch interval must be covered by at least one XC.");
                     Assert.IsTrue(ys[0] - minY <= maxEdge + 0.5,
@@ -135,14 +119,10 @@ namespace HNL.VXT.Core.Tests
         private static Boundary2 SteppedNotch()
             => new Boundary2(new[]
             {
-                new Point2(0.0, 0.0),
-                new Point2(6000.0, 0.0),
-                new Point2(6000.0, 4200.0),
-                new Point2(3000.0, 4200.0),
-                new Point2(3000.0, 3000.0),
-                new Point2(1000.0, 3000.0),
-                new Point2(1000.0, 1800.0),
-                new Point2(0.0, 1800.0)
+                new Point2(0.0, 0.0), new Point2(6000.0, 0.0),
+                new Point2(6000.0, 4200.0), new Point2(3000.0, 4200.0),
+                new Point2(3000.0, 3000.0), new Point2(1000.0, 3000.0),
+                new Point2(1000.0, 1800.0), new Point2(0.0, 1800.0)
             });
 
         private static string LineKey(PreviewLine line)
