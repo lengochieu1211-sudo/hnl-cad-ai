@@ -51,8 +51,16 @@ namespace HNL.VXT.Core.Preview
                 {
                     part = legacyBuilder.Build(boundary, settings, boundaryContext);
                     var angle = ResolveDirectionDegrees(settings, boundary);
-                    VxtConcaveMainPostProcessor.Apply(boundary, settings, boundaryContext, part);
-                    VxtLocalMainSpacingSafety.Apply(boundary, part, settings, angle);
+
+                    // Automatic notch handling is intentionally two-stage:
+                    // 1) global/rebalance/extend with automatic local/regional fallback disabled;
+                    // 2) add only the short local XC that a real MaxEdge/MaxSpacing violation needs.
+                    // This prevents artificial rectangle-region seams while still allowing a local
+                    // edge XC to sit below MainMinSpacing when the nearby wall edge requires it.
+                    VxtConcaveMainPostProcessor.Apply(
+                        boundary, GlobalNotchBaseSettings(settings), boundaryContext, part);
+                    VxtLocalMainSpacingSafety.Apply(
+                        boundary, part, settings, angle, boundaryContext);
                     VxtPostProcessDimensionSynchronizer.Synchronize(
                         boundary, settings, boundaryContext, part, angle);
                 }
@@ -65,10 +73,13 @@ namespace HNL.VXT.Core.Preview
                 else
                 {
                     part = proBuilder.Build(boundary, settings, boundaryContext);
-                    VxtConcaveMainPostProcessor.Apply(boundary, settings, boundaryContext, part);
                     var angle = ResolveDirectionDegrees(settings, boundary);
-                    VxtLocalMainSpacingSafety.Apply(boundary, part, settings, angle);
-                    VxtPostProcessDimensionSynchronizer.Synchronize(boundary, settings, boundaryContext, part, angle);
+                    VxtConcaveMainPostProcessor.Apply(
+                        boundary, GlobalNotchBaseSettings(settings), boundaryContext, part);
+                    VxtLocalMainSpacingSafety.Apply(
+                        boundary, part, settings, angle, boundaryContext);
+                    VxtPostProcessDimensionSynchronizer.Synchronize(
+                        boundary, settings, boundaryContext, part, angle);
                     part.Quality = VxtProPlanQualityEvaluator.Evaluate(
                         part, settings, boundaryContext, angle, 1);
                     VxtProPlanQualityEvaluator.AttachCompactPreviewLabel(boundary, part);
@@ -102,6 +113,18 @@ namespace HNL.VXT.Core.Preview
                 }
             }
             return merged;
+        }
+
+        private static VxtSettings GlobalNotchBaseSettings(VxtSettings settings)
+        {
+            if (settings == null ||
+                !settings.UseLocalMainAdd ||
+                settings.MainDirection == MainDirectionMode.RectangleRegions)
+                return settings;
+
+            var globalOnly = settings.Clone();
+            globalOnly.UseLocalMainAdd = false;
+            return globalOnly;
         }
 
         private static double ResolveDirectionDegrees(VxtSettings settings, Boundary2 boundary)
