@@ -126,33 +126,38 @@ namespace HNL.VXT.AutoCAD
             var previousMode = session.Settings?.MainDirection ?? MainDirectionMode.Horizontal;
             session.Settings = settings.Clone();
 
-            // Interactive CAD pick modes must start immediately and are never debounced.
+            // Modeless WPF callbacks run in AutoCAD application context. Never call Database or
+            // TransientManager preview code directly from here. Interactive modes are queued as
+            // AutoCAD commands so all graphics/database work executes on AutoCAD's command stack.
             if (settings.MainDirection != previousMode)
             {
                 CancelPendingPreview();
                 if (settings.MainDirection == MainDirectionMode.TwoPoints)
                 {
-                    VxtTransientPreview.Instance.Clear();
                     if (session.HasBoundary)
-                        Send("HNLVXTDIRECTION ");
+                        Send("HNLVXTCLEARPREVIEW HNLVXTDIRECTION ");
                     else
+                    {
+                        Send("HNLVXTCLEARPREVIEW ");
                         Write("\nHNL Tool - VXT Pro: Đã chọn hướng 2 điểm. Hãy chọn Polyline biên trần; HNL Tool sẽ yêu cầu 2 điểm ngay sau đó.");
+                    }
                     return;
                 }
                 if (settings.MainDirection == MainDirectionMode.RectangleRegions)
                 {
-                    VxtTransientPreview.Instance.Clear();
                     if (session.HasBoundary)
-                        Send("HNLVXTREGION ");
+                        Send("HNLVXTCLEARPREVIEW HNLVXTREGION ");
                     else
+                    {
+                        Send("HNLVXTCLEARPREVIEW ");
                         Write("\nHNL Tool - VXT Pro: Đã chọn chế độ HCN. Hãy chọn Polyline biên trần; HNL Tool sẽ vào chia vùng ngay sau đó.");
+                    }
                     return;
                 }
             }
 
-            // Numeric typing can produce several Value changes per second. Rebuilding hundreds
-            // of transients for every keystroke caused the palette to feel laggy on large floors.
-            // Coalesce those changes and render only the latest state after 180 ms of quiet time.
+            // Numeric typing can produce several Value changes per second. Coalesce those changes
+            // on the WPF dispatcher, but perform the actual preview inside HNLVXTPREVIEW.
             _pendingPreviewSettings = settings.Clone();
             _previewTimer.Stop();
             _previewTimer.Start();
@@ -161,7 +166,7 @@ namespace HNL.VXT.AutoCAD
         public void ClearPreview()
         {
             CancelPendingPreview();
-            VxtTransientPreview.Instance.Clear();
+            Send("HNLVXTCLEARPREVIEW ");
         }
 
         public string AnalyzeDiagnostics(VxtSettings settings)
@@ -192,32 +197,41 @@ namespace HNL.VXT.AutoCAD
             if (session.ViewModel != null)
                 session.Settings = session.ViewModel.Snapshot();
 
-            // WYSIWYG flush: Preview normally waits 180 ms after typing. If the user changes a
-            // setting and immediately clicks Create, render the exact Snapshot synchronously before
-            // the AutoCAD command is queued. This guarantees the last visible Preview uses the same
-            // settings that HNLVXTCREATE is about to consume.
-            if (session.HasBoundary)
-                VxtTransientPreview.Instance.Refresh();
-
+            // Do not synchronously touch TransientManager from the palette callback. Create consumes
+            // the same latest Snapshot and runs entirely inside the queued AutoCAD command context.
             Send("HNLVXTCREATE ");
         }
 
         private void PreviewTimer_Tick(object sender, EventArgs e)
         {
             _previewTimer.Stop();
+            if (_pendingPreviewSettings == null) return;
+
+            // If a native/interactive AutoCAD command is active, do not inject preview work into it.
+            // Keep only the latest settings and retry after another quiet interval.
+            if (IsCadCommandActive())
+            {
+                _previewTimer.Start();
+                return;
+            }
+
             var settings = _pendingPreviewSettings;
             _pendingPreviewSettings = null;
-            if (settings == null) return;
-
             var session = VxtSession.Current;
             session.Settings = settings.Clone();
-            if (session.HasBoundary) VxtTransientPreview.Instance.Refresh();
+            Send(session.HasBoundary ? "HNLVXTPREVIEW " : "HNLVXTCLEARPREVIEW ");
         }
 
         private void CancelPendingPreview()
         {
             _previewTimer.Stop();
             _pendingPreviewSettings = null;
+        }
+
+        private static bool IsCadCommandActive()
+        {
+            try { return Convert.ToInt32(Application.GetSystemVariable("CMDACTIVE")) != 0; }
+            catch { return false; }
         }
 
         private static string[] ReadSymbolNames(Database db, ObjectId tableId)
