@@ -83,6 +83,15 @@ namespace HNL.VXT.AutoCAD
         [CommandMethod("HNLVXTDIAG", CommandFlags.Modal)]
         public void ExportZip() => new VxtDiagnosticCommands().ExportZip();
 
+        // Internal command-context marshaling used by the modeless WPF palette. These commands
+        // deliberately own all TransientManager work so the palette never manipulates CAD graphics
+        // directly from an application-context DispatcherTimer callback.
+        [CommandMethod("HNLVXTPREVIEW", CommandFlags.Modal)]
+        public void RefreshPreview() => VxtTransientPreview.Instance.Refresh();
+
+        [CommandMethod("HNLVXTCLEARPREVIEW", CommandFlags.Modal)]
+        public void ClearPreview() => VxtTransientPreview.Instance.Clear();
+
         [CommandMethod("HNLVXTGOLDEN", CommandFlags.Modal)]
         public void RuntimeGolden() => VxtRuntimeGoldenService.Run();
 
@@ -94,6 +103,9 @@ namespace HNL.VXT.AutoCAD
 
         [CommandMethod("HNLVXTPROMULTIQA", CommandFlags.Modal)]
         public void RuntimeProMultiQa() => VxtProMultiRuntimeQaService.Run();
+
+        [CommandMethod("HNLVXTSOAKQA", CommandFlags.Modal)]
+        public void RuntimeTransientSoakQa() => VxtTransientSoakQaService.Run();
 
         // One-command replacement for SCRIPT-based QA. Both names intentionally point to the
         // same runner so field verification needs no external .scr file or file chooser.
@@ -109,14 +121,15 @@ namespace HNL.VXT.AutoCAD
             if (doc == null) return;
 
             var ed = doc.Editor;
-            ed.WriteMessage("\nHNL Tool - VXT Pro: Bắt đầu chạy 4 bài kiểm tra Runtime QA...");
+            ed.WriteMessage("\nHNL Tool - VXT Pro: Bắt đầu chạy 5 bài kiểm tra Runtime QA...");
 
             RunQaStep(ed, "HNLVXTGOLDEN", VxtRuntimeGoldenService.Run);
             RunQaStep(ed, "HNLVXTPROGOLDEN", VxtRuntimeGoldenService.RunPro);
             RunQaStep(ed, "HNLVXTPROAUTOQA", VxtProAutoRuntimeQaService.Run);
             RunQaStep(ed, "HNLVXTPROMULTIQA", VxtProMultiRuntimeQaService.Run);
+            RunQaStep(ed, "HNLVXTSOAKQA", VxtTransientSoakQaService.Run);
 
-            ed.WriteMessage("\nHNL Tool - VXT Pro: Đã chạy xong 4 QA. Kiểm tra từng dòng PASS/FAIL phía trên.");
+            ed.WriteMessage("\nHNL Tool - VXT Pro: Đã chạy xong 5 QA. Kiểm tra từng dòng PASS/FAIL phía trên.");
         }
 
         private static void RunQaStep(
