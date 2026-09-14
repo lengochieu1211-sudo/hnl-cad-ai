@@ -9,12 +9,18 @@ namespace HNL.VXT.UI.Views
 {
     public partial class VxtPaletteView
     {
-        static VxtPaletteView()
+        // VxtPaletteView.LegacyCreate.cs already owns the explicit static constructor.
+        // Register this additional class handler through a static field initializer so both
+        // behaviors coexist without introducing a second .cctor.
+        private static readonly bool BuildStampHandlerRegistered = RegisterBuildStampHandler();
+
+        private static bool RegisterBuildStampHandler()
         {
             EventManager.RegisterClassHandler(
                 typeof(VxtPaletteView),
                 FrameworkElement.LoadedEvent,
                 new RoutedEventHandler(OnBuildStampLoaded));
+            return true;
         }
 
         private static void OnBuildStampLoaded(object sender, RoutedEventArgs e)
