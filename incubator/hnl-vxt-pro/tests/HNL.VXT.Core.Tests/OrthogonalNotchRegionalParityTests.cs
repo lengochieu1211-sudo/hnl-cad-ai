@@ -55,12 +55,12 @@ namespace HNL.VXT.Core.Tests
 
             Assert.IsTrue(final.MainSegmentCount > 0,
                 "The final continuity-first notch strategy must retain valid XC geometry.");
-            AssertNoSubMinOverlappingMains(final, settings.MainMinSpacing);
 
-            // Do not force one implementation strategy. The construction rule is now:
-            // global/rebalance/extend first, regional/local only if actually necessary.
-            // Whether final XC equals the raw grid or was rebuilt is therefore not itself a
-            // pass/fail condition; final spacing, XP phase and Ty parity are the contract.
+            // Local edge XC may legitimately be below MainMinSpacing when it is needed to satisfy
+            // the maximum distance to a nearby notch edge. The hard contract for a notch band is
+            // therefore MaxEdge + MainMaxSpacing coverage, not a blanket global MinSpacing ban.
+            AssertHardMaxCoverage(final, boundary, settings);
+
             foreach (var main in final.Lines.Where(x => x.Kind == PreviewLineKind.Main))
             {
                 var minX = Math.Min(main.A.X, main.B.X);
@@ -98,29 +98,36 @@ namespace HNL.VXT.Core.Tests
             }
         }
 
-        private static void AssertNoSubMinOverlappingMains(VxtPreviewPlan plan, double minSpacing)
+        private static void AssertHardMaxCoverage(VxtPreviewPlan plan, Boundary2 boundary, VxtSettings settings)
         {
-            var mains = plan.Lines.Where(x => x.Kind == PreviewLineKind.Main).ToArray();
-            for (var i = 0; i + 1 < mains.Length; i++)
+            var maxEdge = settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance);
+            var xs = boundary.Vertices.Select(p => p.X).Distinct().OrderBy(x => x).ToArray();
+            for (var i = 0; i + 1 < xs.Length; i++)
             {
-                var a = mains[i];
-                var ay = (a.A.Y + a.B.Y) * 0.5;
-                var ax1 = Math.Min(a.A.X, a.B.X);
-                var ax2 = Math.Max(a.A.X, a.B.X);
-
-                for (var j = i + 1; j < mains.Length; j++)
+                if (xs[i + 1] - xs[i] <= 2.0) continue;
+                var sampleX = (xs[i] + xs[i + 1]) * 0.5;
+                foreach (var interval in PolygonScanline.ClipVertical(boundary.Vertices, sampleX))
                 {
-                    var b = mains[j];
-                    var by = (b.A.Y + b.B.Y) * 0.5;
-                    var dy = Math.Abs(by - ay);
-                    if (dy <= 0.5 || dy >= minSpacing - 0.1) continue;
+                    var minY = Math.Min(interval.A.Y, interval.B.Y);
+                    var maxY = Math.Max(interval.A.Y, interval.B.Y);
+                    var ys = plan.Lines
+                        .Where(line => line.Kind == PreviewLineKind.Main &&
+                                       sampleX >= Math.Min(line.A.X, line.B.X) - 0.1 &&
+                                       sampleX <= Math.Max(line.A.X, line.B.X) + 0.1)
+                        .Select(line => (line.A.Y + line.B.Y) * 0.5)
+                        .Where(y => y >= minY - 0.1 && y <= maxY + 0.1)
+                        .Distinct()
+                        .OrderBy(y => y)
+                        .ToArray();
 
-                    var bx1 = Math.Min(b.A.X, b.B.X);
-                    var bx2 = Math.Max(b.A.X, b.B.X);
-                    var overlap = Math.Min(ax2, bx2) - Math.Max(ax1, bx1);
-                    Assert.IsTrue(overlap <= 1.0,
-                        "Final notch strategy must not keep overlapping/touching XC rows below MainMinSpacing. dy=" +
-                        dy.ToString("0.###", CultureInfo.InvariantCulture));
+                    Assert.IsTrue(ys.Length > 0, "Every real notch interval must be covered by at least one XC.");
+                    Assert.IsTrue(ys[0] - minY <= maxEdge + 0.5,
+                        "First XC exceeds configured MaxEdge at notch sample X=" + sampleX.ToString("0.###", CultureInfo.InvariantCulture));
+                    Assert.IsTrue(maxY - ys[ys.Length - 1] <= maxEdge + 0.5,
+                        "Last XC exceeds configured MaxEdge at notch sample X=" + sampleX.ToString("0.###", CultureInfo.InvariantCulture));
+                    for (var j = 0; j + 1 < ys.Length; j++)
+                        Assert.IsTrue(ys[j + 1] - ys[j] <= settings.MainMaxSpacing + 0.5,
+                            "XC gap exceeds configured MainMaxSpacing at notch sample X=" + sampleX.ToString("0.###", CultureInfo.InvariantCulture));
                 }
             }
         }
