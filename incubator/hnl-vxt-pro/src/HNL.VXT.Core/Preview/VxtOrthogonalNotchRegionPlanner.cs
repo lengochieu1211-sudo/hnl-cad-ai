@@ -32,6 +32,12 @@ namespace HNL.VXT.Core.Preview
         {
             mainSegments = null;
             if (polygon == null || polygon.Count < 4 || settings == null) return false;
+
+            // This planner is one of the local/notch fallback mechanisms. The UI switch
+            // "Thêm XC cục bộ cạnh khuyết" must therefore disable regional decomposition too,
+            // not only AddLocalRepairs in the post-processor. When OFF, the caller keeps the
+            // global XC grid/rebalance result and clips it only by the real ceiling polygon.
+            if (!settings.UseLocalMainAdd) return false;
             if (!IsOrthogonal(polygon)) return false;
 
             var regions = BuildMaximalRegions(polygon, domain);
@@ -75,6 +81,14 @@ namespace HNL.VXT.Core.Preview
 
             segments = MergeCollinear(segments);
             if (segments.Count == 0) return false;
+
+            // A rectangular decomposition is only an implementation aid. It must never create
+            // two construction XC rows that overlap/touch in plan while being closer than the
+            // configured minimum XC spacing. The field block14 case exposed a 50 mm stagger at
+            // an artificial region seam. Reject such a regional candidate and let the caller keep
+            // the global/rebalanced strategy instead.
+            if (HasUnsafeConstructionSpacing(segments, settings.MainMinSpacing)) return false;
+
             mainSegments = segments;
             return true;
         }
@@ -90,9 +104,6 @@ namespace HNL.VXT.Core.Preview
             if (regions == null || regions.Count == 0 || sharedGrid == null || sharedGrid.Count == 0)
                 return false;
 
-            // Edge feasibility window is normally <=125 mm with HNL defaults (300..400 + 25 tol).
-            // Search at 1 mm resolution so a real 110 mm floor step can resolve with a 10 mm global
-            // translation instead of forcing a 100 mm phase jump between neighboring rectangles.
             var maxShift = Math.Max(
                 settings.MainBalanceStep,
                 settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance) - settings.MainMinEdgeOffset);
@@ -363,6 +374,36 @@ namespace HNL.VXT.Core.Preview
                     output.Add(new Segment2(new Point2(x1.Value, y), new Point2(x2, y)));
             }
             return output;
+        }
+
+        private static bool HasUnsafeConstructionSpacing(
+            IReadOnlyList<Segment2> segments,
+            double minSpacing)
+        {
+            if (segments == null || segments.Count < 2 || minSpacing <= Tol) return false;
+
+            for (var i = 0; i + 1 < segments.Count; i++)
+            {
+                var a = segments[i];
+                var ay = (a.A.Y + a.B.Y) * 0.5;
+                var ax1 = Math.Min(a.A.X, a.B.X);
+                var ax2 = Math.Max(a.A.X, a.B.X);
+
+                for (var j = i + 1; j < segments.Count; j++)
+                {
+                    var b = segments[j];
+                    var by = (b.A.Y + b.B.Y) * 0.5;
+                    var dy = Math.Abs(by - ay);
+                    if (dy <= Tol || dy >= minSpacing - Tol) continue;
+
+                    var bx1 = Math.Min(b.A.X, b.B.X);
+                    var bx2 = Math.Max(b.A.X, b.B.X);
+                    var overlapOrTouch = Math.Min(ax2, bx2) >= Math.Max(ax1, bx1) - Tol;
+                    if (overlapOrTouch) return true;
+                }
+            }
+
+            return false;
         }
 
         private static List<double> UniqueSort(IEnumerable<double> values)
