@@ -1,7 +1,7 @@
 using System;
 using System.Drawing;
-using System.Reflection;
 using Autodesk.AutoCAD.Windows;
+using HNL.VXT.UI.Infrastructure;
 using HNL.VXT.UI.Views;
 
 namespace HNL.VXT.AutoCAD
@@ -34,9 +34,7 @@ namespace HNL.VXT.AutoCAD
                 VxtPaletteVisualIdentity.Apply(_view);
                 VxtSession.Current.ViewModel = _view.ViewModel;
 
-                _palette = new PaletteSet(
-                    $"HNL Tool - VXT Pro v7.0.0-beta.1 • Build {GetBuildDateTime()}",
-                    PaletteGuid)
+                _palette = new PaletteSet(VxtBuildInfo.PaletteTitle, PaletteGuid)
                 {
                     Style = PaletteSetStyles.ShowAutoHideButton |
                             PaletteSetStyles.ShowCloseButton |
@@ -51,22 +49,6 @@ namespace HNL.VXT.AutoCAD
             }
 
             _palette.Visible = true;
-        }
-
-        private static string GetBuildDateTime()
-        {
-            foreach (var attribute in typeof(VxtPaletteService).Assembly.GetCustomAttributes(typeof(AssemblyMetadataAttribute), false))
-            {
-                var metadata = attribute as AssemblyMetadataAttribute;
-                if (metadata != null &&
-                    string.Equals(metadata.Key, "HNLBuildDateTime", StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrWhiteSpace(metadata.Value))
-                {
-                    return metadata.Value;
-                }
-            }
-
-            return "--/--/---- --:--";
         }
     }
 }
