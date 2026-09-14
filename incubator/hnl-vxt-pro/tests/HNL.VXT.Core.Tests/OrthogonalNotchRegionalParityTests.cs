@@ -13,7 +13,7 @@ namespace HNL.VXT.Core.Tests
     public sealed class OrthogonalNotchRegionalParityTests
     {
         [TestMethod]
-        public void OrthogonalNotch_RegionalMainRebuildRedistributesHangersAndPreservesOneSideFurringPhase()
+        public void OrthogonalNotch_FinalMainStrategyRedistributesHangersAndPreservesOneSideFurringPhase()
         {
             var settings = new VxtSettings
             {
@@ -51,13 +51,16 @@ namespace HNL.VXT.Core.Tests
                 .ToArray();
 
             CollectionAssert.AreEqual(rawFurring, finalFurring,
-                "Auto notch-region processing must not restart/re-phase XP per rectangle. XP keeps the original one-side chase direction across the whole ceiling.");
+                "Auto notch processing must not restart/re-phase XP per rectangle. XP keeps the original one-side chase direction across the whole ceiling.");
 
-            var rawMain = raw.Lines.Where(x => x.Kind == PreviewLineKind.Main).Select(LineKey).OrderBy(x => x).ToArray();
-            var finalMain = final.Lines.Where(x => x.Kind == PreviewLineKind.Main).Select(LineKey).OrderBy(x => x).ToArray();
-            Assert.IsFalse(rawMain.SequenceEqual(finalMain),
-                "Fixture must exercise the orthogonal notch regional XC rebuild, not the untouched raw grid.");
+            Assert.IsTrue(final.MainSegmentCount > 0,
+                "The final continuity-first notch strategy must retain valid XC geometry.");
+            AssertNoSubMinOverlappingMains(final, settings.MainMinSpacing);
 
+            // Do not force one implementation strategy. The construction rule is now:
+            // global/rebalance/extend first, regional/local only if actually necessary.
+            // Whether final XC equals the raw grid or was rebuilt is therefore not itself a
+            // pass/fail condition; final spacing, XP phase and Ty parity are the contract.
             foreach (var main in final.Lines.Where(x => x.Kind == PreviewLineKind.Main))
             {
                 var minX = Math.Min(main.A.X, main.B.X);
@@ -75,7 +78,7 @@ namespace HNL.VXT.Core.Tests
                     settings.HangerBalanceStep,
                     MainLayoutMode.BalancedTwoEnds);
                 Assert.IsNotNull(layout,
-                    "Every final regional XC must have a valid Ty layout for its actual segment length.");
+                    "Every final XC must have a valid Ty layout for its actual segment length.");
 
                 var expected = layout.Positions(minX)
                     .Where(x => x > minX + 2.0 && x < maxX - 2.0)
@@ -88,10 +91,37 @@ namespace HNL.VXT.Core.Tests
                     .ToArray();
 
                 Assert.AreEqual(expected.Length, actual.Length,
-                    "Ty must be recalculated after XC is split/merged by the notch regions; it must not retain the pre-process hanger count.");
+                    "Ty must be recalculated from the final XC segment length after any rebalance/extend/local decision.");
                 for (var i = 0; i < expected.Length; i++)
                     Assert.AreEqual(expected[i], actual[i], 0.1,
                         "Ty position must follow SmartLayout1D of the final XC segment length.");
+            }
+        }
+
+        private static void AssertNoSubMinOverlappingMains(VxtPreviewPlan plan, double minSpacing)
+        {
+            var mains = plan.Lines.Where(x => x.Kind == PreviewLineKind.Main).ToArray();
+            for (var i = 0; i + 1 < mains.Length; i++)
+            {
+                var a = mains[i];
+                var ay = (a.A.Y + a.B.Y) * 0.5;
+                var ax1 = Math.Min(a.A.X, a.B.X);
+                var ax2 = Math.Max(a.A.X, a.B.X);
+
+                for (var j = i + 1; j < mains.Length; j++)
+                {
+                    var b = mains[j];
+                    var by = (b.A.Y + b.B.Y) * 0.5;
+                    var dy = Math.Abs(by - ay);
+                    if (dy <= 0.5 || dy >= minSpacing - 0.1) continue;
+
+                    var bx1 = Math.Min(b.A.X, b.B.X);
+                    var bx2 = Math.Max(b.A.X, b.B.X);
+                    var overlap = Math.Min(ax2, bx2) - Math.Max(ax1, bx1);
+                    Assert.IsTrue(overlap <= 1.0,
+                        "Final notch strategy must not keep overlapping/touching XC rows below MainMinSpacing. dy=" +
+                        dy.ToString("0.###", CultureInfo.InvariantCulture));
+                }
             }
         }
 
