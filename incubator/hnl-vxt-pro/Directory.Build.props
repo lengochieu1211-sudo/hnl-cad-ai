@@ -12,5 +12,11 @@
     <VersionSuffix>beta.1</VersionSuffix>
     <AssemblyVersion>7.0.0.7</AssemblyVersion>
     <FileVersion>7.0.0.7</FileVersion>
+    <!-- Stable build identity shown in the AutoCAD palette title. GitHub runners use UTC,
+         so convert to HNL local build time (UTC+7). A caller may override HnlBuildDateTime. -->
+    <HnlBuildDateTime Condition="'$(HnlBuildDateTime)' == ''">$([System.DateTime]::UtcNow.AddHours(7).ToString('dd/MM/yyyy HH:mm'))</HnlBuildDateTime>
   </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="HNLBuildDateTime" Value="$(HnlBuildDateTime)" />
+  </ItemGroup>
 </Project>
