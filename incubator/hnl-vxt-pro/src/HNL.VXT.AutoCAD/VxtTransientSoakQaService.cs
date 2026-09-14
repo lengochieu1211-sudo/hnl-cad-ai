@@ -9,7 +9,9 @@ namespace HNL.VXT.AutoCAD
     /// <summary>
     /// Real-host stress check for the modeless Preview transient lifecycle. The test repeatedly
     /// adds and erases lightweight drawables through the exact VxtTransientPreview code path and
-    /// verifies that no tracked drawable survives a successful erase cycle. It never commits DWG data.
+    /// verifies that no active drawable survives a successful erase cycle. Successfully erased
+    /// wrappers must enter the delayed-disposal quarantine instead of being destroyed immediately.
+    /// It never commits DWG data.
     /// </summary>
     internal static class VxtTransientSoakQaService
     {
@@ -32,12 +34,20 @@ namespace HNL.VXT.AutoCAD
                         "Soak QA chỉ chạy " + completed + "/" + Cycles + " vòng.");
                 if (preview.TrackedDrawableCount != 0)
                     throw new InvalidOperationException(
-                        "Còn " + preview.TrackedDrawableCount + " transient được theo dõi sau Soak QA.");
+                        "Còn " + preview.TrackedDrawableCount + " transient đang hoạt động sau Soak QA.");
+
+                var expectedQuarantine = Cycles * 3;
+                if (preview.RetiredDrawableCount < expectedQuarantine)
+                    throw new InvalidOperationException(
+                        "Quarantine chỉ giữ " + preview.RetiredDrawableCount + "/" + expectedQuarantine +
+                        " wrapper; có nguy cơ Dispose quá sớm sau EraseTransient.");
 
                 if (restorePreview) preview.Refresh();
 
                 var summary = "PASS Transient Soak QA: " + Cycles +
-                              " vòng Add/Erase x 3 drawable | tracked=0 | Preview chạy trong command context.";
+                              " vòng Add/Erase x 3 drawable | active=0 | quarantine=" +
+                              preview.RetiredDrawableCount +
+                              " | delayed-dispose guard ON | Preview chạy trong command context.";
                 WriteLog("PASS", summary);
                 doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
                 return summary;
