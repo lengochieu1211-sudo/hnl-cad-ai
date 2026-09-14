@@ -293,7 +293,7 @@ namespace HNL.VXT.Core.Preview
 
             if (obstacles.Count == 0 || optimized) return ideal;
 
-            return SmartLayout1D.AdjustGrid(
+            return LegacyGridAvoidance.AdjustGrid(
                     ideal,
                     obstacles,
                     minLimit,
@@ -332,7 +332,7 @@ namespace HNL.VXT.Core.Preview
             var ideal = BuildFixedPositions(domain.MinX, domain.MaxX, spacing, offset, minEdge: 0.0);
             if (!settings.UseAvoidance || intervals.Count == 0 || optimized) return ideal;
 
-            return SmartLayout1D.AdjustGrid(
+            return LegacyGridAvoidance.AdjustGrid(
                 ideal,
                 intervals,
                 domain.MinX,
@@ -379,7 +379,7 @@ namespace HNL.VXT.Core.Preview
             IReadOnlyList<double> final = ideal;
             if (settings.UseAvoidance && rowIntervals.Count > 0)
             {
-                final = SmartLayout1D.AdjustGrid(
+                final = LegacyGridAvoidance.AdjustGrid(
                     ideal,
                     rowIntervals,
                     minX,
