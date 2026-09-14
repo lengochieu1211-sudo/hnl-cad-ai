@@ -126,9 +126,6 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        // Exact V6.7.2 workflow gate: normal drawing needs a selected ceiling boundary, but
-        // XC off + XP off + Ty on + Auto DIM off may start without a boundary because Create
-        // then asks for existing XC and distributes Ty on those members.
         public bool CanCreate => VxtWorkflowEligibility.CanStartCreate(HasBoundary, _settings);
 
         public string BoundaryStatus { get => _boundaryStatus; private set => Set(ref _boundaryStatus, value); }
@@ -138,7 +135,6 @@ namespace HNL.VXT.UI.ViewModels
         public string MainEquipmentStatus { get => _mainEquipmentStatus; private set => Set(ref _mainEquipmentStatus, value); }
         public string FurringEquipmentStatus { get => _furringEquipmentStatus; private set => Set(ref _furringEquipmentStatus, value); }
 
-        // XƯƠNG CHÍNH
         public bool DrawMain { get => _settings.DrawMain; set => SetSetting(ref _settings.DrawMain, value); }
         public bool UseDynamicMainBlock { get => _settings.UseDynamicMainBlock; set => SetSetting(ref _settings.UseDynamicMainBlock, value); }
         public string MainBlockName { get => _settings.MainBlockName; set => SetStringSetting(() => _settings.MainBlockName, v => _settings.MainBlockName = v, value); }
@@ -179,14 +175,12 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        // XƯƠNG PHỤ
         public bool DrawFurring { get => _settings.DrawFurring; set => SetSetting(ref _settings.DrawFurring, value); }
         public bool UseDynamicFurringBlock { get => _settings.UseDynamicFurringBlock; set => SetSetting(ref _settings.UseDynamicFurringBlock, value); }
         public string FurringBlockName { get => _settings.FurringBlockName; set => SetStringSetting(() => _settings.FurringBlockName, v => _settings.FurringBlockName = v, value); }
         public double FurringSpacing { get => _settings.FurringSpacing; set => SetNumberSetting(() => _settings.FurringSpacing, v => _settings.FurringSpacing = v, value); }
         public bool AskDirectionEachRegion { get => _settings.AskDirectionEachRegion; set => SetSetting(ref _settings.AskDirectionEachRegion, value); }
 
-        // TY TREO
         public bool DrawHangers { get => _settings.DrawHangers; set => SetSetting(ref _settings.DrawHangers, value); }
         public string HangerBlockName { get => _settings.HangerBlockName; set => SetStringSetting(() => _settings.HangerBlockName, v => _settings.HangerBlockName = v, value); }
         public double HangerMinSpacing { get => _settings.HangerMinSpacing; set => SetNumberSetting(() => _settings.HangerMinSpacing, v => _settings.HangerMinSpacing = v, value); }
@@ -207,32 +201,18 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        // NÉ THIẾT BỊ
         public bool UseAvoidance { get => _settings.UseAvoidance; set => SetSetting(ref _settings.UseAvoidance, value); }
         public bool ShiftAllForAvoidance { get => _settings.ShiftAllForAvoidance; set => SetSetting(ref _settings.ShiftAllForAvoidance, value); }
         public double ClearanceDistance { get => _settings.ClearanceDistance; set => SetNumberSetting(() => _settings.ClearanceDistance, v => _settings.ClearanceDistance = v, value); }
 
-        // DIM
         public bool AutoDimension { get => _settings.AutoDimension; set => SetSetting(ref _settings.AutoDimension, value); }
         public bool DimMain { get => _settings.DimMain; set => SetSetting(ref _settings.DimMain, value); }
         public bool DimFurring { get => _settings.DimFurring; set => SetSetting(ref _settings.DimFurring, value); }
         public bool DimHanger { get => _settings.DimHanger; set => SetSetting(ref _settings.DimHanger, value); }
 
-        public string SelectedMainDimPosition
-        {
-            get => DimensionPositionToText(_settings.MainDimPosition);
-            set => SetDimensionPosition(DimensionTarget.Main, TextToDimensionPosition(value));
-        }
-        public string SelectedFurringDimPosition
-        {
-            get => DimensionPositionToText(_settings.FurringDimPosition);
-            set => SetDimensionPosition(DimensionTarget.Furring, TextToDimensionPosition(value));
-        }
-        public string SelectedHangerDimPosition
-        {
-            get => DimensionPositionToText(_settings.HangerDimPosition);
-            set => SetDimensionPosition(DimensionTarget.Hanger, TextToDimensionPosition(value));
-        }
+        public string SelectedMainDimPosition { get => DimensionPositionToText(_settings.MainDimPosition); set => SetDimensionPosition(DimensionTarget.Main, TextToDimensionPosition(value)); }
+        public string SelectedFurringDimPosition { get => DimensionPositionToText(_settings.FurringDimPosition); set => SetDimensionPosition(DimensionTarget.Furring, TextToDimensionPosition(value)); }
+        public string SelectedHangerDimPosition { get => DimensionPositionToText(_settings.HangerDimPosition); set => SetDimensionPosition(DimensionTarget.Hanger, TextToDimensionPosition(value)); }
 
         public double DimensionDistance { get => _settings.DimensionDistance; set => SetNumberSetting(() => _settings.DimensionDistance, v => _settings.DimensionDistance = v, value); }
         public double DimensionSpacing { get => _settings.DimensionSpacing; set => SetNumberSetting(() => _settings.DimensionSpacing, v => _settings.DimensionSpacing = v, value); }
@@ -246,9 +226,7 @@ namespace HNL.VXT.UI.ViewModels
         {
             BoundaryStatus = display;
             HasBoundary = hasBoundary;
-            PreviewStatus = hasBoundary
-                ? "Xem trước đang bật • thay đổi thông số để cập nhật."
-                : "Chọn Polyline kín để bắt đầu xem trước.";
+            PreviewStatus = hasBoundary ? "Xem trước đang bật • thay đổi thông số để cập nhật." : "Chọn Polyline kín để bắt đầu xem trước.";
         }
 
         public void SetDirection(double degrees)
@@ -267,18 +245,9 @@ namespace HNL.VXT.UI.ViewModels
             if (string.IsNullOrWhiteSpace(blockName)) return;
             switch (target)
             {
-                case BlockTarget.Main:
-                    _settings.MainBlockName = blockName;
-                    OnPropertyChanged(nameof(MainBlockName));
-                    break;
-                case BlockTarget.Furring:
-                    _settings.FurringBlockName = blockName;
-                    OnPropertyChanged(nameof(FurringBlockName));
-                    break;
-                case BlockTarget.Hanger:
-                    _settings.HangerBlockName = blockName;
-                    OnPropertyChanged(nameof(HangerBlockName));
-                    break;
+                case BlockTarget.Main: _settings.MainBlockName = blockName; OnPropertyChanged(nameof(MainBlockName)); break;
+                case BlockTarget.Furring: _settings.FurringBlockName = blockName; OnPropertyChanged(nameof(FurringBlockName)); break;
+                case BlockTarget.Hanger: _settings.HangerBlockName = blockName; OnPropertyChanged(nameof(HangerBlockName)); break;
             }
             MarkCustom();
         }
@@ -298,18 +267,9 @@ namespace HNL.VXT.UI.ViewModels
         {
             switch (target)
             {
-                case DimensionTarget.Main:
-                    _settings.MainDimPosition = position;
-                    OnPropertyChanged(nameof(SelectedMainDimPosition));
-                    break;
-                case DimensionTarget.Furring:
-                    _settings.FurringDimPosition = position;
-                    OnPropertyChanged(nameof(SelectedFurringDimPosition));
-                    break;
-                case DimensionTarget.Hanger:
-                    _settings.HangerDimPosition = position;
-                    OnPropertyChanged(nameof(SelectedHangerDimPosition));
-                    break;
+                case DimensionTarget.Main: _settings.MainDimPosition = position; OnPropertyChanged(nameof(SelectedMainDimPosition)); break;
+                case DimensionTarget.Furring: _settings.FurringDimPosition = position; OnPropertyChanged(nameof(SelectedFurringDimPosition)); break;
+                case DimensionTarget.Hanger: _settings.HangerDimPosition = position; OnPropertyChanged(nameof(SelectedHangerDimPosition)); break;
             }
             _settings.DimensionDistance = Math.Max(0, distance);
             MarkCustom();
@@ -330,8 +290,7 @@ namespace HNL.VXT.UI.ViewModels
             var normalized = Normalize(value);
             if (Near(_settings.DirectionDegrees, normalized)) return;
             _settings.DirectionDegrees = normalized;
-            if (!Near(normalized, 0.0) && !Near(normalized, 90.0))
-                _settings.MainDirection = MainDirectionMode.TwoPoints;
+            if (!Near(normalized, 0.0) && !Near(normalized, 90.0)) _settings.MainDirection = MainDirectionMode.TwoPoints;
             OnPropertyChanged(nameof(DirectionDegrees));
             OnPropertyChanged(nameof(SelectedMainDirection));
             MarkCustom();
@@ -343,18 +302,9 @@ namespace HNL.VXT.UI.ViewModels
             var changed = false;
             switch (target)
             {
-                case DimensionTarget.Main:
-                    changed = _settings.MainDimPosition != value;
-                    _settings.MainDimPosition = value;
-                    break;
-                case DimensionTarget.Furring:
-                    changed = _settings.FurringDimPosition != value;
-                    _settings.FurringDimPosition = value;
-                    break;
-                case DimensionTarget.Hanger:
-                    changed = _settings.HangerDimPosition != value;
-                    _settings.HangerDimPosition = value;
-                    break;
+                case DimensionTarget.Main: changed = _settings.MainDimPosition != value; _settings.MainDimPosition = value; break;
+                case DimensionTarget.Furring: changed = _settings.FurringDimPosition != value; _settings.FurringDimPosition = value; break;
+                case DimensionTarget.Hanger: changed = _settings.HangerDimPosition != value; _settings.HangerDimPosition = value; break;
             }
             if (changed) Changed();
         }
@@ -400,11 +350,7 @@ namespace HNL.VXT.UI.ViewModels
         private void RequestPreview()
         {
             if (!HasBoundary) return;
-            if (!_settings.IsValid(out var error))
-            {
-                SetPreviewError(error);
-                return;
-            }
+            if (!_settings.IsValid(out var error)) { SetPreviewError(error); return; }
             _host.RequestPreview(_settings.Clone());
         }
 
@@ -421,9 +367,6 @@ namespace HNL.VXT.UI.ViewModels
 
         private void ResetDefaults()
         {
-            // Original V6.7.2 reset restores numeric/layer defaults but does not silently throw
-            // away the user's current DIM style or CAD equipment selection sets. Preserve those
-            // runtime choices so the status text never lies about still-active obstacle IDs.
             var dimensionStyle = _settings.DimensionStyle;
             _applyingPreset = true;
             _settings = new VxtSettings { DimensionStyle = dimensionStyle };
@@ -479,11 +422,8 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        private static string HangerLayoutToText(HangerLayoutMode mode)
-            => mode == HangerLayoutMode.OneSideFollowFurring ? "Dồn theo Xương phụ" : "Cân đều hai đầu";
-
-        private static HangerLayoutMode TextToHangerLayout(string value)
-            => value == "Dồn theo Xương phụ" ? HangerLayoutMode.OneSideFollowFurring : HangerLayoutMode.BalancedTwoEnds;
+        private static string HangerLayoutToText(HangerLayoutMode mode) => mode == HangerLayoutMode.OneSideFollowFurring ? "Dồn theo Xương phụ" : "Cân đều hai đầu";
+        private static HangerLayoutMode TextToHangerLayout(string value) => value == "Dồn theo Xương phụ" ? HangerLayoutMode.OneSideFollowFurring : HangerLayoutMode.BalancedTwoEnds;
 
         private static string DimensionPositionToText(DimensionPosition position)
         {
@@ -509,12 +449,7 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        private static double Normalize(double value)
-        {
-            value %= 360.0;
-            return value < 0 ? value + 360.0 : value;
-        }
-
+        private static double Normalize(double value) { value %= 360.0; return value < 0 ? value + 360.0 : value; }
         private static bool Near(double a, double b) => Math.Abs(a - b) < 1e-8;
 
         public event PropertyChangedEventHandler PropertyChanged;
