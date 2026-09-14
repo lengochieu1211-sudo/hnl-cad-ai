@@ -25,10 +25,6 @@ namespace HNL.VXT.Core.Tests
             var boundaries = RealProblemBoundaries();
             var plan = VxtMultiBoundaryPlanBuilder.Build(boundaries, settings, new VxtLayoutContext());
 
-            // Field rule clarified on block15: a short XC near a notch edge may legitimately sit
-            // only ~350 mm from the neighbouring global XC even when MainMinSpacing=700. Its purpose
-            // is to keep the nearby wall/ceiling edge within MainMaxEdgeOffset (or prevent a MaxGap),
-            // so MinSpacing is a preferred normal-grid rule, not a reason to delete required edge XC.
             var justifiedSubMinPairs = CountJustifiedSubMinPairs(plan, boundaries, settings);
             Assert.IsTrue(justifiedSubMinPairs > 0,
                 "Real block15 fixture must retain at least one required local edge XC below MainMinSpacing when that XC protects a hard MaxEdge/MaxSpacing condition.");
@@ -56,9 +52,6 @@ namespace HNL.VXT.Core.Tests
                 "Local-edge ON may add short XC required by MaxEdge/MaxSpacing, but must never lose the continuous OFF base grid.");
 
             AssertEverySubMinPairIsHardMaxJustified(onPlan, boundaries, enabled);
-
-            // OFF means no automatic local notch XC. It does not mean the ceiling edge rule is
-            // retroactively forced; it means the user explicitly accepts the continuous base grid.
             Assert.IsTrue(offPlan.MainSegmentCount > 0);
         }
 
@@ -93,7 +86,6 @@ namespace HNL.VXT.Core.Tests
         private static Boundary2[] RealProblemBoundaries()
             => new[]
             {
-                // DXF handle A9 - new block 15/16.
                 new Boundary2(new[]
                 {
                     new Point2(771050.4001939078, -12879.9395401919),
@@ -107,8 +99,6 @@ namespace HNL.VXT.Core.Tests
                     new Point2(771380.4001939078, -13960.6076400746),
                     new Point2(771050.4001939078, -13960.6076400746)
                 }),
-
-                // DXF handle AA.
                 new Boundary2(new[]
                 {
                     new Point2(768700.4001939076, -17465.6080527564),
@@ -120,8 +110,6 @@ namespace HNL.VXT.Core.Tests
                     new Point2(767540.4001939076, -18065.6080527564),
                     new Point2(767540.4001939076, -17465.6080527564)
                 }),
-
-                // DXF handle AB.
                 new Boundary2(new[]
                 {
                     new Point2(773990.4001956151, -17465.6080527564),
@@ -133,8 +121,6 @@ namespace HNL.VXT.Core.Tests
                     new Point2(775600.4001939077, -18065.6080527564),
                     new Point2(775600.4001939077, -17465.6080527564)
                 }),
-
-                // DXF handle A0.
                 new Boundary2(new[]
                 {
                     new Point2(783445.4001939078, -16273.1080467898),
@@ -148,10 +134,7 @@ namespace HNL.VXT.Core.Tests
                 })
             };
 
-        private static int CountJustifiedSubMinPairs(
-            VxtPreviewPlan plan,
-            IReadOnlyList<Boundary2> boundaries,
-            VxtSettings settings)
+        private static int CountJustifiedSubMinPairs(VxtPreviewPlan plan, IReadOnlyList<Boundary2> boundaries, VxtSettings settings)
         {
             var count = 0;
             var mains = MainRecords(plan);
@@ -165,16 +148,12 @@ namespace HNL.VXT.Core.Tests
                 if (dy <= 0.5 || dy >= settings.MainMinSpacing - 0.5 || overlap <= 1.0) continue;
 
                 var shorter = a.Length < b.Length - 0.5 ? a : b.Length < a.Length - 0.5 ? b : null;
-                if (shorter != null && IsHardMaxRequired(shorter, mains, boundaries, settings))
-                    count++;
+                if (shorter != null && IsHardMaxRequired(shorter, mains, boundaries, settings)) count++;
             }
             return count;
         }
 
-        private static void AssertEverySubMinPairIsHardMaxJustified(
-            VxtPreviewPlan plan,
-            IReadOnlyList<Boundary2> boundaries,
-            VxtSettings settings)
+        private static void AssertEverySubMinPairIsHardMaxJustified(VxtPreviewPlan plan, IReadOnlyList<Boundary2> boundaries, VxtSettings settings)
         {
             var mains = MainRecords(plan);
             for (var i = 0; i + 1 < mains.Count; i++)
@@ -190,22 +169,17 @@ namespace HNL.VXT.Core.Tests
                 Assert.IsNotNull(shorter,
                     "A sub-MinSpacing overlapping pair with equal spans is not a local-edge repair and needs separate strategy resolution.");
                 Assert.IsTrue(IsHardMaxRequired(shorter, mains, boundaries, settings),
-                    "A short XC below MainMinSpacing may survive only when removing it would violate MaxEdge or MainMaxSpacing in its actual notch band. dy=" +
-                    dy.ToString("0.###"));
+                    "A short XC below MainMinSpacing may survive only when removing it would violate MaxEdge or MainMaxSpacing in its actual notch band. dy=" + dy.ToString("0.###"));
             }
         }
 
-        private static bool IsHardMaxRequired(
-            MainRecord candidate,
-            IReadOnlyList<MainRecord> mains,
-            IReadOnlyList<Boundary2> boundaries,
-            VxtSettings settings)
+        private static bool IsHardMaxRequired(MainRecord candidate, IReadOnlyList<MainRecord> mains, IReadOnlyList<Boundary2> boundaries, VxtSettings settings)
         {
             var width = candidate.X2 - candidate.X1;
             var sampleXs = new[] { candidate.X1 + width * 0.2, candidate.X1 + width * 0.5, candidate.X1 + width * 0.8 };
             foreach (var boundary in boundaries)
             foreach (var x in sampleXs)
-            foreach (var interval in PolygonScanline.ClipVertical(boundary.Vertices, x))
+            foreach (var interval in TestPolygonScanline.ClipVertical(boundary.Vertices, x))
             {
                 var minY = Math.Min(interval.A.Y, interval.B.Y);
                 var maxY = Math.Max(interval.A.Y, interval.B.Y);
@@ -216,8 +190,7 @@ namespace HNL.VXT.Core.Tests
                 var withoutCandidate = mains.Where(m => !ReferenceEquals(m, candidate) && x >= m.X1 - 0.5 && x <= m.X2 + 0.5 && m.Y >= minY - 0.5 && m.Y <= maxY + 0.5)
                     .Select(m => m.Y).Distinct(new DoubleToleranceComparer()).OrderBy(y => y).ToArray();
 
-                if (HardMaxViolations(withoutCandidate, minY, maxY, settings) > HardMaxViolations(withCandidate, minY, maxY, settings))
-                    return true;
+                if (HardMaxViolations(withoutCandidate, minY, maxY, settings) > HardMaxViolations(withCandidate, minY, maxY, settings)) return true;
             }
             return false;
         }
@@ -236,10 +209,7 @@ namespace HNL.VXT.Core.Tests
 
         private static List<MainRecord> MainRecords(VxtPreviewPlan plan)
             => plan.Lines.Where(x => x.Kind == PreviewLineKind.Main)
-                .Select(x => new MainRecord(
-                    (x.A.Y + x.B.Y) * 0.5,
-                    Math.Min(x.A.X, x.B.X),
-                    Math.Max(x.A.X, x.B.X)))
+                .Select(x => new MainRecord((x.A.Y + x.B.Y) * 0.5, Math.Min(x.A.X, x.B.X), Math.Max(x.A.X, x.B.X)))
                 .ToList();
 
         private static void AssertEveryHangerStillBelongsToAMain(VxtPreviewPlan plan)
@@ -259,12 +229,7 @@ namespace HNL.VXT.Core.Tests
 
         private sealed class MainRecord
         {
-            public MainRecord(double y, double x1, double x2)
-            {
-                Y = y;
-                X1 = x1;
-                X2 = x2;
-            }
+            public MainRecord(double y, double x1, double x2) { Y = y; X1 = x1; X2 = x2; }
             public double Y { get; }
             public double X1 { get; }
             public double X2 { get; }
