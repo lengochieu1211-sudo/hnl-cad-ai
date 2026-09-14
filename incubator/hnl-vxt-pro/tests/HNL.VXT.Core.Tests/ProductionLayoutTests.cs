@@ -89,19 +89,31 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void Avoidance_ShiftAllKeepsMainAxisOutsideObstacleBand()
+        public void Avoidance_ShiftAllKeepsMainAxisOutsideObstacleBand_WhenWholeGridShiftIsFeasible()
         {
+            // 4100 resolves to 350 + 850x4 + 350, leaving exactly one 50 mm balance step
+            // of legal edge slack in either direction. A narrow obstacle around the first XC
+            // therefore exercises the real Lisp Shift-All path rather than the impossible-
+            // shift best-effort fallback.
             var context = new VxtLayoutContext();
-            context.GeneralObstacles.Add(new Box2(1000, 250, 5000, 450));
+            context.GeneralObstacles.Add(new Box2(1000, 330, 5000, 370));
             var settings = new VxtSettings
             {
                 UseAvoidance = true,
                 ShiftAllForAvoidance = true,
-                ClearanceDistance = 20
+                ClearanceDistance = 0
             };
-            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings, context);
-            Assert.IsFalse(plan.Lines.Where(x => x.Kind == PreviewLineKind.Main)
-                .Any(x => x.A.Y > 230 && x.A.Y < 470));
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4100), settings, context);
+            var mainY = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Select(x => Math.Round(x.A.Y, 3))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+
+            Assert.IsTrue(mainY.Length > 0);
+            Assert.IsFalse(mainY.Any(y => y > 330 && y < 370));
+            CollectionAssert.AreEqual(new[] { 400.0, 1250.0, 2100.0, 2950.0, 3800.0 }, mainY);
         }
 
         [TestMethod]
