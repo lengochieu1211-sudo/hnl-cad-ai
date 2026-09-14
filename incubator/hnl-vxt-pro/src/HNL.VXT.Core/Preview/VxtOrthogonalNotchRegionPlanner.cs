@@ -10,12 +10,13 @@ namespace HNL.VXT.Core.Preview
     /// <summary>
     /// Decomposes an orthogonal concave ceiling, already transformed to the XC local axis,
     /// into maximal vertical rectangular regions. A valid shared/global XC grid is tried first
-    /// and projected into every region; this keeps collinear rows aligned so MergeCollinear can
-    /// extend one XC through adjacent regions instead of needlessly creating two independent
-    /// region phases. Only a region that cannot satisfy edge/spacing limits with the shared grid
-    /// receives its own SmartLayout1D grid. XP is intentionally outside this planner and therefore
-    /// keeps one global chase direction. Ty is rebuilt later from the final XC segments so every
-    /// short/long XC receives its own valid hanger distribution.
+    /// and may be translated slightly as one unit so shallow step/notch edges can share the same
+    /// rows. This keeps collinear rows aligned so MergeCollinear extends one XC through adjacent
+    /// regions instead of needlessly creating two independent region phases. Only when no shared
+    /// translated grid can satisfy all regions does a region receive its own SmartLayout1D grid.
+    /// XP is intentionally outside this planner and therefore keeps one global chase direction.
+    /// Ty is rebuilt later from the final XC segments so every short/long XC receives its own
+    /// valid hanger distribution.
     /// </summary>
     internal static class VxtOrthogonalNotchRegionPlanner
     {
@@ -36,10 +37,10 @@ namespace HNL.VXT.Core.Preview
             var regions = BuildMaximalRegions(polygon, domain);
             if (regions.Count <= 1) return false;
 
-            // Construction-first rule: before allowing every rectangle to phase its own XC rows,
-            // solve the whole bounding domain once. Whenever that shared grid is valid inside a
-            // region, reuse it verbatim. Adjacent regions then share identical Y rows and the
-            // collinear merge below physically extends the same XC through instead of splitting it.
+            // Construction-first rule: solve the whole bounding domain once. For shallow steps the
+            // balanced whole-domain grid can miss a regional Min-edge by only a few millimetres even
+            // though translating the entire grid keeps every spacing unchanged and makes all bands
+            // valid. Search the smallest shared translation before allowing independent region grids.
             List<double> sharedGrid;
             TryBuildRegionGrid(
                 new RectRegion(domain.MinX, domain.MaxX, domain.MinY, domain.MaxY),
@@ -47,13 +48,23 @@ namespace HNL.VXT.Core.Preview
                 obstacles,
                 out sharedGrid);
 
+            List<double> alignedSharedGrid;
+            var useSharedEverywhere = TryFindAlignedSharedGrid(
+                regions, sharedGrid, settings, obstacles, out alignedSharedGrid);
+
             var segments = new List<Segment2>();
             foreach (var region in regions)
             {
                 List<double> grid;
-                if (!TryReuseSharedGrid(region, sharedGrid, settings, out grid) &&
-                    !TryBuildRegionGrid(region, settings, obstacles, out grid))
+                if (useSharedEverywhere)
+                {
+                    if (!TryReuseSharedGrid(region, alignedSharedGrid, settings, out grid)) return false;
+                }
+                else if (!TryReuseSharedGrid(region, sharedGrid, settings, out grid) &&
+                         !TryBuildRegionGrid(region, settings, obstacles, out grid))
+                {
                     return false;
+                }
 
                 foreach (var y in grid)
                 {
@@ -65,6 +76,65 @@ namespace HNL.VXT.Core.Preview
             segments = MergeCollinear(segments);
             if (segments.Count == 0) return false;
             mainSegments = segments;
+            return true;
+        }
+
+        private static bool TryFindAlignedSharedGrid(
+            IReadOnlyList<RectRegion> regions,
+            IReadOnlyList<double> sharedGrid,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles,
+            out List<double> aligned)
+        {
+            aligned = null;
+            if (regions == null || regions.Count == 0 || sharedGrid == null || sharedGrid.Count == 0)
+                return false;
+
+            // Edge feasibility window is normally <=125 mm with HNL defaults (300..400 + 25 tol).
+            // Search at 1 mm resolution so a real 110 mm floor step can resolve with a 10 mm global
+            // translation instead of forcing a 100 mm phase jump between neighboring rectangles.
+            var maxShift = Math.Max(
+                settings.MainBalanceStep,
+                settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance) - settings.MainMinEdgeOffset);
+            var maxUnits = Math.Max(0, (int)Math.Ceiling(maxShift));
+
+            for (var amount = 0; amount <= maxUnits; amount++)
+            {
+                if (TrySharedDelta(amount)) return true;
+                if (amount > 0 && TrySharedDelta(-amount)) return true;
+            }
+
+            return false;
+
+            bool TrySharedDelta(double delta)
+            {
+                var candidate = sharedGrid.Select(y => y + delta).ToList();
+                foreach (var region in regions)
+                {
+                    List<double> projected;
+                    if (!TryReuseSharedGrid(region, candidate, settings, out projected)) return false;
+                    if (settings.UseAvoidance &&
+                        !ProjectedGridClear(region, projected, obstacles)) return false;
+                }
+                aligned = candidate;
+                return true;
+            }
+        }
+
+        private static bool ProjectedGridClear(
+            RectRegion region,
+            IReadOnlyList<double> grid,
+            IReadOnlyList<Box2> obstacles)
+        {
+            if (obstacles == null || obstacles.Count == 0) return true;
+            foreach (var y in grid ?? new double[0])
+            {
+                foreach (var box in obstacles)
+                {
+                    if (box.MaxX < region.X1 + Tol || box.MinX > region.X2 - Tol) continue;
+                    if (box.IntersectsHorizontal(y, region.X1, region.X2, Tol)) return false;
+                }
+            }
             return true;
         }
 
