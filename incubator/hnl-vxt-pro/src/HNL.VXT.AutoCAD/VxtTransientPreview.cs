@@ -26,61 +26,144 @@ namespace HNL.VXT.AutoCAD
         private readonly List<Drawable> _drawables = new List<Drawable>();
         private readonly IntegerCollection _viewports = new IntegerCollection();
         private const int SubDrawingMode = 190;
+        private bool _isMutating;
+        private bool _clearRequested;
+
+        internal int TrackedDrawableCount => _drawables.Count;
 
         public void Refresh()
         {
-            Clear();
-            var session = VxtSession.Current;
-            if (!session.HasBoundary) return;
+            if (_isMutating)
+            {
+                _clearRequested = true;
+                return;
+            }
 
-            var doc = Application.DocumentManager.MdiActiveDocument;
-            if (doc == null) return;
-
+            _isMutating = true;
             try
             {
-                var settings = session.Settings;
-                var db = doc.Database;
-                VxtPreviewPlan plan;
+                ClearCore();
 
-                using (var tr = db.TransactionManager.StartTransaction())
+                // If AutoCAD could not detach an older transient, keep its managed wrapper alive.
+                // Disposing a drawable while the graphics system still references it can leave a
+                // native dangling pointer and later crash during pan/zoom/redraw. Do not overlay a
+                // new preview until the old graphics have actually been erased.
+                if (_drawables.Count > 0)
                 {
-                    var context = VxtLayoutContextFactory.Build(session, tr);
-                    plan = VxtMultiBoundaryPlanBuilder.Build(session.Boundaries, settings, context);
-
-                    var layerTable = tr.GetObject(db.LayerTableId, OpenMode.ForRead) as LayerTable;
-                    var linetypeTable = tr.GetObject(db.LinetypeTableId, OpenMode.ForRead) as LinetypeTable;
-                    var dimStyleTable = tr.GetObject(db.DimStyleTableId, OpenMode.ForRead) as DimStyleTable;
-
-                    RenderStructuralLines(plan, settings, db, layerTable, linetypeTable);
-                    RenderHangers(plan, settings, db, layerTable, linetypeTable);
-                    RenderDimensions(plan, settings, db, dimStyleTable, layerTable, linetypeTable);
-                    RenderGuides(plan, db);
-
-                    // Preview is a strict read-only DB operation. Disposing an uncommitted read
-                    // transaction guarantees no helper can accidentally persist drawing changes.
+                    VxtSession.Current.ViewModel?.SetPreviewError(
+                        "Preview cũ chưa giải phóng an toàn; HNL Tool đã hoãn vẽ lại để bảo vệ AutoCAD.");
+                    return;
                 }
 
-                // Measure the exact final post-processed geometry shared with Create. Do not use
-                // builder bookkeeping counters here because concave split/merge and MEP finalizers
-                // may change the actual entity set after those counters were first populated.
-                session.ViewModel?.SetPreviewActualStats(VxtFinalPlanMetrics.FromPlan(plan));
+                var session = VxtSession.Current;
+                if (!session.HasBoundary) return;
+
+                var doc = Application.DocumentManager.MdiActiveDocument;
+                if (doc == null) return;
+
+                try
+                {
+                    var settings = session.Settings;
+                    var db = doc.Database;
+                    VxtPreviewPlan plan;
+
+                    using (var tr = db.TransactionManager.StartTransaction())
+                    {
+                        var context = VxtLayoutContextFactory.Build(session, tr);
+                        plan = VxtMultiBoundaryPlanBuilder.Build(session.Boundaries, settings, context);
+
+                        var layerTable = tr.GetObject(db.LayerTableId, OpenMode.ForRead) as LayerTable;
+                        var linetypeTable = tr.GetObject(db.LinetypeTableId, OpenMode.ForRead) as LinetypeTable;
+                        var dimStyleTable = tr.GetObject(db.DimStyleTableId, OpenMode.ForRead) as DimStyleTable;
+
+                        RenderStructuralLines(plan, settings, db, layerTable, linetypeTable);
+                        RenderHangers(plan, settings, db, layerTable, linetypeTable);
+                        RenderDimensions(plan, settings, db, dimStyleTable, layerTable, linetypeTable);
+                        RenderGuides(plan, db);
+
+                        // Preview is a strict read-only DB operation. Disposing an uncommitted read
+                        // transaction guarantees no helper can accidentally persist drawing changes.
+                    }
+
+                    // Measure the exact final post-processed geometry shared with Create. Do not use
+                    // builder bookkeeping counters here because concave split/merge and MEP finalizers
+                    // may change the actual entity set after those counters were first populated.
+                    session.ViewModel?.SetPreviewActualStats(VxtFinalPlanMetrics.FromPlan(plan));
+                }
+                catch (System.Exception ex)
+                {
+                    session.ViewModel?.SetPreviewError(ex.Message);
+                    doc.Editor.WriteMessage("\nHNL Tool - VXT Pro Preview: " + ex.Message);
+                }
             }
-            catch (System.Exception ex)
+            finally
             {
-                session.ViewModel?.SetPreviewError(ex.Message);
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro Preview: " + ex.Message);
+                _isMutating = false;
+                if (_clearRequested)
+                {
+                    _clearRequested = false;
+                    Clear();
+                }
             }
         }
 
         public void Clear()
         {
+            if (_isMutating)
+            {
+                _clearRequested = true;
+                return;
+            }
+
+            _isMutating = true;
+            try
+            {
+                ClearCore();
+            }
+            finally
+            {
+                _isMutating = false;
+            }
+        }
+
+        private void ClearCore()
+        {
+            if (_drawables.Count == 0) return;
+
             var manager = TransientManager.CurrentTransientManager;
+            var allErased = false;
+            try
+            {
+                allErased = manager.EraseTransients(
+                    TransientDrawingMode.DirectShortTerm, SubDrawingMode, _viewports);
+            }
+            catch
+            {
+                allErased = false;
+            }
+
+            if (allErased)
+            {
+                foreach (var drawable in _drawables) DisposeDrawable(drawable);
+                _drawables.Clear();
+                return;
+            }
+
+            // Bulk erase can fail during a viewport/document state transition. Retry each drawable
+            // individually. Only Dispose after AutoCAD explicitly reports that erase succeeded.
+            var survivors = new List<Drawable>();
             foreach (var drawable in _drawables)
             {
-                try { manager.EraseTransient(drawable, _viewports); } catch { }
-                if (drawable is IDisposable disposable) disposable.Dispose();
+                var erased = false;
+                try { erased = manager.EraseTransient(drawable, _viewports); }
+                catch { erased = false; }
+
+                if (erased) DisposeDrawable(drawable);
+                else survivors.Add(drawable);
             }
+
             _drawables.Clear();
+            _drawables.AddRange(survivors);
         }
 
         private void RenderStructuralLines(
@@ -252,9 +335,76 @@ namespace HNL.VXT.AutoCAD
 
         private void AddDrawable(Drawable drawable)
         {
-            TransientManager.CurrentTransientManager.AddTransient(
-                drawable, TransientDrawingMode.DirectShortTerm, SubDrawingMode, _viewports);
+            if (drawable == null) return;
+
+            var added = false;
+            try
+            {
+                added = TransientManager.CurrentTransientManager.AddTransient(
+                    drawable, TransientDrawingMode.DirectShortTerm, SubDrawingMode, _viewports);
+            }
+            catch
+            {
+                DisposeDrawable(drawable);
+                throw;
+            }
+
+            if (!added)
+            {
+                DisposeDrawable(drawable);
+                throw new InvalidOperationException("AutoCAD từ chối thêm đối tượng Preview transient.");
+            }
+
             _drawables.Add(drawable);
+        }
+
+        internal int RunLifecycleProbe(Database db, int cycles)
+        {
+            if (db == null) throw new ArgumentNullException(nameof(db));
+            if (cycles < 1) throw new ArgumentOutOfRangeException(nameof(cycles));
+
+            Clear();
+            if (_drawables.Count != 0)
+                throw new InvalidOperationException("Không thể giải phóng Preview cũ trước Soak QA.");
+
+            for (var i = 0; i < cycles; i++)
+            {
+                var x = i * 0.01;
+                var line = new Line(new Point3d(x, 0.0, 0.0), new Point3d(x + 10.0, 10.0, 0.0));
+                line.SetDatabaseDefaults(db);
+                AddDrawable(line);
+
+                var circle = new Circle(new Point3d(x + 5.0, 5.0, 0.0), Vector3d.ZAxis, 2.0);
+                circle.SetDatabaseDefaults(db);
+                AddDrawable(circle);
+
+                var text = new DBText
+                {
+                    Position = new Point3d(x, 12.0, 0.0),
+                    Height = 1.0,
+                    TextString = "HNL"
+                };
+                text.SetDatabaseDefaults(db);
+                AddDrawable(text);
+
+                if (_drawables.Count != 3)
+                    throw new InvalidOperationException("Soak QA sai số drawable sau AddTransient.");
+
+                Clear();
+                if (_drawables.Count != 0)
+                    throw new InvalidOperationException(
+                        "Soak QA còn " + _drawables.Count + " transient chưa Erase an toàn ở vòng " + (i + 1) + ".");
+            }
+
+            return cycles;
+        }
+
+        private static void DisposeDrawable(Drawable drawable)
+        {
+            if (drawable is IDisposable disposable)
+            {
+                try { disposable.Dispose(); } catch { }
+            }
         }
 
         private static Point3d ToPoint3d(Point2 point) => new Point3d(point.X, point.Y, 0.0);
