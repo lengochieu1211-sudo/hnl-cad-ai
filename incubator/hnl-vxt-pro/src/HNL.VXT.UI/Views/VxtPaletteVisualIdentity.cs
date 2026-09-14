@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -43,8 +44,42 @@ namespace HNL.VXT.UI.Views
 
         private static void ApplyNow(VxtPaletteView view)
         {
+            StampBuildIdentity(view);
             NormalizePrimaryAction(view);
             DistinguishLayerDimExpanders(view);
+        }
+
+        private static void StampBuildIdentity(VxtPaletteView view)
+        {
+            var display = "VXT Pro v7.0.0-beta.1 • Build " + GetBuildDateTime();
+
+            foreach (var node in Walk(view))
+            {
+                var text = node as TextBlock;
+                if (text == null || string.IsNullOrWhiteSpace(text.Text)) continue;
+                if (!text.Text.StartsWith("VXT Pro v7.0.0-beta.1", StringComparison.OrdinalIgnoreCase)) continue;
+
+                text.Text = display;
+                text.FontSize = Math.Min(text.FontSize, 9.5);
+                text.TextWrapping = TextWrapping.NoWrap;
+                text.TextTrimming = TextTrimming.CharacterEllipsis;
+                text.ToolTip = display;
+                break;
+            }
+        }
+
+        private static string GetBuildDateTime()
+        {
+            foreach (var attribute in typeof(VxtPaletteVisualIdentity).Assembly.GetCustomAttributes(typeof(AssemblyMetadataAttribute), false))
+            {
+                var metadata = attribute as AssemblyMetadataAttribute;
+                if (metadata != null &&
+                    string.Equals(metadata.Key, "HNLBuildDateTime", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(metadata.Value))
+                    return metadata.Value;
+            }
+
+            return "--/--/---- --:--";
         }
 
         private static void NormalizePrimaryAction(VxtPaletteView view)
