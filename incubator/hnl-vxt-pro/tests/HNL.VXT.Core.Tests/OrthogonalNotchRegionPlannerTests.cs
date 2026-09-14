@@ -78,6 +78,48 @@ namespace HNL.VXT.Core.Tests
                 "Auto DIM must follow final XC geometry; it must never freeze or alter the notch optimizer.");
         }
 
+        [TestMethod]
+        public void FieldDxf_Shallow110Step_ExtendsTwoSharedMainRowsInsteadOfSplittingRegionPhase()
+        {
+            // Fixture simplified directly from the user's new block10.dxf field case:
+            // total ceiling 2675 x 1800; the right 800 mm band starts 110 mm higher.
+            // Old behavior independently balanced the two rectangles and produced four XC members
+            // with a 100 mm phase jump. A +10 mm shared translation yields two continuous rows.
+            var settings = Settings(autoDimension: false);
+            settings.DrawFurring = false;
+            settings.DrawHangers = false;
+            var boundary = Shallow110StepFromFieldDxf();
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, settings, new VxtLayoutContext());
+            var mains = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .OrderBy(x => (x.A.Y + x.B.Y) * 0.5)
+                .ToArray();
+
+            Assert.AreEqual(2, mains.Length,
+                "Shallow 110 mm step must keep two continuous XC rows; do not split the ceiling into two independent XC phases.");
+
+            var expectedY = new[] { 410.0, 1410.0 };
+            for (var i = 0; i < mains.Length; i++)
+            {
+                var minX = Math.Min(mains[i].A.X, mains[i].B.X);
+                var maxX = Math.Max(mains[i].A.X, mains[i].B.X);
+                var y = (mains[i].A.Y + mains[i].B.Y) * 0.5;
+                Assert.AreEqual(0.0, minX, 0.1,
+                    "Field DXF XC must start at the left ceiling edge.");
+                Assert.AreEqual(2675.0, maxX, 0.1,
+                    "Field DXF XC must extend through the shallow step to the right ceiling edge.");
+                Assert.AreEqual(expectedY[i], y, 0.1,
+                    "Field DXF shared XC row must use the smallest valid global translation.");
+            }
+
+            AssertMainBandValid(plan, 900.0, 0.0, 1800.0, settings,
+                "Full-height left band must remain valid after XC extension.");
+            AssertMainBandValid(plan, 2275.0, 110.0, 1800.0, settings,
+                "Raised right band must remain valid after XC extension.");
+        }
+
         private static void AssertMainBandValid(
             VxtPreviewPlan plan,
             double x,
@@ -162,6 +204,17 @@ namespace HNL.VXT.Core.Tests
                 new Point2(6000, 0),
                 new Point2(6000, 4000),
                 new Point2(0, 4000)
+            });
+
+        private static Boundary2 Shallow110StepFromFieldDxf()
+            => new Boundary2(new[]
+            {
+                new Point2(0.0, 0.0),
+                new Point2(1875.0, 0.0),
+                new Point2(1875.0, 110.0),
+                new Point2(2675.0, 110.0),
+                new Point2(2675.0, 1800.0),
+                new Point2(0.0, 1800.0)
             });
     }
 }
