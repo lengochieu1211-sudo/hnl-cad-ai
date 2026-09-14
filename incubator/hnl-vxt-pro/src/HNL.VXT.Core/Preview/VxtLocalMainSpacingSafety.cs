@@ -12,15 +12,17 @@ namespace HNL.VXT.Core.Preview
     ///
     /// Construction contract:
     /// - the normal/global XC grid is solved first;
+    /// - before adding local bars, the whole XC grid may translate together by the smallest
+    ///   amount that makes all real ceiling bands satisfy their Min/Max edge limits;
     /// - a local XC is added only when a real notch band would otherwise violate MaxEdge or
     ///   MainMaxSpacing;
     /// - a required local edge XC may be closer than MainMinSpacing to a neighbouring global XC;
     /// - a sub-MinSpacing local XC is removed only when it is redundant and the local band remains
     ///   hard-max safe without it.
     ///
-    /// This deliberately treats MainMinSpacing as a preferred normal-grid rule, while MaxEdge and
-    /// MainMaxSpacing are the hard constraints that justify local notch reinforcement.
-    /// Manual RectangleRegions is user-authored and is intentionally excluded.
+    /// MainMinSpacing remains a preferred normal-grid rule. MaxEdge/MainMaxSpacing are the hard
+    /// constraints that justify local notch reinforcement. Manual RectangleRegions is user-authored
+    /// and intentionally excluded.
     /// </summary>
     internal static class VxtLocalMainSpacingSafety
     {
@@ -46,11 +48,16 @@ namespace HNL.VXT.Core.Preview
 
             var obstacles = TransformMainObstacles(context, radians, settings.ClearanceDistance);
 
-            // First enforce the reason this feature exists: the local ceiling edge/gap must respect
-            // configured maxima. This pass is phase-locked to the existing XC lattice.
+            // Shallow steps such as the real block10 case are best solved by translating the
+            // complete XC lattice a few millimetres. This keeps every XC continuous and preserves
+            // all centre-to-centre spacing while satisfying the regional edge range.
+            TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles);
+
+            // Next enforce the reason the local-notch feature exists: local ceiling edge/gap must
+            // respect configured maxima. Added rows stay on the final global lattice phase.
             EnsureHardMaxCoverage(plan, polygon, radians, settings, obstacles);
 
-            // Then remove only truly redundant close local bars. A bar that protects MaxEdge or a
+            // Finally remove only truly redundant close local bars. A bar protecting MaxEdge or a
             // MaxSpacing gap is retained even when its distance to another XC is < MainMinSpacing.
             if (settings.MainMinSpacing > Tol)
             {
@@ -77,8 +84,6 @@ namespace HNL.VXT.Core.Preview
                             else if (b.Length < a.Length - Tol)
                                 candidate = b;
 
-                            // Equal-length/global rows are never deleted here. This pass only cleans
-                            // optional shorter notch bars.
                             if (candidate == null) continue;
                             if (IsRequiredForHardMaxConstraint(candidate, mains, polygon, settings))
                                 continue;
@@ -95,6 +100,147 @@ namespace HNL.VXT.Core.Preview
 
             plan.MainSegmentCount = plan.Lines.Count(x => x.Kind == PreviewLineKind.Main);
             plan.HangerCount = plan.HangerPoints.Count;
+        }
+
+        private static bool TryAlignSharedGlobalGrid(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Point2> polygon,
+            double radians,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            var source = BuildMainRecords(plan, radians)
+                .Select(m => m.Y)
+                .Distinct(new DoubleTolComparer())
+                .OrderBy(y => y)
+                .ToList();
+            if (source.Count == 0) return false;
+
+            if (SharedGridValid(source, polygon, settings, obstacles)) return false;
+
+            var maxSearch = Math.Max(
+                settings.MainBalanceStep,
+                settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance) - settings.MainMinEdgeOffset);
+            var maxUnits = Math.Max(1, (int)Math.Ceiling(maxSearch));
+            List<double> aligned = null;
+
+            for (var amount = 1; amount <= maxUnits && aligned == null; amount++)
+            {
+                var positive = source.Select(y => y + amount).ToList();
+                if (SharedGridValid(positive, polygon, settings, obstacles))
+                {
+                    aligned = positive;
+                    break;
+                }
+
+                var negative = source.Select(y => y - amount).ToList();
+                if (SharedGridValid(negative, polygon, settings, obstacles))
+                    aligned = negative;
+            }
+
+            if (aligned == null) return false;
+            RebuildAllMains(plan, polygon, aligned, radians, settings, obstacles);
+            return true;
+        }
+
+        private static bool SharedGridValid(
+            IReadOnlyList<double> grid,
+            IReadOnlyList<Point2> polygon,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            if (grid == null || grid.Count == 0) return false;
+            var domain = Box2.FromPoints(polygon);
+            var maxEdge = settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance);
+            var xs = UniqueSort(polygon.Select(p => p.X)
+                .Concat(new[] { domain.MinX, domain.MaxX }), 0.5);
+
+            for (var i = 0; i + 1 < xs.Count; i++)
+            {
+                var bandA = Math.Max(domain.MinX, xs[i]);
+                var bandB = Math.Min(domain.MaxX, xs[i + 1]);
+                if (bandB - bandA <= MinDrawLength) continue;
+
+                var samples = new[]
+                {
+                    bandA + 0.25 * (bandB - bandA),
+                    bandA + 0.50 * (bandB - bandA),
+                    bandA + 0.75 * (bandB - bandA)
+                };
+
+                foreach (var x in samples)
+                {
+                    foreach (var interval in PolygonScanline.ClipVertical(polygon, x))
+                    {
+                        var a = Math.Min(interval.A.Y, interval.B.Y);
+                        var b = Math.Max(interval.A.Y, interval.B.Y);
+                        var rows = grid.Where(y => y >= a - Tol && y <= b + Tol).OrderBy(y => y).ToList();
+                        if (rows.Count == 0) return false;
+
+                        var firstEdge = rows[0] - a;
+                        var lastEdge = b - rows[rows.Count - 1];
+                        if (firstEdge < settings.MainMinEdgeOffset - Tol || firstEdge > maxEdge + Tol) return false;
+                        if (lastEdge < settings.MainMinEdgeOffset - Tol || lastEdge > maxEdge + Tol) return false;
+                        for (var j = 0; j + 1 < rows.Count; j++)
+                        {
+                            var gap = rows[j + 1] - rows[j];
+                            if (gap < settings.MainMinSpacing - Tol || gap > settings.MainMaxSpacing + Tol)
+                                return false;
+                        }
+                    }
+                }
+            }
+
+            if (settings.UseAvoidance && obstacles != null && obstacles.Count > 0)
+            {
+                foreach (var y in grid)
+                {
+                    foreach (var raw in PolygonScanline.ClipHorizontal(polygon, y))
+                    {
+                        var segment = new Segment2(
+                            new Point2(Math.Min(raw.A.X, raw.B.X), y),
+                            new Point2(Math.Max(raw.A.X, raw.B.X), y));
+                        if (segment.B.X - segment.A.X > MinDrawLength && !SegmentClear(segment, obstacles))
+                            return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private static void RebuildAllMains(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Point2> polygon,
+            IReadOnlyList<double> grid,
+            double radians,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            plan.Lines.RemoveAll(x => x.Kind == PreviewLineKind.Main || x.Kind == PreviewLineKind.Hanger);
+            plan.HangerPoints.Clear();
+            plan.MainSegmentCount = 0;
+            plan.HangerCount = 0;
+
+            foreach (var y in grid)
+            {
+                foreach (var raw in PolygonScanline.ClipHorizontal(polygon, y))
+                {
+                    var x1 = Math.Min(raw.A.X, raw.B.X);
+                    var x2 = Math.Max(raw.A.X, raw.B.X);
+                    if (x2 - x1 <= MinDrawLength) continue;
+                    var local = new Segment2(new Point2(x1, y), new Point2(x2, y));
+                    if (settings.UseAvoidance && !SegmentClear(local, obstacles)) continue;
+
+                    plan.Lines.Add(new PreviewLine(
+                        Transform2.ToWorld(local.A, radians),
+                        Transform2.ToWorld(local.B, radians),
+                        PreviewLineKind.Main));
+                    plan.MainSegmentCount++;
+                    if (settings.DrawHangers)
+                        AddHangers(plan, local, radians, settings, obstacles);
+                }
+            }
         }
 
         private static void EnsureHardMaxCoverage(
