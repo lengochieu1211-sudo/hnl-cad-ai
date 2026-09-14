@@ -100,25 +100,41 @@ namespace HNL.VXT.Core.Preview
 
             for (var amount = 0; amount <= maxUnits; amount++)
             {
-                if (TrySharedDelta(amount)) return true;
-                if (amount > 0 && TrySharedDelta(-amount)) return true;
+                var positive = ShiftGrid(sharedGrid, amount);
+                if (SharedGridValidForAllRegions(regions, positive, settings, obstacles))
+                {
+                    aligned = positive;
+                    return true;
+                }
+
+                if (amount <= 0) continue;
+                var negative = ShiftGrid(sharedGrid, -amount);
+                if (SharedGridValidForAllRegions(regions, negative, settings, obstacles))
+                {
+                    aligned = negative;
+                    return true;
+                }
             }
 
             return false;
+        }
 
-            bool TrySharedDelta(double delta)
+        private static List<double> ShiftGrid(IReadOnlyList<double> source, double delta)
+            => (source ?? new double[0]).Select(y => y + delta).ToList();
+
+        private static bool SharedGridValidForAllRegions(
+            IReadOnlyList<RectRegion> regions,
+            IReadOnlyList<double> candidate,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            foreach (var region in regions)
             {
-                var candidate = sharedGrid.Select(y => y + delta).ToList();
-                foreach (var region in regions)
-                {
-                    List<double> projected;
-                    if (!TryReuseSharedGrid(region, candidate, settings, out projected)) return false;
-                    if (settings.UseAvoidance &&
-                        !ProjectedGridClear(region, projected, obstacles)) return false;
-                }
-                aligned = candidate;
-                return true;
+                List<double> projected;
+                if (!TryReuseSharedGrid(region, candidate, settings, out projected)) return false;
+                if (settings.UseAvoidance && !ProjectedGridClear(region, projected, obstacles)) return false;
             }
+            return true;
         }
 
         private static bool ProjectedGridClear(
