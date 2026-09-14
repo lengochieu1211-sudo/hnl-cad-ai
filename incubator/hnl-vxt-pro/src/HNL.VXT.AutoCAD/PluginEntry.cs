@@ -1,5 +1,6 @@
 using Autodesk.AutoCAD.ApplicationServices.Core;
 using Autodesk.AutoCAD.Runtime;
+using HNL.VXT.UI.Infrastructure;
 using DocumentCollectionEventArgs = Autodesk.AutoCAD.ApplicationServices.DocumentCollectionEventArgs;
 
 [assembly: ExtensionApplication(typeof(HNL.VXT.AutoCAD.PluginEntry))]
@@ -17,7 +18,7 @@ namespace HNL.VXT.AutoCAD
 
             var doc = documents.MdiActiveDocument;
             if (doc != null) VxtSession.SynchronizeDocument(doc);
-            doc?.Editor.WriteMessage("\nHNL Tool - Vẽ Xương Trần | VXT Pro v7.0.0-beta.1 | Lệnh: HVX");
+            doc?.Editor.WriteMessage("\nHNL Tool - Vẽ Xương Trần | " + VxtBuildInfo.VersionLabel + " | Lệnh: HVX");
         }
 
         public void Terminate()
