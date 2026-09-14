@@ -21,15 +21,35 @@ namespace HNL.VXT.AutoCAD
     /// </summary>
     internal sealed class VxtTransientPreview
     {
+        private sealed class RetiredDrawable
+        {
+            public RetiredDrawable(Drawable drawable, DateTime retiredUtc)
+            {
+                Drawable = drawable;
+                RetiredUtc = retiredUtc;
+            }
+
+            public Drawable Drawable { get; }
+            public DateTime RetiredUtc { get; }
+        }
+
         public static VxtTransientPreview Instance { get; } = new VxtTransientPreview();
 
         private readonly List<Drawable> _drawables = new List<Drawable>();
+        private readonly List<RetiredDrawable> _retiredDrawables = new List<RetiredDrawable>();
+        private readonly List<Drawable> _documentTransitionQuarantine = new List<Drawable>();
         private readonly IntegerCollection _viewports = new IntegerCollection();
         private const int SubDrawingMode = 190;
+        private const int FullPreviewDrawableLimit = 3000;
+        private static readonly TimeSpan RetiredDrawableGrace = TimeSpan.FromSeconds(15.0);
         private bool _isMutating;
         private bool _clearRequested;
+        private bool _abandonRequested;
+        private bool _largePreviewNoticeShown;
 
         internal int TrackedDrawableCount => _drawables.Count;
+        internal int RetiredDrawableCount => _retiredDrawables.Count;
+        internal int TransitionQuarantineCount => _documentTransitionQuarantine.Count;
 
         public void Refresh()
         {
@@ -42,6 +62,10 @@ namespace HNL.VXT.AutoCAD
             _isMutating = true;
             try
             {
+                // AutoCAD may release erased transient graphics asynchronously. Do not destroy the
+                // managed/native wrapper immediately after EraseTransient reports success. A short
+                // quarantine avoids a use-after-free during the next native redraw/paste/zoom.
+                DrainRetiredDrawables();
                 ClearCore();
 
                 // If AutoCAD could not detach an older transient, keep its managed wrapper alive.
@@ -76,10 +100,24 @@ namespace HNL.VXT.AutoCAD
                         var linetypeTable = tr.GetObject(db.LinetypeTableId, OpenMode.ForRead) as LinetypeTable;
                         var dimStyleTable = tr.GetObject(db.DimStyleTableId, OpenMode.ForRead) as DimStyleTable;
 
+                        var estimatedDrawables = EstimateFullPreviewDrawableCount(plan, settings);
+                        var structuralOnly = estimatedDrawables > FullPreviewDrawableLimit;
+
                         RenderStructuralLines(plan, settings, db, layerTable, linetypeTable);
-                        RenderHangers(plan, settings, db, layerTable, linetypeTable);
-                        RenderDimensions(plan, settings, db, dimStyleTable, layerTable, linetypeTable);
-                        RenderGuides(plan, db);
+
+                        if (!structuralOnly)
+                        {
+                            RenderHangers(plan, settings, db, layerTable, linetypeTable);
+                            RenderDimensions(plan, settings, db, dimStyleTable, layerTable, linetypeTable);
+                            RenderGuides(plan, db);
+                            _largePreviewNoticeShown = false;
+                        }
+                        else if (!_largePreviewNoticeShown)
+                        {
+                            _largePreviewNoticeShown = true;
+                            doc.Editor.WriteMessage(
+                                "\nHNL Tool - VXT Pro Preview: Bản vẽ lớn; chế độ an toàn chỉ hiển thị XC/XP. Ty/DIM vẫn được tính đầy đủ và sẽ tạo đúng khi bấm Tạo khung xương trần.");
+                        }
 
                         // Preview is a strict read-only DB operation. Disposing an uncommitted read
                         // transaction guarantees no helper can accidentally persist drawing changes.
@@ -99,7 +137,12 @@ namespace HNL.VXT.AutoCAD
             finally
             {
                 _isMutating = false;
-                if (_clearRequested)
+                if (_abandonRequested)
+                {
+                    _abandonRequested = false;
+                    AbandonForDocumentTransition();
+                }
+                else if (_clearRequested)
                 {
                     _clearRequested = false;
                     Clear();
@@ -118,12 +161,40 @@ namespace HNL.VXT.AutoCAD
             _isMutating = true;
             try
             {
+                DrainRetiredDrawables();
                 ClearCore();
             }
             finally
             {
                 _isMutating = false;
+                if (_abandonRequested)
+                {
+                    _abandonRequested = false;
+                    AbandonForDocumentTransition();
+                }
             }
+        }
+
+        /// <summary>
+        /// DocumentActivated/DocumentToBeDestroyed are native document-transition callbacks.
+        /// Never call TransientManager from those callbacks. Keep every wrapper alive and let
+        /// AutoCAD tear down the old viewport/document graphics on its own.
+        /// </summary>
+        internal void AbandonForDocumentTransition()
+        {
+            if (_isMutating)
+            {
+                _abandonRequested = true;
+                return;
+            }
+
+            if (_drawables.Count > 0)
+            {
+                _documentTransitionQuarantine.AddRange(_drawables);
+                _drawables.Clear();
+            }
+
+            _clearRequested = false;
         }
 
         private void ClearCore()
@@ -144,13 +215,14 @@ namespace HNL.VXT.AutoCAD
 
             if (allErased)
             {
-                foreach (var drawable in _drawables) DisposeDrawable(drawable);
+                foreach (var drawable in _drawables) RetireDrawable(drawable);
                 _drawables.Clear();
                 return;
             }
 
             // Bulk erase can fail during a viewport/document state transition. Retry each drawable
-            // individually. Only Dispose after AutoCAD explicitly reports that erase succeeded.
+            // individually. Successful erases enter a grace-period quarantine instead of being
+            // disposed immediately; failed erases remain strongly referenced as active survivors.
             var survivors = new List<Drawable>();
             foreach (var drawable in _drawables)
             {
@@ -158,12 +230,41 @@ namespace HNL.VXT.AutoCAD
                 try { erased = manager.EraseTransient(drawable, _viewports); }
                 catch { erased = false; }
 
-                if (erased) DisposeDrawable(drawable);
+                if (erased) RetireDrawable(drawable);
                 else survivors.Add(drawable);
             }
 
             _drawables.Clear();
             _drawables.AddRange(survivors);
+        }
+
+        private static int EstimateFullPreviewDrawableCount(VxtPreviewPlan plan, VxtSettings settings)
+        {
+            if (plan == null) return 0;
+            var count = plan.Lines.Count + plan.Texts.Count;
+            if (settings.DrawHangers) count += plan.HangerPoints.Count;
+            if (settings.AutoDimension) count += plan.Dimensions.Count;
+            return count;
+        }
+
+        private void RetireDrawable(Drawable drawable)
+        {
+            if (drawable == null) return;
+            _retiredDrawables.Add(new RetiredDrawable(drawable, DateTime.UtcNow));
+        }
+
+        private void DrainRetiredDrawables()
+        {
+            if (_retiredDrawables.Count == 0) return;
+            var cutoff = DateTime.UtcNow - RetiredDrawableGrace;
+
+            for (var i = _retiredDrawables.Count - 1; i >= 0; i--)
+            {
+                var retired = _retiredDrawables[i];
+                if (retired.RetiredUtc > cutoff) continue;
+                DisposeDrawable(retired.Drawable);
+                _retiredDrawables.RemoveAt(i);
+            }
         }
 
         private void RenderStructuralLines(
@@ -345,12 +446,14 @@ namespace HNL.VXT.AutoCAD
             }
             catch
             {
+                // AddTransient threw before AutoCAD accepted ownership, so immediate disposal is safe.
                 DisposeDrawable(drawable);
                 throw;
             }
 
             if (!added)
             {
+                // AutoCAD explicitly rejected the drawable and therefore does not retain it.
                 DisposeDrawable(drawable);
                 throw new InvalidOperationException("AutoCAD từ chối thêm đối tượng Preview transient.");
             }
