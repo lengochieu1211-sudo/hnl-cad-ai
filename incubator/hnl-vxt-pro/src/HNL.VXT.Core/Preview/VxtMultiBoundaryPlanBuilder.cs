@@ -52,7 +52,7 @@ namespace HNL.VXT.Core.Preview
                     part = legacyBuilder.Build(boundary, settings, boundaryContext);
                     var angle = ResolveDirectionDegrees(settings, boundary);
                     VxtConcaveMainPostProcessor.Apply(boundary, settings, boundaryContext, part);
-                    VxtLocalMainSpacingSafety.Apply(part, settings, angle);
+                    VxtLocalMainSpacingSafety.Apply(boundary, part, settings, angle);
                     VxtPostProcessDimensionSynchronizer.Synchronize(
                         boundary, settings, boundaryContext, part, angle);
                 }
@@ -67,7 +67,7 @@ namespace HNL.VXT.Core.Preview
                     part = proBuilder.Build(boundary, settings, boundaryContext);
                     VxtConcaveMainPostProcessor.Apply(boundary, settings, boundaryContext, part);
                     var angle = ResolveDirectionDegrees(settings, boundary);
-                    VxtLocalMainSpacingSafety.Apply(part, settings, angle);
+                    VxtLocalMainSpacingSafety.Apply(boundary, part, settings, angle);
                     VxtPostProcessDimensionSynchronizer.Synchronize(boundary, settings, boundaryContext, part, angle);
                     part.Quality = VxtProPlanQualityEvaluator.Evaluate(
                         part, settings, boundaryContext, angle, 1);
