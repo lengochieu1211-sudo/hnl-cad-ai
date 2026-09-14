@@ -19,12 +19,7 @@ namespace HNL.VXT.Core.Tests
 
             var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000.0, 4000.0), settings, context);
 
-            var mainY = plan.Lines
-                .Where(line => line.Kind == PreviewLineKind.Main)
-                .Select(line => Math.Round(line.A.Y, 3))
-                .Distinct()
-                .OrderBy(value => value)
-                .ToArray();
+            var mainY = MainCoordinates(plan);
 
             // Exact V6.7.2 adjust-grid best-effort result for the three projected XC bands.
             // The first XC is allowed to finish at 500 even though that exceeds max_O=400;
@@ -58,6 +53,31 @@ namespace HNL.VXT.Core.Tests
                 "MainObstacles are local_bboxes_xc in the Lisp and must never leak into the XP grid.");
         }
 
+        [TestMethod]
+        public void ShiftAll_WhenNoWholeGridOffsetExists_FallsBackToLispBestEffortInsteadOfEmpty()
+        {
+            var settings = LegacyAvoidanceSettings();
+            settings.ShiftAllForAvoidance = true;
+            settings.ClearanceDistance = 20.0;
+
+            var context = new VxtLayoutContext();
+            context.MainObstacles.Add(new Box2(1000.0, 250.0, 5000.0, 450.0));
+
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000.0, 4000.0), settings, context);
+            var mainY = MainCoordinates(plan);
+
+            // 4000 has 300 mm at both ends, exactly the hard minimum, so a whole-grid
+            // +/-50 shift is impossible. V6.7.2 therefore falls back to adjust-grid.
+            // The first XC repeatedly snaps to 200 then is restored to the 300 minimum edge;
+            // after 100 iterations Lisp returns the best-effort grid instead of nil/empty.
+            CollectionAssert.AreEqual(
+                new[] { 300.0, 1150.0, 2000.0, 2850.0, 3700.0 },
+                mainY);
+            Assert.IsTrue(plan.MainSegmentCount > 0);
+            Assert.IsTrue(plan.FurringSegmentCount > 0, "Main-only ShiftAll fallback must not remove XP.");
+            Assert.IsTrue(plan.HangerCount > 0, "Ty must remain available when ShiftAll falls back to Lisp best-effort repair.");
+        }
+
         private static VxtSettings LegacyAvoidanceSettings()
             => new VxtSettings
             {
@@ -77,6 +97,14 @@ namespace HNL.VXT.Core.Tests
             context.MainObstacles.Add(new Box2(4100.0, 3000.0, 5000.0, 3300.0));
             return context;
         }
+
+        private static double[] MainCoordinates(VxtPreviewPlan plan)
+            => plan.Lines
+                .Where(line => line.Kind == PreviewLineKind.Main)
+                .Select(line => Math.Round(line.A.Y, 3))
+                .Distinct()
+                .OrderBy(value => value)
+                .ToArray();
 
         private static double[] FurringCoordinates(VxtPreviewPlan plan)
             => plan.Lines
