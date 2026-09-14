@@ -13,7 +13,7 @@ namespace HNL.VXT.Core.Tests
     public sealed class FieldBlock15_16RealFixtureTests
     {
         [TestMethod]
-        public void Block15Real_LocalOn_DoesNotKeepSubMinOverlappingXcRows()
+        public void Block15Real_LocalOn_AllowsSubMinLocalXcWhenItProtectsHardMaxEdgeOrGap()
         {
             var settings = FieldSettings();
             settings.UseLocalMainAdd = true;
@@ -22,21 +22,23 @@ namespace HNL.VXT.Core.Tests
             settings.DimMain = true;
             settings.DimHanger = true;
 
-            var plan = VxtMultiBoundaryPlanBuilder.Build(
-                RealProblemBoundaries(), settings, new VxtLayoutContext());
+            var boundaries = RealProblemBoundaries();
+            var plan = VxtMultiBoundaryPlanBuilder.Build(boundaries, settings, new VxtLayoutContext());
 
-            AssertNoSubMinOverlappingMains(plan, settings.MainMinSpacing);
+            // Field rule clarified on block15: a short XC near a notch edge may legitimately sit
+            // only ~350 mm from the neighbouring global XC even when MainMinSpacing=700. Its purpose
+            // is to keep the nearby wall/ceiling edge within MainMaxEdgeOffset (or prevent a MaxGap),
+            // so MinSpacing is a preferred normal-grid rule, not a reason to delete required edge XC.
+            var justifiedSubMinPairs = CountJustifiedSubMinPairs(plan, boundaries, settings);
+            Assert.IsTrue(justifiedSubMinPairs > 0,
+                "Real block15 fixture must retain at least one required local edge XC below MainMinSpacing when that XC protects a hard MaxEdge/MaxSpacing condition.");
+
+            AssertEverySubMinPairIsHardMaxJustified(plan, boundaries, settings);
             AssertEveryHangerStillBelongsToAMain(plan);
-
-            // The bad field output added rows such as -14523.113 next to the long -14173.113
-            // XC and -17125.608 next to -16775.608. Those 350 mm pairs must never survive the
-            // final automatic-notch safety pass.
-            Assert.IsFalse(HasOverlappingPairNear(plan, -14523.1126400746, -14173.1126400746, 5.0));
-            Assert.IsFalse(HasOverlappingPairNear(plan, -17125.6080527564, -16775.6080527564, 5.0));
         }
 
         [TestMethod]
-        public void Block15Vs16Real_OverConstrainedShallowNotchesPreferContinuousGridOverExtraLocalBars()
+        public void Block15Vs16Real_LocalOnMayAddRequiredEdgeBarsButOffKeepsContinuousBaseGrid()
         {
             var enabled = FieldSettings();
             enabled.UseLocalMainAdd = true;
@@ -46,23 +48,18 @@ namespace HNL.VXT.Core.Tests
             var disabled = enabled.Clone();
             disabled.UseLocalMainAdd = false;
 
-            var onPlan = VxtMultiBoundaryPlanBuilder.Build(
-                RealProblemBoundaries(), enabled, new VxtLayoutContext());
-            var offPlan = VxtMultiBoundaryPlanBuilder.Build(
-                RealProblemBoundaries(), disabled, new VxtLayoutContext());
+            var boundaries = RealProblemBoundaries();
+            var onPlan = VxtMultiBoundaryPlanBuilder.Build(boundaries, enabled, new VxtLayoutContext());
+            var offPlan = VxtMultiBoundaryPlanBuilder.Build(boundaries, disabled, new VxtLayoutContext());
 
-            AssertNoSubMinOverlappingMains(onPlan, enabled.MainMinSpacing);
-            Assert.AreEqual(
-                offPlan.MainSegmentCount,
-                onPlan.MainSegmentCount,
-                "For the real block15/16 shallow-notch fixtures, local-edge repair is over-constrained. " +
-                "ON must preserve the longer/continuous XC set instead of adding short XC below MainMinSpacing.");
+            Assert.IsTrue(onPlan.MainSegmentCount >= offPlan.MainSegmentCount,
+                "Local-edge ON may add short XC required by MaxEdge/MaxSpacing, but must never lose the continuous OFF base grid.");
 
-            Assert.AreEqual(
-                TotalMainLength(offPlan),
-                TotalMainLength(onPlan),
-                0.5,
-                "The safe ON result should match the continuous OFF geometry for these four real shallow notches.");
+            AssertEverySubMinPairIsHardMaxJustified(onPlan, boundaries, enabled);
+
+            // OFF means no automatic local notch XC. It does not mean the ceiling edge rule is
+            // retroactively forced; it means the user explicitly accepts the continuous base grid.
+            Assert.IsTrue(offPlan.MainSegmentCount > 0);
         }
 
         [TestMethod]
@@ -76,7 +73,6 @@ namespace HNL.VXT.Core.Tests
                 RealProblemBoundaries(), settings, new VxtLayoutContext());
 
             Assert.IsTrue(plan.MainSegmentCount > 0);
-            AssertNoSubMinOverlappingMains(plan, settings.MainMinSpacing);
         }
 
         private static VxtSettings FieldSettings()
@@ -152,51 +148,99 @@ namespace HNL.VXT.Core.Tests
                 })
             };
 
-        private static void AssertNoSubMinOverlappingMains(VxtPreviewPlan plan, double minSpacing)
+        private static int CountJustifiedSubMinPairs(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Boundary2> boundaries,
+            VxtSettings settings)
         {
-            var mains = plan.Lines.Where(x => x.Kind == PreviewLineKind.Main).ToArray();
-            for (var i = 0; i + 1 < mains.Length; i++)
+            var count = 0;
+            var mains = MainRecords(plan);
+            for (var i = 0; i + 1 < mains.Count; i++)
+            for (var j = i + 1; j < mains.Count; j++)
             {
                 var a = mains[i];
-                var ay = (a.A.Y + a.B.Y) * 0.5;
-                var ax1 = Math.Min(a.A.X, a.B.X);
-                var ax2 = Math.Max(a.A.X, a.B.X);
+                var b = mains[j];
+                var dy = Math.Abs(a.Y - b.Y);
+                var overlap = Math.Min(a.X2, b.X2) - Math.Max(a.X1, b.X1);
+                if (dy <= 0.5 || dy >= settings.MainMinSpacing - 0.5 || overlap <= 1.0) continue;
 
-                for (var j = i + 1; j < mains.Length; j++)
-                {
-                    var b = mains[j];
-                    var by = (b.A.Y + b.B.Y) * 0.5;
-                    var dy = Math.Abs(by - ay);
-                    if (dy <= 0.5 || dy >= minSpacing - 0.1) continue;
+                var shorter = a.Length < b.Length - 0.5 ? a : b.Length < a.Length - 0.5 ? b : null;
+                if (shorter != null && IsHardMaxRequired(shorter, mains, boundaries, settings))
+                    count++;
+            }
+            return count;
+        }
 
-                    var bx1 = Math.Min(b.A.X, b.B.X);
-                    var bx2 = Math.Max(b.A.X, b.B.X);
-                    var overlap = Math.Min(ax2, bx2) - Math.Max(ax1, bx1);
-                    if (overlap <= 1.0) continue;
+        private static void AssertEverySubMinPairIsHardMaxJustified(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Boundary2> boundaries,
+            VxtSettings settings)
+        {
+            var mains = MainRecords(plan);
+            for (var i = 0; i + 1 < mains.Count; i++)
+            for (var j = i + 1; j < mains.Count; j++)
+            {
+                var a = mains[i];
+                var b = mains[j];
+                var dy = Math.Abs(a.Y - b.Y);
+                var overlap = Math.Min(a.X2, b.X2) - Math.Max(a.X1, b.X1);
+                if (dy <= 0.5 || dy >= settings.MainMinSpacing - 0.5 || overlap <= 1.0) continue;
 
-                    Assert.Fail(
-                        "Real block15/16 fixture has overlapping XC rows below MainMinSpacing: dy=" +
-                        dy.ToString("0.###") + ", overlap=" + overlap.ToString("0.###"));
-                }
+                var shorter = a.Length < b.Length - 0.5 ? a : b.Length < a.Length - 0.5 ? b : null;
+                Assert.IsNotNull(shorter,
+                    "A sub-MinSpacing overlapping pair with equal spans is not a local-edge repair and needs separate strategy resolution.");
+                Assert.IsTrue(IsHardMaxRequired(shorter, mains, boundaries, settings),
+                    "A short XC below MainMinSpacing may survive only when removing it would violate MaxEdge or MainMaxSpacing in its actual notch band. dy=" +
+                    dy.ToString("0.###"));
             }
         }
 
-        private static bool HasOverlappingPairNear(VxtPreviewPlan plan, double y1, double y2, double tolerance)
+        private static bool IsHardMaxRequired(
+            MainRecord candidate,
+            IReadOnlyList<MainRecord> mains,
+            IReadOnlyList<Boundary2> boundaries,
+            VxtSettings settings)
         {
-            var first = plan.Lines.Where(x => x.Kind == PreviewLineKind.Main &&
-                Math.Abs((x.A.Y + x.B.Y) * 0.5 - y1) <= tolerance).ToArray();
-            var second = plan.Lines.Where(x => x.Kind == PreviewLineKind.Main &&
-                Math.Abs((x.A.Y + x.B.Y) * 0.5 - y2) <= tolerance).ToArray();
-
-            foreach (var a in first)
-            foreach (var b in second)
+            var width = candidate.X2 - candidate.X1;
+            var sampleXs = new[] { candidate.X1 + width * 0.2, candidate.X1 + width * 0.5, candidate.X1 + width * 0.8 };
+            foreach (var boundary in boundaries)
+            foreach (var x in sampleXs)
+            foreach (var interval in PolygonScanline.ClipVertical(boundary.Vertices, x))
             {
-                var overlap = Math.Min(Math.Max(a.A.X, a.B.X), Math.Max(b.A.X, b.B.X)) -
-                              Math.Max(Math.Min(a.A.X, a.B.X), Math.Min(b.A.X, b.B.X));
-                if (overlap > 1.0) return true;
+                var minY = Math.Min(interval.A.Y, interval.B.Y);
+                var maxY = Math.Max(interval.A.Y, interval.B.Y);
+                if (candidate.Y < minY - 0.5 || candidate.Y > maxY + 0.5) continue;
+
+                var withCandidate = mains.Where(m => x >= m.X1 - 0.5 && x <= m.X2 + 0.5 && m.Y >= minY - 0.5 && m.Y <= maxY + 0.5)
+                    .Select(m => m.Y).Distinct(new DoubleToleranceComparer()).OrderBy(y => y).ToArray();
+                var withoutCandidate = mains.Where(m => !ReferenceEquals(m, candidate) && x >= m.X1 - 0.5 && x <= m.X2 + 0.5 && m.Y >= minY - 0.5 && m.Y <= maxY + 0.5)
+                    .Select(m => m.Y).Distinct(new DoubleToleranceComparer()).OrderBy(y => y).ToArray();
+
+                if (HardMaxViolations(withoutCandidate, minY, maxY, settings) > HardMaxViolations(withCandidate, minY, maxY, settings))
+                    return true;
             }
             return false;
         }
+
+        private static int HardMaxViolations(double[] ys, double minY, double maxY, VxtSettings settings)
+        {
+            if (ys.Length == 0) return 1;
+            var result = 0;
+            var maxEdge = settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance);
+            if (ys[0] - minY > maxEdge + 0.5) result++;
+            if (maxY - ys[ys.Length - 1] > maxEdge + 0.5) result++;
+            for (var i = 0; i + 1 < ys.Length; i++)
+                if (ys[i + 1] - ys[i] > settings.MainMaxSpacing + 0.5) result++;
+            return result;
+        }
+
+        private static List<MainRecord> MainRecords(VxtPreviewPlan plan)
+            => plan.Lines.Where(x => x.Kind == PreviewLineKind.Main)
+                .Select(x => new MainRecord(
+                    (x.A.Y + x.B.Y) * 0.5,
+                    Math.Min(x.A.X, x.B.X),
+                    Math.Max(x.A.X, x.B.X)))
+                .ToList();
 
         private static void AssertEveryHangerStillBelongsToAMain(VxtPreviewPlan plan)
         {
@@ -209,13 +253,28 @@ namespace HNL.VXT.Core.Tests
                     var x1 = Math.Min(main.A.X, main.B.X);
                     var x2 = Math.Max(main.A.X, main.B.X);
                     return Math.Abs(hanger.Y - y) <= 0.5 && hanger.X >= x1 - 0.5 && hanger.X <= x2 + 0.5;
-                }), "Removing an unsafe local XC must also remove its orphan Ty.");
+                }), "Removing a redundant local XC must also remove its orphan Ty.");
             }
         }
 
-        private static double TotalMainLength(VxtPreviewPlan plan)
-            => plan.Lines
-                .Where(x => x.Kind == PreviewLineKind.Main)
-                .Sum(x => x.A.DistanceTo(x.B));
+        private sealed class MainRecord
+        {
+            public MainRecord(double y, double x1, double x2)
+            {
+                Y = y;
+                X1 = x1;
+                X2 = x2;
+            }
+            public double Y { get; }
+            public double X1 { get; }
+            public double X2 { get; }
+            public double Length => X2 - X1;
+        }
+
+        private sealed class DoubleToleranceComparer : IEqualityComparer<double>
+        {
+            public bool Equals(double x, double y) => Math.Abs(x - y) <= 0.5;
+            public int GetHashCode(double obj) => Math.Round(obj * 2.0).GetHashCode();
+        }
     }
 }
