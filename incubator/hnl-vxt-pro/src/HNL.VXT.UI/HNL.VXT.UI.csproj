@@ -5,6 +5,10 @@
     <RootNamespace>HNL.VXT.UI</RootNamespace>
     <AssemblyName>HNL.VXT.UI</AssemblyName>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Stamp the real build start time into the UI assembly so the palette can show it. -->
+    <AssemblyMetadata Include="HnlVxtBuildUtc" Value="$([System.DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))" />
+  </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
