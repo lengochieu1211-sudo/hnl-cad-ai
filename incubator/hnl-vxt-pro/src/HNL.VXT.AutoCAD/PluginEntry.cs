@@ -26,7 +26,10 @@ namespace HNL.VXT.AutoCAD
             var documents = Application.DocumentManager;
             documents.DocumentActivated -= OnDocumentActivated;
             documents.DocumentToBeDestroyed -= OnDocumentToBeDestroyed;
-            VxtTransientPreview.Instance.Clear();
+
+            // Shutdown/document teardown is exactly where AutoCAD owns native graphics destruction.
+            // Never call TransientManager here. Keep wrappers alive and let process teardown reclaim them.
+            VxtTransientPreview.Instance.AbandonForDocumentTransition();
             VxtSession.ReleaseDocument(null);
         }
 
@@ -36,10 +39,11 @@ namespace HNL.VXT.AutoCAD
             if (doc == null) return;
 
             // AutoCAD can fire DocumentActivated again for the same drawing when focus/modal
-            // state changes. VxtSession filters that redundant notification by Document identity,
-            // so only a real DWG switch clears drawing-specific selection/transient state.
+            // state changes. VxtSession filters that redundant notification by Document identity.
+            // On a real DWG switch, do not touch TransientManager from this native callback:
+            // retain the wrappers until AutoCAD has finished tearing down the old viewport state.
             if (VxtSession.SynchronizeDocument(doc))
-                VxtTransientPreview.Instance.Clear();
+                VxtTransientPreview.Instance.AbandonForDocumentTransition();
         }
 
         private static void OnDocumentToBeDestroyed(object sender, DocumentCollectionEventArgs e)
@@ -47,7 +51,7 @@ namespace HNL.VXT.AutoCAD
             var doc = e?.Document;
             if (doc == null) return;
             if (VxtSession.ReleaseDocument(doc))
-                VxtTransientPreview.Instance.Clear();
+                VxtTransientPreview.Instance.AbandonForDocumentTransition();
         }
     }
 }
