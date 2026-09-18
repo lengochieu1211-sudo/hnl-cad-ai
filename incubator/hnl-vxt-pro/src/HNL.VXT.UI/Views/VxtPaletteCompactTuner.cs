@@ -20,7 +20,7 @@ namespace HNL.VXT.UI.Views
     {
         private const double LabelWidth = 142.0;
         private const double PickButtonWidth = 68.0;
-        private const double PairLabelWidth = 108.0;
+        private const double PairLabelWidth = LabelWidth;
         private const double PairTokenWidth = 27.0;
         private static bool _blockLayerSyncHooked;
         private static bool _pairedRowsApplied;
@@ -94,9 +94,11 @@ namespace HNL.VXT.UI.Views
         private static void ApplyNow(VxtPaletteView view)
         {
             CompactHeaderAndFooter(view);
+            EnsureUnitLabel(view);
             SurfaceLayerAndDimPanel(view);
             RemoveDuplicateDimResourceRows(view);
             CompactMinMaxRows(view);
+            SpaceSectionHeaderToggles(view);
             CompactScrollableContent(view);
         }
 
@@ -146,6 +148,79 @@ namespace HNL.VXT.UI.Views
                     }
                     foreach (var button in Descendants<Button>(border))
                         button.Height = 34.0;
+                }
+            }
+        }
+
+        private static void EnsureUnitLabel(VxtPaletteView view)
+        {
+            var root = view.Content as Grid;
+            if (root == null) return;
+
+            Border header = null;
+            foreach (var child in root.Children)
+            {
+                var border = child as Border;
+                if (border != null && Grid.GetRow(border) == 0)
+                {
+                    header = border;
+                    break;
+                }
+            }
+            if (header == null) return;
+
+            foreach (var existing in Descendants<TextBlock>(header))
+            {
+                if (!string.IsNullOrWhiteSpace(existing.Text) &&
+                    existing.Text.StartsWith("Đơn vị:", StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+
+            StackPanel titleStack = null;
+            foreach (var stack in Descendants<StackPanel>(header))
+            {
+                foreach (var text in Descendants<TextBlock>(stack))
+                {
+                    if (string.Equals(text.Text, "VẼ XƯƠNG TRẦN", StringComparison.Ordinal))
+                    {
+                        titleStack = stack;
+                        break;
+                    }
+                }
+                if (titleStack != null) break;
+            }
+            if (titleStack == null) return;
+
+            var unit = new TextBlock
+            {
+                Text = "Đơn vị: mm",
+                Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                FontSize = 9.0,
+                Margin = new Thickness(0, 1, 0, 0),
+                ToolTip = "Đơn vị kích thước đang dùng trong HNL VXT"
+            };
+
+            var insertAt = Math.Min(3, titleStack.Children.Count);
+            titleStack.Children.Insert(insertAt, unit);
+        }
+
+        private static void SpaceSectionHeaderToggles(VxtPaletteView view)
+        {
+            var toggleStyle = view.Resources["ToggleSwitch"] as Style;
+            foreach (var check in Descendants<CheckBox>(view))
+            {
+                if (toggleStyle == null || !ReferenceEquals(check.Style, toggleStyle)) continue;
+
+                check.Margin = new Thickness(8, 0, 0, 0);
+
+                var grid = Ancestor<Grid>(check);
+                if (grid == null) continue;
+
+                foreach (var text in grid.Children)
+                {
+                    var label = text as TextBlock;
+                    if (label == null || Grid.GetColumn(label) != 1) continue;
+                    label.Margin = new Thickness(20, 0, 8, 0);
                 }
             }
         }
