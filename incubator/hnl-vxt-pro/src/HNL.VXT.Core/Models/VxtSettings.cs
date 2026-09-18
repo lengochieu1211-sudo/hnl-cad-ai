@@ -42,7 +42,7 @@ namespace HNL.VXT.Core.Models
         public HangerLayoutMode HangerLayout { get; set; } = HangerLayoutMode.BalancedTwoEnds;
 
         // Né thiết bị
-        public bool UseAvoidance = true;
+        public bool UseAvoidance = false;
         public bool ShiftAllForAvoidance = true;
         public double ClearanceDistance { get; set; } = 20.0;
 
