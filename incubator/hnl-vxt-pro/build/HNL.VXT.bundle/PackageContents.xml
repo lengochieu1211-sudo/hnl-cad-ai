@@ -12,10 +12,35 @@
                     Version="7.0.0.6"
                     ModuleName="./Contents/Windows/HNL.VXT.AutoCAD.dll"
                     AppDescription="HNL Tool - Vẽ Xương Trần | VXT Pro"
-                    LoadOnAutoCADStartup="True">
+                    LoadOnCommandInvocation="True">
       <Commands GroupName="HNL.VXT.Commands">
-        <Command Global="VXT" Local="VXT" />
-        <Command Global="VXTCREATE" Local="VXTCREATE" />
+        <Command Global="HVX" Local="HVX" />
+        <Command Global="HNLVXTCREATE" Local="HNLVXTCREATE" />
+        <Command Global="HNLVXTBOUNDARY" Local="HNLVXTBOUNDARY" />
+        <Command Global="HNLVXTAUTOSETUP" Local="HNLVXTAUTOSETUP" />
+        <Command Global="HNLVXTDIRECTION" Local="HNLVXTDIRECTION" />
+        <Command Global="HNLVXTREGION" Local="HNLVXTREGION" />
+        <Command Global="HNLVXTPICKMAIN" Local="HNLVXTPICKMAIN" />
+        <Command Global="HNLVXTPICKFURRING" Local="HNLVXTPICKFURRING" />
+        <Command Global="HNLVXTPICKHANGER" Local="HNLVXTPICKHANGER" />
+        <Command Global="HNLVXTMEP" Local="HNLVXTMEP" />
+        <Command Global="HNLVXTMEPMAIN" Local="HNLVXTMEPMAIN" />
+        <Command Global="HNLVXTMEPFURRING" Local="HNLVXTMEPFURRING" />
+        <Command Global="HNLVXTDIMMAIN" Local="HNLVXTDIMMAIN" />
+        <Command Global="HNLVXTDIMFURRING" Local="HNLVXTDIMFURRING" />
+        <Command Global="HNLVXTDIMHANGER" Local="HNLVXTDIMHANGER" />
+        <Command Global="HNLVXTANALYZE" Local="HNLVXTANALYZE" />
+        <Command Global="HNLVXTDIAG" Local="HNLVXTDIAG" />
+        <Command Global="HNLVXTPREVIEW" Local="HNLVXTPREVIEW" />
+        <Command Global="HNLVXTCLEARPREVIEW" Local="HNLVXTCLEARPREVIEW" />
+        <Command Global="HNLVXTGOLDEN" Local="HNLVXTGOLDEN" />
+        <Command Global="HNLVXTPROGOLDEN" Local="HNLVXTPROGOLDEN" />
+        <Command Global="HNLVXTPROAUTOQA" Local="HNLVXTPROAUTOQA" />
+        <Command Global="HNLVXTPROMULTIQA" Local="HNLVXTPROMULTIQA" />
+        <Command Global="HNLVXTSOAKQA" Local="HNLVXTSOAKQA" />
+        <Command Global="HNLVXTPREVIEWQA" Local="HNLVXTPREVIEWQA" />
+        <Command Global="HNLVXTQA" Local="HNLVXTQA" />
+        <Command Global="HNLVXTRUNALLQA" Local="HNLVXTRUNALLQA" />
       </Commands>
     </ComponentEntry>
   </Components>
