@@ -32,6 +32,9 @@ namespace HNL.VXT.AutoCAD
                 VxtPalettePreviewLegend.Apply(_view);
                 VxtPaletteTypography.Apply(_view);
                 VxtPaletteVisualIdentity.Apply(_view);
+                // Final presentation-only pass: make the body read like AutoCAD Properties
+                // while preserving every existing HNL color/resource/binding.
+                VxtPalettePropertiesLayout.Apply(_view);
                 VxtSession.Current.ViewModel = _view.ViewModel;
 
                 _palette = new PaletteSet(VxtBuildInfo.PaletteTitle, PaletteGuid)
