@@ -16,10 +16,6 @@ namespace HNL.VXT.AutoCAD
 
     internal static class BoundarySampler
     {
-        // HNL VXT input tolerance policy. Drawing units are mm.
-        public const double AutoCloseGapTolerance = 1.0;
-        public const double ZTolerance = 0.01;
-
         public static Boundary2 FromPolyline(Polyline polyline)
         {
             if (!TryFromPolyline(polyline, out var boundary, out var info))
@@ -60,12 +56,12 @@ namespace HNL.VXT.AutoCAD
             }
 
             info.MaxAbsZ = maxAbsZ;
-            if (maxAbsZ > ZTolerance)
+            if (!BoundaryInputTolerancePolicy.AcceptZ(maxAbsZ))
             {
                 info.RejectionReason = "Z";
                 return false;
             }
-            info.TinyZNormalized = maxAbsZ > 1e-12;
+            info.TinyZNormalized = BoundaryInputTolerancePolicy.IsTinyNonZeroZ(maxAbsZ);
 
             if (!polyline.Closed)
             {
@@ -76,7 +72,7 @@ namespace HNL.VXT.AutoCAD
                 var gap = Math.Sqrt(dx * dx + dy * dy);
                 info.ClosureGap = gap;
 
-                if (gap > AutoCloseGapTolerance)
+                if (!BoundaryInputTolerancePolicy.AcceptOpenGap(gap))
                 {
                     info.RejectionReason = "OpenGap";
                     return false;
