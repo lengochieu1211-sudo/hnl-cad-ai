@@ -81,9 +81,10 @@ namespace HNL.VXT.AutoCAD
             VxtSession.Current.Settings.MainDirection = mode;
             switch (mode)
             {
+                case MainDirectionMode.Auto: Send("HNLVXTAUTOSETUP "); break;
                 case MainDirectionMode.TwoPoints: Send("HNLVXTDIRECTION "); break;
                 case MainDirectionMode.RectangleRegions: Send("HNLVXTREGION "); break;
-                default: Write("\nHNL Tool - VXT Pro: Hướng hiện tại không cần chọn điểm trên CAD."); break;
+                default: Write("\nHNL Tool - VXT Pro: Hướng hiện tại không cần thiết lập thêm."); break;
             }
         }
 
