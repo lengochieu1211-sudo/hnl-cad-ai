@@ -285,7 +285,11 @@ namespace HNL.VXT.Core.Preview
                 (settings.ShiftAllForAvoidance && result.IsClear))
                 return result.Positions;
 
-            var repaired = SmartLayout1D.AdjustGrid(
+            // XP avoidance must keep the original V6.7.2 repair semantics even when
+            // a Pro optimization profile is active. Pro may try a whole-grid offset first,
+            // but if that cannot clear every selected XP/general obstacle, the fallback is
+            // the Lisp absolute-WCS adjust-grid (not the XC phase-preserving repair).
+            var repaired = LegacyGridAvoidance.AdjustGridAbsoluteLisp(
                 result.Positions,
                 intervals,
                 domain.MinX,
