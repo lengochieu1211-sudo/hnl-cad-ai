@@ -94,8 +94,9 @@ namespace HNL.VXT.Core.Tests
             var baseline = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { boundary }, settings, new VxtLayoutContext());
 
+            var xp0 = FurringCoordinates(baseline).First();
             var context = new VxtLayoutContext();
-            context.FurringObstacles.Add(new Box2(400.0, 0.0, 420.0, 4000.0));
+            context.FurringObstacles.Add(new Box2(xp0 - 10.0, 0.0, xp0 + 10.0, 4000.0));
             var obstructed = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { boundary }, settings, context);
 
@@ -121,15 +122,22 @@ namespace HNL.VXT.Core.Tests
 
             var boundary = Rectangle(6000.0, 4000.0);
 
+            var baseline = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, settings, new VxtLayoutContext());
+            var mainGrid = MainCoordinates(baseline);
+            var xpGrid = FurringCoordinates(baseline);
+            var main0 = mainGrid.Length > 2 ? mainGrid[1] : mainGrid.First();
+            var xp0 = xpGrid.First();
+
             var mainOnly = new VxtLayoutContext();
-            mainOnly.MainObstacles.Add(new Box2(0.0, 1950.0, 6000.0, 2050.0));
+            mainOnly.MainObstacles.Add(new Box2(0.0, main0 - 10.0, 6000.0, main0 + 10.0));
 
             var xpOnly = new VxtLayoutContext();
-            xpOnly.FurringObstacles.Add(new Box2(400.0, 0.0, 420.0, 4000.0));
+            xpOnly.FurringObstacles.Add(new Box2(xp0 - 10.0, 0.0, xp0 + 10.0, 4000.0));
 
             var combined = new VxtLayoutContext();
-            combined.MainObstacles.Add(new Box2(0.0, 1950.0, 6000.0, 2050.0));
-            combined.FurringObstacles.Add(new Box2(400.0, 0.0, 420.0, 4000.0));
+            combined.MainObstacles.Add(new Box2(0.0, main0 - 10.0, 6000.0, main0 + 10.0));
+            combined.FurringObstacles.Add(new Box2(xp0 - 10.0, 0.0, xp0 + 10.0, 4000.0));
 
             var mainOnlyPlan = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, settings, mainOnly);
             var xpOnlyPlan = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, settings, xpOnly);
