@@ -106,6 +106,89 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void LegacyFurringOnlyAvoidance_RepairsXpWithoutChangingMainGrid()
+        {
+            var settings = LegacyAvoidanceSettings();
+            settings.ShiftAllForAvoidance = false;
+
+            var boundary = Rectangle(6000.0, 4000.0);
+            var baseline = new VxtPreviewPlanBuilder().Build(boundary, settings, new VxtLayoutContext());
+
+            var context = new VxtLayoutContext();
+            // First XP row is at 1220/3 = 406.666...; this XP-only obstacle must move XP
+            // but must not leak into XC, matching local_bboxes_xp in V6.7.2.
+            context.FurringObstacles.Add(new Box2(400.0, 0.0, 420.0, 4000.0));
+            var obstructed = new VxtPreviewPlanBuilder().Build(boundary, settings, context);
+
+            CollectionAssert.AreEqual(
+                MainCoordinates(baseline),
+                MainCoordinates(obstructed),
+                "XP-only equipment must never change the XC grid.");
+
+            CollectionAssert.AreNotEqual(
+                FurringCoordinates(baseline),
+                FurringCoordinates(obstructed),
+                "XP-only equipment must actively repair the XP grid.");
+        }
+
+        [TestMethod]
+        public void LegacyCombinedMainAndFurringAvoidance_AppliesBothIndependentEquipmentSets()
+        {
+            var settings = LegacyAvoidanceSettings();
+            settings.ShiftAllForAvoidance = false;
+            var boundary = Rectangle(6000.0, 4000.0);
+
+            var mainOnly = MainOnlyObstacleContext();
+            var xpOnly = new VxtLayoutContext();
+            xpOnly.FurringObstacles.Add(new Box2(400.0, 0.0, 420.0, 4000.0));
+
+            var combined = MainOnlyObstacleContext();
+            combined.FurringObstacles.Add(new Box2(400.0, 0.0, 420.0, 4000.0));
+
+            var mainOnlyPlan = new VxtPreviewPlanBuilder().Build(boundary, settings, mainOnly);
+            var xpOnlyPlan = new VxtPreviewPlanBuilder().Build(boundary, settings, xpOnly);
+            var combinedPlan = new VxtPreviewPlanBuilder().Build(boundary, settings, combined);
+
+            CollectionAssert.AreEqual(
+                MainCoordinates(mainOnlyPlan),
+                MainCoordinates(combinedPlan),
+                "When XC and XP equipment are selected together, XC avoidance must remain identical to XC-only avoidance.");
+
+            CollectionAssert.AreEqual(
+                FurringCoordinates(xpOnlyPlan),
+                FurringCoordinates(combinedPlan),
+                "When XC and XP equipment are selected together, XP avoidance must remain identical to XP-only avoidance.");
+
+            Assert.IsTrue(combinedPlan.MainSegmentCount > 0);
+            Assert.IsTrue(combinedPlan.FurringSegmentCount > 0);
+        }
+
+        [TestMethod]
+        public void LegacyGeneralEquipment_AppliesToBothMainAndFurring()
+        {
+            var settings = LegacyAvoidanceSettings();
+            settings.ShiftAllForAvoidance = false;
+            var boundary = Rectangle(6000.0, 4000.0);
+
+            var baseline = new VxtPreviewPlanBuilder().Build(boundary, settings, new VxtLayoutContext());
+
+            var context = new VxtLayoutContext();
+            // Crosses the first XC row (Y=300) and the first XP row (X=406.666...).
+            context.GeneralObstacles.Add(new Box2(400.0, 250.0, 420.0, 350.0));
+            var obstructed = new VxtPreviewPlanBuilder().Build(boundary, settings, context);
+
+            CollectionAssert.AreNotEqual(
+                MainCoordinates(baseline),
+                MainCoordinates(obstructed),
+                "General equipment must participate in XC avoidance.");
+
+            CollectionAssert.AreNotEqual(
+                FurringCoordinates(baseline),
+                FurringCoordinates(obstructed),
+                "General equipment must participate in XP avoidance.");
+        }
+
+        [TestMethod]
         public void FieldDxf_OffsetWorldOrigin_MainAvoidanceKeepsConfigured50MillimetreGridPhase()
         {
             // Regression from new block11.dxf. The field drawing lives at a large, non-round WCS
