@@ -9,16 +9,19 @@ using HNL.VXT.UI.Controls;
 namespace HNL.VXT.UI.Views
 {
     /// <summary>
-    /// Final presentation-only layout pass inspired by AutoCAD Properties.
+    /// Final presentation-only layout pass inspired by the native AutoCAD Properties palette.
     ///
-    /// It intentionally does not replace bindings, commands, colors or HNL identity. Existing
-    /// CardBackground/HoverBackground/CardBorder resources are reused so Dark/Light themes and
-    /// XC/XP/Ty/DIM/MEP colors remain exactly under the existing theme system.
+    /// This pass never replaces bindings, commands, HNL colors or geometry logic. It only
+    /// normalizes the palette chrome into dense group bars and Property | Value rows.
+    /// Existing CardBackground/HoverBackground/CardBorder resources remain authoritative so
+    /// Dark/Light themes and XC/XP/Ty/DIM/MEP colors continue to come from the existing theme.
     /// </summary>
     public static class VxtPalettePropertiesLayout
     {
         private const string HeaderTag = "HNL_VXT_PROPERTIES_GROUP_HEADER";
         private const string RowDividerTag = "HNL_VXT_PROPERTIES_ROW_DIVIDER";
+        private const string ColumnDividerTag = "HNL_VXT_PROPERTIES_COLUMN_DIVIDER";
+        private const double PropertyRowMinHeight = 24.0;
 
         public static void Apply(VxtPaletteView view)
         {
@@ -27,8 +30,9 @@ namespace HNL.VXT.UI.Views
             ApplyNow(view);
             view.Loaded += (sender, args) =>
             {
-                // Run after the dynamic palette, typography and visual identity passes have
-                // materialized their final controls. This keeps the pass idempotent and visual only.
+                // Run after dynamic panels, typography and visual-identity passes have finished.
+                // The pass is intentionally idempotent because theme/appearance controls can
+                // cause the palette tree to be revisited during the same AutoCAD session.
                 view.Dispatcher.BeginInvoke(
                     new Action(() => ApplyNow(view)),
                     DispatcherPriority.ApplicationIdle);
@@ -40,8 +44,8 @@ namespace HNL.VXT.UI.Views
             var scroll = FindFirst<ScrollViewer>(view);
             if (scroll == null) return;
 
-            // AutoCAD Properties uses a narrow gutter instead of floating cards.
-            scroll.Padding = new Thickness(4, 4, 4, 4);
+            // Native Properties uses a very small outer gutter rather than floating cards.
+            scroll.Padding = new Thickness(2);
 
             var stack = scroll.Content as StackPanel;
             if (stack == null) return;
@@ -61,14 +65,14 @@ namespace HNL.VXT.UI.Views
             var cardBorder = ResourceBrush(view, "CardBorder", Brushes.DimGray);
             var headerBackground = ResourceBrush(view, "HoverBackground", Brushes.DimGray);
 
-            // Keep the existing Background/BorderBrush when a section deliberately uses an HNL
-            // accent (Preset, Preview, DIM etc.). Only geometry/spacing is normalized here.
+            // Preserve any deliberate HNL accent BorderBrush/Background already assigned by the
+            // original palette. Only spacing, shape and separators are normalized here.
             if (card.BorderBrush == null)
                 card.BorderBrush = cardBorder;
 
             card.CornerRadius = new CornerRadius(0);
             card.BorderThickness = new Thickness(1);
-            card.Margin = new Thickness(0, 0, 0, 2);
+            card.Margin = new Thickness(0, 0, 0, 1);
 
             var expander = card.Child as Expander;
             if (expander != null)
@@ -81,16 +85,21 @@ namespace HNL.VXT.UI.Views
                 var content = expander.Content as FrameworkElement;
                 if (content != null)
                 {
-                    content.Margin = new Thickness(7, 4, 7, 5);
+                    // Property rows themselves provide their own cell padding, so the content can
+                    // sit almost flush with the group border like AutoCAD Properties.
+                    content.Margin = new Thickness(1, 2, 1, 2);
                     NormalizePropertyRows(content, cardBorder);
+                    FlattenNestedPropertyGroups(content, cardBorder);
                 }
                 return;
             }
 
-            // Non-expandable cards (Preset, Scope, diagnostics, Preview) still become flat blocks,
-            // but retain their original accent/background and functional content.
-            card.Padding = new Thickness(7, 5, 7, 6);
+            // Preset / Scope / diagnostics / Preview are not all pure property grids. Keep a small
+            // inner inset for their action/status content, while any detected two-column property
+            // row is still normalized to the same grid contract.
+            card.Padding = new Thickness(6, 4, 6, 5);
             NormalizePropertyRows(card.Child, cardBorder);
+            FlattenNestedPropertyGroups(card.Child, cardBorder);
         }
 
         private static void WrapGroupHeader(Expander expander, Brush background, Brush borderBrush)
@@ -101,6 +110,7 @@ namespace HNL.VXT.UI.Views
             {
                 existingBorder.Background = background;
                 existingBorder.BorderBrush = borderBrush;
+                existingBorder.Padding = new Thickness(6, 3, 6, 3);
                 return;
             }
 
@@ -132,7 +142,7 @@ namespace HNL.VXT.UI.Views
                 BorderBrush = borderBrush,
                 BorderThickness = new Thickness(0, 0, 0, 1),
                 CornerRadius = new CornerRadius(0),
-                Padding = new Thickness(7, 4, 7, 4),
+                Padding = new Thickness(6, 3, 6, 3),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Child = visual
             };
@@ -144,44 +154,226 @@ namespace HNL.VXT.UI.Views
         {
             if (root == null) return;
 
+            // Snapshot first. Adding divider Borders while traversing a Grid must not make the
+            // classification of later rows depend on mutation order.
+            var rows = new List<Grid>();
             foreach (var node in Walk(root))
             {
                 var grid = node as Grid;
-                if (grid == null || !LooksLikePropertyRow(grid)) continue;
+                if (grid != null && LooksLikePropertyRow(grid))
+                    rows.Add(grid);
+            }
+
+            foreach (var grid in rows)
+            {
+                var labelColumn = FindLabelColumn(grid);
+                if (labelColumn < 0) continue;
 
                 grid.Margin = new Thickness(0);
-                grid.MinHeight = Math.Max(grid.MinHeight, 28.0);
+                grid.MinHeight = PropertyRowMinHeight;
+                grid.SnapsToDevicePixels = true;
 
-                var alreadyHasDivider = false;
-                foreach (UIElement child in grid.Children)
+                NormalizeColumns(grid, labelColumn);
+                NormalizeCellMargins(grid, labelColumn);
+                NormalizeValueEditors(grid);
+                AddOrUpdateHorizontalDivider(grid, dividerBrush);
+                AddOrUpdateColumnDivider(grid, labelColumn, dividerBrush);
+            }
+        }
+
+        private static void NormalizeColumns(Grid grid, int labelColumn)
+        {
+            var columns = grid.ColumnDefinitions;
+            if (columns == null || columns.Count < 2) return;
+
+            if (labelColumn == 0)
+            {
+                // Standard Properties contract: one stable property column and one elastic value
+                // column. Any third action column (Pick/Setup) keeps its original fixed width.
+                columns[0].Width = new GridLength(43, GridUnitType.Star);
+                columns[1].Width = new GridLength(57, GridUnitType.Star);
+                return;
+            }
+
+            if (labelColumn == 1 && columns.Count >= 3)
+            {
+                // DIM rows carry an enable CheckBox before the property label. Preserve that
+                // leading affordance, then split the remaining area into Property | Value.
+                columns[0].Width = new GridLength(30);
+                columns[1].Width = new GridLength(36, GridUnitType.Star);
+                columns[2].Width = new GridLength(64, GridUnitType.Star);
+            }
+        }
+
+        private static void NormalizeCellMargins(Grid grid, int labelColumn)
+        {
+            foreach (UIElement child in grid.Children)
+            {
+                if (IsDivider(child)) continue;
+
+                var column = Grid.GetColumn(child);
+                var text = child as TextBlock;
+                if (text != null)
                 {
-                    var border = child as Border;
-                    if (border != null &&
-                        string.Equals(border.Tag as string, RowDividerTag, StringComparison.Ordinal))
-                    {
-                        alreadyHasDivider = true;
-                        border.Background = dividerBrush;
-                        break;
-                    }
+                    text.Margin = new Thickness(5, 0, 5, 0);
+                    text.VerticalAlignment = VerticalAlignment.Center;
+                    continue;
                 }
 
-                if (alreadyHasDivider) continue;
+                var check = child as CheckBox;
+                if (check != null)
+                {
+                    check.Margin = column <= labelColumn
+                        ? new Thickness(5, 0, 3, 0)
+                        : new Thickness(4, 0, 2, 0);
+                    check.VerticalAlignment = VerticalAlignment.Center;
+                    continue;
+                }
 
-                var divider = new Border
+                var button = child as Button;
+                if (button != null)
+                {
+                    button.Margin = new Thickness(3, 0, 2, 0);
+                    continue;
+                }
+
+                // Editors occupy the value cell rather than floating inside card padding.
+                if (child is TextBox || child is ComboBox || child is HnlNumericBox)
+                    ((FrameworkElement)child).Margin = new Thickness(0);
+            }
+        }
+
+        private static void NormalizeValueEditors(Grid grid)
+        {
+            foreach (var node in Walk(grid))
+            {
+                var textBox = node as TextBox;
+                if (textBox != null)
+                {
+                    textBox.Height = PropertyRowMinHeight;
+                    textBox.MinHeight = 0;
+                    textBox.Padding = new Thickness(4, 0, 4, 0);
+                    textBox.VerticalContentAlignment = VerticalAlignment.Center;
+                    textBox.BorderThickness = new Thickness(1);
+                    continue;
+                }
+
+                var combo = node as ComboBox;
+                if (combo != null)
+                {
+                    combo.Height = PropertyRowMinHeight;
+                    combo.MinHeight = 0;
+                    combo.Padding = new Thickness(4, 0, 4, 0);
+                    combo.VerticalContentAlignment = VerticalAlignment.Center;
+                    combo.BorderThickness = new Thickness(1);
+                    continue;
+                }
+
+                var numeric = node as HnlNumericBox;
+                if (numeric != null)
+                {
+                    numeric.Height = PropertyRowMinHeight;
+                    numeric.MinHeight = PropertyRowMinHeight;
+                    numeric.VerticalAlignment = VerticalAlignment.Center;
+                    continue;
+                }
+
+                var button = node as Button;
+                if (button != null)
+                {
+                    button.Height = PropertyRowMinHeight;
+                    button.MinHeight = PropertyRowMinHeight;
+                    button.Padding = new Thickness(6, 1, 6, 1);
+                    button.VerticalContentAlignment = VerticalAlignment.Center;
+                }
+            }
+        }
+
+        private static void AddOrUpdateHorizontalDivider(Grid grid, Brush dividerBrush)
+        {
+            var divider = FindTaggedBorder(grid, RowDividerTag);
+            if (divider == null)
+            {
+                divider = new Border
                 {
                     Tag = RowDividerTag,
                     Height = 1,
-                    Background = dividerBrush,
                     VerticalAlignment = VerticalAlignment.Bottom,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
-                    IsHitTestVisible = false,
-                    Opacity = 0.65
+                    IsHitTestVisible = false
                 };
                 Grid.SetColumn(divider, 0);
                 Grid.SetColumnSpan(divider, Math.Max(1, grid.ColumnDefinitions.Count));
                 Panel.SetZIndex(divider, 1000);
                 grid.Children.Add(divider);
             }
+
+            divider.Background = dividerBrush;
+            divider.Opacity = 0.68;
+        }
+
+        private static void AddOrUpdateColumnDivider(Grid grid, int labelColumn, Brush dividerBrush)
+        {
+            var divider = FindTaggedBorder(grid, ColumnDividerTag);
+            if (divider == null)
+            {
+                divider = new Border
+                {
+                    Tag = ColumnDividerTag,
+                    Width = 1,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Stretch,
+                    IsHitTestVisible = false
+                };
+                Grid.SetColumn(divider, labelColumn);
+                Panel.SetZIndex(divider, 1000);
+                grid.Children.Add(divider);
+            }
+            else
+            {
+                Grid.SetColumn(divider, labelColumn);
+            }
+
+            divider.Background = dividerBrush;
+            divider.Opacity = 0.82;
+        }
+
+        private static Border FindTaggedBorder(Grid grid, string tag)
+        {
+            foreach (UIElement child in grid.Children)
+            {
+                var border = child as Border;
+                if (border != null && string.Equals(border.Tag as string, tag, StringComparison.Ordinal))
+                    return border;
+            }
+            return null;
+        }
+
+        private static bool IsDivider(UIElement element)
+        {
+            var border = element as Border;
+            if (border == null) return false;
+            var tag = border.Tag as string;
+            return string.Equals(tag, RowDividerTag, StringComparison.Ordinal) ||
+                   string.Equals(tag, ColumnDividerTag, StringComparison.Ordinal);
+        }
+
+        private static int FindLabelColumn(Grid grid)
+        {
+            var best = int.MaxValue;
+            foreach (UIElement child in grid.Children)
+            {
+                if (IsDivider(child)) continue;
+
+                var text = child as TextBlock;
+                if (text == null || string.IsNullOrWhiteSpace(text.Text)) continue;
+
+                var column = Grid.GetColumn(text);
+                if (column < best)
+                    best = column;
+            }
+
+            return best == int.MaxValue ? -1 : best;
         }
 
         private static bool LooksLikePropertyRow(Grid grid)
@@ -189,26 +381,72 @@ namespace HNL.VXT.UI.Views
             if (grid.ColumnDefinitions == null || grid.ColumnDefinitions.Count < 2)
                 return false;
 
-            var hasValueControl = false;
-            var hasLabelOrStatus = false;
+            var labelColumn = FindLabelColumn(grid);
+            if (labelColumn < 0) return false;
 
-            foreach (var node in Walk(grid))
+            // Require a real editor/action after the label. This deliberately avoids treating
+            // structural header/preview grids as property rows merely because they contain text.
+            foreach (UIElement child in grid.Children)
             {
-                if (ReferenceEquals(node, grid)) continue;
+                if (IsDivider(child)) continue;
+                if (Grid.GetColumn(child) <= labelColumn) continue;
 
-                if (node is TextBox || node is ComboBox || node is HnlNumericBox ||
-                    node is Button || node is CheckBox)
-                    hasValueControl = true;
-
-                var text = node as TextBlock;
-                if (text != null && !string.IsNullOrWhiteSpace(text.Text))
-                    hasLabelOrStatus = true;
-
-                if (hasValueControl && hasLabelOrStatus)
+                if (child is TextBox || child is ComboBox || child is HnlNumericBox ||
+                    child is Button || child is CheckBox)
                     return true;
             }
 
             return false;
+        }
+
+        private static void FlattenNestedPropertyGroups(DependencyObject root, Brush borderBrush)
+        {
+            if (root == null) return;
+
+            foreach (var node in Walk(root))
+            {
+                var border = node as Border;
+                if (border == null || border.Child == null) continue;
+
+                // Only flatten genuinely rounded mini-cards that contain multiple property rows.
+                // Status badges/alerts use rounded borders too, but contain no property grid and
+                // therefore retain their original HNL appearance and colors.
+                if (!HasRoundedCorner(border.CornerRadius)) continue;
+                if (CountPropertyRows(border.Child, 2) < 2) continue;
+
+                border.CornerRadius = new CornerRadius(0);
+                border.BorderBrush = borderBrush;
+                border.BorderThickness = new Thickness(1);
+                border.Padding = new Thickness(0);
+                border.Margin = new Thickness(0, 0, 0, 1);
+
+                var panel = border.Child as StackPanel;
+                if (panel != null && panel.Children.Count > 0)
+                {
+                    var title = panel.Children[0] as TextBlock;
+                    if (title != null)
+                        title.Margin = new Thickness(5, 3, 5, 3);
+                }
+            }
+        }
+
+        private static int CountPropertyRows(DependencyObject root, int stopAfter)
+        {
+            var count = 0;
+            foreach (var node in Walk(root))
+            {
+                var grid = node as Grid;
+                if (grid == null || !LooksLikePropertyRow(grid)) continue;
+                count++;
+                if (count >= stopAfter) break;
+            }
+            return count;
+        }
+
+        private static bool HasRoundedCorner(CornerRadius radius)
+        {
+            return radius.TopLeft > 0 || radius.TopRight > 0 ||
+                   radius.BottomLeft > 0 || radius.BottomRight > 0;
         }
 
         private static Brush ResourceBrush(FrameworkElement element, string key, Brush fallback)
