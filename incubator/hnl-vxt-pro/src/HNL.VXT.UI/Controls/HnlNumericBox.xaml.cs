@@ -34,7 +34,7 @@ namespace HNL.VXT.UI.Controls
             nameof(Step), typeof(double), typeof(HnlNumericBox), new PropertyMetadata(50.0));
 
         public static readonly DependencyProperty UnitProperty = DependencyProperty.Register(
-            nameof(Unit), typeof(string), typeof(HnlNumericBox), new PropertyMetadata("mm"));
+            nameof(Unit), typeof(string), typeof(HnlNumericBox), new PropertyMetadata(string.Empty));
 
         public double Value
         {
