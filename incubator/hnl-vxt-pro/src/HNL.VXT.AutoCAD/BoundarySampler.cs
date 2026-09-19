@@ -149,12 +149,12 @@ namespace HNL.VXT.AutoCAD
                 maxAbsZ = Math.Max(maxAbsZ, Math.Abs(p.Z));
 
             info.MaxAbsZ = maxAbsZ;
-            if (maxAbsZ > ZTolerance)
+            if (!BoundaryInputTolerancePolicy.AcceptZ(maxAbsZ))
             {
                 info.RejectionReason = "Z";
                 return false;
             }
-            info.TinyZNormalized = maxAbsZ > 1e-12;
+            info.TinyZNormalized = BoundaryInputTolerancePolicy.IsTinyNonZeroZ(maxAbsZ);
 
             if (!polyline.Closed)
             {
@@ -165,7 +165,7 @@ namespace HNL.VXT.AutoCAD
                 var gap = Math.Sqrt(dx * dx + dy * dy);
                 info.ClosureGap = gap;
 
-                if (gap > AutoCloseGapTolerance)
+                if (!BoundaryInputTolerancePolicy.AcceptOpenGap(gap))
                 {
                     info.RejectionReason = "OpenGap";
                     return false;
