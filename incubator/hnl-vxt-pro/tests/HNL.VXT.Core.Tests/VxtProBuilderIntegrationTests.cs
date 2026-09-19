@@ -82,6 +82,74 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void ProEconomy_FurringOnlyAvoidance_RepairsXpWithoutChangingMainGrid()
+        {
+            var settings = GoldenSettings(VxtOptimizationMode.ProEconomy);
+            settings.AutoDimension = false;
+            settings.UseAvoidance = true;
+            settings.ShiftAllForAvoidance = false;
+            settings.ClearanceDistance = 0.0;
+
+            var boundary = Rectangle(6000.0, 4000.0);
+            var baseline = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, settings, new VxtLayoutContext());
+
+            var context = new VxtLayoutContext();
+            context.FurringObstacles.Add(new Box2(400.0, 0.0, 420.0, 4000.0));
+            var obstructed = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, settings, context);
+
+            CollectionAssert.AreEqual(
+                MainCoordinates(baseline),
+                MainCoordinates(obstructed),
+                "XP-only equipment must not change the XC grid in Pro mode.");
+
+            CollectionAssert.AreNotEqual(
+                FurringCoordinates(baseline),
+                FurringCoordinates(obstructed),
+                "XP-only equipment must actively repair the XP grid in Pro mode.");
+        }
+
+        [TestMethod]
+        public void ProEconomy_CombinedMainAndFurringAvoidance_AppliesBothIndependentEquipmentSets()
+        {
+            var settings = GoldenSettings(VxtOptimizationMode.ProEconomy);
+            settings.AutoDimension = false;
+            settings.UseAvoidance = true;
+            settings.ShiftAllForAvoidance = false;
+            settings.ClearanceDistance = 0.0;
+
+            var boundary = Rectangle(6000.0, 4000.0);
+
+            var mainOnly = new VxtLayoutContext();
+            mainOnly.MainObstacles.Add(new Box2(0.0, 1950.0, 6000.0, 2050.0));
+
+            var xpOnly = new VxtLayoutContext();
+            xpOnly.FurringObstacles.Add(new Box2(400.0, 0.0, 420.0, 4000.0));
+
+            var combined = new VxtLayoutContext();
+            combined.MainObstacles.Add(new Box2(0.0, 1950.0, 6000.0, 2050.0));
+            combined.FurringObstacles.Add(new Box2(400.0, 0.0, 420.0, 4000.0));
+
+            var mainOnlyPlan = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, settings, mainOnly);
+            var xpOnlyPlan = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, settings, xpOnly);
+            var combinedPlan = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, settings, combined);
+
+            CollectionAssert.AreEqual(
+                MainCoordinates(mainOnlyPlan),
+                MainCoordinates(combinedPlan),
+                "Combined MEP avoidance must preserve the same XC result as XC-only avoidance.");
+
+            CollectionAssert.AreEqual(
+                FurringCoordinates(xpOnlyPlan),
+                FurringCoordinates(combinedPlan),
+                "Combined MEP avoidance must preserve the same XP result as XP-only avoidance.");
+
+            Assert.IsTrue(combinedPlan.MainSegmentCount > 0);
+            Assert.IsTrue(combinedPlan.FurringSegmentCount > 0);
+        }
+
+        [TestMethod]
         public void ProTyRepair_LeavesNoTyInsideObstacleBand_AndNoOversizeInternalGap()
         {
             var settings = new VxtSettings
@@ -113,6 +181,22 @@ namespace HNL.VXT.Core.Tests
                         "Ty repair must not leave an internal gap above Max after avoidance.");
             }
         }
+
+        private static double[] MainCoordinates(VxtPreviewPlan plan)
+            => plan.Lines
+                .Where(line => line.Kind == PreviewLineKind.Main)
+                .Select(line => Math.Round((line.A.Y + line.B.Y) * 0.5, 6))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+
+        private static double[] FurringCoordinates(VxtPreviewPlan plan)
+            => plan.Lines
+                .Where(line => line.Kind == PreviewLineKind.Furring)
+                .Select(line => Math.Round((line.A.X + line.B.X) * 0.5, 6))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
 
         private static VxtSettings GoldenSettings(VxtOptimizationMode mode)
             => new VxtSettings
