@@ -21,7 +21,9 @@ namespace HNL.VXT.UI.Views
         private const string HeaderTag = "HNL_VXT_PROPERTIES_GROUP_HEADER";
         private const string RowDividerTag = "HNL_VXT_PROPERTIES_ROW_DIVIDER";
         private const string ColumnDividerTag = "HNL_VXT_PROPERTIES_COLUMN_DIVIDER";
-        private const double PropertyRowMinHeight = 24.0;
+        private const double PropertyColumnWidth = 145.0;
+        private const double PropertyRowMinHeight = 30.0;
+        private const double EditorHeight = 27.0;
 
         public static void Apply(VxtPaletteView view)
         {
@@ -45,7 +47,7 @@ namespace HNL.VXT.UI.Views
             if (scroll == null) return;
 
             // Native Properties uses a very small outer gutter rather than floating cards.
-            scroll.Padding = new Thickness(2);
+            scroll.Padding = new Thickness(4, 3, 4, 4);
 
             var stack = scroll.Content as StackPanel;
             if (stack == null) return;
@@ -72,7 +74,7 @@ namespace HNL.VXT.UI.Views
 
             card.CornerRadius = new CornerRadius(0);
             card.BorderThickness = new Thickness(1);
-            card.Margin = new Thickness(0, 0, 0, 1);
+            card.Margin = new Thickness(0, 0, 0, 4);
 
             var expander = card.Child as Expander;
             if (expander != null)
@@ -87,7 +89,7 @@ namespace HNL.VXT.UI.Views
                 {
                     // Property rows themselves provide their own cell padding, so the content can
                     // sit almost flush with the group border like AutoCAD Properties.
-                    content.Margin = new Thickness(1, 2, 1, 2);
+                    content.Margin = new Thickness(4, 3, 4, 4);
                     NormalizePropertyRows(content, cardBorder);
                     FlattenNestedPropertyGroups(content, cardBorder);
                 }
@@ -110,7 +112,7 @@ namespace HNL.VXT.UI.Views
             {
                 existingBorder.Background = background;
                 existingBorder.BorderBrush = borderBrush;
-                existingBorder.Padding = new Thickness(6, 3, 6, 3);
+                existingBorder.Padding = new Thickness(7, 4, 7, 4);
                 return;
             }
 
@@ -142,7 +144,7 @@ namespace HNL.VXT.UI.Views
                 BorderBrush = borderBrush,
                 BorderThickness = new Thickness(0, 0, 0, 1),
                 CornerRadius = new CornerRadius(0),
-                Padding = new Thickness(6, 3, 6, 3),
+                Padding = new Thickness(7, 4, 7, 4),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Child = visual
             };
@@ -186,23 +188,74 @@ namespace HNL.VXT.UI.Views
             var columns = grid.ColumnDefinitions;
             if (columns == null || columns.Count < 2) return;
 
+            if (IsPairedMinMaxRow(grid))
+            {
+                // CompactTuner intentionally combines Min + Max into one six-column row:
+                // Property | Min | value | gap | Max | value.
+                // Do NOT collapse this back into a two-column Properties row.
+                columns[0].Width = new GridLength(PropertyColumnWidth);
+                columns[1].Width = new GridLength(30);
+                columns[2].Width = new GridLength(1, GridUnitType.Star);
+                columns[3].Width = new GridLength(8);
+                columns[4].Width = new GridLength(30);
+                columns[5].Width = new GridLength(1, GridUnitType.Star);
+                return;
+            }
+
             if (labelColumn == 0)
             {
-                // Standard Properties contract: one stable property column and one elastic value
-                // column. Any third action column (Pick/Setup) keeps its original fixed width.
-                columns[0].Width = new GridLength(43, GridUnitType.Star);
-                columns[1].Width = new GridLength(57, GridUnitType.Star);
+                // Match the visual divider behavior of AutoCAD Properties: keep one stable
+                // property-name column and let the value area absorb palette resizing. Any
+                // trailing Pick/Setup button column keeps its existing fixed width.
+                columns[0].Width = new GridLength(PropertyColumnWidth);
+                columns[1].Width = new GridLength(1, GridUnitType.Star);
                 return;
             }
 
             if (labelColumn == 1 && columns.Count >= 3)
             {
                 // DIM rows carry an enable CheckBox before the property label. Preserve that
-                // leading affordance, then split the remaining area into Property | Value.
+                // leading affordance while keeping the visual Property/Value divider aligned
+                // with standard rows.
                 columns[0].Width = new GridLength(30);
-                columns[1].Width = new GridLength(36, GridUnitType.Star);
-                columns[2].Width = new GridLength(64, GridUnitType.Star);
+                columns[1].Width = new GridLength(PropertyColumnWidth - 30.0);
+                columns[2].Width = new GridLength(1, GridUnitType.Star);
             }
+        }
+
+        private static bool IsPairedMinMaxRow(Grid grid)
+        {
+            var columns = grid.ColumnDefinitions;
+            if (columns == null || columns.Count != 6) return false;
+
+            var hasFirstNumeric = false;
+            var hasSecondNumeric = false;
+            var hasMinToken = false;
+            var hasMaxToken = false;
+
+            foreach (UIElement child in grid.Children)
+            {
+                if (IsDivider(child)) continue;
+
+                if (child is HnlNumericBox)
+                {
+                    if (Grid.GetColumn(child) == 2) hasFirstNumeric = true;
+                    if (Grid.GetColumn(child) == 5) hasSecondNumeric = true;
+                }
+
+                var text = child as TextBlock;
+                if (text == null) continue;
+
+                if (Grid.GetColumn(text) == 1 &&
+                    string.Equals(text.Text, "Min", StringComparison.OrdinalIgnoreCase))
+                    hasMinToken = true;
+
+                if (Grid.GetColumn(text) == 4 &&
+                    string.Equals(text.Text, "Max", StringComparison.OrdinalIgnoreCase))
+                    hasMaxToken = true;
+            }
+
+            return hasFirstNumeric && hasSecondNumeric && hasMinToken && hasMaxToken;
         }
 
         private static void NormalizeCellMargins(Grid grid, int labelColumn)
@@ -215,7 +268,7 @@ namespace HNL.VXT.UI.Views
                 var text = child as TextBlock;
                 if (text != null)
                 {
-                    text.Margin = new Thickness(5, 0, 5, 0);
+                    text.Margin = new Thickness(6, 1, 6, 1);
                     text.VerticalAlignment = VerticalAlignment.Center;
                     continue;
                 }
@@ -224,8 +277,8 @@ namespace HNL.VXT.UI.Views
                 if (check != null)
                 {
                     check.Margin = column <= labelColumn
-                        ? new Thickness(5, 0, 3, 0)
-                        : new Thickness(4, 0, 2, 0);
+                        ? new Thickness(6, 1, 4, 1)
+                        : new Thickness(5, 1, 3, 1);
                     check.VerticalAlignment = VerticalAlignment.Center;
                     continue;
                 }
@@ -233,7 +286,7 @@ namespace HNL.VXT.UI.Views
                 var button = child as Button;
                 if (button != null)
                 {
-                    button.Margin = new Thickness(3, 0, 2, 0);
+                    button.Margin = new Thickness(4, 1, 2, 1);
                     continue;
                 }
 
@@ -250,7 +303,7 @@ namespace HNL.VXT.UI.Views
                 var textBox = node as TextBox;
                 if (textBox != null)
                 {
-                    textBox.Height = PropertyRowMinHeight;
+                    textBox.Height = EditorHeight;
                     textBox.MinHeight = 0;
                     textBox.Padding = new Thickness(4, 0, 4, 0);
                     textBox.VerticalContentAlignment = VerticalAlignment.Center;
@@ -261,7 +314,7 @@ namespace HNL.VXT.UI.Views
                 var combo = node as ComboBox;
                 if (combo != null)
                 {
-                    combo.Height = PropertyRowMinHeight;
+                    combo.Height = EditorHeight;
                     combo.MinHeight = 0;
                     combo.Padding = new Thickness(4, 0, 4, 0);
                     combo.VerticalContentAlignment = VerticalAlignment.Center;
@@ -272,8 +325,8 @@ namespace HNL.VXT.UI.Views
                 var numeric = node as HnlNumericBox;
                 if (numeric != null)
                 {
-                    numeric.Height = PropertyRowMinHeight;
-                    numeric.MinHeight = PropertyRowMinHeight;
+                    numeric.Height = EditorHeight;
+                    numeric.MinHeight = EditorHeight;
                     numeric.VerticalAlignment = VerticalAlignment.Center;
                     continue;
                 }
@@ -281,8 +334,8 @@ namespace HNL.VXT.UI.Views
                 var button = node as Button;
                 if (button != null)
                 {
-                    button.Height = PropertyRowMinHeight;
-                    button.MinHeight = PropertyRowMinHeight;
+                    button.Height = EditorHeight;
+                    button.MinHeight = EditorHeight;
                     button.Padding = new Thickness(6, 1, 6, 1);
                     button.VerticalContentAlignment = VerticalAlignment.Center;
                 }
@@ -309,7 +362,7 @@ namespace HNL.VXT.UI.Views
             }
 
             divider.Background = dividerBrush;
-            divider.Opacity = 0.68;
+            divider.Opacity = 0.42;
         }
 
         private static void AddOrUpdateColumnDivider(Grid grid, int labelColumn, Brush dividerBrush)
@@ -335,7 +388,7 @@ namespace HNL.VXT.UI.Views
             }
 
             divider.Background = dividerBrush;
-            divider.Opacity = 0.82;
+            divider.Opacity = 0.62;
         }
 
         private static Border FindTaggedBorder(Grid grid, string tag)
