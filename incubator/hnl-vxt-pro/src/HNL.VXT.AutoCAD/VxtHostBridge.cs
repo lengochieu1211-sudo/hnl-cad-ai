@@ -193,8 +193,22 @@ namespace HNL.VXT.AutoCAD
 
         public void RequestCreate()
         {
-            CancelPendingPreview();
             var session = VxtSession.Current;
+
+            // WYSIWYG gate: a palette edit may have updated session.Settings immediately while the
+            // transient redraw is still waiting inside the 180 ms debounce window. Creating at that
+            // moment would use the new settings against an older on-screen Preview (for example DIM
+            // toggled ON but not rendered yet). Never allow Create to overtake a pending Preview.
+            if (_pendingPreviewSettings != null)
+            {
+                _previewTimer.Stop();
+                session.Settings = _pendingPreviewSettings.Clone();
+                _pendingPreviewSettings = null;
+                Send(session.HasBoundary ? "HNLVXTPREVIEW " : "HNLVXTCLEARPREVIEW ");
+                Write("\nHNL Tool - VXT Pro: Preview vừa có thay đổi chưa kịp vẽ. HNL Tool đã cập nhật Preview trước; hãy kiểm tra rồi bấm Tạo lại để bảo đảm WYSIWYG.");
+                return;
+            }
+
             if (session.ViewModel != null)
                 session.Settings = session.ViewModel.Snapshot();
 
