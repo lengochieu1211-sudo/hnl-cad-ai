@@ -422,24 +422,28 @@ namespace HNL.VXT.UI.Views
                 }
             }
 
+            // Keep the broad fallback pass conservative. Only VxtPalettePropertiesLayout
+            // forces true Property rows down to 24 DIP. Applying 24 DIP to every control in
+            // the whole visual tree can fight nested control MinHeight/template metrics and
+            // cause expensive WPF Measure/Arrange churn inside AutoCAD's PaletteSet host.
             foreach (var textBox in Descendants<TextBox>(view))
             {
-                textBox.Height = 24.0;
+                textBox.Height = 27.0;
                 textBox.HorizontalAlignment = HorizontalAlignment.Stretch;
             }
             foreach (var combo in Descendants<ComboBox>(view))
             {
-                combo.Height = 24.0;
+                combo.Height = 27.0;
                 combo.HorizontalAlignment = HorizontalAlignment.Stretch;
             }
             foreach (var numeric in Descendants<HnlNumericBox>(view))
             {
-                numeric.Height = 24.0;
+                numeric.Height = 27.0;
                 numeric.HorizontalAlignment = HorizontalAlignment.Stretch;
             }
             foreach (var button in Descendants<Button>(view))
             {
-                if (button.Height > 34.0 || double.IsNaN(button.Height)) button.Height = 24.0;
+                if (button.Height > 34.0 || double.IsNaN(button.Height)) button.Height = 27.0;
             }
         }
 
