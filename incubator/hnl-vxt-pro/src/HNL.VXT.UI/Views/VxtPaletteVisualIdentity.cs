@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using HNL.VXT.UI.Infrastructure;
 
 namespace HNL.VXT.UI.Views
 {
@@ -51,7 +51,7 @@ namespace HNL.VXT.UI.Views
 
         private static void StampBuildIdentity(VxtPaletteView view)
         {
-            var display = "VXT Pro v7.0.0-beta.1 • Build " + GetBuildDateTime();
+            var display = VxtBuildInfo.VersionLabel;
 
             foreach (var node in Walk(view))
             {
@@ -66,20 +66,6 @@ namespace HNL.VXT.UI.Views
                 text.ToolTip = display;
                 break;
             }
-        }
-
-        private static string GetBuildDateTime()
-        {
-            foreach (var attribute in typeof(VxtPaletteVisualIdentity).Assembly.GetCustomAttributes(typeof(AssemblyMetadataAttribute), false))
-            {
-                var metadata = attribute as AssemblyMetadataAttribute;
-                if (metadata != null &&
-                    string.Equals(metadata.Key, "HNLBuildDateTime", StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrWhiteSpace(metadata.Value))
-                    return metadata.Value;
-            }
-
-            return "--/--/---- --:--";
         }
 
         private static void NormalizePrimaryAction(VxtPaletteView view)

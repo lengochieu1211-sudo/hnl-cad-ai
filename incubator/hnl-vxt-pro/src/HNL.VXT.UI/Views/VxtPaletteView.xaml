@@ -604,18 +604,13 @@
             </StackPanel>
         </ScrollViewer>
 
-        <!-- FOOTER -->
+        <!-- FOOTER: primary action only. Build/version identity lives in the header. -->
         <Border Grid.Row="2" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="10">
-            <StackPanel>
-                <Button Style="{StaticResource PrimaryButton}"
-                        Content="✓ TẠO KHUNG XƯƠNG TRẦN"
-                        Command="{Binding CreateCommand}"
-                        IsEnabled="{Binding CanCreate}"
-                        HorizontalAlignment="Stretch"/>
-                <TextBlock Text="Alpha.2: Đã khôi phục tùy chọn V6.7.4 • Tạo thật đang khóa đến khi Golden Test hoàn tất."
-                           FontSize="9.5" Foreground="{DynamicResource SecondaryText}" TextAlignment="Center"
-                           Margin="0,5,0,0" TextWrapping="Wrap"/>
-            </StackPanel>
+            <Button Style="{StaticResource PrimaryButton}"
+                    Content="✓ TẠO KHUNG XƯƠNG TRẦN"
+                    Command="{Binding CreateCommand}"
+                    IsEnabled="{Binding CanCreate}"
+                    HorizontalAlignment="Stretch"/>
         </Border>
     </Grid>
 </UserControl>

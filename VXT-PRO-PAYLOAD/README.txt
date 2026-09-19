@@ -1,1 +1,0 @@
-HNL VXT Pro bootstrap payload staging. DO NOT MERGE.
