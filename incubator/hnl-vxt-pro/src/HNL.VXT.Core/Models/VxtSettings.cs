@@ -22,6 +22,10 @@ namespace HNL.VXT.Core.Models
         public MainLayoutMode MainLayout { get; set; } = MainLayoutMode.BalancedTwoEnds;
         // Lisp hỏi "Trần có đi Shadowline không?" khi chọn Auto và mặc định <Yes>.
         public bool AutoShadowline { get; set; } = true;
+        // False until the user confirms Shadowline through the Auto "Thiết lập" action
+        // (or answers the fallback question at Create time). This prevents a silent default
+        // from being mistaken for an intentional Auto-direction choice.
+        public bool AutoShadowlineConfigured { get; set; } = false;
 
         // Xương phụ - V6.7.6.15 giữ bước cố định; 1220/3 phải giữ giá trị thực, không làm tròn.
         public bool DrawFurring = true;
