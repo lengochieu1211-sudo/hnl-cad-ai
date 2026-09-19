@@ -90,6 +90,7 @@ namespace HNL.VXT.AutoCAD
                     var settings = session.Settings;
                     var db = doc.Database;
                     VxtPreviewPlan plan;
+                    string previewNotice = null;
 
                     using (var tr = db.TransactionManager.StartTransaction())
                     {
@@ -100,23 +101,53 @@ namespace HNL.VXT.AutoCAD
                         var linetypeTable = tr.GetObject(db.LinetypeTableId, OpenMode.ForRead) as LinetypeTable;
                         var dimStyleTable = tr.GetObject(db.DimStyleTableId, OpenMode.ForRead) as DimStyleTable;
 
-                        var estimatedDrawables = EstimateFullPreviewDrawableCount(plan, settings);
-                        var structuralOnly = estimatedDrawables > FullPreviewDrawableLimit;
+                        // Load shedding must count only drawables that this renderer really creates.
+                        // PreviewLineKind.Hanger contains two internal cross-lines per Ty, but those
+                        // lines are never rendered because Ty uses one lightweight Circle marker.
+                        // Counting the hidden cross-lines made large ceilings enter XC/XP-only mode
+                        // too early and caused DIM to disappear even though Create still had DIM.
+                        var renderDecision = VxtPreviewLoadSheddingPolicy.Evaluate(
+                            plan, settings, FullPreviewDrawableLimit);
 
                         RenderStructuralLines(plan, settings, db, layerTable, linetypeTable);
 
-                        if (!structuralOnly)
-                        {
-                            RenderHangers(plan, settings, db, layerTable, linetypeTable);
+                        // DIM is the highest-priority overlay after XC/XP. Render it before Ty/guides
+                        // so a large hanger population cannot unnecessarily hide WYSIWYG dimensions.
+                        if (renderDecision.RenderDimensions)
                             RenderDimensions(plan, settings, db, dimStyleTable, layerTable, linetypeTable);
+                        if (renderDecision.RenderHangers)
+                            RenderHangers(plan, settings, db, layerTable, linetypeTable);
+                        if (renderDecision.RenderGuides)
                             RenderGuides(plan, db);
+
+                        if (!renderDecision.IsReduced)
+                        {
                             _largePreviewNoticeShown = false;
                         }
-                        else if (!_largePreviewNoticeShown)
+                        else
                         {
-                            _largePreviewNoticeShown = true;
-                            doc.Editor.WriteMessage(
-                                "\nHNL Tool - VXT Pro Preview: Bản vẽ lớn; chế độ an toàn chỉ hiển thị XC/XP. Ty/DIM vẫn được tính đầy đủ và sẽ tạo đúng khi bấm Tạo khung xương trần.");
+                            var dimensionsRequested = settings.AutoDimension && plan.Dimensions.Count > 0;
+                            if (dimensionsRequested && renderDecision.RenderDimensions)
+                            {
+                                previewNotice =
+                                    "Bản vẽ lớn: HNL Tool vẫn hiển thị XC/XP + DIM; tạm ẩn Ty và đường hướng Preview để bảo vệ AutoCAD.";
+                            }
+                            else if (dimensionsRequested)
+                            {
+                                previewNotice =
+                                    "Bản vẽ rất lớn: HNL Tool tạm ẩn Ty/DIM/đường hướng Preview để bảo vệ AutoCAD. DIM vẫn được tính đầy đủ và sẽ tạo thật.";
+                            }
+                            else
+                            {
+                                previewNotice =
+                                    "Bản vẽ lớn: HNL Tool tạm ẩn Ty và đường hướng Preview để bảo vệ AutoCAD.";
+                            }
+
+                            if (!_largePreviewNoticeShown)
+                            {
+                                _largePreviewNoticeShown = true;
+                                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro Preview: " + previewNotice);
+                            }
                         }
 
                         // Preview is a strict read-only DB operation. Disposing an uncommitted read
@@ -127,6 +158,8 @@ namespace HNL.VXT.AutoCAD
                     // builder bookkeeping counters here because concave split/merge and MEP finalizers
                     // may change the actual entity set after those counters were first populated.
                     session.ViewModel?.SetPreviewActualStats(VxtFinalPlanMetrics.FromPlan(plan));
+                    if (!string.IsNullOrWhiteSpace(previewNotice))
+                        session.ViewModel?.SetPreviewError(previewNotice);
                 }
                 catch (System.Exception ex)
                 {
@@ -236,15 +269,6 @@ namespace HNL.VXT.AutoCAD
 
             _drawables.Clear();
             _drawables.AddRange(survivors);
-        }
-
-        private static int EstimateFullPreviewDrawableCount(VxtPreviewPlan plan, VxtSettings settings)
-        {
-            if (plan == null) return 0;
-            var count = plan.Lines.Count + plan.Texts.Count;
-            if (settings.DrawHangers) count += plan.HangerPoints.Count;
-            if (settings.AutoDimension) count += plan.Dimensions.Count;
-            return count;
         }
 
         private void RetireDrawable(Drawable drawable)
