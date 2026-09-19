@@ -173,8 +173,10 @@ namespace HNL.VXT.Core.Tests
             var baseline = new VxtPreviewPlanBuilder().Build(boundary, settings, new VxtLayoutContext());
 
             var context = new VxtLayoutContext();
-            // Crosses the first Legacy XC row (Y=500) and the first XP row (X=406.666...).
-            context.GeneralObstacles.Add(new Box2(400.0, 450.0, 420.0, 550.0));
+            // Crosses an interior Legacy XC row (Y=2000) and the first XP row
+            // (X=406.666...). The interior XC has enough neighbour clearance for the
+            // exact V6.7.2 best-effort repair to move it without violating Min spacing.
+            context.GeneralObstacles.Add(new Box2(400.0, 1950.0, 420.0, 2050.0));
             var obstructed = new VxtPreviewPlanBuilder().Build(boundary, settings, context);
 
             CollectionAssert.AreNotEqual(
