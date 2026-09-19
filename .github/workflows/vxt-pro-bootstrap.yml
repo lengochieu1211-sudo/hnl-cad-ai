@@ -69,8 +69,12 @@ jobs:
           if ($vmSource.Contains("public bool CanCreate => false")) {
             throw "Functional gate failed: Create is still hard-locked."
           }
-          if (-not $vmSource.Contains('VXT Pro v7.0.0-beta.1')) {
-            throw "Version gate failed: Palette is not beta.1."
+          $buildInfoSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Infrastructure\VxtBuildInfo.cs" -Raw
+          if (-not $vmSource.Contains('VxtBuildInfo.VersionLabel')) {
+            throw "Version gate failed: Palette ViewModel is not bound to canonical VxtBuildInfo.VersionLabel."
+          }
+          if (-not $buildInfoSource.Contains('public const string Version = "v7.0.0-beta.1"')) {
+            throw "Version gate failed: canonical VxtBuildInfo is not beta.1."
           }
 
           $commandSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
