@@ -21,6 +21,9 @@ namespace HNL.VXT.AutoCAD
 
         public static void Show()
         {
+            // Explicit user invocation is the first point where runtime document hooks are enabled.
+            // AutoCAD startup remains completely free of VXT Session/Transient/WPF work.
+            PluginEntry.EnableRuntimeHooks();
             TraceUiStartup("HVX Show begin");
 
             if (_palette == null)
