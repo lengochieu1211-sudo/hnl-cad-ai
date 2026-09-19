@@ -332,7 +332,9 @@ namespace HNL.VXT.Core.Preview
             var ideal = BuildFixedPositions(domain.MinX, domain.MaxX, spacing, offset, minEdge: 0.0);
             if (!settings.UseAvoidance || intervals.Count == 0 || optimized) return ideal;
 
-            return LegacyGridAvoidance.AdjustGrid(
+            // Legacy XP parity: V6.7.2 adjust-grid snaps collision repairs to absolute
+            // WCS multiples of *step_xp*. Do not reuse the XC phase-preserving correction here.
+            return LegacyGridAvoidance.AdjustGridAbsoluteLisp(
                 ideal,
                 intervals,
                 domain.MinX,
