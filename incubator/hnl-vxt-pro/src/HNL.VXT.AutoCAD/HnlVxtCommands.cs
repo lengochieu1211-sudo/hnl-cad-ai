@@ -111,6 +111,11 @@ namespace HNL.VXT.AutoCAD
         [CommandMethod("HNLVXTSOAKQA", CommandFlags.Modal)]
         public void RuntimeTransientSoakQa() => VxtTransientSoakQaService.Run();
 
+        // Field QA for the currently selected real ceiling. Unlike the deterministic 5-step
+        // suite below, this intentionally validates the active user drawing and Preview state.
+        [CommandMethod("HNLVXTPREVIEWQA", CommandFlags.Modal)]
+        public void RuntimePreviewQa() => VxtPreviewRuntimeQaService.Run();
+
         // One-command replacement for SCRIPT-based QA. Both names intentionally point to the
         // same runner so field verification needs no external .scr file or file chooser.
         [CommandMethod("HNLVXTQA", CommandFlags.Modal)]

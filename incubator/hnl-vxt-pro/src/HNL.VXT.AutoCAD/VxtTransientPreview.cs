@@ -50,6 +50,11 @@ namespace HNL.VXT.AutoCAD
         internal int TrackedDrawableCount => _drawables.Count;
         internal int RetiredDrawableCount => _retiredDrawables.Count;
         internal int TransitionQuarantineCount => _documentTransitionQuarantine.Count;
+        internal VxtFinalPlanMetrics LastPlanMetrics { get; private set; }
+        internal VxtPreviewRenderDecision LastRenderDecision { get; private set; }
+        internal int LastExpectedDrawableCount { get; private set; }
+        internal int LastActualDrawableCount { get; private set; }
+        internal int LastRenderedDimensionCount { get; private set; }
 
         public void Refresh()
         {
@@ -62,6 +67,12 @@ namespace HNL.VXT.AutoCAD
             _isMutating = true;
             try
             {
+                LastPlanMetrics = null;
+                LastRenderDecision = null;
+                LastExpectedDrawableCount = 0;
+                LastActualDrawableCount = 0;
+                LastRenderedDimensionCount = 0;
+
                 // AutoCAD may release erased transient graphics asynchronously. Do not destroy the
                 // managed/native wrapper immediately after EraseTransient reports success. A short
                 // quarantine avoids a use-after-free during the next native redraw/paste/zoom.
@@ -90,6 +101,7 @@ namespace HNL.VXT.AutoCAD
                     var settings = session.Settings;
                     var db = doc.Database;
                     VxtPreviewPlan plan;
+                    VxtPreviewRenderDecision renderDecision = null;
                     string previewNotice = null;
 
                     using (var tr = db.TransactionManager.StartTransaction())
@@ -106,7 +118,7 @@ namespace HNL.VXT.AutoCAD
                         // lines are never rendered because Ty uses one lightweight Circle marker.
                         // Counting the hidden cross-lines made large ceilings enter XC/XP-only mode
                         // too early and caused DIM to disappear even though Create still had DIM.
-                        var renderDecision = VxtPreviewLoadSheddingPolicy.Evaluate(
+                        renderDecision = VxtPreviewLoadSheddingPolicy.Evaluate(
                             plan, settings, FullPreviewDrawableLimit);
 
                         RenderStructuralLines(plan, settings, db, layerTable, linetypeTable);
@@ -157,7 +169,19 @@ namespace HNL.VXT.AutoCAD
                     // Measure the exact final post-processed geometry shared with Create. Do not use
                     // builder bookkeeping counters here because concave split/merge and MEP finalizers
                     // may change the actual entity set after those counters were first populated.
-                    session.ViewModel?.SetPreviewActualStats(VxtFinalPlanMetrics.FromPlan(plan));
+                    var metrics = VxtFinalPlanMetrics.FromPlan(plan);
+                    LastPlanMetrics = metrics;
+                    LastRenderDecision = renderDecision;
+                    LastExpectedDrawableCount = renderDecision == null
+                        ? 0
+                        : renderDecision.StructuralDrawableCount +
+                          (renderDecision.RenderHangers ? renderDecision.HangerDrawableCount : 0) +
+                          (renderDecision.RenderDimensions ? renderDecision.DimensionDrawableCount : 0) +
+                          (renderDecision.RenderGuides ? renderDecision.GuideDrawableCount : 0);
+                    LastActualDrawableCount = _drawables.Count;
+                    LastRenderedDimensionCount = _drawables.Count(x => x is RotatedDimension);
+
+                    session.ViewModel?.SetPreviewActualStats(metrics);
                     if (!string.IsNullOrWhiteSpace(previewNotice))
                         session.ViewModel?.SetPreviewError(previewNotice);
                 }
@@ -196,6 +220,11 @@ namespace HNL.VXT.AutoCAD
             {
                 DrainRetiredDrawables();
                 ClearCore();
+                LastPlanMetrics = null;
+                LastRenderDecision = null;
+                LastExpectedDrawableCount = 0;
+                LastActualDrawableCount = 0;
+                LastRenderedDimensionCount = 0;
             }
             finally
             {

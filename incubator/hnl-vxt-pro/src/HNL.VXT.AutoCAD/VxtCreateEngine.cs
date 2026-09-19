@@ -145,6 +145,8 @@ namespace HNL.VXT.AutoCAD
                         }
                     }
 
+                    ValidatePlanMaterializationParity(settings, plan, counts);
+
                     var manualCounts = VxtManualExistingEngine.Append(
                         db, tr, ms, bt, lt, dst, session, settings);
                     counts.Hangers += manualCounts.Hangers;
@@ -178,6 +180,34 @@ namespace HNL.VXT.AutoCAD
                     "Tạo thất bại - đã rollback. Diagnostic ZIP đã được ghi tự động.");
                 try { if (session.HasBoundary) VxtTransientPreview.Instance.Refresh(); } catch { }
             }
+        }
+
+        private static void ValidatePlanMaterializationParity(
+            VxtSettings settings,
+            VxtPreviewPlan plan,
+            CreateCounts counts)
+        {
+            var metrics = VxtFinalPlanMetrics.FromPlan(plan);
+            var expectedMain = settings.DrawMain ? metrics.MainCount : 0;
+            var expectedFurring = settings.DrawFurring ? metrics.FurringCount : 0;
+            var expectedHangers = settings.DrawHangers ? metrics.HangerCount : 0;
+            var expectedDimensions = settings.AutoDimension ? metrics.DimensionCount : 0;
+
+            if (counts.Main == expectedMain &&
+                counts.Furring == expectedFurring &&
+                counts.Hangers == expectedHangers &&
+                counts.Dimensions == expectedDimensions)
+                return;
+
+            throw new InvalidOperationException(
+                "Preview/Create parity guard: plan XC=" + expectedMain +
+                ", XP=" + expectedFurring +
+                ", Ty=" + expectedHangers +
+                ", DIM=" + expectedDimensions +
+                " nhưng Create đã materialize XC=" + counts.Main +
+                ", XP=" + counts.Furring +
+                ", Ty=" + counts.Hangers +
+                ", DIM=" + counts.Dimensions + ". Đã rollback để tránh tạo bản vẽ khác Preview.");
         }
 
         private static string BuildFallbackWarning(CreateCounts counts)
