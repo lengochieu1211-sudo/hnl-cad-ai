@@ -40,7 +40,12 @@ namespace HNL.VXT.AutoCAD
 
             var accepted = new List<Boundary2>();
             var acceptedIds = new List<ObjectId>();
-            var skipped = 0;
+            var autoClosed = 0;
+            var maxAutoCloseGap = 0.0;
+            var tinyZNormalized = 0;
+            var skippedOpen = 0;
+            var skippedZ = 0;
+            var skippedUnsupported = 0;
 
             using (var tr = doc.TransactionManager.StartTransaction())
             {
@@ -50,22 +55,40 @@ namespace HNL.VXT.AutoCAD
                     try { entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity; }
                     catch { }
 
+                    Boundary2 boundary;
+                    BoundarySampleInfo info;
+                    var acceptedBoundary = false;
+
                     if (entity is Polyline pl)
-                    {
-                        if (!pl.Closed) { skipped++; continue; }
-                        accepted.Add(BoundarySampler.FromPolyline(pl));
-                        acceptedIds.Add(id);
-                    }
+                        acceptedBoundary = BoundarySampler.TryFromPolyline(pl, out boundary, out info);
                     else if (entity is Polyline2d pl2)
-                    {
-                        if (!pl2.Closed) { skipped++; continue; }
-                        accepted.Add(BoundarySampler.FromPolyline2d(pl2, tr));
-                        acceptedIds.Add(id);
-                    }
+                        acceptedBoundary = BoundarySampler.TryFromPolyline2d(pl2, tr, out boundary, out info);
                     else
                     {
-                        skipped++;
+                        skippedUnsupported++;
+                        continue;
                     }
+
+                    if (!acceptedBoundary)
+                    {
+                        if (string.Equals(info.RejectionReason, "OpenGap", StringComparison.Ordinal))
+                            skippedOpen++;
+                        else if (string.Equals(info.RejectionReason, "Z", StringComparison.Ordinal))
+                            skippedZ++;
+                        else
+                            skippedUnsupported++;
+                        continue;
+                    }
+
+                    accepted.Add(boundary);
+                    acceptedIds.Add(id);
+                    if (info.AutoClosed)
+                    {
+                        autoClosed++;
+                        maxAutoCloseGap = Math.Max(maxAutoCloseGap, info.ClosureGap);
+                    }
+                    if (info.TinyZNormalized)
+                        tinyZNormalized++;
                 }
 
                 if (accepted.Count == 0)
@@ -81,9 +104,12 @@ namespace HNL.VXT.AutoCAD
                 session.BoundaryFurringFromFarEdges.Clear();
                 session.GlobalFurringFromFarEdge = false;
 
+                var skipped = skippedOpen + skippedZ + skippedUnsupported;
                 session.ViewModel?.SetBoundaryStatus(
-                    "✓ Đã nhận " + accepted.Count + " Polyline kín từ tập chọn sẵn" +
-                    (skipped > 0 ? " • Bỏ qua " + skipped + " đối tượng không hợp lệ" : string.Empty),
+                    "✓ Đã nhận " + accepted.Count + " biên từ tập chọn sẵn" +
+                    (autoClosed > 0 ? " • Tự khép " + autoClosed : string.Empty) +
+                    (tinyZNormalized > 0 ? " • Chuẩn Z≈0 " + tinyZNormalized : string.Empty) +
+                    (skipped > 0 ? " • Bỏ qua " + skipped : string.Empty),
                     true);
 
                 tr.Commit();
@@ -97,9 +123,19 @@ namespace HNL.VXT.AutoCAD
             if (writeMessage)
             {
                 ed.WriteMessage(
-                    "\nHNL Tool - VXT Pro: Đã dùng " + accepted.Count +
-                    " Polyline kín đang chọn làm biên trần" +
-                    (skipped > 0 ? "; bỏ qua " + skipped + " đối tượng không hợp lệ." : "."));
+                    "\nHNL Tool - VXT Pro: Đã dùng " + accepted.Count + " biên trần từ tập chọn sẵn");
+                if (autoClosed > 0)
+                    ed.WriteMessage("; tự khép " + autoClosed + " biên, khe lớn nhất " +
+                        maxAutoCloseGap.ToString("0.###") + " mm");
+                if (tinyZNormalized > 0)
+                    ed.WriteMessage("; chuẩn hóa Z≈0 cho " + tinyZNormalized + " biên");
+                if (skippedOpen > 0)
+                    ed.WriteMessage("; bỏ " + skippedOpen + " biên hở > 1 mm");
+                if (skippedZ > 0)
+                    ed.WriteMessage("; bỏ " + skippedZ + " biên có |Z| > 0.01 mm");
+                if (skippedUnsupported > 0)
+                    ed.WriteMessage("; bỏ " + skippedUnsupported + " đối tượng không hỗ trợ");
+                ed.WriteMessage(".");
             }
 
             if (refreshPreview)
