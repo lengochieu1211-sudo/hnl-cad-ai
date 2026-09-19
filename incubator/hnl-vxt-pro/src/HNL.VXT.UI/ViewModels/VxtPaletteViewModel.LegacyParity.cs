@@ -7,12 +7,16 @@ namespace HNL.VXT.UI.ViewModels
         /// Persist the answer into the ViewModel so a later Snapshot cannot overwrite the
         /// host-side answer captured immediately before Create.
         /// </summary>
-        public void SetAutoShadowlineFromHost(bool value)
+        public void SetAutoShadowlineFromHost(bool value, bool configured = true, bool requestPreview = true)
         {
-            if (_settings.AutoShadowline == value) return;
+            var changed = _settings.AutoShadowline != value ||
+                          _settings.AutoShadowlineConfigured != configured;
+            if (!changed) return;
+
             _settings.AutoShadowline = value;
+            _settings.AutoShadowlineConfigured = configured;
             MarkCustom();
-            RequestPreview();
+            if (requestPreview) RequestPreview();
         }
     }
 }
