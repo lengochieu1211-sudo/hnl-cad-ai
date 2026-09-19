@@ -30,7 +30,8 @@ namespace HNL.VXT.UI.ViewModels
             SelectBoundaryCommand = new RelayCommand(() => _host.SelectBoundary());
             PickDirectionCommand = new RelayCommand(
                 () => _host.PickDirection(_settings.MainDirection),
-                () => _settings.MainDirection == MainDirectionMode.TwoPoints ||
+                () => _settings.MainDirection == MainDirectionMode.Auto ||
+                      _settings.MainDirection == MainDirectionMode.TwoPoints ||
                       _settings.MainDirection == MainDirectionMode.RectangleRegions);
 
             PickMainBlockCommand = new RelayCommand(() => _host.PickBlock(BlockTarget.Main));
