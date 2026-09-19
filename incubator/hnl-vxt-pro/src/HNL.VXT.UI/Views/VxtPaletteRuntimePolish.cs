@@ -118,7 +118,7 @@ namespace HNL.VXT.UI.Views
             var stack = GetContentStack(view);
             if (stack == null) return;
 
-            FrameworkElement scopeCard = null;
+            FrameworkElement dimCard = null;
             Border fixedCard = null;
             var legacyCards = new List<UIElement>();
 
@@ -127,8 +127,8 @@ namespace HNL.VXT.UI.Views
                 var element = child as FrameworkElement;
                 if (element == null) continue;
 
-                if (scopeCard == null && ContainsText(element, "PHẠM VI BỐ TRÍ"))
-                    scopeCard = element;
+                if (dimCard == null && ContainsText(element, "KÍCH THƯỚC DIM"))
+                    dimCard = element;
 
                 var border = element as Border;
                 if (border != null && string.Equals(border.Tag as string, FixedLayerDimTag, StringComparison.Ordinal))
@@ -142,32 +142,33 @@ namespace HNL.VXT.UI.Views
             }
 
             // The old Enhancer-created panel lived near Preview and depended on a later move.
-            // Remove that copy and own one deterministic panel directly after PHẠM VI.
+            // Remove that copy and own one deterministic panel directly after DIM so the
+            // primary workflow remains: Scope -> XC -> XP -> Ty -> MEP -> DIM -> Layer.
             foreach (var legacy in legacyCards)
                 stack.Children.Remove(legacy);
 
-            if (scopeCard == null) return;
+            if (dimCard == null) return;
 
             if (fixedCard == null)
             {
                 fixedCard = CreateFixedLayerAndDimCard(view);
-                var scopeIndex = stack.Children.IndexOf(scopeCard);
-                stack.Children.Insert(Math.Min(scopeIndex + 1, stack.Children.Count), fixedCard);
+                var dimIndex = stack.Children.IndexOf(dimCard);
+                stack.Children.Insert(Math.Min(dimIndex + 1, stack.Children.Count), fixedCard);
             }
             else
             {
                 var oldIndex = stack.Children.IndexOf(fixedCard);
-                var scopeIndex = stack.Children.IndexOf(scopeCard);
-                if (oldIndex >= 0 && scopeIndex >= 0 && oldIndex != scopeIndex + 1)
+                var dimIndex = stack.Children.IndexOf(dimCard);
+                if (oldIndex >= 0 && dimIndex >= 0 && oldIndex != dimIndex + 1)
                 {
                     stack.Children.Remove(fixedCard);
-                    scopeIndex = stack.Children.IndexOf(scopeCard);
-                    stack.Children.Insert(Math.Min(scopeIndex + 1, stack.Children.Count), fixedCard);
+                    dimIndex = stack.Children.IndexOf(dimCard);
+                    stack.Children.Insert(Math.Min(dimIndex + 1, stack.Children.Count), fixedCard);
                 }
             }
 
             var topExpander = FindFirst<Expander>(fixedCard);
-            if (topExpander != null) topExpander.IsExpanded = true;
+            if (topExpander != null) topExpander.IsExpanded = false;
         }
 
         private static Border CreateFixedLayerAndDimCard(VxtPaletteView view)
@@ -179,7 +180,7 @@ namespace HNL.VXT.UI.Views
                 BorderBrush = view.TryFindResource("AccentBorder") as Brush
             };
 
-            var expander = new Expander { IsExpanded = true };
+            var expander = new Expander { IsExpanded = false };
             expander.Header = CreateLayerDimHeader(view);
 
             var body = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
@@ -229,7 +230,7 @@ namespace HNL.VXT.UI.Views
             };
             var title = new TextBlock
             {
-                Text = "CÀI ĐẶT LAYER & DIM",
+                Text = "LAYER & HIỂN THỊ",
                 Style = view.TryFindResource("SectionTitle") as Style,
                 VerticalAlignment = VerticalAlignment.Center
             };
