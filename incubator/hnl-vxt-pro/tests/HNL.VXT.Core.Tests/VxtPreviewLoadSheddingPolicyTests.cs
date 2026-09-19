@@ -57,6 +57,28 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void DisabledOptionalOverlays_AreNotReportedAsReduced()
+        {
+            var plan = new VxtPreviewPlan();
+            AddStructural(plan, 20);
+            var settings = new VxtSettings
+            {
+                DrawMain = true,
+                DrawFurring = true,
+                DrawHangers = false,
+                AutoDimension = false
+            };
+
+            var decision = VxtPreviewLoadSheddingPolicy.Evaluate(plan, settings);
+
+            Assert.IsFalse(decision.RenderHangers);
+            Assert.IsFalse(decision.RenderDimensions);
+            Assert.IsTrue(decision.RenderGuides);
+            Assert.IsFalse(decision.IsReduced,
+                "User-disabled overlays must not be confused with automatic large-preview load shedding.");
+        }
+
+        [TestMethod]
         public void VeryLargeDimensionSet_FallsBackToStructuralOnly()
         {
             var plan = new VxtPreviewPlan();

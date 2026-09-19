@@ -44,7 +44,8 @@ namespace HNL.VXT.Core.Preview
                     structural, hangers, dimensions, guides,
                     renderHangers: settings.DrawHangers,
                     renderDimensions: settings.AutoDimension,
-                    renderGuides: true);
+                    renderGuides: true,
+                    isReduced: false);
             }
 
             // WYSIWYG priority after XC/XP: retain DIM whenever XC/XP + DIM still fit.
@@ -57,7 +58,8 @@ namespace HNL.VXT.Core.Preview
                     structural, hangers, dimensions, guides,
                     renderHangers: false,
                     renderDimensions: settings.AutoDimension,
-                    renderGuides: false);
+                    renderGuides: false,
+                    isReduced: true);
             }
 
             // Very large drawings keep the historical fail-safe: structural framing only.
@@ -65,7 +67,8 @@ namespace HNL.VXT.Core.Preview
                 structural, hangers, dimensions, guides,
                 renderHangers: false,
                 renderDimensions: false,
-                renderGuides: false);
+                renderGuides: false,
+                isReduced: true);
         }
     }
 
@@ -78,7 +81,8 @@ namespace HNL.VXT.Core.Preview
             int guideDrawableCount,
             bool renderHangers,
             bool renderDimensions,
-            bool renderGuides)
+            bool renderGuides,
+            bool isReduced)
         {
             StructuralDrawableCount = structuralDrawableCount;
             HangerDrawableCount = hangerDrawableCount;
@@ -87,6 +91,7 @@ namespace HNL.VXT.Core.Preview
             RenderHangers = renderHangers;
             RenderDimensions = renderDimensions;
             RenderGuides = renderGuides;
+            IsReduced = isReduced;
         }
 
         public int StructuralDrawableCount { get; }
@@ -99,6 +104,6 @@ namespace HNL.VXT.Core.Preview
         public bool RenderHangers { get; }
         public bool RenderDimensions { get; }
         public bool RenderGuides { get; }
-        public bool IsReduced => !RenderHangers || !RenderDimensions || !RenderGuides;
+        public bool IsReduced { get; }
     }
 }
