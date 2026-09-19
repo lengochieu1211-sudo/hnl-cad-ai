@@ -123,6 +123,43 @@ namespace HNL.VXT.AutoCAD
             VxtCreateEngine.Execute();
         }
 
+        internal static bool ConfigureAutoShadowlineInteractive(VxtSettings settings = null, bool refreshPreview = true, bool fallbackFromCreate = false)
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return false;
+
+            var session = VxtSession.Current;
+            settings = settings ?? (session.ViewModel != null ? session.ViewModel.Snapshot() : session.Settings.Clone());
+            settings.MainDirection = MainDirectionMode.Auto;
+
+            var defaultKeyword = settings.AutoShadowline ? "Yes" : "No";
+            var prefix = fallbackFromCreate
+                ? "\nHNL Tool - VXT Pro: Chưa thiết lập hướng Auto. Trần có đi Shadowline không? "
+                : "\nHNL Tool - VXT Pro - Thiết lập hướng Auto: Trần có đi Shadowline không? ";
+            var options = new PromptKeywordOptions(prefix + "[Yes/No] <" + defaultKeyword + ">: ") { AllowNone = true };
+            options.Keywords.Add("Yes");
+            options.Keywords.Add("No");
+            options.Keywords.Default = defaultKeyword;
+
+            var result = doc.Editor.GetKeywords(options);
+            if (result.Status == PromptStatus.Cancel) return false;
+
+            var shadowline = result.Status == PromptStatus.None
+                ? settings.AutoShadowline
+                : string.Equals(result.StringResult, "Yes", StringComparison.OrdinalIgnoreCase);
+
+            settings.AutoShadowline = shadowline;
+            settings.AutoShadowlineConfigured = true;
+            session.Settings = settings;
+            session.ViewModel?.SetAutoShadowlineFromHost(shadowline, configured: true, requestPreview: refreshPreview);
+
+            if (refreshPreview && session.HasBoundary)
+                VxtTransientPreview.Instance.Refresh();
+
+            doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Hướng Auto đã thiết lập Shadowline = " + (shadowline ? "Có." : "Không."));
+            return true;
+        }
+
         private static bool TrySelectExisting(Editor ed, string dxfNames, out ObjectId[] ids)
         {
             ids = Array.Empty<ObjectId>();
