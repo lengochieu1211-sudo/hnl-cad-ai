@@ -44,6 +44,10 @@ namespace HNL.VXT.AutoCAD
             new VxtCommands().SelectBoundary();
         }
 
+        [CommandMethod("HNLVXTAUTOSETUP", CommandFlags.Modal)]
+        public void ConfigureAutoDirection() =>
+            VxtLegacyParityCoordinator.ConfigureAutoShadowlineInteractive(refreshPreview: true, fallbackFromCreate: false);
+
         [CommandMethod("HNLVXTDIRECTION", CommandFlags.Modal)]
         public void PickDirection() => new VxtCommands().PickDirection();
 
