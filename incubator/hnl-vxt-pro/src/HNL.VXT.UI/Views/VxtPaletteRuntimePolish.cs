@@ -96,21 +96,38 @@ namespace HNL.VXT.UI.Views
                 if (text != null) texts.Add(text);
             }
 
-            // Keep only product title + version. Branding is already carried by the HNL logo.
-            if (texts.Count > 0) texts[0].Visibility = Visibility.Collapsed;
-            if (texts.Count > 1)
+            // Keep product title + version + one shared drawing-unit line.
+            // Branding is already carried by the HNL logo; the verbose subtitle stays hidden.
+            foreach (var text in texts)
             {
-                texts[1].Visibility = Visibility.Visible;
-                texts[1].FontSize = 13.0;
-                texts[1].Margin = new Thickness(0);
+                var value = text.Text ?? string.Empty;
+                if (string.Equals(value, "HNL Tool", StringComparison.Ordinal))
+                {
+                    text.Visibility = Visibility.Collapsed;
+                }
+                else if (string.Equals(value, "VẼ XƯƠNG TRẦN", StringComparison.Ordinal))
+                {
+                    text.Visibility = Visibility.Visible;
+                    text.FontSize = 13.0;
+                    text.Margin = new Thickness(0);
+                }
+                else if (value.StartsWith("VXT Pro", StringComparison.OrdinalIgnoreCase))
+                {
+                    text.Visibility = Visibility.Visible;
+                    text.FontSize = 9.0;
+                    text.Margin = new Thickness(0, 1, 0, 0);
+                }
+                else if (value.StartsWith("Đơn vị:", StringComparison.OrdinalIgnoreCase))
+                {
+                    text.Visibility = Visibility.Visible;
+                    text.FontSize = 9.0;
+                    text.Margin = new Thickness(0, 1, 0, 0);
+                }
+                else
+                {
+                    text.Visibility = Visibility.Collapsed;
+                }
             }
-            if (texts.Count > 2)
-            {
-                texts[2].Visibility = Visibility.Visible;
-                texts[2].FontSize = 9.0;
-                texts[2].Margin = new Thickness(0, 1, 0, 0);
-            }
-            if (texts.Count > 3) texts[3].Visibility = Visibility.Collapsed;
         }
 
         private static void EnsureFixedLayerAndDimPanel(VxtPaletteView view)
