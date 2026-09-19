@@ -10,7 +10,7 @@ namespace HNL.VXT.UI.Views
     /// Deterministic production order for the AutoCAD palette sections.
     /// Keep calculation/binding logic untouched; only reorders top-level cards.
     /// Desired order after the structural sections:
-    /// DIM -> avoidance -> Layer/DIM resources -> Preview.
+    /// MEP avoidance -> DIM -> Layer/Display resources -> Diagnostics -> Preview.
     /// </summary>
     public static class VxtPaletteSectionOrder
     {
@@ -37,6 +37,7 @@ namespace HNL.VXT.UI.Views
             UIElement dim = null;
             UIElement avoidance = null;
             UIElement layerDim = null;
+            UIElement diagnostics = null;
             UIElement preview = null;
 
             foreach (UIElement child in stack.Children)
@@ -53,8 +54,10 @@ namespace HNL.VXT.UI.Views
 
                 if (ContainsText(element, "KÍCH THƯỚC DIM"))
                     dim = child;
-                else if (ContainsText(element, "NÉ THIẾT BỊ"))
+                else if (ContainsText(element, "NÉ THIẾT BỊ MEP") || ContainsText(element, "NÉ THIẾT BỊ"))
                     avoidance = child;
+                else if (ContainsText(element, "PHÂN TÍCH & KIỂM TRA LỖI"))
+                    diagnostics = child;
                 else if (ContainsText(element, "XEM TRƯỚC TRÊN BẢN VẼ"))
                     preview = child;
             }
@@ -63,15 +66,17 @@ namespace HNL.VXT.UI.Views
             // partial designer/test trees and preserves all existing bindings/controls.
             if (dim == null || avoidance == null || layerDim == null || preview == null) return;
 
-            stack.Children.Remove(dim);
             stack.Children.Remove(avoidance);
+            stack.Children.Remove(dim);
             stack.Children.Remove(layerDim);
+            if (diagnostics != null) stack.Children.Remove(diagnostics);
             stack.Children.Remove(preview);
 
-            // Append the final production tail in a stable order.
-            stack.Children.Add(dim);
+            // Append the final production tail in the user workflow order.
             stack.Children.Add(avoidance);
+            stack.Children.Add(dim);
             stack.Children.Add(layerDim);
+            if (diagnostics != null) stack.Children.Add(diagnostics);
             stack.Children.Add(preview);
         }
 
