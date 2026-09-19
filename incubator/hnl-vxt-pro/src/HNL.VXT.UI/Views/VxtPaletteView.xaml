@@ -220,7 +220,8 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="92"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Hướng bố trí" Style="{StaticResource FieldLabel}"/>
                                 <ComboBox Grid.Column="1" ItemsSource="{Binding MainDirectionOptions}" SelectedItem="{Binding SelectedMainDirection}"/>
-                                <Button Grid.Column="2" Content="Thiết lập CAD" Command="{Binding PickDirectionCommand}" Style="{StaticResource CompactButton}" Margin="6,0,0,0"/>
+                                <Button Grid.Column="2" Content="Thiết lập" Command="{Binding PickDirectionCommand}" Style="{StaticResource CompactButton}" Margin="8,0,0,0"
+                                        ToolTip="Tự động: chọn Shadowline • 2 điểm/HCN: thiết lập trực tiếp trên CAD"/>
                             </Grid>
 
                             <Grid Margin="0,0,0,7">
