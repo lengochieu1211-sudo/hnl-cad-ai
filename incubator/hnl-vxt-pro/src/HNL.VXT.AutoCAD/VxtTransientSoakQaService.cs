@@ -3,6 +3,8 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using Autodesk.AutoCAD.ApplicationServices.Core;
+using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.Geometry;
 
 namespace HNL.VXT.AutoCAD
 {
@@ -36,7 +38,7 @@ namespace HNL.VXT.AutoCAD
                     throw new InvalidOperationException(
                         "Còn " + preview.TrackedDrawableCount + " transient đang hoạt động sau Soak QA.");
 
-                var expectedQuarantine = Cycles * 3;
+                var expectedQuarantine = Cycles * 4;
                 if (preview.RetiredDrawableCount < expectedQuarantine)
                     throw new InvalidOperationException(
                         "Quarantine chỉ giữ " + preview.RetiredDrawableCount + "/" + expectedQuarantine +
@@ -45,9 +47,9 @@ namespace HNL.VXT.AutoCAD
                 if (restorePreview) preview.Refresh();
 
                 var summary = "PASS Transient Soak QA: " + Cycles +
-                              " vòng Add/Erase x 3 drawable | active=0 | quarantine=" +
+                              " vòng Add/Erase x 4 drawable (Line/Circle/Text/DIM) | active=0 | quarantine=" +
                               preview.RetiredDrawableCount +
-                              " | delayed-dispose guard ON | Preview chạy trong command context.";
+                              " | delayed-dispose guard ON | DIM GenerateLayout ON | Preview chạy trong command context.";
                 WriteLog("PASS", summary);
                 doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
                 return summary;

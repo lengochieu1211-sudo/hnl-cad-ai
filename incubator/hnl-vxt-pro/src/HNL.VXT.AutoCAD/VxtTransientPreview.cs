@@ -358,6 +358,18 @@ namespace HNL.VXT.AutoCAD
                 dim.SetDatabaseDefaults(db);
                 ApplyAppearance(dim, settings.DimensionLayer, settings.DimensionColorIndex,
                     settings.DimensionLinetype, settings.DimensionLineweight, layerTable, linetypeTable);
+
+                // A transient Dimension is not database-resident, so AutoCAD does not get the
+                // normal close/post-to-database opportunity that generates its display geometry.
+                // GenerateLayout builds that geometry in memory and is explicitly supported for
+                // non-resident dimensions. This keeps Preview DIM visually consistent with Create.
+                try { dim.GenerateLayout(); }
+                catch
+                {
+                    DisposeDrawable(dim);
+                    throw;
+                }
+
                 AddDrawable(dim);
             }
         }
@@ -514,7 +526,25 @@ namespace HNL.VXT.AutoCAD
                 text.SetDatabaseDefaults(db);
                 AddDrawable(text);
 
-                if (_drawables.Count != 3)
+                // Exercise the exact non-database-resident DIM path used by live Preview.
+                // GenerateLayout creates in-memory dimension geometry before AddTransient.
+                var dimension = new RotatedDimension(
+                    0.0,
+                    new Point3d(x, 20.0, 0.0),
+                    new Point3d(x + 10.0, 20.0, 0.0),
+                    new Point3d(x + 5.0, 25.0, 0.0),
+                    string.Empty,
+                    db.Dimstyle);
+                dimension.SetDatabaseDefaults(db);
+                try { dimension.GenerateLayout(); }
+                catch
+                {
+                    DisposeDrawable(dimension);
+                    throw;
+                }
+                AddDrawable(dimension);
+
+                if (_drawables.Count != 4)
                     throw new InvalidOperationException("Soak QA sai số drawable sau AddTransient.");
 
                 Clear();
