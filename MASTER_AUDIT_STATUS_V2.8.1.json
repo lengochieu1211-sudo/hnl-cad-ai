@@ -1,0 +1,411 @@
+{
+  "version": "2.8.1",
+  "baseline": "2.8.0",
+  "definition": {
+    "VERIFIED": "fully evidenced in current environment without external runtime",
+    "REVIEW": "requires Windows/AutoCAD/API/installer runtime"
+  },
+  "counts": {
+    "total": 44,
+    "verified": 6,
+    "review": 38
+  },
+  "items": [
+    {
+      "id": "SYS-01",
+      "workflow": "Baseline/version sync",
+      "area": "Core",
+      "static": "PASS",
+      "runtime": "N/A",
+      "status": "VERIFIED",
+      "note": "package/metadata/AutoCAD/SketchUp version synchronized"
+    },
+    {
+      "id": "SYS-02",
+      "workflow": "Master static regression gate",
+      "area": "Core",
+      "static": "PASS",
+      "runtime": "N/A",
+      "status": "VERIFIED",
+      "note": "21/21 static checks"
+    },
+    {
+      "id": "START-01",
+      "workflow": "Start Center primary flow",
+      "area": "Start Center",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Source has Continue / AutoCAD+HNL / DXF-HNL / New; visual Windows test pending"
+    },
+    {
+      "id": "START-02",
+      "workflow": "Advanced DWG modes",
+      "area": "Start Center",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Direct DWG and HNL Canvas are collapsed/guarded; runtime launch test pending"
+    },
+    {
+      "id": "DWG-01",
+      "workflow": "Open DWG via AutoCAD",
+      "area": "DWG",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "OPEN_DWG/launch workflow wired; AutoCAD runtime required"
+    },
+    {
+      "id": "DWG-02",
+      "workflow": "HNL Canvas preview",
+      "area": "DWG",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "DWG→temporary DXF preview wired; fidelity/runtime pending"
+    },
+    {
+      "id": "DWG-03",
+      "workflow": "Direct DWG live snapshot",
+      "area": "DWG",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "GET_MODELSPACE_SNAPSHOT guarded; unsupported/truncated entities possible"
+    },
+    {
+      "id": "BRG-01",
+      "workflow": "Bridge pairing/heartbeat",
+      "area": "Bridge",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "v2.8.1 adds read-only Golden round-trip gate (GET_STATUS/DRAFTING/LAYOUTS/LAYERS), bridge instance evidence and heartbeat/poll diagnostics; run AutoCAD Golden Test to promote VERIFIED."
+    },
+    {
+      "id": "BRG-02",
+      "workflow": "Bridge action timeout policy",
+      "area": "Bridge",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "v2.8.1 propagates per-action deadline, rejects unsupported capabilities, prevents overlapping poll, cancels queued timed-out requests and blocks expired actions before execution; runtime stress test pending."
+    },
+    {
+      "id": "2D-01",
+      "workflow": "2D taxonomy routing",
+      "area": "2D Pro",
+      "static": "PASS",
+      "runtime": "N/A",
+      "status": "VERIFIED",
+      "note": "Electron tool args + native Palette + Ribbon + App routes aligned"
+    },
+    {
+      "id": "2D-02",
+      "workflow": "Electron-safe input dialogs",
+      "area": "2D Pro",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "12 window.prompt calls removed; Windows interaction test pending"
+    },
+    {
+      "id": "2D-03",
+      "workflow": "Quick Dim / Dim+",
+      "area": "2D Pro",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "DN/DNC + JD + TKD mapped; actual AutoCAD dimensions not runtime-verified"
+    },
+    {
+      "id": "2D-04",
+      "workflow": "Field / Links",
+      "area": "2D Pro",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Field center mapped; ObjectID/Field behavior requires native AutoCAD"
+    },
+    {
+      "id": "2D-05",
+      "workflow": "Geometry / Polyline",
+      "area": "2D Pro",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Standalone partial; native path required for Trim/Fillet/Hatch/Arc"
+    },
+    {
+      "id": "2D-06",
+      "workflow": "Layer / Properties",
+      "area": "2D Pro",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "TLE + DM/RDM/FDM taxonomy correct; native behavior pending"
+    },
+    {
+      "id": "LSP-01",
+      "workflow": "45-file archive inventory",
+      "area": "44 Lisp + ARX",
+      "static": "PASS",
+      "runtime": "N/A",
+      "status": "VERIFIED",
+      "note": "44 .lsp + 1 legacy GeomProps2021x64.arx"
+    },
+    {
+      "id": "LSP-02",
+      "workflow": "44 Lisp exact-file taxonomy",
+      "area": "44 Lisp + ARX",
+      "static": "PASS",
+      "runtime": "N/A",
+      "status": "VERIFIED",
+      "note": "44/44 exact sourceFile entries; group counts pass"
+    },
+    {
+      "id": "LSP-03",
+      "workflow": "On-demand Lisp loading policy",
+      "area": "44 Lisp + ARX",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Default does not preload all; SECURELOAD/dependencies require AutoCAD test"
+    },
+    {
+      "id": "LSP-04",
+      "workflow": "TKL runtime",
+      "area": "44 Lisp + ARX",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Present in Layout group; full Layout workflow runtime pending"
+    },
+    {
+      "id": "LSP-05",
+      "workflow": "TKT runtime",
+      "area": "44 Lisp + ARX",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Present in Quantity group; table/geometry runtime pending"
+    },
+    {
+      "id": "LSP-06",
+      "workflow": "Legacy ARX compatibility",
+      "area": "44 Lisp + ARX",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "ARX excluded from autoload/bundle for 2023–2026; compatibility not certified"
+    },
+    {
+      "id": "LIB-01",
+      "workflow": "Library DWG inspect",
+      "area": "Library",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Auto-inspect and multi-definition guard present"
+    },
+    {
+      "id": "LIB-02",
+      "workflow": "Library insert point flow",
+      "area": "Library",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Queued HNLINSERTPENDING avoids web timeout; native insert runtime pending"
+    },
+    {
+      "id": "LIB-03",
+      "workflow": "Dynamic Block properties",
+      "area": "Library",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "GET/SET_DYNAMIC_BLOCK_PROPERTIES present; dynamic block test file needed"
+    },
+    {
+      "id": "SHOP-01",
+      "workflow": "Smart Ceiling",
+      "area": "Shopdrawing",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Native CREATE_CEILING_* present; geometric benchmark pending"
+    },
+    {
+      "id": "SHOP-02",
+      "workflow": "Smart Wall",
+      "area": "Shopdrawing",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "CREATE_WALL_SYSTEM present; geometric benchmark pending"
+    },
+    {
+      "id": "SHOP-03",
+      "workflow": "Shopdrawing Audit",
+      "area": "Shopdrawing",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Native audit scans HNL XData and block scale; coverage is intentionally limited"
+    },
+    {
+      "id": "BOQ-01",
+      "workflow": "HNL native BOQ",
+      "area": "BOQ",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Counts HNL-tagged ceiling/wall/library entities only; not a full arbitrary-DWG takeoff"
+    },
+    {
+      "id": "BOQ-02",
+      "workflow": "TKT Quantity/BOQ",
+      "area": "BOQ",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Source mapping verified; AutoCAD table/result benchmark pending"
+    },
+    {
+      "id": "LAY-01",
+      "workflow": "Native layout mirror/activate/rename",
+      "area": "Layout",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "v2.8.0 fixes effect dependency on workspace mode; runtime pending"
+    },
+    {
+      "id": "LAY-02",
+      "workflow": "TKL Layout Automation",
+      "area": "Layout",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Source present/on-demand; viewport/title block/page setup benchmark pending"
+    },
+    {
+      "id": "LAY-03",
+      "workflow": "Plot/Publish",
+      "area": "Layout",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Native actions present; long-action timeout raised; CTB/printer runtime pending"
+    },
+    {
+      "id": "AI-01",
+      "workflow": "Provider config/key storage",
+      "area": "AI",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "safeStorage/DPAPI wiring present; provider connection test pending"
+    },
+    {
+      "id": "AI-02",
+      "workflow": "No silent provider fallback",
+      "area": "AI",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "v2.8.0 defaults fallback OFF; user opt-in required"
+    },
+    {
+      "id": "AI-03",
+      "workflow": "AI AutoLISP Builder response",
+      "area": "AI",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "v2.8.0 accepts online top-level code and offline nested payload; API runtime pending"
+    },
+    {
+      "id": "AI-04",
+      "workflow": "Offline rule planner",
+      "area": "AI",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Rules present; output quality/geometry application benchmark pending"
+    },
+    {
+      "id": "SAVE-01",
+      "workflow": "Standalone Undo/Redo",
+      "area": "Save/Undo",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "History stack wired; UI runtime test pending"
+    },
+    {
+      "id": "SAVE-02",
+      "workflow": "Native Undo/Redo",
+      "area": "Save/Undo",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "U/REDO routed to AutoCAD; transaction behavior pending"
+    },
+    {
+      "id": "SAVE-03",
+      "workflow": "Native DWG Save/Save As",
+      "area": "Save/Undo",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "SAVE_CURRENT_DWG/SAVE_AS_DWG wired; read-only/unsaved cases pending"
+    },
+    {
+      "id": "SAVE-04",
+      "workflow": "AutoSave/recovery",
+      "area": "Save/Undo",
+      "static": "PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "localStorage + recovery generations present; quota/large-project test pending"
+    },
+    {
+      "id": "BUILD-01",
+      "workflow": "GitHub current Ribbon gate",
+      "area": "Installer",
+      "static": "PASS",
+      "runtime": "N/A",
+      "status": "VERIFIED",
+      "note": "v2.8.0 fixes stale v2.7.12 token checks"
+    },
+    {
+      "id": "BUILD-02",
+      "workflow": "AutoCAD plugin build 2023–2026",
+      "area": "Installer",
+      "static": "SOURCE PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "No dotnet/AutoCAD SDK runtime locally; GitHub Windows is compile gate"
+    },
+    {
+      "id": "BUILD-03",
+      "workflow": "Windows Electron installer",
+      "area": "Installer",
+      "static": "SOURCE PASS",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "Workflow/build config present; actual installer artifact pending"
+    },
+    {
+      "id": "BUILD-04",
+      "workflow": "Dependency reproducibility",
+      "area": "Installer",
+      "static": "WARNING",
+      "runtime": "REQUIRED",
+      "status": "REVIEW",
+      "note": "package-lock.json absent; npm install can resolve transitive versions differently"
+    }
+  ]
+}
