@@ -198,7 +198,7 @@
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AccentStrong}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Height" Value="40"/>
+            <Setter Property="Height" Value="27"/>
         </Style>
 
         <Style x:Key="CompactButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -605,9 +605,9 @@
         </ScrollViewer>
 
         <!-- FOOTER: primary action only. Build/version identity lives in the header. -->
-        <Border Grid.Row="2" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="10">
+        <Border Grid.Row="2" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="6,4">
             <Button Style="{StaticResource PrimaryButton}"
-                    Content="✓ TẠO KHUNG XƯƠNG TRẦN"
+                    Content="✓ Tạo khung xương trần"
                     Command="{Binding CreateCommand}"
                     IsEnabled="{Binding CanCreate}"
                     HorizontalAlignment="Stretch"/>
