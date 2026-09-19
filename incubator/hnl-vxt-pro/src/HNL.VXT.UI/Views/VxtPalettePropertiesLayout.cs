@@ -21,9 +21,9 @@ namespace HNL.VXT.UI.Views
         private const string HeaderTag = "HNL_VXT_PROPERTIES_GROUP_HEADER";
         private const string RowDividerTag = "HNL_VXT_PROPERTIES_ROW_DIVIDER";
         private const string ColumnDividerTag = "HNL_VXT_PROPERTIES_COLUMN_DIVIDER";
-        private const double PropertyColumnWidth = 138.0;
-        private const double PropertyRowMinHeight = 28.0;
-        private const double EditorHeight = 25.0;
+        private const double PropertyColumnWidth = 136.0;
+        private const double PropertyRowMinHeight = 26.0;
+        private const double EditorHeight = 24.0;
 
         public static void Apply(VxtPaletteView view)
         {
@@ -47,7 +47,7 @@ namespace HNL.VXT.UI.Views
             if (scroll == null) return;
 
             // Native Properties uses a very small outer gutter rather than floating cards.
-            scroll.Padding = new Thickness(4, 4, 4, 5);
+            scroll.Padding = new Thickness(3, 3, 3, 4);
 
             var stack = scroll.Content as StackPanel;
             if (stack == null) return;
@@ -72,9 +72,9 @@ namespace HNL.VXT.UI.Views
             if (card.BorderBrush == null)
                 card.BorderBrush = cardBorder;
 
-            card.CornerRadius = new CornerRadius(3);
+            card.CornerRadius = new CornerRadius(2);
             card.BorderThickness = new Thickness(1);
-            card.Margin = new Thickness(0, 0, 0, 5);
+            card.Margin = new Thickness(0, 0, 0, 4);
 
             var expander = card.Child as Expander;
             if (expander != null)
@@ -89,7 +89,7 @@ namespace HNL.VXT.UI.Views
                 {
                     // Property rows themselves provide their own cell padding, so the content can
                     // sit almost flush with the group border like AutoCAD Properties.
-                    content.Margin = new Thickness(6, 4, 6, 5);
+                    content.Margin = new Thickness(5, 3, 5, 4);
                     NormalizePropertyRows(content, cardBorder);
                     FlattenNestedPropertyGroups(content, cardBorder);
                 }
@@ -99,7 +99,7 @@ namespace HNL.VXT.UI.Views
             // Preset / Scope / diagnostics / Preview are not all pure property grids. Keep a small
             // inner inset for their action/status content, while any detected two-column property
             // row is still normalized to the same grid contract.
-            card.Padding = new Thickness(7, 5, 7, 6);
+            card.Padding = new Thickness(6, 4, 6, 5);
             NormalizePropertyRows(card.Child, cardBorder);
             FlattenNestedPropertyGroups(card.Child, cardBorder);
         }
@@ -113,7 +113,7 @@ namespace HNL.VXT.UI.Views
                 existingBorder.Background = Brushes.Transparent;
                 existingBorder.BorderBrush = Brushes.Transparent;
                 existingBorder.BorderThickness = new Thickness(0);
-                existingBorder.Padding = new Thickness(7, 3, 7, 3);
+                existingBorder.Padding = new Thickness(6, 2, 6, 2);
                 return;
             }
 
@@ -145,7 +145,7 @@ namespace HNL.VXT.UI.Views
                 BorderBrush = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 CornerRadius = new CornerRadius(0),
-                Padding = new Thickness(7, 3, 7, 3),
+                Padding = new Thickness(6, 2, 6, 2),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Child = visual
             };
@@ -172,7 +172,7 @@ namespace HNL.VXT.UI.Views
                 var labelColumn = FindLabelColumn(grid);
                 if (labelColumn < 0) continue;
 
-                grid.Margin = new Thickness(0, 0, 0, 2);
+                grid.Margin = new Thickness(0, 0, 0, 1);
                 grid.MinHeight = PropertyRowMinHeight;
                 grid.SnapsToDevicePixels = true;
 
@@ -195,10 +195,10 @@ namespace HNL.VXT.UI.Views
                 // Property | Min | value | gap | Max | value.
                 // Do NOT collapse this back into a two-column Properties row.
                 columns[0].Width = new GridLength(PropertyColumnWidth);
-                columns[1].Width = new GridLength(28);
+                columns[1].Width = new GridLength(26);
                 columns[2].Width = new GridLength(1, GridUnitType.Star);
-                columns[3].Width = new GridLength(8);
-                columns[4].Width = new GridLength(28);
+                columns[3].Width = new GridLength(6);
+                columns[4].Width = new GridLength(26);
                 columns[5].Width = new GridLength(1, GridUnitType.Star);
                 return;
             }
@@ -269,7 +269,7 @@ namespace HNL.VXT.UI.Views
                 var text = child as TextBlock;
                 if (text != null)
                 {
-                    text.Margin = new Thickness(2, 1, 6, 1);
+                    text.Margin = new Thickness(1, 0, 5, 0);
                     text.VerticalAlignment = VerticalAlignment.Center;
                     continue;
                 }
@@ -278,8 +278,8 @@ namespace HNL.VXT.UI.Views
                 if (check != null)
                 {
                     check.Margin = column <= labelColumn
-                        ? new Thickness(2, 1, 5, 1)
-                        : new Thickness(4, 1, 2, 1);
+                        ? new Thickness(1, 0, 4, 0)
+                        : new Thickness(3, 0, 2, 0);
                     check.VerticalAlignment = VerticalAlignment.Center;
                     continue;
                 }
@@ -287,13 +287,13 @@ namespace HNL.VXT.UI.Views
                 var button = child as Button;
                 if (button != null)
                 {
-                    button.Margin = new Thickness(5, 1, 0, 1);
+                    button.Margin = new Thickness(4, 0, 0, 0);
                     continue;
                 }
 
                 // Editors occupy the value cell rather than floating inside card padding.
                 if (child is TextBox || child is ComboBox || child is HnlNumericBox)
-                    ((FrameworkElement)child).Margin = new Thickness(3, 1, 0, 1);
+                    ((FrameworkElement)child).Margin = new Thickness(2, 0, 0, 0);
             }
         }
 
@@ -306,7 +306,7 @@ namespace HNL.VXT.UI.Views
                 {
                     textBox.Height = EditorHeight;
                     textBox.MinHeight = 0;
-                    textBox.Padding = new Thickness(6, 1, 6, 1);
+                    textBox.Padding = new Thickness(5, 0, 5, 0);
                     textBox.VerticalContentAlignment = VerticalAlignment.Center;
                     textBox.BorderThickness = new Thickness(1);
                     continue;
@@ -317,7 +317,7 @@ namespace HNL.VXT.UI.Views
                 {
                     combo.Height = EditorHeight;
                     combo.MinHeight = 0;
-                    combo.Padding = new Thickness(6, 1, 6, 1);
+                    combo.Padding = new Thickness(5, 0, 5, 0);
                     combo.VerticalContentAlignment = VerticalAlignment.Center;
                     combo.BorderThickness = new Thickness(1);
                     continue;
@@ -429,15 +429,15 @@ namespace HNL.VXT.UI.Views
                 border.CornerRadius = new CornerRadius(2);
                 border.BorderBrush = borderBrush;
                 border.BorderThickness = new Thickness(1);
-                border.Padding = new Thickness(5, 4, 5, 5);
-                border.Margin = new Thickness(0, 0, 0, 4);
+                border.Padding = new Thickness(4, 3, 4, 4);
+                border.Margin = new Thickness(0, 0, 0, 3);
 
                 var panel = border.Child as StackPanel;
                 if (panel != null && panel.Children.Count > 0)
                 {
                     var title = panel.Children[0] as TextBlock;
                     if (title != null)
-                        title.Margin = new Thickness(1, 0, 1, 3);
+                        title.Margin = new Thickness(1, 0, 1, 2);
                 }
             }
         }
