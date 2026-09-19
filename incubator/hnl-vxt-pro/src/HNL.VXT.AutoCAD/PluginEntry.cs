@@ -10,27 +10,53 @@ namespace HNL.VXT.AutoCAD
 {
     public sealed class PluginEntry : IExtensionApplication
     {
+        private static bool _runtimeHooksEnabled;
+
         public void Initialize()
         {
-            var documents = Application.DocumentManager;
-            documents.DocumentActivated += OnDocumentActivated;
-            documents.DocumentToBeDestroyed += OnDocumentToBeDestroyed;
-
-            var doc = documents.MdiActiveDocument;
-            if (doc != null) VxtSession.SynchronizeDocument(doc);
-            doc?.Editor.WriteMessage("\nHNL Tool - Vẽ Xương Trần | " + VxtBuildInfo.VersionLabel + " | Lệnh: HVX");
+            // Startup must be inert. The bundle is command-lazy-loaded, but keep Initialize()
+            // safe even if AutoCAD or an older manifest loads this assembly during startup.
+            // Do not touch VxtSession, TransientManager, WPF, Document events, Database or Editor.
         }
 
         public void Terminate()
         {
-            var documents = Application.DocumentManager;
-            documents.DocumentActivated -= OnDocumentActivated;
-            documents.DocumentToBeDestroyed -= OnDocumentToBeDestroyed;
+            if (!_runtimeHooksEnabled) return;
 
-            // Shutdown/document teardown is exactly where AutoCAD owns native graphics destruction.
-            // Never call TransientManager here. Keep wrappers alive and let process teardown reclaim them.
-            VxtTransientPreview.Instance.AbandonForDocumentTransition();
-            VxtSession.ReleaseDocument(null);
+            try
+            {
+                var documents = Application.DocumentManager;
+                documents.DocumentActivated -= OnDocumentActivated;
+                documents.DocumentToBeDestroyed -= OnDocumentToBeDestroyed;
+            }
+            catch
+            {
+                // AutoCAD may already be tearing down managed wrappers.
+            }
+
+            _runtimeHooksEnabled = false;
+
+            // Do not call TransientManager during shutdown. Abandon only releases HNL ownership
+            // of managed wrapper collections and leaves native graphics teardown to AutoCAD.
+            try { VxtTransientPreview.Instance.AbandonForDocumentTransition(); } catch { }
+            try { VxtSession.ReleaseDocument(null); } catch { }
+        }
+
+        internal static void EnableRuntimeHooks()
+        {
+            if (_runtimeHooksEnabled) return;
+
+            var documents = Application.DocumentManager;
+            documents.DocumentActivated += OnDocumentActivated;
+            documents.DocumentToBeDestroyed += OnDocumentToBeDestroyed;
+            _runtimeHooksEnabled = true;
+
+            var doc = documents.MdiActiveDocument;
+            if (doc != null)
+                VxtSession.SynchronizeDocument(doc);
+
+            doc?.Editor.WriteMessage(
+                "\nHNL Tool - Vẽ Xương Trần | " + VxtBuildInfo.VersionLabel + " | Lệnh: HVX");
         }
 
         private static void OnDocumentActivated(object sender, DocumentCollectionEventArgs e)
@@ -38,10 +64,6 @@ namespace HNL.VXT.AutoCAD
             var doc = e?.Document;
             if (doc == null) return;
 
-            // AutoCAD can fire DocumentActivated again for the same drawing when focus/modal
-            // state changes. VxtSession filters that redundant notification by Document identity.
-            // On a real DWG switch, do not touch TransientManager from this native callback:
-            // retain the wrappers until AutoCAD has finished tearing down the old viewport state.
             if (VxtSession.SynchronizeDocument(doc))
                 VxtTransientPreview.Instance.AbandonForDocumentTransition();
         }
