@@ -136,7 +136,9 @@ namespace HNL.VXT.UI.Views
 
                 var title = HeaderText(expander.Header);
                 if (string.Equals(title, "Cài đặt Layer & DIM", StringComparison.Ordinal) ||
-                    string.Equals(title, "CÀI ĐẶT LAYER & DIM", StringComparison.Ordinal))
+                    string.Equals(title, "CÀI ĐẶT LAYER & DIM", StringComparison.Ordinal) ||
+                    string.Equals(title, "Layer & hiển thị", StringComparison.Ordinal) ||
+                    string.Equals(title, "LAYER & HIỂN THỊ", StringComparison.Ordinal))
                     return expander;
             }
             return null;
