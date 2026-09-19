@@ -64,7 +64,7 @@ namespace HNL.VXT.Core.Tests
             Assert.AreEqual(400.0, s.HangerMaxEdgeOffset, 1e-9);
             Assert.AreEqual(50.0, s.HangerBalanceStep, 1e-9);
             Assert.AreEqual(HangerLayoutMode.BalancedTwoEnds, s.HangerLayout);
-            Assert.IsTrue(s.UseAvoidance);
+            Assert.IsFalse(s.UseAvoidance);
             Assert.IsTrue(s.ShiftAllForAvoidance);
             Assert.AreEqual(20.0, s.ClearanceDistance, 1e-9);
             Assert.IsFalse(s.AutoDimension);
