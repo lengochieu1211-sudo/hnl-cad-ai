@@ -54,6 +54,23 @@ namespace HNL.VXT.UI.Views
             }
         }
 
+        private void ComboBox_Loaded(object sender, RoutedEventArgs e)
+        {
+            var combo = sender as ComboBox;
+            if (combo == null) return;
+
+            var primary = FindBrush(combo, "PrimaryText", Brushes.Black);
+            var secondary = FindBrush(combo, "SecondaryText", Brushes.Gray);
+            var input = FindBrush(combo, "InputBackground", Brushes.White);
+            var border = FindBrush(combo, "InputBorder", Brushes.Gray);
+            var selected = FindBrush(combo, "AccentSoft", Brushes.LightGray);
+
+            // Expander content can be materialized after the palette's first Loaded pass.
+            // Theme every ComboBox on its own Loaded event so disabled DIM position rows
+            // never fall back to the host AutoCAD/Windows white chrome.
+            FixCombo(combo, primary, secondary, input, border, selected);
+        }
+
         private static void FixCombo(ComboBox combo, Brush primary, Brush secondary, Brush input, Brush border, Brush selected)
         {
             combo.Foreground = combo.IsEnabled ? primary : secondary;
