@@ -331,6 +331,8 @@ namespace HNL.VXT.UI.Views
             Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = primaryText;
 
             var itemStyle = new Style(typeof(ComboBoxItem));
+            itemStyle.Setters.Add(new Setter(Control.FontFamilyProperty, new FontFamily("Segoe UI")));
+            itemStyle.Setters.Add(new Setter(Control.FontSizeProperty, 12.0));
             itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, primaryText));
             itemStyle.Setters.Add(new Setter(Control.BackgroundProperty, inputBackground));
             itemStyle.Setters.Add(new Setter(Control.BorderBrushProperty, inputBorder));

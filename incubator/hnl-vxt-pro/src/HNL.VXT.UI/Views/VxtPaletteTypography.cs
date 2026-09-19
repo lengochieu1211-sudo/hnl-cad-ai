@@ -22,11 +22,11 @@ namespace HNL.VXT.UI.Views
     public static class VxtPaletteTypography
     {
         private const double ProductTitleSize = 13.0;
-        private const double SectionTitleSize = 11.5;
-        private const double BodySize = 10.5;
-        private const double PrimaryActionSize = 11.0;
-        private const double HintSize = 9.0;
-        private const double VersionSize = 9.0;
+        private const double SectionTitleSize = 12.0;
+        private const double BodySize = 12.0;
+        private const double PrimaryActionSize = 12.0;
+        private const double HintSize = 11.0;
+        private const double VersionSize = 10.5;
 
         private static readonly Dictionary<string, string> SectionText =
             new Dictionary<string, string>(StringComparer.Ordinal)
@@ -71,6 +71,12 @@ namespace HNL.VXT.UI.Views
 
         private static void ApplyNow(VxtPaletteView view, double scale, bool normalizeSectionText)
         {
+            // Match the AutoCAD Properties palette baseline: Segoe UI, 12 DIP at 100% text scale.
+            // Keep the explicit HNL product-title hierarchy, but make all property labels/values
+            // share one readable technical UI size.
+            view.FontFamily = new System.Windows.Media.FontFamily("Segoe UI");
+            view.FontSize = BodySize * scale;
+
             var sectionStyle = view.TryFindResource("SectionTitle") as Style;
             var fieldStyle = view.TryFindResource("FieldLabel") as Style;
             var hintStyle = view.TryFindResource("HintText") as Style;
@@ -109,6 +115,14 @@ namespace HNL.VXT.UI.Views
                              text.Text.StartsWith("VXT Pro", StringComparison.OrdinalIgnoreCase))
                     {
                         text.FontSize = VersionSize * scale;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(text.Text) &&
+                             !string.Equals(text.Text, "HNL Tool", StringComparison.Ordinal) &&
+                             !string.Equals(text.Text, "LIVE", StringComparison.Ordinal))
+                    {
+                        // Dynamic panels created in code-behind/runtime polish must not fall back
+                        // to smaller ad-hoc font sizes. They follow the same Properties body size.
+                        text.FontSize = BodySize * scale;
                     }
                 }
 

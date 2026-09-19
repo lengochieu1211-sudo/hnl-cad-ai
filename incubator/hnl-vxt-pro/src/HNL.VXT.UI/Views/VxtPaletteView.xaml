@@ -3,12 +3,18 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:HNL.VXT.UI.Controls"
              Background="{DynamicResource AppBackground}"
+             FontFamily="Segoe UI"
+             FontSize="12"
              MinWidth="380">
     <UserControl.Resources>
         <Style TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
         </Style>
         <Style TargetType="CheckBox">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
@@ -114,16 +120,18 @@
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
 
         <Style x:Key="HintText" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/>
-            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="FontSize" Value="11"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
 
         <Style TargetType="TextBox">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="7,3"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -134,6 +142,8 @@
         </Style>
 
         <Style TargetType="ComboBox">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="6,2"/>
             <Setter Property="Background" Value="{DynamicResource InputBackground}"/>
@@ -143,6 +153,8 @@
         </Style>
 
         <Style TargetType="Button">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Height" Value="30"/>
             <Setter Property="Padding" Value="10,3"/>
             <Setter Property="Background" Value="{DynamicResource InputBackground}"/>
@@ -192,7 +204,7 @@
         <Style x:Key="CompactButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Height" Value="28"/>
             <Setter Property="Padding" Value="8,2"/>
-            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
 
         <Style x:Key="ToggleSwitch" TargetType="CheckBox">
@@ -274,7 +286,7 @@
                                 HorizontalAlignment="Stretch" Margin="0,0,0,7"/>
                         <Border Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}"
                                 BorderThickness="1" CornerRadius="6" Padding="8,6">
-                            <TextBlock Text="{Binding BoundaryStatus}" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" FontSize="10.5"/>
+                            <TextBlock Text="{Binding BoundaryStatus}" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" FontSize="12"/>
                         </Border>
                     </StackPanel>
                 </Border>
@@ -487,19 +499,19 @@
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Thiết bị dùng chung" Style="{StaticResource FieldLabel}"/>
-                                <TextBlock Grid.Column="1" Text="{Binding GeneralEquipmentStatus}" VerticalAlignment="Center" FontSize="10.5"/>
+                                <TextBlock Grid.Column="1" Text="{Binding GeneralEquipmentStatus}" VerticalAlignment="Center" FontSize="12"/>
                                 <Button Grid.Column="2" Content="⌖ Chọn" Command="{Binding PickGeneralEquipmentCommand}" Style="{StaticResource CompactButton}"/>
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Thiết bị Xương chính" Style="{StaticResource FieldLabel}"/>
-                                <TextBlock Grid.Column="1" Text="{Binding MainEquipmentStatus}" VerticalAlignment="Center" FontSize="10.5"/>
+                                <TextBlock Grid.Column="1" Text="{Binding MainEquipmentStatus}" VerticalAlignment="Center" FontSize="12"/>
                                 <Button Grid.Column="2" Content="⌖ Chọn" Command="{Binding PickMainEquipmentCommand}" Style="{StaticResource CompactButton}"/>
                             </Grid>
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Thiết bị Xương phụ" Style="{StaticResource FieldLabel}"/>
-                                <TextBlock Grid.Column="1" Text="{Binding FurringEquipmentStatus}" VerticalAlignment="Center" FontSize="10.5"/>
+                                <TextBlock Grid.Column="1" Text="{Binding FurringEquipmentStatus}" VerticalAlignment="Center" FontSize="12"/>
                                 <Button Grid.Column="2" Content="⌖ Chọn" Command="{Binding PickFurringEquipmentCommand}" Style="{StaticResource CompactButton}"/>
                             </Grid>
                         </StackPanel>
@@ -574,14 +586,14 @@
                         </Grid>
 
                         <WrapPanel Margin="0,0,0,8">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#22D3EE" VerticalAlignment="Center"/><TextBlock Text=" Xương chính" FontSize="9.5"/></StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#FACC15" VerticalAlignment="Center"/><TextBlock Text=" Xương phụ" FontSize="9.5"/></StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#22C55E" VerticalAlignment="Center"/><TextBlock Text=" Ty" FontSize="9.5"/></StackPanel>
-                            <StackPanel Orientation="Horizontal"><Rectangle Width="20" Height="3" Fill="#D946EF" VerticalAlignment="Center"/><TextBlock Text=" DIM" FontSize="9.5"/></StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#22D3EE" VerticalAlignment="Center"/><TextBlock Text=" Xương chính" FontSize="11"/></StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#FACC15" VerticalAlignment="Center"/><TextBlock Text=" Xương phụ" FontSize="11"/></StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#22C55E" VerticalAlignment="Center"/><TextBlock Text=" Ty" FontSize="11"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><Rectangle Width="20" Height="3" Fill="#D946EF" VerticalAlignment="Center"/><TextBlock Text=" DIM" FontSize="11"/></StackPanel>
                         </WrapPanel>
 
                         <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="11"/>
-                        <TextBlock Text="{Binding PreviewStatus}" Margin="0,5,0,0" Foreground="{DynamicResource AccentStrong}" TextWrapping="Wrap" FontSize="10"/>
+                        <TextBlock Text="{Binding PreviewStatus}" Margin="0,5,0,0" Foreground="{DynamicResource AccentStrong}" TextWrapping="Wrap" FontSize="11"/>
                         <StackPanel Orientation="Horizontal" Margin="-3,7,0,0">
                             <Button Content="Cập nhật" Command="{Binding RefreshPreviewCommand}" Style="{StaticResource CompactButton}" Margin="3"/>
                             <Button Content="Ẩn xem trước" Command="{Binding ClearPreviewCommand}" Style="{StaticResource CompactButton}" Margin="3"/>
