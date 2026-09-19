@@ -17,6 +17,87 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         </Style>
 
+        <!-- Secondary/nested expander: visually subordinate to the main section expanders.
+             Main cards keep the normal prominent AutoCAD expander button; nested Layer rows
+             use a slim chevron and indented content so hierarchy is immediately obvious. -->
+        <Style x:Key="SubExpanderStyle" TargetType="Expander">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Expander}">
+                        <Grid SnapsToDevicePixels="True">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="18"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <ToggleButton x:Name="SubHeaderToggle"
+                                              Grid.Column="0"
+                                              Width="16"
+                                              Height="22"
+                                              Focusable="False"
+                                              Background="Transparent"
+                                              BorderThickness="0"
+                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                            <Grid Background="Transparent">
+                                                <Path x:Name="Chevron"
+                                                      Width="6"
+                                                      Height="10"
+                                                      Stretch="Fill"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"
+                                                      Fill="{DynamicResource SecondaryText}"
+                                                      Data="M 0 0 L 6 5 L 0 10 Z"
+                                                      RenderTransformOrigin="0.5,0.5">
+                                                    <Path.RenderTransform>
+                                                        <RotateTransform x:Name="ChevronRotate" Angle="0"/>
+                                                    </Path.RenderTransform>
+                                                </Path>
+                                            </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsChecked" Value="True">
+                                                    <Setter TargetName="ChevronRotate" Property="Angle" Value="90"/>
+                                                    <Setter TargetName="Chevron" Property="Fill" Value="{DynamicResource AccentStrong}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Chevron" Property="Fill" Value="{DynamicResource AccentStrong}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+                                <ContentPresenter Grid.Column="1"
+                                                  ContentSource="Header"
+                                                  VerticalAlignment="Center"
+                                                  RecognizesAccessKey="True"/>
+                            </Grid>
+                            <ContentPresenter x:Name="SubExpandSite"
+                                              Grid.Row="1"
+                                              Margin="18,3,0,4"
+                                              HorizontalAlignment="Stretch"
+                                              ContentSource="Content"
+                                              Visibility="Collapsed"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="SubExpandSite" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.55"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SectionCard" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource CardBackground}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}"/>
