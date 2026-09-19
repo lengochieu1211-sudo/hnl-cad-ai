@@ -173,8 +173,8 @@ namespace HNL.VXT.Core.Tests
             var baseline = new VxtPreviewPlanBuilder().Build(boundary, settings, new VxtLayoutContext());
 
             var context = new VxtLayoutContext();
-            // Crosses the first XC row (Y=300) and the first XP row (X=406.666...).
-            context.GeneralObstacles.Add(new Box2(400.0, 250.0, 420.0, 350.0));
+            // Crosses the first Legacy XC row (Y=500) and the first XP row (X=406.666...).
+            context.GeneralObstacles.Add(new Box2(400.0, 450.0, 420.0, 550.0));
             var obstructed = new VxtPreviewPlanBuilder().Build(boundary, settings, context);
 
             CollectionAssert.AreNotEqual(
