@@ -147,7 +147,7 @@ namespace HNL.VXT.UI.Views
                             text.Visibility = Visibility.Collapsed;
                     }
                     foreach (var button in Descendants<Button>(border))
-                        button.Height = 30.0;
+                        button.Height = 27.0;
                 }
             }
         }
