@@ -34,31 +34,16 @@ namespace HNL.VXT.AutoCAD
             }
 
             if (settings.MainDirection == MainDirectionMode.Auto &&
-                (settings.DrawMain || settings.DrawFurring || settings.AutoDimension))
+                (settings.DrawMain || settings.DrawFurring || settings.AutoDimension) &&
+                !settings.AutoShadowlineConfigured)
             {
-                var previousShadowline = settings.AutoShadowline;
-                var options = new PromptKeywordOptions("\nHNL Tool - VXT Pro: Trần có đi Shadowline không? [Yes/No] <Yes>: ")
-                {
-                    AllowNone = true
-                };
-                options.Keywords.Add("Yes");
-                options.Keywords.Add("No");
-                options.Keywords.Default = "Yes";
-                var result = ed.GetKeywords(options);
-                if (result.Status == PromptStatus.Cancel) return;
-                settings.AutoShadowline = result.Status == PromptStatus.None ||
-                                          string.Equals(result.StringResult, "Yes", StringComparison.OrdinalIgnoreCase);
-                session.ViewModel?.SetAutoShadowlineFromHost(settings.AutoShadowline);
-                session.Settings = settings;
-
-                if (settings.AutoShadowline != previousShadowline && session.HasBoundary)
-                {
-                    VxtTransientPreview.Instance.Refresh();
-                    ed.WriteMessage(
-                        "\nHNL Tool - VXT Pro: Shadowline đã làm thay đổi hướng Auto. " +
-                        "Preview đã được cập nhật; hãy kiểm tra rồi bấm Tạo khung xương trần lần nữa.");
+                // Normally Shadowline is configured beforehand with the single "Thiết lập"
+                // button beside Hướng bố trí. Ask only when the user forgot to configure it.
+                if (!ConfigureAutoShadowlineInteractive(settings, refreshPreview: false, fallbackFromCreate: true))
                     return;
-                }
+
+                settings = session.ViewModel != null ? session.ViewModel.Snapshot() : session.Settings.Clone();
+                session.Settings = settings;
             }
 
             if (session.HasBoundary && settings.AskDirectionEachRegion &&
