@@ -5,17 +5,90 @@ using HNL.VXT.Core.Geometry;
 
 namespace HNL.VXT.AutoCAD
 {
+    internal struct BoundarySampleInfo
+    {
+        public bool AutoClosed;
+        public double ClosureGap;
+        public bool TinyZNormalized;
+        public double MaxAbsZ;
+        public string RejectionReason;
+    }
+
     internal static class BoundarySampler
     {
+        // HNL VXT input tolerance policy. Drawing units are mm.
+        public const double AutoCloseGapTolerance = 1.0;
+        public const double ZTolerance = 0.01;
+
         public static Boundary2 FromPolyline(Polyline polyline)
         {
-            if (polyline == null) throw new ArgumentNullException(nameof(polyline));
-            if (!polyline.Closed) throw new ArgumentException("Polyline must be closed.", nameof(polyline));
+            if (!TryFromPolyline(polyline, out var boundary, out var info))
+                throw new ArgumentException(info.RejectionReason ?? "Polyline is not a valid ceiling boundary.", nameof(polyline));
+            return boundary;
+        }
+
+        public static Boundary2 FromPolyline2d(Polyline2d polyline, Transaction tr)
+        {
+            if (!TryFromPolyline2d(polyline, tr, out var boundary, out var info))
+                throw new ArgumentException(info.RejectionReason ?? "Polyline2d is not a valid ceiling boundary.", nameof(polyline));
+            return boundary;
+        }
+
+        public static bool TryFromPolyline(Polyline polyline, out Boundary2 boundary, out BoundarySampleInfo info)
+        {
+            boundary = null;
+            info = new BoundarySampleInfo();
+
+            if (polyline == null)
+            {
+                info.RejectionReason = "Unsupported";
+                return false;
+            }
+
+            var vertexCount = polyline.NumberOfVertices;
+            if (vertexCount < 3)
+            {
+                info.RejectionReason = "Unsupported";
+                return false;
+            }
+
+            var maxAbsZ = 0.0;
+            for (var i = 0; i < vertexCount; i++)
+            {
+                var p = polyline.GetPoint3dAt(i);
+                maxAbsZ = Math.Max(maxAbsZ, Math.Abs(p.Z));
+            }
+
+            info.MaxAbsZ = maxAbsZ;
+            if (maxAbsZ > ZTolerance)
+            {
+                info.RejectionReason = "Z";
+                return false;
+            }
+            info.TinyZNormalized = maxAbsZ > 1e-12;
+
+            if (!polyline.Closed)
+            {
+                var first = polyline.GetPoint3dAt(0);
+                var last = polyline.GetPoint3dAt(vertexCount - 1);
+                var dx = last.X - first.X;
+                var dy = last.Y - first.Y;
+                var gap = Math.Sqrt(dx * dx + dy * dy);
+                info.ClosureGap = gap;
+
+                if (gap > AutoCloseGapTolerance)
+                {
+                    info.RejectionReason = "OpenGap";
+                    return false;
+                }
+
+                info.AutoClosed = true;
+            }
 
             var points = new List<Point2>();
-            var segments = polyline.NumberOfVertices;
+            var segmentCount = polyline.Closed ? vertexCount : vertexCount - 1;
 
-            for (var i = 0; i < segments; i++)
+            for (var i = 0; i < segmentCount; i++)
             {
                 var bulge = polyline.GetBulgeAt(i);
                 var samples = Math.Abs(bulge) > 1e-9 ? 12 : 1;
@@ -28,23 +101,89 @@ namespace HNL.VXT.AutoCAD
                 }
             }
 
-            return new Boundary2(points);
+            // For an accepted almost-closed open Polyline, keep the actual last vertex and let
+            // Boundary2 close the tiny final gap in memory. The AutoCAD entity is never modified.
+            if (!polyline.Closed)
+            {
+                var p = polyline.GetPoint3dAt(vertexCount - 1);
+                points.Add(new Point2(p.X, p.Y));
+            }
+
+            if (points.Count < 3)
+            {
+                info.RejectionReason = "Unsupported";
+                return false;
+            }
+
+            boundary = new Boundary2(points);
+            return true;
         }
 
-        public static Boundary2 FromPolyline2d(Polyline2d polyline, Transaction tr)
+        public static bool TryFromPolyline2d(
+            Polyline2d polyline,
+            Transaction tr,
+            out Boundary2 boundary,
+            out BoundarySampleInfo info)
         {
-            if (polyline == null) throw new ArgumentNullException(nameof(polyline));
-            if (tr == null) throw new ArgumentNullException(nameof(tr));
-            if (!polyline.Closed) throw new ArgumentException("Polyline2d must be closed.", nameof(polyline));
+            boundary = null;
+            info = new BoundarySampleInfo();
 
-            var points = new List<Point2>();
+            if (polyline == null || tr == null)
+            {
+                info.RejectionReason = "Unsupported";
+                return false;
+            }
+
+            var positions = new List<Autodesk.AutoCAD.Geometry.Point3d>();
             foreach (ObjectId vertexId in polyline)
             {
                 var vertex = tr.GetObject(vertexId, OpenMode.ForRead, false) as Vertex2d;
                 if (vertex == null) continue;
-                points.Add(new Point2(vertex.Position.X, vertex.Position.Y));
+                positions.Add(vertex.Position);
             }
-            return new Boundary2(points);
+
+            if (positions.Count < 3)
+            {
+                info.RejectionReason = "Unsupported";
+                return false;
+            }
+
+            var maxAbsZ = 0.0;
+            foreach (var p in positions)
+                maxAbsZ = Math.Max(maxAbsZ, Math.Abs(p.Z));
+
+            info.MaxAbsZ = maxAbsZ;
+            if (maxAbsZ > ZTolerance)
+            {
+                info.RejectionReason = "Z";
+                return false;
+            }
+            info.TinyZNormalized = maxAbsZ > 1e-12;
+
+            if (!polyline.Closed)
+            {
+                var first = positions[0];
+                var last = positions[positions.Count - 1];
+                var dx = last.X - first.X;
+                var dy = last.Y - first.Y;
+                var gap = Math.Sqrt(dx * dx + dy * dy);
+                info.ClosureGap = gap;
+
+                if (gap > AutoCloseGapTolerance)
+                {
+                    info.RejectionReason = "OpenGap";
+                    return false;
+                }
+
+                info.AutoClosed = true;
+            }
+
+            var points = new List<Point2>(positions.Count);
+            foreach (var p in positions)
+                points.Add(new Point2(p.X, p.Y));
+
+            boundary = new Boundary2(points);
+            return true;
         }
     }
 }
