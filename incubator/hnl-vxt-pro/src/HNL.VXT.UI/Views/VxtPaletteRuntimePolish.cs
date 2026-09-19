@@ -270,6 +270,7 @@ namespace HNL.VXT.UI.Views
             {
                 IsExpanded = expanded,
                 Margin = new Thickness(0, 0, 0, 3),
+                Style = view.TryFindResource("SubExpanderStyle") as Style,
                 Header = new TextBlock
                 {
                     Text = title,
