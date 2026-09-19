@@ -38,10 +38,10 @@ namespace HNL.VXT.UI.Views
                 var check = node as CheckBox;
                 if (check == null || !ReferenceEquals(check.Style, toggleStyle)) continue;
 
-                // Final production compact size: visually lighter than the previous 36x20
+                // Final production compact size: visually lighter than the previous 32x18
                 // switch while remaining comfortably clickable inside the Expander header.
-                check.Width = 32.0;
-                check.Height = 18.0;
+                check.Width = 28.0;
+                check.Height = 16.0;
                 check.Template = CompactToggleTemplate();
             }
         }
@@ -54,12 +54,12 @@ namespace HNL.VXT.UI.Views
 <ControlTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
                  xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'
                  TargetType='{x:Type CheckBox}'>
-  <Grid Width='32' Height='18' SnapsToDevicePixels='True'>
+  <Grid Width='28' Height='16' SnapsToDevicePixels='True'>
     <Border x:Name='Track'
-            CornerRadius='9'
+            CornerRadius='8'
             Background='{DynamicResource InputBorder}'/>
     <Ellipse x:Name='Knob'
-             Width='12' Height='12'
+             Width='10' Height='10'
              Fill='White'
              Margin='3'
              HorizontalAlignment='Left'
