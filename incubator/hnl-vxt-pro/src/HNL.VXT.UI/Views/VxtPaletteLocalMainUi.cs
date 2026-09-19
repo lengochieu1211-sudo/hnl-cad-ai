@@ -36,7 +36,7 @@ namespace HNL.VXT.UI.Views
 
         private static Grid CreateToggleRow(VxtPaletteView view)
         {
-            var row = CreateBaseRow(view, "Thêm XC cục bộ cạnh khuyết");
+            var row = CreateBaseRow(view, "Thêm XC cạnh khuyết");
             row.Margin = new Thickness(0, 0, 0, 5);
 
             var toggle = new CheckBox
@@ -60,7 +60,7 @@ namespace HNL.VXT.UI.Views
 
         private static Grid CreateMinimumLengthRow(VxtPaletteView view)
         {
-            var row = CreateBaseRow(view, "Chiều dài XC cục bộ tối thiểu");
+            var row = CreateBaseRow(view, "Chiều dài XC tối thiểu");
             row.Margin = new Thickness(0, 0, 0, 7);
 
             var input = new HnlNumericBox
