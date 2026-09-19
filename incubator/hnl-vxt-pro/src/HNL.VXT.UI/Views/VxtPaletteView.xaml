@@ -411,7 +411,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="Thiết bị XC" Style="{StaticResource FieldLabel}"/>
+                                <TextBlock Text="Thiết bị Xương chính" Style="{StaticResource FieldLabel}"/>
                                 <TextBlock Grid.Column="1" Text="{Binding MainEquipmentStatus}" VerticalAlignment="Center" FontSize="10.5"/>
                                 <Button Grid.Column="2" Content="⌖ Chọn" Command="{Binding PickMainEquipmentCommand}" Style="{StaticResource CompactButton}"/>
                             </Grid>
@@ -444,7 +444,7 @@
                             <Grid Margin="0,0,0,7">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
                                 <CheckBox IsChecked="{Binding DimMain}"/>
-                                <TextBlock Grid.Column="1" Text="XC" Style="{StaticResource FieldLabel}"/>
+                                <TextBlock Grid.Column="1" Text="Xương chính" Style="{StaticResource FieldLabel}"/>
                                 <ComboBox Grid.Column="2" ItemsSource="{Binding DimensionPositionOptions}" SelectedItem="{Binding SelectedMainDimPosition}" IsEnabled="{Binding DimMain}"/>
                                 <Button Grid.Column="3" Content="⌖ Chọn" Command="{Binding PickMainDimCommand}" IsEnabled="{Binding DimMain}" Style="{StaticResource CompactButton}" Margin="6,0,0,0"/>
                             </Grid>
@@ -491,7 +491,7 @@
                         </Grid>
 
                         <WrapPanel Margin="0,0,0,8">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#22D3EE" VerticalAlignment="Center"/><TextBlock Text=" XC" FontSize="9.5"/></StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#22D3EE" VerticalAlignment="Center"/><TextBlock Text=" Xương chính" FontSize="9.5"/></StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#FACC15" VerticalAlignment="Center"/><TextBlock Text=" Xương phụ" FontSize="9.5"/></StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#22C55E" VerticalAlignment="Center"/><TextBlock Text=" Ty" FontSize="9.5"/></StackPanel>
                             <StackPanel Orientation="Horizontal"><Rectangle Width="20" Height="3" Fill="#D946EF" VerticalAlignment="Center"/><TextBlock Text=" DIM" FontSize="9.5"/></StackPanel>
