@@ -227,26 +227,30 @@ namespace HNL.VXT.UI.Views
 
         private static void SurfaceLayerAndDimPanel(VxtPaletteView view)
         {
-            var layerTitle = FindText(view, "LAYER & KIỂU NÉT") ?? FindText(view, "LAYER & DIM");
+            var layerTitle =
+                FindText(view, "LAYER & HIỂN THỊ") ??
+                FindText(view, "CÀI ĐẶT LAYER & DIM") ??
+                FindText(view, "LAYER & KIỂU NÉT") ??
+                FindText(view, "LAYER & DIM");
             if (layerTitle == null) return;
 
-            layerTitle.Text = "LAYER & DIM";
+            layerTitle.Text = "LAYER & HIỂN THỊ";
             var layerExpander = Ancestor<Expander>(layerTitle);
-            if (layerExpander != null) layerExpander.IsExpanded = true;
+            if (layerExpander != null) layerExpander.IsExpanded = false;
 
             var layerCard = AncestorBorderOwnedByStack(layerTitle);
-            var scopeTitle = FindText(view, "PHẠM VI BỐ TRÍ");
-            var scopeCard = AncestorBorderOwnedByStack(scopeTitle);
+            var dimTitle = FindText(view, "KÍCH THƯỚC DIM");
+            var dimCard = AncestorBorderOwnedByStack(dimTitle);
             var stack = layerCard?.Parent as StackPanel;
-            if (stack == null || scopeCard == null || !ReferenceEquals(scopeCard.Parent, stack)) return;
+            if (stack == null || dimCard == null || !ReferenceEquals(dimCard.Parent, stack)) return;
 
             var oldIndex = stack.Children.IndexOf(layerCard);
-            var scopeIndex = stack.Children.IndexOf(scopeCard);
-            if (oldIndex < 0 || scopeIndex < 0) return;
+            var dimIndex = stack.Children.IndexOf(dimCard);
+            if (oldIndex < 0 || dimIndex < 0) return;
 
             stack.Children.Remove(layerCard);
-            scopeIndex = stack.Children.IndexOf(scopeCard);
-            stack.Children.Insert(Math.Min(scopeIndex + 1, stack.Children.Count), layerCard);
+            dimIndex = stack.Children.IndexOf(dimCard);
+            stack.Children.Insert(Math.Min(dimIndex + 1, stack.Children.Count), layerCard);
         }
 
         private static void RemoveDuplicateDimResourceRows(VxtPaletteView view)
@@ -446,8 +450,8 @@ namespace HNL.VXT.UI.Views
             if (!first.IsAbsolute) return;
 
             // Functional form grids in the original XAML use 112 / 155 / 190 px labels.
-            // Normalize those three families to the same vertical axis. Pair rows use a
-            // 108 px first column and are intentionally excluded by this range.
+            // Normalize those families to the same vertical axis. Paired Min/Max rows
+            // already use the same 142 px shared label axis and are handled separately.
             if (first.Value < 105.0 || first.Value > 195.0) return;
             if (Math.Abs(first.Value - PairLabelWidth) < 0.1 && grid.ColumnDefinitions.Count == 6) return;
 
