@@ -380,17 +380,17 @@
                     </Expander>
                 </Border>
 
-                <!-- NÉ THIẾT BỊ -->
+                <!-- NÉ THIẾT BỊ MEP -->
                 <Border Style="{StaticResource SectionCard}">
-                    <Expander IsExpanded="False">
+                    <Expander IsExpanded="{Binding UseAvoidance, Mode=OneWay}">
                         <Expander.Header>
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Rectangle Width="4" Height="18" Fill="#EF4444" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
-                                    <TextBlock Text="NÉ THIẾT BỊ" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Text="NÉ THIẾT BỊ MEP" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
-                                <TextBlock Grid.Column="1" Text="Tự động né thiết bị" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
+                                <TextBlock Grid.Column="1" Text="Bật né MEP" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
                                 <CheckBox Grid.Column="2" IsChecked="{Binding UseAvoidance}" Style="{StaticResource ToggleSwitch}"/>
                             </Grid>
                         </Expander.Header>
@@ -427,7 +427,7 @@
 
                 <!-- DIM -->
                 <Border Style="{StaticResource SectionCard}" BorderBrush="{DynamicResource AccentBorder}">
-                    <Expander IsExpanded="True">
+                    <Expander IsExpanded="{Binding AutoDimension, Mode=OneWay}">
                         <Expander.Header>
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -435,7 +435,7 @@
                                     <Rectangle Width="4" Height="18" Fill="#D946EF" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
                                     <TextBlock Text="KÍCH THƯỚC DIM" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
-                                <TextBlock Grid.Column="1" Text="Tự động tạo DIM" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
+                                <TextBlock Grid.Column="1" Text="Bật DIM" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
                                 <CheckBox Grid.Column="2" IsChecked="{Binding AutoDimension}" Style="{StaticResource ToggleSwitch}"/>
                             </Grid>
                         </Expander.Header>
