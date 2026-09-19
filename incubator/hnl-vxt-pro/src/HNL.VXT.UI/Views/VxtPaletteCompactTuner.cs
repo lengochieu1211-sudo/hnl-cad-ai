@@ -18,10 +18,10 @@ namespace HNL.VXT.UI.Views
     /// </summary>
     public static class VxtPaletteCompactTuner
     {
-        private const double LabelWidth = 142.0;
-        private const double PickButtonWidth = 68.0;
+        private const double LabelWidth = 136.0;
+        private const double PickButtonWidth = 64.0;
         private const double PairLabelWidth = LabelWidth;
-        private const double PairTokenWidth = 27.0;
+        private const double PairTokenWidth = 26.0;
         private static bool _blockLayerSyncHooked;
         private static bool _pairedRowsApplied;
 
@@ -115,7 +115,7 @@ namespace HNL.VXT.UI.Views
                 var row = Grid.GetRow(border);
                 if (row == 0)
                 {
-                    border.Padding = new Thickness(10, 5, 10, 5);
+                    border.Padding = new Thickness(8, 3, 8, 3);
                     foreach (var text in Descendants<TextBlock>(border))
                     {
                         if (text.Text == "HNL Tool")
@@ -138,7 +138,7 @@ namespace HNL.VXT.UI.Views
                 }
                 else if (row == 2)
                 {
-                    border.Padding = new Thickness(8, 5, 8, 5);
+                    border.Padding = new Thickness(6, 4, 6, 4);
                     foreach (var text in Descendants<TextBlock>(border))
                     {
                         if (!string.IsNullOrWhiteSpace(text.Text) &&
@@ -147,7 +147,7 @@ namespace HNL.VXT.UI.Views
                             text.Visibility = Visibility.Collapsed;
                     }
                     foreach (var button in Descendants<Button>(border))
-                        button.Height = 34.0;
+                        button.Height = 30.0;
                 }
             }
         }
@@ -211,7 +211,7 @@ namespace HNL.VXT.UI.Views
             {
                 if (toggleStyle == null || !ReferenceEquals(check.Style, toggleStyle)) continue;
 
-                check.Margin = new Thickness(8, 0, 0, 0);
+                check.Margin = new Thickness(6, 0, 0, 0);
 
                 var grid = Ancestor<Grid>(check);
                 if (grid == null) continue;
@@ -220,7 +220,7 @@ namespace HNL.VXT.UI.Views
                 {
                     var label = text as TextBlock;
                     if (label == null || Grid.GetColumn(label) != 1) continue;
-                    label.Margin = new Thickness(20, 0, 8, 0);
+                    label.Margin = new Thickness(18, 0, 6, 0);
                 }
             }
         }
@@ -333,11 +333,11 @@ namespace HNL.VXT.UI.Views
             parent.Children.Remove(firstGrid);
             parent.Children.Remove(secondGrid);
 
-            var row = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 2) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(PairLabelWidth) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(PairTokenWidth) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(6) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(5) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(PairTokenWidth) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -353,9 +353,9 @@ namespace HNL.VXT.UI.Views
             Grid.SetColumn(token2, 4);
             Grid.SetColumn(secondNumeric, 5);
 
-            firstNumeric.Height = 27.0;
+            firstNumeric.Height = 24.0;
             firstNumeric.HorizontalAlignment = HorizontalAlignment.Stretch;
-            secondNumeric.Height = 27.0;
+            secondNumeric.Height = 24.0;
             secondNumeric.HorizontalAlignment = HorizontalAlignment.Stretch;
 
             row.Children.Add(label);
@@ -424,22 +424,22 @@ namespace HNL.VXT.UI.Views
 
             foreach (var textBox in Descendants<TextBox>(view))
             {
-                textBox.Height = 27.0;
+                textBox.Height = 24.0;
                 textBox.HorizontalAlignment = HorizontalAlignment.Stretch;
             }
             foreach (var combo in Descendants<ComboBox>(view))
             {
-                combo.Height = 27.0;
+                combo.Height = 24.0;
                 combo.HorizontalAlignment = HorizontalAlignment.Stretch;
             }
             foreach (var numeric in Descendants<HnlNumericBox>(view))
             {
-                numeric.Height = 27.0;
+                numeric.Height = 24.0;
                 numeric.HorizontalAlignment = HorizontalAlignment.Stretch;
             }
             foreach (var button in Descendants<Button>(view))
             {
-                if (button.Height > 34.0 || double.IsNaN(button.Height)) button.Height = 27.0;
+                if (button.Height > 34.0 || double.IsNaN(button.Height)) button.Height = 24.0;
             }
         }
 
