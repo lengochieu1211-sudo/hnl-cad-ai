@@ -75,6 +75,37 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void LegacyFurringAvoidance_OffsetWorldOrigin_MatchesV672AbsoluteSnap()
+        {
+            const double minX = 100.0;
+            const double width = 2000.0;
+            const double height = 1000.0;
+
+            var settings = LegacyAvoidanceSettings();
+            settings.DrawMain = false;
+            settings.DrawHangers = false;
+            settings.ShiftAllForAvoidance = true;
+
+            var context = new VxtLayoutContext();
+            // The first ideal XP is minX + 1220/3 = 506.666..., inside this obstacle.
+            // V6.7.2 adjust-grid snaps against absolute WCS-zero multiples of step_xp,
+            // not against the ceiling's local 100 mm origin.
+            context.FurringObstacles.Add(new Box2(500.0, 0.0, 520.0, height));
+
+            var plan = new VxtPreviewPlanBuilder().Build(
+                RectangleAt(minX, 0.0, width, height),
+                settings,
+                context);
+            var xp = FurringCoordinates(plan);
+
+            CollectionAssert.AreEqual(
+                new[] { 406.666667, 813.333333, 1220.0, 1626.666667 },
+                xp,
+                "Legacy XP avoidance must reproduce the V6.7.2 absolute-WCS adjust-grid result. " +
+                "The XC phase-preserving block11 correction must not leak into XP.");
+        }
+
+        [TestMethod]
         public void FieldDxf_OffsetWorldOrigin_MainAvoidanceKeepsConfigured50MillimetreGridPhase()
         {
             // Regression from new block11.dxf. The field drawing lives at a large, non-round WCS
