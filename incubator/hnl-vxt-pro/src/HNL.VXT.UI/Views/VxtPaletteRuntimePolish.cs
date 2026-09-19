@@ -185,7 +185,7 @@ namespace HNL.VXT.UI.Views
 
             var body = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
             body.Children.Add(CreateResourceExpander(
-                view, "XC", false,
+                view, "Xương chính", false,
                 nameof(VxtPaletteViewModel.MainLayer),
                 nameof(VxtPaletteViewModel.MainColorIndex),
                 nameof(VxtPaletteViewModel.MainLinetype),
