@@ -48,7 +48,7 @@ namespace HNL.VXT.AutoCAD
             var ed = doc.Editor;
             var options = new PromptSelectionOptions
             {
-                MessageForAdding = "\nHNL Tool - VXT Pro: Quét chọn các Polyline kín làm biên trần: ",
+                MessageForAdding = "\nHNL Tool - VXT Pro: Quét chọn Polyline biên trần (kín hoặc hở ≤ 1 mm): ",
                 MessageForRemoval = "\nHNL Tool - VXT Pro: Bỏ Polyline khỏi tập chọn: "
             };
             var filter = new SelectionFilter(new[]
@@ -62,32 +62,57 @@ namespace HNL.VXT.AutoCAD
             {
                 var accepted = new List<Boundary2>();
                 var acceptedIds = new List<ObjectId>();
+                var autoClosed = 0;
+                var maxAutoCloseGap = 0.0;
+                var tinyZNormalized = 0;
                 var skippedOpen = 0;
+                var skippedZ = 0;
                 var skippedUnsupported = 0;
+
                 foreach (var id in result.Value.GetObjectIds())
                 {
                     var entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
+                    Boundary2 boundary;
+                    BoundarySampleInfo info;
+                    var acceptedBoundary = false;
+
                     if (entity is Polyline pl)
-                    {
-                        if (!pl.Closed) { skippedOpen++; continue; }
-                        accepted.Add(BoundarySampler.FromPolyline(pl));
-                        acceptedIds.Add(id);
-                    }
+                        acceptedBoundary = BoundarySampler.TryFromPolyline(pl, out boundary, out info);
                     else if (entity is Polyline2d pl2)
-                    {
-                        if (!pl2.Closed) { skippedOpen++; continue; }
-                        accepted.Add(BoundarySampler.FromPolyline2d(pl2, tr));
-                        acceptedIds.Add(id);
-                    }
+                        acceptedBoundary = BoundarySampler.TryFromPolyline2d(pl2, tr, out boundary, out info);
                     else
                     {
                         skippedUnsupported++;
+                        continue;
                     }
+
+                    if (!acceptedBoundary)
+                    {
+                        if (string.Equals(info.RejectionReason, "OpenGap", StringComparison.Ordinal))
+                            skippedOpen++;
+                        else if (string.Equals(info.RejectionReason, "Z", StringComparison.Ordinal))
+                            skippedZ++;
+                        else
+                            skippedUnsupported++;
+                        continue;
+                    }
+
+                    accepted.Add(boundary);
+                    acceptedIds.Add(id);
+                    if (info.AutoClosed)
+                    {
+                        autoClosed++;
+                        maxAutoCloseGap = Math.Max(maxAutoCloseGap, info.ClosureGap);
+                    }
+                    if (info.TinyZNormalized)
+                        tinyZNormalized++;
                 }
 
                 if (accepted.Count == 0)
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Không có Polyline kín hợp lệ trong tập chọn.");
+                    ed.WriteMessage(
+                        "\nHNL Tool - VXT Pro: Không có biên trần hợp lệ. " +
+                        "Cho phép khe hở đầu-cuối ≤ 1 mm và |Z| ≤ 0.01 mm.");
                     return;
                 }
 
@@ -99,14 +124,27 @@ namespace HNL.VXT.AutoCAD
                 session.Regions.Clear();
                 session.BoundaryRegionGroups.Clear();
                 session.GlobalFurringFromFarEdge = false;
-                var skipped = skippedOpen + skippedUnsupported;
+                var skipped = skippedOpen + skippedZ + skippedUnsupported;
                 session.ViewModel?.SetBoundaryStatus(
-                    "✓ Đã chọn " + accepted.Count + " Polyline kín" +
-                    (skipped > 0 ? " • Bỏ qua " + skipped + " đối tượng không hợp lệ" : string.Empty), true);
+                    "✓ Đã chọn " + accepted.Count + " biên trần" +
+                    (autoClosed > 0 ? " • Tự khép " + autoClosed : string.Empty) +
+                    (tinyZNormalized > 0 ? " • Chuẩn Z≈0 " + tinyZNormalized : string.Empty) +
+                    (skipped > 0 ? " • Bỏ qua " + skipped : string.Empty), true);
                 tr.Commit();
 
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận " + accepted.Count +
-                    " mảng trần độc lập" + (skipped > 0 ? "; bỏ qua " + skipped + " đối tượng." : "."));
+                ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận " + accepted.Count + " mảng trần độc lập");
+                if (autoClosed > 0)
+                    ed.WriteMessage("; tự khép " + autoClosed + " biên, khe lớn nhất " +
+                        maxAutoCloseGap.ToString("0.###") + " mm");
+                if (tinyZNormalized > 0)
+                    ed.WriteMessage("; chuẩn hóa Z≈0 cho " + tinyZNormalized + " biên");
+                if (skippedOpen > 0)
+                    ed.WriteMessage("; bỏ " + skippedOpen + " biên hở > 1 mm");
+                if (skippedZ > 0)
+                    ed.WriteMessage("; bỏ " + skippedZ + " biên có |Z| > 0.01 mm");
+                if (skippedUnsupported > 0)
+                    ed.WriteMessage("; bỏ " + skippedUnsupported + " đối tượng không hỗ trợ");
+                ed.WriteMessage(".");
             }
 
             var mode = VxtSession.Current.Settings.MainDirection;
