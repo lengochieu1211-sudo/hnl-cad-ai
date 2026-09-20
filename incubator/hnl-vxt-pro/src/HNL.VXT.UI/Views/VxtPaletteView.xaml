@@ -568,7 +568,7 @@
                                     </Grid>
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="Khoảng cách giữa các hàng DIM" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
+                                        <TextBlock Text="Khoảng cách hàng Dim" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
                                         <controls:HnlNumericBox Grid.Column="1" Value="{Binding DimensionSpacing, Mode=TwoWay}" Step="50" Minimum="1"/>
                                     </Grid>
                                 </StackPanel>
