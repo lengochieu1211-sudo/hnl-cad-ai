@@ -182,6 +182,12 @@ namespace HNL.VXT.AutoCAD
                     LastRenderedDimensionCount = _drawables.Count(x => x is RotatedDimension);
 
                     session.ViewModel?.SetPreviewActualStats(metrics);
+                    session.ViewModel?.SetConstraintDiagnostics(plan.Diagnostics);
+
+                    var constraintReport = VxtConstraintReport.Format(plan.Diagnostics);
+                    if (!string.IsNullOrWhiteSpace(constraintReport))
+                        doc.Editor.WriteMessage("\nHNL Tool - VXT Pro Constraint: " + constraintReport);
+
                     if (!string.IsNullOrWhiteSpace(previewNotice))
                         session.ViewModel?.SetPreviewError(previewNotice);
                 }

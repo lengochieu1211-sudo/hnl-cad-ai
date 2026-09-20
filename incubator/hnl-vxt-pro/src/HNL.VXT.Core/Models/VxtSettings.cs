@@ -14,6 +14,7 @@ namespace HNL.VXT.Core.Models
         public double MainMinEdgeOffset { get; set; } = 300.0;
         public double MainMaxEdgeOffset { get; set; } = 400.0;
         public double MainBalanceStep { get; set; } = 50.0;
+        // SOFT Min-edge tolerance only. It must never extend MainMaxEdgeOffset.
         public double MainEdgeTolerance { get; set; } = 25.0;
         public bool UseLocalMainAdd { get; set; } = true;
         public double MinLocalMainLength { get; set; } = 500.0;
@@ -42,6 +43,7 @@ namespace HNL.VXT.Core.Models
         public double HangerMinEdgeOffset { get; set; } = 300.0;
         public double HangerMaxEdgeOffset { get; set; } = 400.0;
         public double HangerBalanceStep { get; set; } = 50.0;
+        // SOFT Min-edge tolerance only. It must never extend HangerMaxEdgeOffset.
         public double HangerEdgeTolerance { get; set; } = 25.0;
         public HangerLayoutMode HangerLayout { get; set; } = HangerLayoutMode.BalancedTwoEnds;
 

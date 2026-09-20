@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 using HNL.VXT.UI.Hosting;
+using HNL.VXT.Core.Preview;
 using HNL.VXT.UI.ViewModels;
 
 namespace HNL.VXT.UI.Views
@@ -185,6 +186,36 @@ namespace HNL.VXT.UI.Views
             status.SetBinding(TextBlock.TextProperty, new Binding(nameof(VxtPaletteViewModel.DiagnosticStatus)));
             statusBox.Child = status;
             panel.Children.Add(statusBox);
+
+            var constraintLabel = new TextBlock
+            {
+                Text = "Cảnh báo theo mảng (bấm Mxx để highlight đúng Polyline):",
+                FontSize = 9.5,
+                Foreground = (Brush)Resources["SecondaryText"],
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            panel.Children.Add(constraintLabel);
+
+            var constraintList = new ListBox
+            {
+                ItemsSource = ViewModel.ConstraintDiagnostics,
+                DisplayMemberPath = nameof(VxtConstraintDiagnostic.DisplayText),
+                MaxHeight = 108,
+                Margin = new Thickness(0, 0, 0, 8),
+                Background = (Brush)Resources["InputBackground"],
+                BorderBrush = (Brush)Resources["InputBorder"],
+                BorderThickness = new Thickness(1),
+                ToolTip = "Bấm M01/M02/... để chọn và highlight đúng Polyline biên trần trong AutoCAD"
+            };
+            constraintList.SelectionChanged += (sender, args) =>
+            {
+                var item = constraintList.SelectedItem as VxtConstraintDiagnostic;
+                if (item == null) return;
+                if (ViewModel.FocusConstraintDiagnosticCommand.CanExecute(item))
+                    ViewModel.FocusConstraintDiagnosticCommand.Execute(item);
+                constraintList.SelectedItem = null;
+            };
+            panel.Children.Add(constraintList);
 
             var golden = new Button
             {

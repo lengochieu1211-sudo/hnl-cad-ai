@@ -238,7 +238,7 @@ namespace HNL.VXT.Core.Preview
             if (baseline?.Layout == null) return Array.Empty<double>();
 
             var baselineIdeal = baseline.Layout.Positions(domain.MinY)
-                .Where(v => v <= domain.MaxY - (settings.MainMinEdgeOffset - 0.1) + Eps)
+                .Where(v => v >= domain.MinY - Eps && v <= domain.MaxY + Eps)
                 .ToList();
 
             if (!settings.UseAvoidance || absoluteIntervals.Count == 0)
@@ -265,7 +265,7 @@ namespace HNL.VXT.Core.Preview
                 if (shifted?.Layout != null && shifted.Quality != null && shifted.Quality.IsClear)
                 {
                     return shifted.Layout.Positions(domain.MinY)
-                        .Where(v => v <= domain.MaxY - (settings.MainMinEdgeOffset - 0.1) + Eps)
+                        .Where(v => v >= domain.MinY - Eps && v <= domain.MaxY + Eps)
                         .ToList();
                 }
             }
@@ -281,7 +281,8 @@ namespace HNL.VXT.Core.Preview
                 settings.MainMaxSpacing,
                 settings.MainMinEdgeOffset,
                 settings.MainMaxEdgeOffset,
-                settings.MainBalanceStep);
+                settings.MainBalanceStep,
+                settings.MainEdgeTolerance);
             return repaired.Count > 0 ? repaired : baselineIdeal;
         }
 
@@ -601,13 +602,14 @@ namespace HNL.VXT.Core.Preview
                     settings.HangerMinEdgeOffset,
                     settings.HangerBalanceStep,
                     MainLayoutMode.OneSide,
-                    reverse: furringFromFarEdge);
+                    reverse: furringFromFarEdge,
+                    minEdgeTolerance: settings.HangerEdgeTolerance);
             }
 
             if (layout == null) return new List<Point2>();
 
             var ideal = layout.Positions(minX)
-                .Where(v => v <= maxX - (settings.HangerMinEdgeOffset - 0.1) + Eps)
+                .Where(v => v >= minX - Eps && v <= maxX + Eps)
                 .ToList();
 
             var rowIntervals = obstacles

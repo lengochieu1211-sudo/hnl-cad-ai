@@ -59,8 +59,8 @@ namespace HNL.VXT.Core.Tests
                     .OrderBy(p => p.X)
                     .ToArray();
                 Assert.IsTrue(row.Length > 0, "Every final XC segment must receive its own Ty row.");
-                Assert.IsTrue(row[0].X - minX <= 425.1, "Ty first edge exceeds configured max edge.");
-                Assert.IsTrue(maxX - row[row.Length - 1].X <= 425.1, "Ty last edge exceeds configured max edge.");
+                Assert.IsTrue(row[0].X - minX <= 400.1, "Ty first edge exceeds configured HARD max edge.");
+                Assert.IsTrue(maxX - row[row.Length - 1].X <= 400.1, "Ty last edge exceeds configured HARD max edge.");
                 for (var i = 0; i + 1 < row.Length; i++)
                     Assert.IsTrue(row[i + 1].X - row[i].X <= 1000.1,
                         "Ty on a rebuilt XC segment exceeds configured max spacing.");
@@ -132,20 +132,20 @@ namespace HNL.VXT.Core.Tests
         {
             var ys = MainYsAtX(plan, x);
             Assert.IsTrue(ys.Length > 0, message + " No XC intersects the test band.");
-            var minEdge = Math.Max(0.0, settings.MainMinEdgeOffset - settings.MainEdgeTolerance);
-            var maxEdge = settings.MainMaxEdgeOffset + settings.MainEdgeTolerance;
-            Assert.IsTrue(ys[0] - minY >= minEdge - 0.1 &&
-                          ys[0] - minY <= maxEdge + 0.1,
-                message + " First edge is outside the configured range.");
-            Assert.IsTrue(maxY - ys[ys.Length - 1] >= minEdge - 0.1 &&
-                          maxY - ys[ys.Length - 1] <= maxEdge + 0.1,
-                message + " Last edge is outside the configured range.");
+            var maxEdge = settings.MainMaxEdgeOffset;
+            Assert.IsTrue(ys[0] - minY <= maxEdge + 0.1,
+                message + " First edge exceeds HARD Max.");
+            Assert.IsTrue(maxY - ys[ys.Length - 1] <= maxEdge + 0.1,
+                message + " Last edge exceeds HARD Max.");
             for (var i = 0; i + 1 < ys.Length; i++)
             {
                 var gap = ys[i + 1] - ys[i];
-                Assert.IsTrue(gap >= settings.MainMinSpacing - 0.1 &&
-                              gap <= settings.MainMaxSpacing + 0.1,
-                    message + " XC spacing is outside the configured range.");
+                Assert.IsTrue(gap <= settings.MainMaxSpacing + 0.1,
+                    message + " XC spacing exceeds HARD Max.");
+                Assert.AreEqual(0.0,
+                    Math.Abs(gap / settings.MainBalanceStep - Math.Round(gap / settings.MainBalanceStep)),
+                    1e-6,
+                    message + " XC spacing must stay on the configured multiple lattice.");
             }
         }
 

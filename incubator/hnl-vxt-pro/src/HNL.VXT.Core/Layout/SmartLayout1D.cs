@@ -12,15 +12,17 @@ namespace HNL.VXT.Core.Layout
     /// - every XC/Ty gap is an exact multiple of the configured balance step;
     /// - equal gaps are preferred, otherwise only adjacent unit sizes are distributed evenly;
     /// - dimensional remainder is absorbed by the two edge offsets;
-    /// - Max spacing and Max edge remain hard limits; a 25 mm soft-edge pass is attempted before
-    ///   dense fallback, where Min spacing may be lowered only when no normal solution exists.
+    /// - Max spacing and Max edge are HARD and are never relaxed;
+    /// - Min spacing is SOFT through the existing dense lattice fallback;
+    /// - Min edge is SOFT: strict Min is tried first, then configured Min-edge tolerance,
+    ///   then a final lattice fallback only when no preferred solution exists.
+    /// Every spacing remains an exact multiple of the configured increment.
     /// Preview and Create use this same engine.
     /// </summary>
     public static class SmartLayout1D
     {
         private const double Eps = 1e-8;
         private const double Tol = 0.1;
-        private const double DefaultEdgeTolerance = 25.0;
 
         public sealed class Result
         {
@@ -79,39 +81,58 @@ namespace HNL.VXT.Core.Layout
             double increment,
             MainLayoutMode mode,
             bool reverse = false,
-            bool obstacleGreedy = false)
+            bool obstacleGreedy = false,
+            double minEdgeTolerance = 25.0)
         {
             if (!BasicInputValid(length, maxSpacing, minSpacing, maxEdge, minEdge, increment))
                 return null;
 
             var oneSided = obstacleGreedy || mode == MainLayoutMode.OneSide;
 
+            // 1) Preferred solution: both Min spacing and Min edge are respected.
             var normal = CalculateStrict(
                 length, maxSpacing, minSpacing, maxEdge, minEdge,
                 increment, oneSided, reverse, dense: false, usedSoftEdge: false);
             if (normal != null) return normal;
 
-            var softMaxEdge = maxEdge + DefaultEdgeTolerance;
-            if (DefaultEdgeTolerance > Eps)
-            {
-                var soft = CalculateStrict(
-                    length, maxSpacing, minSpacing, softMaxEdge, minEdge,
-                    increment, oneSided, reverse, dense: false, usedSoftEdge: true);
-                if (soft != null) return soft;
-            }
-
+            // 2) Existing Dense contract: Min spacing may fall below configured Min,
+            // but Max spacing/Max edge and Min edge are still respected.
             var dense = CalculateDense(
                 length, maxSpacing, maxEdge, minEdge,
                 increment, oneSided, reverse, usedSoftEdge: false);
             if (dense != null) return dense;
 
-            if (DefaultEdgeTolerance > Eps)
+            // 3) Min-edge tolerance is SOFT only on the minimum side. Max edge is never expanded.
+            var toleratedMinEdge = Math.Max(0.0, minEdge - Math.Max(0.0, minEdgeTolerance));
+            if (toleratedMinEdge < minEdge - Eps)
             {
+                var softEdge = CalculateStrict(
+                    length, maxSpacing, minSpacing, maxEdge, toleratedMinEdge,
+                    increment, oneSided, reverse, dense: false, usedSoftEdge: true);
+                if (softEdge != null) return softEdge;
+
                 dense = CalculateDense(
-                    length, maxSpacing, softMaxEdge, minEdge,
+                    length, maxSpacing, maxEdge, toleratedMinEdge,
                     increment, oneSided, reverse, usedSoftEdge: true);
+                if (dense != null) return dense;
             }
-            return dense;
+
+            // 4) Final Min-edge fallback. This keeps Min edge genuinely SOFT for very short runs,
+            // while Max edge/Max spacing remain HARD and every spacing remains on the lattice.
+            if (toleratedMinEdge > Eps)
+            {
+                var fallback = CalculateStrict(
+                    length, maxSpacing, minSpacing, maxEdge, 0.0,
+                    increment, oneSided, reverse, dense: false, usedSoftEdge: true);
+                if (fallback != null) return fallback;
+
+                dense = CalculateDense(
+                    length, maxSpacing, maxEdge, 0.0,
+                    increment, oneSided, reverse, usedSoftEdge: true);
+                if (dense != null) return dense;
+            }
+
+            return null;
         }
 
         private static Result CalculateStrict(
@@ -325,28 +346,73 @@ namespace HNL.VXT.Core.Layout
             double maxSpacing,
             double minEdge,
             double maxEdge,
-            double increment)
+            double increment,
+            double minEdgeTolerance = 25.0)
         {
-            var x = (idealCoordinates ?? Enumerable.Empty<double>()).OrderBy(v => v).ToList();
-            var ideal = x.ToArray();
+            var ideal = (idealCoordinates ?? Enumerable.Empty<double>()).OrderBy(v => v).ToArray();
             var obstacles = (obstacleIntervals ?? Enumerable.Empty<Tuple<double, double>>()).ToList();
-            if (x.Count == 0 || obstacles.Count == 0) return x;
+            if (ideal.Length == 0 || obstacles.Count == 0) return ideal;
             if (increment <= Eps) increment = 1.0;
 
-            // Local MEP repair must stay on the phase of the normal XC/Ty grid.
-            // Snapping against absolute WCS zero mixes phases when a ceiling lives at a
-            // non-round coordinate and produces odd spacings even though BalanceStep is fixed.
-            var gridOrigin = ideal[0];
-
-            var effectiveMin = minSpacing;
-            if (x.Count > 1)
+            // Preserve an already-dense/soft baseline. The MEP pass must never "repair" a valid
+            // soft-Min base grid back into a different phase before it even considers obstacles.
+            var preferredMinSpacing = minSpacing;
+            if (ideal.Length > 1)
             {
                 var actualMin = double.MaxValue;
-                for (var i = 1; i < x.Count; i++)
-                    actualMin = Math.Min(actualMin, x[i] - x[i - 1]);
-                if (actualMin < effectiveMin - Tol) effectiveMin = Math.Max(0.0, actualMin);
+                for (var i = 1; i < ideal.Length; i++)
+                    actualMin = Math.Min(actualMin, ideal[i] - ideal[i - 1]);
+                if (actualMin < preferredMinSpacing - Tol)
+                    preferredMinSpacing = Math.Max(0.0, actualMin);
             }
 
+            var preferredMinEdge = minEdge;
+            var actualEdge = Math.Min(ideal[0] - minLimit, maxLimit - ideal[ideal.Length - 1]);
+            if (actualEdge < preferredMinEdge - Tol)
+                preferredMinEdge = Math.Max(0.0, actualEdge);
+
+            var denseMinSpacing = Math.Min(preferredMinSpacing, Math.Max(increment, Eps));
+            var toleratedMinEdge = Math.Max(
+                0.0,
+                Math.Min(preferredMinEdge, minEdge - Math.Max(0.0, minEdgeTolerance)));
+
+            var passes = new[]
+            {
+                Tuple.Create(preferredMinSpacing, preferredMinEdge),
+                Tuple.Create(denseMinSpacing, preferredMinEdge),
+                Tuple.Create(preferredMinSpacing, toleratedMinEdge),
+                Tuple.Create(denseMinSpacing, toleratedMinEdge),
+                Tuple.Create(preferredMinSpacing, 0.0),
+                Tuple.Create(denseMinSpacing, 0.0)
+            };
+
+            foreach (var pass in passes)
+            {
+                var adjusted = AdjustGridPass(
+                    ideal, obstacles, minLimit, maxLimit,
+                    pass.Item1, maxSpacing, pass.Item2, maxEdge, increment);
+                if (adjusted.Count > 0) return adjusted;
+            }
+
+            return Array.Empty<double>();
+        }
+
+        private static IReadOnlyList<double> AdjustGridPass(
+            IReadOnlyList<double> ideal,
+            IReadOnlyList<Tuple<double, double>> obstacles,
+            double minLimit,
+            double maxLimit,
+            double minSpacing,
+            double maxSpacing,
+            double minEdge,
+            double maxEdge,
+            double increment)
+        {
+            var x = (ideal ?? Array.Empty<double>()).OrderBy(v => v).ToList();
+            if (x.Count == 0) return x;
+
+            // Local MEP repair stays on the phase of the normal XC/Ty grid.
+            var gridOrigin = ideal[0];
             var changed = true;
             var iteration = 0;
             while (changed && iteration < 100)
@@ -385,9 +451,9 @@ namespace HNL.VXT.Core.Layout
                     else
                     {
                         var previous = x[i - 1];
-                        if (value - previous < effectiveMin - Tol)
+                        if (value - previous < minSpacing - Tol)
                         {
-                            value = CeilMultipleOnPhase(previous + effectiveMin, gridOrigin, increment);
+                            value = CeilMultipleOnPhase(previous + minSpacing, gridOrigin, increment);
                             x[i] = value;
                             changed = true;
                         }
@@ -414,9 +480,9 @@ namespace HNL.VXT.Core.Layout
                     else
                     {
                         var next = x[i + 1];
-                        if (next - value < effectiveMin - Tol)
+                        if (next - value < minSpacing - Tol)
                         {
-                            value = FloorMultipleOnPhase(next - effectiveMin, gridOrigin, increment);
+                            value = FloorMultipleOnPhase(next - minSpacing, gridOrigin, increment);
                             x[i] = value;
                             changed = true;
                         }
@@ -439,7 +505,7 @@ namespace HNL.VXT.Core.Layout
                     if (!Collides(x[i], obstacles)) continue;
                     var safe = FindSafetyCoordinate(
                         i, x, ideal, obstacles, minLimit, maxLimit,
-                        effectiveMin, maxSpacing, minEdge, maxEdge, increment, gridOrigin);
+                        minSpacing, maxSpacing, minEdge, maxEdge, increment, gridOrigin);
                     if (!double.IsNaN(safe) && Math.Abs(safe - x[i]) > Eps)
                     {
                         x[i] = safe;
@@ -450,11 +516,10 @@ namespace HNL.VXT.Core.Layout
             }
 
             x.Sort();
-            if (!GridLayoutValid(x, minLimit, maxLimit, effectiveMin, maxSpacing, minEdge, maxEdge))
+            if (!GridLayoutValid(x, minLimit, maxLimit, minSpacing, maxSpacing, minEdge, maxEdge))
                 return Array.Empty<double>();
             if (x.Any(v => Collides(v, obstacles)))
                 return Array.Empty<double>();
-
             return x;
         }
 

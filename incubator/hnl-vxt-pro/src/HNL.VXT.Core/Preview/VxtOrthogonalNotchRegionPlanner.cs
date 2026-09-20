@@ -8,6 +8,11 @@ using HNL.VXT.Core.Models;
 namespace HNL.VXT.Core.Preview
 {
     /// <summary>
+    /// LEGACY/EXPERIMENTAL regional strategy. Current Preview/Create runtime does NOT call this
+    /// planner; VxtLocalMainSpacingSafety owns the certified local-notch path so the base XC grid
+    /// remains immutable. Keep this class for historical/regression reference only unless an
+    /// explicit migration redefines that contract.
+    ///
     /// Decomposes an orthogonal concave ceiling, already transformed to the XC local axis,
     /// into maximal vertical rectangular regions. A valid shared/global XC grid is tried first
     /// and may be translated slightly as one unit so shallow step/notch edges can share the same

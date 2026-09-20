@@ -16,6 +16,54 @@ namespace HNL.VXT.AutoCAD
         [CommandMethod("VXT", CommandFlags.Modal)]
         public void ShowPalette() => VxtPaletteService.Show();
 
+        [CommandMethod("HNLVXTFOCUSBOUNDARY", CommandFlags.Modal)]
+        public void FocusBoundaryDiagnostic()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+
+            var session = VxtSession.Current;
+            var index = session.PendingBoundaryHighlightIndex;
+            session.PendingBoundaryHighlightIndex = -1;
+
+            if (index < 0 || index >= session.BoundaryIds.Count)
+            {
+                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Không tìm thấy mảng Mxx cần highlight.");
+                return;
+            }
+
+            var id = session.BoundaryIds[index];
+            if (id.IsNull || !id.IsValid || id.IsErased)
+            {
+                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Polyline của M" +
+                    (index + 1).ToString("00") + " không còn hợp lệ trong DWG.");
+                return;
+            }
+
+            string handle = string.Empty;
+            try
+            {
+                using (var tr = doc.TransactionManager.StartOpenCloseTransaction())
+                {
+                    var entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
+                    if (entity != null) handle = entity.Handle.ToString();
+                    tr.Commit();
+                }
+
+                doc.Editor.SetImpliedSelection(new ObjectId[0]);
+                doc.Editor.SetImpliedSelection(new[] { id });
+                TryHighlight(doc, id, true);
+                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: M" +
+                    (index + 1).ToString("00") + " -> Polyline Handle " +
+                    (string.IsNullOrWhiteSpace(handle) ? "N/A" : handle) + ".");
+            }
+            catch (System.Exception ex)
+            {
+                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Không highlight được M" +
+                    (index + 1).ToString("00") + ": " + ex.Message);
+            }
+        }
+
         [CommandMethod("VXTCREATE", CommandFlags.Modal)]
         public void Create()
         {

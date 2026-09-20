@@ -42,6 +42,10 @@ namespace HNL.VXT.Core.Tests
             Assert.IsTrue(enabledPlan.Lines.Count(x => x.Kind == PreviewLineKind.Main) >
                           disabledPlan.Lines.Count(x => x.Kind == PreviewLineKind.Main),
                 "With local-main ON, this unresolved notch must add local XC rather than rebalance the base grid.");
+
+            Assert.IsTrue(HasExpectedLocalNotchMain(enabledPlan),
+                "Local notch XC must be placed toward the notch edge (Y=1800 in this fixture) " +
+                "instead of being pinned near the neighbouring base XC.");
         }
 
         [TestMethod]

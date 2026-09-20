@@ -191,6 +191,14 @@ namespace HNL.VXT.AutoCAD
             Send("HNLVXTGOLDEN ");
         }
 
+        public void HighlightBoundary(int boundaryIndex)
+        {
+            CancelPendingPreview();
+            var session = VxtSession.Current;
+            session.PendingBoundaryHighlightIndex = boundaryIndex;
+            Send("HNLVXTFOCUSBOUNDARY ");
+        }
+
         public void RequestCreate()
         {
             var session = VxtSession.Current;

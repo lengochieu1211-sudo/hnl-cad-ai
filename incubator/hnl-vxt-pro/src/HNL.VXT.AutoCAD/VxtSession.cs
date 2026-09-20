@@ -69,16 +69,21 @@ namespace HNL.VXT.AutoCAD
             ManualHangerReverseHorizontal = false;
             ManualHangerReverseVertical = false;
             GlobalFurringFromFarEdge = false;
+            PendingBoundaryHighlightIndex = -1;
 
             // Keep the palette instance and all user settings, but clear drawing-specific UI facts.
             ViewModel?.SetBoundaryStatus("Chưa chọn biên trần.", false);
             ViewModel?.SetPreviewStats(0, 0, 0, 0);
+            ViewModel?.SetConstraintDiagnostics(null);
         }
 
         // V6.7.4 parity: one command can receive a selection set containing many
         // closed ceiling polylines. Each polygon remains an independent ceiling area.
         public List<Boundary2> Boundaries { get; } = new List<Boundary2>();
         public List<ObjectId> BoundaryIds { get; } = new List<ObjectId>();
+
+        // Modeless palette -> AutoCAD command handoff for Mxx click-to-highlight.
+        public int PendingBoundaryHighlightIndex { get; set; } = -1;
 
         // Backward-compatible first boundary for code paths that need one reference
         // point (for example a manual DIM pick). New Preview/Create paths use Boundaries.

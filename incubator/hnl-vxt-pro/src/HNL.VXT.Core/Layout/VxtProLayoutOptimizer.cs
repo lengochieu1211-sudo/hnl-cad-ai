@@ -114,7 +114,8 @@ namespace HNL.VXT.Core.Layout
             if (optimizationMode == VxtOptimizationMode.Legacy)
             {
                 var legacy = SmartLayout1D.Calculate(
-                    length, maxSpacing, minSpacing, maxEdge, minEdge, increment, mode);
+                    length, maxSpacing, minSpacing, maxEdge, minEdge, increment, mode,
+                    minEdgeTolerance: edgeTolerance);
                 return legacy == null
                     ? new OptimizedResult(null, null, optimizationMode)
                     : new OptimizedResult(
@@ -129,7 +130,9 @@ namespace HNL.VXT.Core.Layout
             {
                 AddLayoutFamily(
                     candidates,
-                    SmartLayout1D.Calculate(length, candidateMax, minSpacing, maxEdge, minEdge, increment, mode, reverse: false),
+                    SmartLayout1D.Calculate(
+                        length, candidateMax, minSpacing, maxEdge, minEdge, increment, mode,
+                        reverse: false, minEdgeTolerance: edgeTolerance),
                     length, minSpacing, maxSpacing, minEdge, maxEdge, increment,
                     obstacles, optimizationMode, edgeTolerance, allowEdgeShift);
 
@@ -138,7 +141,9 @@ namespace HNL.VXT.Core.Layout
                 {
                     AddLayoutFamily(
                         candidates,
-                        SmartLayout1D.Calculate(length, candidateMax, minSpacing, maxEdge, minEdge, increment, mode, reverse: true),
+                        SmartLayout1D.Calculate(
+                            length, candidateMax, minSpacing, maxEdge, minEdge, increment, mode,
+                            reverse: true, minEdgeTolerance: edgeTolerance),
                         length, minSpacing, maxSpacing, minEdge, maxEdge, increment,
                         obstacles, optimizationMode, edgeTolerance, allowEdgeShift);
                 }
@@ -176,14 +181,16 @@ namespace HNL.VXT.Core.Layout
             if (layout == null) return null;
 
             var obstacles = NormalizeObstacles(obstacleIntervals, length);
+            // HARD contract: Max spacing and Max edge can never be exceeded.
+            // Min spacing and Min edge are SOFT and are scored/diagnosed separately.
             var hard = 0;
-            var allowedMaxEdge = maxEdge + Math.Max(0.0, edgeTolerance);
+            var allowedMaxEdge = maxEdge;
 
-            if (layout.StartOffset < minEdge - Tol || layout.StartOffset > allowedMaxEdge + Tol) hard++;
-            if (layout.EndOffset < minEdge - Tol || layout.EndOffset > allowedMaxEdge + Tol) hard++;
+            if (layout.StartOffset < -Tol || layout.StartOffset > allowedMaxEdge + Tol) hard++;
+            if (layout.EndOffset < -Tol || layout.EndOffset > allowedMaxEdge + Tol) hard++;
 
             foreach (var gap in layout.Steps)
-                if (gap < minSpacing - Tol || gap > maxSpacing + Tol) hard++;
+                if (gap <= Tol || gap > maxSpacing + Tol) hard++;
 
             var positions = layout.Positions(0.0);
             var collisions = 0;
@@ -203,7 +210,7 @@ namespace HNL.VXT.Core.Layout
                 hard, collisions, layout.PointCount,
                 minGap, maxGap, averageGap, spread,
                 layout.StartOffset, layout.EndOffset, edgeImbalance, 0.0);
-            var score = CalculateScore(reportWithoutScore, minSpacing, maxSpacing, optimizationMode);
+            var score = CalculateScore(reportWithoutScore, minSpacing, maxSpacing, minEdge, optimizationMode);
 
             return new QualityReport(
                 hard, collisions, layout.PointCount,
@@ -228,9 +235,9 @@ namespace HNL.VXT.Core.Layout
             if (baseLayout == null) return;
 
             var edgeSum = length - baseLayout.Span;
-            var allowedMax = maxEdge + Math.Max(0.0, edgeTolerance);
-            var startMin = Math.Max(minEdge, edgeSum - allowedMax);
-            var startMax = Math.Min(allowedMax, edgeSum - minEdge);
+            var allowedMax = maxEdge;
+            var startMin = Math.Max(0.0, edgeSum - allowedMax);
+            var startMax = Math.Min(allowedMax, edgeSum);
             if (startMin > startMax + Tol) return;
 
             var starts = new HashSet<double> { baseLayout.StartOffset };
@@ -249,7 +256,7 @@ namespace HNL.VXT.Core.Layout
             {
                 var end = edgeSum - start;
                 if (start < startMin - Tol || start > startMax + Tol ||
-                    end < minEdge - Tol || end > allowedMax + Tol)
+                    end < -Tol || end > allowedMax + Tol)
                     continue;
 
                 var layout = new SmartLayout1D.Result(start, baseLayout.Steps.ToArray(), end);
@@ -288,12 +295,20 @@ namespace HNL.VXT.Core.Layout
             QualityReport q,
             double minSpacing,
             double maxSpacing,
+            double minEdge,
             VxtOptimizationMode mode)
         {
             if (q == null) return double.MaxValue;
 
             var score = q.HardViolationCount * 1_000_000_000.0
                       + q.CollisionCount * 10_000_000.0;
+
+            // SOFT-Min penalty: prefer configured Min values whenever a legal solution exists,
+            // but never reclassify a below-Min result as a HARD failure.
+            var spacingShortfall = q.MinGap > Tol ? Math.Max(0.0, minSpacing - q.MinGap) : 0.0;
+            var edgeShortfall = Math.Max(0.0, minEdge - q.StartEdge) +
+                                Math.Max(0.0, minEdge - q.EndEdge);
+            score += spacingShortfall * 10_000.0 + edgeShortfall * 10_000.0;
 
             switch (mode)
             {

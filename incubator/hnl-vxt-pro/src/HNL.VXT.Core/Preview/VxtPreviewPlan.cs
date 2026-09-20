@@ -13,6 +13,10 @@ namespace HNL.VXT.Core.Preview
         public List<Point2> HangerPoints { get; } = new List<Point2>();
         public List<PreviewDimension> Dimensions { get; } = new List<PreviewDimension>();
 
+        // Final constraint report shared by Preview and Create. BoundaryIndex maps directly
+        // to the selected Boundaries/BoundaryIds list (M01, M02, ... in UI).
+        public List<VxtConstraintDiagnostic> Diagnostics { get; } = new List<VxtConstraintDiagnostic>();
+
         public int MainSegmentCount { get; set; }
         public int FurringSegmentCount { get; set; }
         public int HangerCount { get; set; }

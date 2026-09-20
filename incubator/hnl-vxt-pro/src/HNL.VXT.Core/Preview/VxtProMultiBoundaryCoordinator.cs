@@ -68,6 +68,11 @@ namespace HNL.VXT.Core.Preview
                 // labels produced by the single-boundary Auto builder before the plans are merged.
                 part.Texts.RemoveAll(x =>
                     x.Text != null && x.Text.StartsWith("HNL Pro Q", StringComparison.Ordinal));
+                var auditAngle = part.Quality != null
+                    ? part.Quality.SelectedDirectionDegrees
+                    : ResolveLegacyAutoAngle(boundaries[i], settings.AutoShadowline);
+                VxtPlanConstraintAuditor.Attach(
+                    boundaries[i], part, settings, auditAngle, i);
                 parts.Add(part);
                 if (part.Quality != null)
                     directions.Add(Normalize180(part.Quality.SelectedDirectionDegrees));
@@ -120,6 +125,13 @@ namespace HNL.VXT.Core.Preview
                             VxtPostProcessDimensionSynchronizer.Synchronize(boundaries[i], candidateSettings, context, part, angle);
                         }
                         part.Quality = VxtProPlanQualityEvaluator.Evaluate(part, candidateSettings, context, angle, 1);
+                        VxtPlanConstraintAuditor.Attach(
+                            boundaries[i], part, candidateSettings, angle, i);
+                        if (part.Diagnostics.Any(x => x.IsHard))
+                        {
+                            failed = true;
+                            break;
+                        }
                         parts.Add(part);
                     }
                     catch
@@ -263,6 +275,7 @@ namespace HNL.VXT.Core.Preview
                 merged.FurringSegmentCount += part.FurringSegmentCount;
                 merged.HangerCount += part.HangerCount;
                 merged.DimensionSegmentCount += part.DimensionSegmentCount;
+                merged.Diagnostics.AddRange(part.Diagnostics);
             }
             return merged;
         }

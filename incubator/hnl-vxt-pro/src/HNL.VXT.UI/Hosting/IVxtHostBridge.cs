@@ -17,6 +17,7 @@ namespace HNL.VXT.UI.Hosting
         string AnalyzeDiagnostics(VxtSettings settings);
         string ExportDiagnostics(VxtSettings settings);
         void RequestRuntimeGolden();
+        void HighlightBoundary(int boundaryIndex);
         void RequestCreate();
     }
 }

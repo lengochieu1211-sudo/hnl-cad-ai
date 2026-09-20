@@ -86,7 +86,7 @@ namespace HNL.VXT.Core.Tests
 
         private static void AssertHardMaxCoverage(VxtPreviewPlan plan, Boundary2 boundary, VxtSettings settings)
         {
-            var maxEdge = settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance);
+            var maxEdge = settings.MainMaxEdgeOffset;
             var xs = boundary.Vertices.Select(p => p.X).Distinct().OrderBy(x => x).ToArray();
             for (var i = 0; i + 1 < xs.Length; i++)
             {

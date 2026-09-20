@@ -218,7 +218,7 @@ namespace HNL.VXT.Core.Tests
         {
             if (ys.Length == 0) return 1;
             var result = 0;
-            var maxEdge = settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance);
+            var maxEdge = settings.MainMaxEdgeOffset;
             if (ys[0] - minY > maxEdge + 0.5) result++;
             if (maxY - ys[ys.Length - 1] > maxEdge + 0.5) result++;
             for (var i = 0; i + 1 < ys.Length; i++)

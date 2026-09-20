@@ -8,6 +8,11 @@ using HNL.VXT.Core.Models;
 namespace HNL.VXT.Core.Preview
 {
     /// <summary>
+    /// LEGACY/EXPERIMENTAL concave strategy. Current Preview/Create runtime uses
+    /// VxtLocalMainSpacingSafety instead, specifically to forbid global XC rebalance/re-phase.
+    /// This class remains for historical/regression reference and must not be wired back into
+    /// runtime without an explicit contract migration.
+    ///
     /// HNL Tool V6.7.6.15 concave/notch post-process.
     /// The global XC grid is kept as the primary/economic solution. For concave bands the
     /// processor first tries to move an existing global XC on the same strict-multiple lattice;

@@ -226,7 +226,8 @@ namespace HNL.VXT.Core.Preview
                     settings.MainBalanceStep,
                     requestedMode,
                     reverse: false,
-                    obstacleGreedy: true);
+                    obstacleGreedy: true,
+                    minEdgeTolerance: settings.MainEdgeTolerance);
                 var reverse = SmartLayout1D.Calculate(
                     domain.Height,
                     settings.MainMaxSpacing,
@@ -236,15 +237,18 @@ namespace HNL.VXT.Core.Preview
                     settings.MainBalanceStep,
                     requestedMode,
                     reverse: true,
-                    obstacleGreedy: true);
+                    obstacleGreedy: true,
+                    minEdgeTolerance: settings.MainEdgeTolerance);
 
                 var intervals = obstacles.Select(b => Tuple.Create(b.MinY, b.MaxY)).ToList();
                 var grid1 = BuildFiniteGrid(forward, domain.MinY, domain.MaxY, settings.MainMinEdgeOffset,
                     settings.MainMinSpacing, settings.MainMaxSpacing, settings.MainMaxEdgeOffset,
-                    settings.MainBalanceStep, intervals, settings.ShiftAllForAvoidance);
+                    settings.MainBalanceStep, settings.MainEdgeTolerance,
+                    intervals, settings.ShiftAllForAvoidance);
                 var grid2 = BuildFiniteGrid(reverse, domain.MinY, domain.MaxY, settings.MainMinEdgeOffset,
                     settings.MainMinSpacing, settings.MainMaxSpacing, settings.MainMaxEdgeOffset,
-                    settings.MainBalanceStep, intervals, settings.ShiftAllForAvoidance);
+                    settings.MainBalanceStep, settings.MainEdgeTolerance,
+                    intervals, settings.ShiftAllForAvoidance);
                 return grid2.Count < grid1.Count ? grid2 : grid1;
             }
 
@@ -256,7 +260,8 @@ namespace HNL.VXT.Core.Preview
                 settings.MainMinEdgeOffset,
                 settings.MainBalanceStep,
                 requestedMode,
-                reverse: false);
+                reverse: false,
+                minEdgeTolerance: settings.MainEdgeTolerance);
 
             return layout?.Positions(domain.MinY) ?? Array.Empty<double>();
         }
@@ -270,6 +275,7 @@ namespace HNL.VXT.Core.Preview
             double maxSpacing,
             double maxEdge,
             double increment,
+            double minEdgeTolerance,
             List<Tuple<double, double>> obstacles,
             bool shiftAll)
         {
@@ -294,7 +300,7 @@ namespace HNL.VXT.Core.Preview
             }
 
             var ideal = Positions(minLimit, layout, startOffset)
-                .Where(v => v <= maxLimit - (minEdge - 0.1) + Eps)
+                .Where(v => v >= minLimit - Eps && v <= maxLimit + Eps)
                 .ToList();
 
             if (obstacles.Count == 0 || optimized) return ideal;
@@ -308,7 +314,8 @@ namespace HNL.VXT.Core.Preview
                     maxSpacing,
                     minEdge,
                     maxEdge,
-                    increment)
+                    increment,
+                    minEdgeTolerance)
                 .ToList();
         }
 
@@ -372,11 +379,12 @@ namespace HNL.VXT.Core.Preview
                 settings.HangerMinEdgeOffset,
                 settings.HangerBalanceStep,
                 oneSide ? MainLayoutMode.OneSide : MainLayoutMode.BalancedTwoEnds,
-                reverse: oneSide && furringFromFarEdge);
+                reverse: oneSide && furringFromFarEdge,
+                minEdgeTolerance: settings.HangerEdgeTolerance);
             if (layout == null) return new List<Point2>();
 
             var ideal = layout.Positions(minX)
-                .Where(v => v <= maxX - (settings.HangerMinEdgeOffset - 0.1) + Eps)
+                .Where(v => v >= minX - Eps && v <= maxX + Eps)
                 .ToList();
 
             var rowIntervals = obstacles
@@ -396,7 +404,8 @@ namespace HNL.VXT.Core.Preview
                     settings.HangerMaxSpacing,
                     settings.HangerMinEdgeOffset,
                     settings.HangerMaxEdgeOffset,
-                    settings.HangerBalanceStep);
+                    settings.HangerBalanceStep,
+                    settings.HangerEdgeTolerance);
             }
 
             return final

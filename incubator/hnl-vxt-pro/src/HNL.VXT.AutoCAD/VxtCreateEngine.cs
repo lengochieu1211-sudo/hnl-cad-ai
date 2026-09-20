@@ -37,6 +37,7 @@ namespace HNL.VXT.AutoCAD
             VxtTransientPreview.Instance.Clear();
             var db = doc.Database;
             var counts = new CreateCounts();
+            var constraintReport = string.Empty;
 
             try
             {
@@ -51,6 +52,17 @@ namespace HNL.VXT.AutoCAD
                     else
                     {
                         plan = new VxtPreviewPlan();
+                    }
+
+                    constraintReport = VxtConstraintReport.Format(plan.Diagnostics);
+                    session.ViewModel?.SetConstraintDiagnostics(plan.Diagnostics);
+
+                    var hardDiagnostics = plan.Diagnostics.Where(x => x != null && x.IsHard).ToList();
+                    if (hardDiagnostics.Count > 0)
+                    {
+                        throw new InvalidOperationException(
+                            "Vi phạm HARD, Create bị chặn: " +
+                            VxtConstraintReport.Format(hardDiagnostics));
                     }
 
                     ValidateRequiredResources(settings, plan, session, db, tr);
@@ -163,7 +175,11 @@ namespace HNL.VXT.AutoCAD
                 doc.Editor.WriteMessage(
                     "\nHNL Tool - VXT Pro: Đã tạo thành công " + counts.Main + " Xương chính, " +
                     counts.Furring + " Xương phụ, " + counts.Hangers + " Ty treo, " +
-                    counts.Dimensions + " Dim. Dùng UNDO để hoàn tác toàn bộ thao tác tạo." + fallbackWarning);
+                    counts.Dimensions + " Dim. Dùng UNDO để hoàn tác toàn bộ thao tác tạo." +
+                    fallbackWarning +
+                    (string.IsNullOrWhiteSpace(constraintReport)
+                        ? string.Empty
+                        : " | Constraint: " + constraintReport));
 
                 if (session.HasBoundary) VxtTransientPreview.Instance.Refresh();
                 else VxtTransientPreview.Instance.Clear();

@@ -14,7 +14,8 @@ namespace HNL.VXT.Core.Preview
     /// - the normal/global XC grid is solved first;
     /// - the normal/global XC grid is immutable in this pass: no translation, re-phase or
     ///   replacement is allowed;
-    /// - a local XC is added only when a real notch band would otherwise violate MaxEdge or
+    /// - polygon X-levels are split into local bands first; only REAL notch bands are evaluated;
+    /// - a local XC is added only when such a notch band would otherwise violate MaxEdge or
     ///   MainMaxSpacing;
     /// - a required local edge XC may be closer than MainMinSpacing to a neighbouring global XC;
     /// - a sub-MinSpacing local XC is removed only when it is redundant and the local band remains
@@ -120,7 +121,7 @@ namespace HNL.VXT.Core.Preview
 
             var maxSearch = Math.Max(
                 settings.MainBalanceStep,
-                settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance) - settings.MainMinEdgeOffset);
+                settings.MainMaxEdgeOffset - settings.MainMinEdgeOffset);
             var maxUnits = Math.Max(1, (int)Math.Ceiling(maxSearch));
             List<double> aligned = null;
 
@@ -151,7 +152,7 @@ namespace HNL.VXT.Core.Preview
         {
             if (grid == null || grid.Count == 0) return false;
             var domain = Box2.FromPoints(polygon);
-            var maxEdge = settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance);
+            var maxEdge = settings.MainMaxEdgeOffset;
             var xs = UniqueSort(polygon.Select(p => p.X)
                 .Concat(new[] { domain.MinX, domain.MaxX }), 0.5);
 
@@ -251,7 +252,7 @@ namespace HNL.VXT.Core.Preview
             IReadOnlyList<Box2> obstacles)
         {
             var domain = Box2.FromPoints(polygon);
-            var maxEdge = settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance);
+            var maxEdge = settings.MainMaxEdgeOffset;
             var step = settings.MainBalanceStep;
 
             for (var pass = 0; pass < 4; pass++)
@@ -261,23 +262,12 @@ namespace HNL.VXT.Core.Preview
                 var latticeOrigin = mains.OrderBy(m => m.Y).First().Y;
                 var specs = new List<LocalSpec>();
 
-                var xs = UniqueSort(polygon.Select(p => p.X)
-                    .Concat(new[] { domain.MinX, domain.MaxX }), 0.5);
-
-                for (var i = 0; i + 1 < xs.Count; i++)
+                // Explicit notch-region split comes BEFORE deciding whether any local XC is needed.
+                // This reuses the geometric intent of the old regional planner without allowing it
+                // to translate/re-phase/replace the immutable global XC grid.
+                foreach (var notchBand in BuildNotchBands(polygon, domain))
                 {
-                    var bandA = Math.Max(domain.MinX, xs[i]);
-                    var bandB = Math.Min(domain.MaxX, xs[i + 1]);
-                    if (bandB - bandA <= MinDrawLength) continue;
-
-                    var sampleXs = new[]
-                    {
-                        bandA + 0.25 * (bandB - bandA),
-                        bandA + 0.50 * (bandB - bandA),
-                        bandA + 0.75 * (bandB - bandA)
-                    };
-
-                    foreach (var sampleX in sampleXs)
+                    foreach (var sampleX in notchBand.SampleXs)
                     {
                         foreach (var interval in PolygonScanline.ClipVertical(polygon, sampleX))
                         {
@@ -293,7 +283,7 @@ namespace HNL.VXT.Core.Preview
                                 .ToList();
 
                             foreach (var y in RequiredRows(rows, a, b, latticeOrigin, step, settings, maxEdge))
-                                AddOrMergeSpec(specs, y, bandA, bandB);
+                                AddOrMergeSpec(specs, y, notchBand.X1, notchBand.X2);
                         }
                     }
                 }
@@ -379,12 +369,26 @@ namespace HNL.VXT.Core.Preview
             VxtSettings settings,
             double maxEdge)
         {
-            var high = Math.Min(b - Tol, a + maxEdge);
-            var low = Math.Min(high, a + Math.Max(0.0, settings.MainMinEdgeOffset));
-            var candidate = SnapAtOrBelow(high, origin, step);
-            if (candidate < low - Tol)
-                candidate = SnapAtOrAbove(low, origin, step);
-            return candidate > a + Tol && candidate < b - Tol && candidate <= a + maxEdge + Tol
+            var hardHigh = Math.Min(b - Tol, a + maxEdge);
+            if (hardHigh <= a + Tol) return null;
+
+            // Put the reinforcement as close to the notch edge as the preferred Min permits.
+            // This maximizes separation from the neighbouring global XC instead of pinning the
+            // local XC near MaxEdge (the old behavior that could leave only 50-100 mm).
+            var preferredLow = a + Math.Max(0.0, settings.MainMinEdgeOffset);
+            var candidate = SnapAtOrAbove(preferredLow, origin, step);
+            if (candidate <= hardHigh + Tol && candidate > a + Tol)
+                return candidate;
+
+            var toleratedMin = Math.Max(
+                0.0,
+                settings.MainMinEdgeOffset - Math.Max(0.0, settings.MainEdgeTolerance));
+            candidate = SnapAtOrAbove(a + toleratedMin, origin, step);
+            if (candidate <= hardHigh + Tol && candidate > a + Tol)
+                return candidate;
+
+            candidate = SnapAtOrAbove(a + Tol, origin, step);
+            return candidate <= hardHigh + Tol && candidate > a + Tol
                 ? (double?)candidate
                 : null;
         }
@@ -397,12 +401,25 @@ namespace HNL.VXT.Core.Preview
             VxtSettings settings,
             double maxEdge)
         {
-            var low = Math.Max(a + Tol, b - maxEdge);
-            var high = Math.Max(low, b - Math.Max(0.0, settings.MainMinEdgeOffset));
-            var candidate = SnapAtOrAbove(low, origin, step);
-            if (candidate > high + Tol)
-                candidate = SnapAtOrBelow(high, origin, step);
-            return candidate > a + Tol && candidate < b - Tol && candidate >= b - maxEdge - Tol
+            var hardLow = Math.Max(a + Tol, b - maxEdge);
+            if (hardLow >= b - Tol) return null;
+
+            // Symmetric rule for the top notch edge: choose the largest legal lattice point,
+            // i.e. nearest to the edge, before relaxing Min edge.
+            var preferredHigh = b - Math.Max(0.0, settings.MainMinEdgeOffset);
+            var candidate = SnapAtOrBelow(preferredHigh, origin, step);
+            if (candidate >= hardLow - Tol && candidate < b - Tol)
+                return candidate;
+
+            var toleratedMin = Math.Max(
+                0.0,
+                settings.MainMinEdgeOffset - Math.Max(0.0, settings.MainEdgeTolerance));
+            candidate = SnapAtOrBelow(b - toleratedMin, origin, step);
+            if (candidate >= hardLow - Tol && candidate < b - Tol)
+                return candidate;
+
+            candidate = SnapAtOrBelow(b - Tol, origin, step);
+            return candidate >= hardLow - Tol && candidate < b - Tol
                 ? (double?)candidate
                 : null;
         }
@@ -462,7 +479,8 @@ namespace HNL.VXT.Core.Preview
                 settings.HangerMaxEdgeOffset,
                 settings.HangerMinEdgeOffset,
                 settings.HangerBalanceStep,
-                mode);
+                mode,
+                minEdgeTolerance: settings.HangerEdgeTolerance);
             if (layout == null) return;
 
             IReadOnlyList<double> xs = layout.Positions(minX)
@@ -486,7 +504,8 @@ namespace HNL.VXT.Core.Preview
                         settings.HangerMaxSpacing,
                         settings.HangerMinEdgeOffset,
                         settings.HangerMaxEdgeOffset,
-                        settings.HangerBalanceStep);
+                        settings.HangerBalanceStep,
+                        settings.HangerEdgeTolerance);
                 }
             }
 
@@ -577,7 +596,7 @@ namespace HNL.VXT.Core.Preview
         {
             if (ys == null || ys.Count == 0) return 1;
             var violations = 0;
-            var maxEdge = settings.MainMaxEdgeOffset + Math.Max(0.0, settings.MainEdgeTolerance);
+            var maxEdge = settings.MainMaxEdgeOffset;
             if (ys[0] - edgeA > maxEdge + Tol) violations++;
             if (edgeB - ys[ys.Count - 1] > maxEdge + Tol) violations++;
             for (var i = 0; i + 1 < ys.Count; i++)
@@ -659,6 +678,51 @@ namespace HNL.VXT.Core.Preview
             return true;
         }
 
+        private static IEnumerable<NotchBand> BuildNotchBands(
+            IReadOnlyList<Point2> polygon,
+            Box2 domain)
+        {
+            var xs = UniqueSort(
+                polygon.Select(p => p.X).Concat(new[] { domain.MinX, domain.MaxX }),
+                0.5);
+
+            for (var i = 0; i + 1 < xs.Count; i++)
+            {
+                var x1 = Math.Max(domain.MinX, xs[i]);
+                var x2 = Math.Min(domain.MaxX, xs[i + 1]);
+                if (x2 - x1 <= MinDrawLength) continue;
+
+                var samples = new[]
+                {
+                    x1 + 0.25 * (x2 - x1),
+                    x1 + 0.50 * (x2 - x1),
+                    x1 + 0.75 * (x2 - x1)
+                };
+
+                var hasDrawable = false;
+                var realNotch = false;
+                foreach (var sample in samples)
+                {
+                    var intervals = PolygonScanline.ClipVertical(polygon, sample).ToList();
+                    if (intervals.Count == 0) continue;
+                    hasDrawable = true;
+                    if (intervals.Count != 1)
+                    {
+                        realNotch = true;
+                        continue;
+                    }
+
+                    var a = Math.Min(intervals[0].A.Y, intervals[0].B.Y);
+                    var b = Math.Max(intervals[0].A.Y, intervals[0].B.Y);
+                    if (a > domain.MinY + Tol || b < domain.MaxY - Tol)
+                        realNotch = true;
+                }
+
+                if (hasDrawable && realNotch)
+                    yield return new NotchBand(x1, x2, samples);
+            }
+        }
+
         private static void AddOrMergeSpec(List<LocalSpec> specs, double y, double x1, double x2)
         {
             foreach (var spec in specs)
@@ -723,6 +787,20 @@ namespace HNL.VXT.Core.Preview
             public double X1 { get; }
             public double X2 { get; }
             public double Length => X2 - X1;
+        }
+
+        private sealed class NotchBand
+        {
+            public NotchBand(double x1, double x2, IReadOnlyList<double> sampleXs)
+            {
+                X1 = Math.Min(x1, x2);
+                X2 = Math.Max(x1, x2);
+                SampleXs = sampleXs ?? Array.Empty<double>();
+            }
+
+            public double X1 { get; }
+            public double X2 { get; }
+            public IReadOnlyList<double> SampleXs { get; }
         }
 
         private sealed class LocalSpec

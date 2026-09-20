@@ -58,9 +58,13 @@ namespace HNL.VXT.Core.Layout
                 .OrderBy(x => x)
                 .ToArray();
             var obstacles = NormalizeObstacles(obstacleIntervals, minLimit, maxLimit);
-            var allowedMaxEdge = maxEdge + Math.Max(0.0, edgeTolerance);
+            var allowedMaxEdge = maxEdge;
 
-            if (IsValidChain(ideal, obstacles, minLimit, maxLimit, minSpacing, maxSpacing, minEdge, allowedMaxEdge))
+            // Preserve a fully preferred row exactly. Min spacing/Min edge are SOFT only when
+            // a preferred clear chain cannot be found.
+            if (IsPreferredChain(
+                    ideal, obstacles, minLimit, maxLimit,
+                    minSpacing, maxSpacing, minEdge, allowedMaxEdge))
                 return new Result(ideal, repaired: false, movedOrAdded: 0, MaxInternalGap(ideal));
 
             // Preserve the legacy greedy answer when it is valid. Pro repair is a fail-safe,
@@ -74,41 +78,36 @@ namespace HNL.VXT.Core.Layout
                 maxSpacing,
                 minEdge,
                 maxEdge,
-                increment);
+                increment,
+                minEdgeTolerance: edgeTolerance);
             if (IsValidChain(greedy, obstacles, minLimit, maxLimit, minSpacing, maxSpacing, minEdge, allowedMaxEdge))
                 return new Result(greedy.ToArray(), repaired: true, movedOrAdded: DifferenceCount(ideal, greedy), MaxInternalGap(greedy));
 
             if (increment <= Eps || maxLimit - minLimit <= Eps)
                 return new Result(Array.Empty<double>(), repaired: true, movedOrAdded: ideal.Length, 0.0);
 
-            Result best = null;
-            double bestCost = double.MaxValue;
-            foreach (var anchor in BuildAnchors(ideal, obstacles, minLimit, minEdge, maxEdge, increment))
+            var denseMinSpacing = Math.Min(minSpacing, Math.Max(increment, Eps));
+            var toleratedMinEdge = Math.Max(0.0, minEdge - Math.Max(0.0, edgeTolerance));
+            var passes = new[]
             {
-                var path = SolveForAnchor(
-                    anchor,
-                    ideal,
-                    obstacles,
-                    minLimit,
-                    maxLimit,
-                    minSpacing,
-                    maxSpacing,
-                    minEdge,
-                    allowedMaxEdge,
-                    increment,
-                    optimizationMode,
-                    out var cost);
-                if (path == null || path.Count == 0 || cost >= bestCost) continue;
+                Tuple.Create(minSpacing, minEdge),
+                Tuple.Create(denseMinSpacing, minEdge),
+                Tuple.Create(minSpacing, toleratedMinEdge),
+                Tuple.Create(denseMinSpacing, toleratedMinEdge),
+                Tuple.Create(minSpacing, 0.0),
+                Tuple.Create(denseMinSpacing, 0.0)
+            };
 
-                bestCost = cost;
-                best = new Result(
-                    path,
-                    repaired: true,
-                    movedOrAdded: DifferenceCount(ideal, path),
-                    MaxInternalGap(path));
+            foreach (var pass in passes)
+            {
+                var best = SolveBest(
+                    ideal, obstacles, minLimit, maxLimit,
+                    pass.Item1, maxSpacing, pass.Item2, allowedMaxEdge,
+                    increment, optimizationMode);
+                if (best != null) return best;
             }
 
-            return best ?? new Result(Array.Empty<double>(), repaired: true, movedOrAdded: ideal.Length, 0.0);
+            return new Result(Array.Empty<double>(), repaired: true, movedOrAdded: ideal.Length, 0.0);
         }
 
         public static bool IsValidChain(
@@ -127,8 +126,11 @@ namespace HNL.VXT.Core.Layout
 
             var startEdge = values[0] - minLimit;
             var endEdge = maxLimit - values[values.Length - 1];
-            if (startEdge < minEdge - Tol || startEdge > maxEdge + Tol ||
-                endEdge < minEdge - Tol || endEdge > maxEdge + Tol)
+
+            // HARD validity intentionally ignores Min spacing/Min edge. Those are preferred
+            // constraints and are reported as warnings by the final plan auditor.
+            if (startEdge < -Tol || startEdge > maxEdge + Tol ||
+                endEdge < -Tol || endEdge > maxEdge + Tol)
                 return false;
 
             for (var i = 0; i < values.Length; i++)
@@ -136,9 +138,80 @@ namespace HNL.VXT.Core.Layout
                 if (!IsClear(values[i], obstacles)) return false;
                 if (i == 0) continue;
                 var gap = values[i] - values[i - 1];
-                if (gap < minSpacing - Tol || gap > maxSpacing + Tol) return false;
+                if (gap <= Tol || gap > maxSpacing + Tol) return false;
             }
             return true;
+        }
+
+        private static bool IsPreferredChain(
+            IEnumerable<double> positions,
+            IEnumerable<Tuple<double, double>> obstacleIntervals,
+            double minLimit,
+            double maxLimit,
+            double minSpacing,
+            double maxSpacing,
+            double minEdge,
+            double maxEdge)
+        {
+            var values = (positions ?? Enumerable.Empty<double>()).OrderBy(x => x).ToArray();
+            if (!IsValidChain(
+                    values, obstacleIntervals, minLimit, maxLimit,
+                    minSpacing, maxSpacing, minEdge, maxEdge))
+                return false;
+
+            var startEdge = values[0] - minLimit;
+            var endEdge = maxLimit - values[values.Length - 1];
+            if (startEdge < minEdge - Tol || endEdge < minEdge - Tol) return false;
+
+            for (var i = 1; i < values.Length; i++)
+                if (values[i] - values[i - 1] < minSpacing - Tol)
+                    return false;
+            return true;
+        }
+
+        private static Result SolveBest(
+            IReadOnlyList<double> ideal,
+            IReadOnlyList<Tuple<double, double>> obstacles,
+            double minLimit,
+            double maxLimit,
+            double minSpacing,
+            double maxSpacing,
+            double minEdge,
+            double maxEdge,
+            double increment,
+            VxtOptimizationMode optimizationMode)
+        {
+            Result best = null;
+            var bestCost = double.MaxValue;
+            foreach (var anchor in BuildAnchors(ideal, obstacles, minLimit, minEdge, maxEdge, increment))
+            {
+                var path = SolveForAnchor(
+                    anchor,
+                    ideal,
+                    obstacles,
+                    minLimit,
+                    maxLimit,
+                    minSpacing,
+                    maxSpacing,
+                    minEdge,
+                    maxEdge,
+                    increment,
+                    optimizationMode,
+                    out var cost);
+                if (path == null || path.Count == 0 || cost >= bestCost) continue;
+                if (!IsValidChain(
+                        path, obstacles, minLimit, maxLimit,
+                        minSpacing, maxSpacing, minEdge, maxEdge))
+                    continue;
+
+                bestCost = cost;
+                best = new Result(
+                    path,
+                    repaired: true,
+                    movedOrAdded: DifferenceCount(ideal, path),
+                    MaxInternalGap(path));
+            }
+            return best;
         }
 
         private static IReadOnlyList<double> SolveForAnchor(

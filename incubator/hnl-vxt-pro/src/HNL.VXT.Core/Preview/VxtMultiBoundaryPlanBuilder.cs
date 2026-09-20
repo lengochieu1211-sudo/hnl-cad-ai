@@ -87,6 +87,12 @@ namespace HNL.VXT.Core.Preview
                     VxtProPlanQualityEvaluator.AttachCompactPreviewLabel(boundary, part);
                 }
 
+                var auditAngle = part.Quality != null
+                    ? part.Quality.SelectedDirectionDegrees
+                    : ResolveDirectionDegrees(settings, boundary);
+                VxtPlanConstraintAuditor.Attach(
+                    boundary, part, settings, auditAngle, count);
+
                 if (part.Quality != null) qualities.Add(part.Quality);
                 merged.Lines.AddRange(part.Lines);
                 merged.Texts.AddRange(part.Texts);
@@ -96,6 +102,7 @@ namespace HNL.VXT.Core.Preview
                 merged.FurringSegmentCount += part.FurringSegmentCount;
                 merged.HangerCount += part.HangerCount;
                 merged.DimensionSegmentCount += part.DimensionSegmentCount;
+                merged.Diagnostics.AddRange(part.Diagnostics);
             }
 
             if (qualities.Count > 0)
