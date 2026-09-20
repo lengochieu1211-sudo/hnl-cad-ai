@@ -14,7 +14,7 @@ namespace HNL.VXT.UI.Views
     /// This pass never replaces bindings, commands, HNL colors or geometry logic. It only
     /// normalizes the palette chrome into dense group bars and Property | Value rows.
     /// Existing CardBackground/HoverBackground/CardBorder resources remain authoritative so
-    /// Dark/Light themes and XC/XP/Ty/DIM/MEP colors continue to come from the existing theme.
+    /// Dark/Light themes and XC/XP/Ty/Dim/MEP colors continue to come from the existing theme.
     /// </summary>
     public static class VxtPalettePropertiesLayout
     {
@@ -81,12 +81,12 @@ namespace HNL.VXT.UI.Views
                     case "TY TREO": text.Text = "Ty treo"; break;
                     case "NÉ THIẾT BỊ MEP": text.Text = "Né thiết bị MEP"; break;
                     case "NÉ THIẾT BỊ": text.Text = "Né thiết bị"; break;
-                    case "KÍCH THƯỚC DIM": text.Text = "Kích thước DIM"; break;
+                    case "KÍCH THƯỚC Dim": text.Text = "Kích thước Dim"; break;
                     case "XEM TRƯỚC TRÊN BẢN VẼ": text.Text = "Xem trước trên bản vẽ"; break;
                     case "LAYER & KIỂU NÉT": text.Text = "Layer & kiểu nét"; break;
-                    case "LAYER & DIM": text.Text = "Layer & DIM"; break;
+                    case "LAYER & Dim": text.Text = "Layer & Dim"; break;
                     case "LAYER & HIỂN THỊ": text.Text = "Layer & hiển thị"; break;
-                    case "CÀI ĐẶT LAYER & DIM": text.Text = "Cài đặt Layer & DIM"; break;
+                    case "CÀI ĐẶT LAYER & Dim": text.Text = "Cài đặt Layer & Dim"; break;
                     case "GIAO DIỆN": text.Text = "Giao diện"; break;
                     case "PHÂN TÍCH & KIỂM TRA LỖI": text.Text = "Phân tích & kiểm tra lỗi"; break;
                     case "CHẨN ĐOÁN": text.Text = "Chẩn đoán"; break;
@@ -247,7 +247,7 @@ namespace HNL.VXT.UI.Views
 
             if (labelColumn == 1 && columns.Count >= 3)
             {
-                // DIM rows carry an enable CheckBox before the property label. Preserve that
+                // Dim rows carry an enable CheckBox before the property label. Preserve that
                 // leading affordance while keeping the visual Property/Value divider aligned
                 // with standard rows.
                 columns[0].Width = new GridLength(30);

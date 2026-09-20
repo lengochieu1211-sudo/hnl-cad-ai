@@ -72,7 +72,7 @@ namespace HNL.VXT.UI.Views
             panel.Children.Add(CreateResourceGroup(view, state.ViewModel, "Ty treo",
                 nameof(VxtPaletteViewModel.HangerLayer), nameof(VxtPaletteViewModel.HangerColorIndex),
                 nameof(VxtPaletteViewModel.HangerLinetype), nameof(VxtPaletteViewModel.HangerLineweight), false));
-            panel.Children.Add(CreateResourceGroup(view, state.ViewModel, "DIM",
+            panel.Children.Add(CreateResourceGroup(view, state.ViewModel, "Dim",
                 nameof(VxtPaletteViewModel.DimensionLayer), nameof(VxtPaletteViewModel.DimensionColorIndex),
                 nameof(VxtPaletteViewModel.DimensionLinetype), nameof(VxtPaletteViewModel.DimensionLineweight), true));
 

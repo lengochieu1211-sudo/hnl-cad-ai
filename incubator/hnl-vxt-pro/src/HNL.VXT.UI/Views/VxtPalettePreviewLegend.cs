@@ -9,8 +9,8 @@ using HNL.VXT.UI.ViewModels;
 namespace HNL.VXT.UI.Views
 {
     /// <summary>
-    /// Keeps every user-facing XC / XP / Ty / DIM color marker in sync with the same
-    /// ACI settings consumed by CAD Preview / Create resources.
+    /// Keeps every user-facing XC / XP / Ty / Dim color marker in sync with the same
+    /// ACI settings consumed by Cad Preview / Create resources.
     ///
     /// This covers both:
     /// - the short swatches inside the Preview legend; and
@@ -59,7 +59,7 @@ namespace HNL.VXT.UI.Views
             SetRole(swatches.PreviewMain, swatches.SectionMain, vm.MainColorIndex, "XC", resourceRoot);
             SetRole(swatches.PreviewFurring, swatches.SectionFurring, vm.FurringColorIndex, "XP", resourceRoot);
             SetRole(swatches.PreviewHanger, swatches.SectionHanger, vm.HangerColorIndex, "Ty", resourceRoot);
-            SetRole(swatches.PreviewDimension, swatches.SectionDimension, vm.DimensionColorIndex, "DIM", resourceRoot);
+            SetRole(swatches.PreviewDimension, swatches.SectionDimension, vm.DimensionColorIndex, "Dim", resourceRoot);
         }
 
         private static void SetRole(
@@ -81,7 +81,7 @@ namespace HNL.VXT.UI.Views
             if (section != null)
             {
                 section.Fill = brush;
-                section.ToolTip = label + " • ACI " + index + " • cùng màu Preview/CAD";
+                section.ToolTip = label + " • ACI " + index + " • cùng màu Preview/Cad";
             }
         }
 
@@ -205,9 +205,9 @@ namespace HNL.VXT.UI.Views
                         else if (isSection) result.SectionHanger = rectangle;
                         break;
 
-                    case "KÍCH THƯỚC DIM":
-                    case "Kích thước DIM":
-                    case "DIM":
+                    case "KÍCH THƯỚC Dim":
+                    case "Kích thước Dim":
+                    case "Dim":
                         if (isPreview) result.PreviewDimension = rectangle;
                         else if (isSection) result.SectionDimension = rectangle;
                         break;

@@ -7,7 +7,7 @@ namespace HNL.VXT.UI.ViewModels
     public sealed partial class VxtPaletteViewModel
     {
         private string _diagnosticState = "CHƯA KIỂM TRA";
-        private string _diagnosticStatus = "Chưa chạy phân tích. Bấm Phân tích nhanh để kiểm tra cấu hình và tài nguyên CAD.";
+        private string _diagnosticStatus = "Chưa chạy phân tích. Bấm Phân tích nhanh để kiểm tra cấu hình và tài nguyên Cad.";
         private string _diagnosticPackagePath = "Chưa có gói Diagnostic ZIP.";
         private ICommand _analyzeDiagnosticsCommand;
         private ICommand _exportDiagnosticsUiCommand;

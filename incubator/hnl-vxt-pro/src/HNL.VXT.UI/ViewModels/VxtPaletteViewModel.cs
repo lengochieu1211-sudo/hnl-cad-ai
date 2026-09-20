@@ -15,7 +15,7 @@ namespace HNL.VXT.UI.ViewModels
         private VxtSettings _settings = new VxtSettings();
         private string _boundaryStatus = "Chưa chọn biên trần";
         private string _previewStatus = "Chọn Polyline kín để bắt đầu xem trước.";
-        private string _summary = "XC --  •  XP --  •  TY --  •  DIM --";
+        private string _summary = "XC --  •  XP --  •  TY --  •  Dim --";
         private string _selectedPreset = "Trần chìm tiêu chuẩn";
         private string _generalEquipmentStatus = "Chưa chọn";
         private string _mainEquipmentStatus = "Chưa chọn";
@@ -128,7 +128,7 @@ namespace HNL.VXT.UI.ViewModels
         }
 
         // Exact V6.7.2 workflow gate: normal drawing needs a selected ceiling boundary, but
-        // XC off + XP off + Ty on + Auto DIM off may start without a boundary because Create
+        // XC off + XP off + Ty on + Auto Dim off may start without a boundary because Create
         // then asks for existing XC and distributes Ty on those members.
         public bool CanCreate => VxtWorkflowEligibility.CanStartCreate(HasBoundary, _settings);
 
@@ -213,7 +213,7 @@ namespace HNL.VXT.UI.ViewModels
         public bool ShiftAllForAvoidance { get => _settings.ShiftAllForAvoidance; set => SetSetting(ref _settings.ShiftAllForAvoidance, value); }
         public double ClearanceDistance { get => _settings.ClearanceDistance; set => SetNumberSetting(() => _settings.ClearanceDistance, v => _settings.ClearanceDistance = v, value); }
 
-        // DIM
+        // Dim
         public bool AutoDimension { get => _settings.AutoDimension; set => SetSetting(ref _settings.AutoDimension, value); }
         public bool DimMain { get => _settings.DimMain; set => SetSetting(ref _settings.DimMain, value); }
         public bool DimFurring { get => _settings.DimFurring; set => SetSetting(ref _settings.DimFurring, value); }
@@ -320,7 +320,7 @@ namespace HNL.VXT.UI.ViewModels
 
         public void SetPreviewStats(int main, int furring, int hangers, int dims)
         {
-            Summary = $"Xương chính {main}  •  Xương phụ {furring}  •  Ty {hangers}  •  DIM {dims}";
+            Summary = $"Xương chính {main}  •  Xương phụ {furring}  •  Ty {hangers}  •  Dim {dims}";
             PreviewStatus = "✓ Đã cập nhật xem trước • chưa ghi đối tượng vào bản vẽ";
         }
 
@@ -423,7 +423,7 @@ namespace HNL.VXT.UI.ViewModels
         private void ResetDefaults()
         {
             // Original V6.7.2 reset restores numeric/layer defaults but does not silently throw
-            // away the user's current DIM style or CAD equipment selection sets. Preserve those
+            // away the user's current Dim style or Cad equipment selection sets. Preserve those
             // runtime choices so the status text never lies about still-active obstacle IDs.
             var dimensionStyle = _settings.DimensionStyle;
             _applyingPreset = true;

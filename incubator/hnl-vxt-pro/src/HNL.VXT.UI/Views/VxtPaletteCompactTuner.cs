@@ -230,9 +230,9 @@ namespace HNL.VXT.UI.Views
             var layerTitle =
                 FindText(view, "Layer & hiển thị") ??
                 FindText(view, "LAYER & HIỂN THỊ") ??
-                FindText(view, "CÀI ĐẶT LAYER & DIM") ??
+                FindText(view, "CÀI ĐẶT LAYER & Dim") ??
                 FindText(view, "LAYER & KIỂU NÉT") ??
-                FindText(view, "LAYER & DIM");
+                FindText(view, "LAYER & Dim");
             if (layerTitle == null) return;
 
             layerTitle.Text = "Layer & hiển thị";
@@ -240,7 +240,7 @@ namespace HNL.VXT.UI.Views
             if (layerExpander != null) layerExpander.IsExpanded = false;
 
             var layerCard = AncestorBorderOwnedByStack(layerTitle);
-            var dimTitle = FindText(view, "Kích thước DIM") ?? FindText(view, "KÍCH THƯỚC DIM");
+            var dimTitle = FindText(view, "Kích thước Dim") ?? FindText(view, "KÍCH THƯỚC Dim");
             var dimCard = AncestorBorderOwnedByStack(dimTitle);
             var stack = layerCard?.Parent as StackPanel;
             if (stack == null || dimCard == null || !ReferenceEquals(dimCard.Parent, stack)) return;
@@ -256,9 +256,9 @@ namespace HNL.VXT.UI.Views
 
         private static void RemoveDuplicateDimResourceRows(VxtPaletteView view)
         {
-            // Old view injected Layer DIM + DimStyle a second time inside the DIM card.
-            // The new visible LAYER & DIM panel owns these fields, so remove the duplicate.
-            var text = FindText(view, "Layer DIM");
+            // Old view injected Layer Dim + DimStyle a second time inside the Dim card.
+            // The new visible LAYER & Dim panel owns these fields, so remove the duplicate.
+            var text = FindText(view, "Layer Dim");
             if (text == null) return;
             var duplicate = AncestorBorderOwnedByStack(text);
             var parent = duplicate?.Parent as StackPanel;

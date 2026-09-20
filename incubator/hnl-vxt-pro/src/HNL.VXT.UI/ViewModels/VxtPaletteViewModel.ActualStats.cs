@@ -16,7 +16,7 @@ namespace HNL.VXT.UI.ViewModels
             Summary =
                 $"XC {metrics.MainCount} đoạn • {metrics.MainLengthM:0.00} m   |   " +
                 $"XP {metrics.FurringCount} đoạn • {metrics.FurringLengthM:0.00} m\n" +
-                $"Ty {metrics.HangerCount}  •  DIM {metrics.DimensionCount}";
+                $"Ty {metrics.HangerCount}  •  Dim {metrics.DimensionCount}";
             PreviewStatus = "✓ Đã cập nhật xem trước • số lượng/chiều dài lấy từ hình học cuối • chưa ghi đối tượng vào bản vẽ";
         }
     }
