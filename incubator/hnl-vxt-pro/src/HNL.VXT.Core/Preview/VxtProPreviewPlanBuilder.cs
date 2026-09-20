@@ -408,7 +408,7 @@ namespace HNL.VXT.Core.Preview
             // original absolute-WCS lattice, then add the original/repaired coordinates and safe
             // obstacle-edge candidates. Dynamic programming picks targetCount distinct clear rows
             // with minimum movement from the normal XP chain.
-            var slotSet = new HashSet<double>(new DoubleToleranceComparer());
+            var slotSet = new HashSet<double>(new FurringCandidateToleranceComparer());
             var firstIndex = (long)Math.Ceiling((minLimit + drawTolerance + coordinateTolerance) / spacing);
             var lastIndex = (long)Math.Floor((maxLimit - drawTolerance - coordinateTolerance) / spacing);
             for (var k = firstIndex; k <= lastIndex; k++)
@@ -511,7 +511,7 @@ namespace HNL.VXT.Core.Preview
             return selected;
         }
 
-        private sealed class DoubleToleranceComparer : IEqualityComparer<double>
+        private sealed class FurringCandidateToleranceComparer : IEqualityComparer<double>
         {
             public bool Equals(double x, double y) => Math.Abs(x - y) <= 1e-6;
             public int GetHashCode(double obj) => Math.Round(obj, 6).GetHashCode();
