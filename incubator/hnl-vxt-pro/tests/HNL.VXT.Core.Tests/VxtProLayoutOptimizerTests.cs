@@ -101,7 +101,8 @@ namespace HNL.VXT.Core.Tests
 
             Assert.IsNotNull(quality);
             Assert.IsFalse(quality.IsValid);
-            Assert.IsTrue(quality.HardViolationCount >= 4);
+            Assert.AreEqual(2, quality.HardViolationCount,
+                "Only the two 1200 mm > 1000 mm Max-spacing violations are HARD; Min values are SOFT.");
             Assert.AreEqual(0, quality.QualityScore100);
         }
     }

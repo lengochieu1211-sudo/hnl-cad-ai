@@ -504,8 +504,7 @@ namespace HNL.VXT.Core.Preview
                         settings.HangerMaxSpacing,
                         settings.HangerMinEdgeOffset,
                         settings.HangerMaxEdgeOffset,
-                        settings.HangerBalanceStep,
-                        settings.HangerEdgeTolerance);
+                        settings.HangerBalanceStep);
                 }
             }
 

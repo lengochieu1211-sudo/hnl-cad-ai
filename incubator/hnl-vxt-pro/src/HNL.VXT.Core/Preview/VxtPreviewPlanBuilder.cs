@@ -243,12 +243,10 @@ namespace HNL.VXT.Core.Preview
                 var intervals = obstacles.Select(b => Tuple.Create(b.MinY, b.MaxY)).ToList();
                 var grid1 = BuildFiniteGrid(forward, domain.MinY, domain.MaxY, settings.MainMinEdgeOffset,
                     settings.MainMinSpacing, settings.MainMaxSpacing, settings.MainMaxEdgeOffset,
-                    settings.MainBalanceStep, settings.MainEdgeTolerance,
-                    intervals, settings.ShiftAllForAvoidance);
+                    settings.MainBalanceStep, intervals, settings.ShiftAllForAvoidance);
                 var grid2 = BuildFiniteGrid(reverse, domain.MinY, domain.MaxY, settings.MainMinEdgeOffset,
                     settings.MainMinSpacing, settings.MainMaxSpacing, settings.MainMaxEdgeOffset,
-                    settings.MainBalanceStep, settings.MainEdgeTolerance,
-                    intervals, settings.ShiftAllForAvoidance);
+                    settings.MainBalanceStep, intervals, settings.ShiftAllForAvoidance);
                 return grid2.Count < grid1.Count ? grid2 : grid1;
             }
 
@@ -275,7 +273,6 @@ namespace HNL.VXT.Core.Preview
             double maxSpacing,
             double maxEdge,
             double increment,
-            double minEdgeTolerance,
             List<Tuple<double, double>> obstacles,
             bool shiftAll)
         {
@@ -314,8 +311,7 @@ namespace HNL.VXT.Core.Preview
                     maxSpacing,
                     minEdge,
                     maxEdge,
-                    increment,
-                    minEdgeTolerance)
+                    increment)
                 .ToList();
         }
 
@@ -404,8 +400,7 @@ namespace HNL.VXT.Core.Preview
                     settings.HangerMaxSpacing,
                     settings.HangerMinEdgeOffset,
                     settings.HangerMaxEdgeOffset,
-                    settings.HangerBalanceStep,
-                    settings.HangerEdgeTolerance);
+                    settings.HangerBalanceStep);
             }
 
             return final

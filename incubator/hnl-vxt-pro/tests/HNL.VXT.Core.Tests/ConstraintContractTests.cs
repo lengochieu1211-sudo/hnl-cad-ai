@@ -65,7 +65,8 @@ namespace HNL.VXT.Core.Tests
                 AutoDimension = false,
                 MainDirection = MainDirectionMode.Horizontal,
                 UseLocalMainAdd = false,
-                UseAvoidance = false
+                UseAvoidance = false,
+                MainSkipLimit = 0.0
             };
 
             var boundaries = new[]
