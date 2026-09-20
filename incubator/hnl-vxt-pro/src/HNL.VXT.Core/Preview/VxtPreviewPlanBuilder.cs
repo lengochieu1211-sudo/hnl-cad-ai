@@ -123,10 +123,16 @@ namespace HNL.VXT.Core.Preview
                 plan.Lines.Add(new PreviewLine(center, end, PreviewLineKind.Direction));
             }
 
-            var mainObstacles = TransformObstacles(
-                context.GeneralObstacles.Concat(context.MainObstacles), radians, settings.ClearanceDistance, domain);
-            var furringObstacles = TransformObstacles(
-                context.GeneralObstacles.Concat(context.FurringObstacles), radians, settings.ClearanceDistance, domain);
+            // Hard isolation contract: when Né MEP is OFF, selected/stale MEP objects must be
+            // geometrically invisible to the entire layout pipeline.
+            var mainObstacles = settings.UseAvoidance
+                ? TransformObstacles(
+                    context.GeneralObstacles.Concat(context.MainObstacles), radians, settings.ClearanceDistance, domain)
+                : new List<Box2>();
+            var furringObstacles = settings.UseAvoidance
+                ? TransformObstacles(
+                    context.GeneralObstacles.Concat(context.FurringObstacles), radians, settings.ClearanceDistance, domain)
+                : new List<Box2>();
 
             var mainSegmentsLocal = new List<Segment2>();
             var mainCoords = new List<double>();

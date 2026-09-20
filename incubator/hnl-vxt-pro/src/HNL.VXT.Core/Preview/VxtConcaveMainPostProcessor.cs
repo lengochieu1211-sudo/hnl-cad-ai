@@ -887,6 +887,12 @@ namespace HNL.VXT.Core.Preview
 
         private static List<Box2> TransformMainObstacles(VxtLayoutContext context, Scope scope, VxtSettings settings)
         {
+            // This post-processor also performs notch rebalance. Without this gate, stale MEP
+            // selections could still reject a notch candidate through GridClear() even when
+            // the user had turned Né MEP OFF.
+            if (settings == null || !settings.UseAvoidance)
+                return new List<Box2>();
+
             var result = new List<Box2>();
             foreach (var source in context.GeneralObstacles.Concat(context.MainObstacles))
             {

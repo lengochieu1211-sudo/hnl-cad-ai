@@ -46,7 +46,9 @@ namespace HNL.VXT.Core.Preview
             var polygon = boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)).ToList();
             if (polygon.Count < 3) return;
 
-            var obstacles = TransformMainObstacles(context, radians, settings.ClearanceDistance);
+            IReadOnlyList<Box2> obstacles = settings.UseAvoidance
+                ? TransformMainObstacles(context, radians, settings.ClearanceDistance)
+                : new List<Box2>();
 
             // "Thêm XC cạnh khuyết" is a local-add feature only. The normal/global XC grid
             // has already been solved by the base layout (and by MEP avoidance when enabled).
