@@ -214,11 +214,11 @@ namespace HNL.VXT.Core.Preview
                 : settings.MainLayout;
 
             var absoluteIntervals = obstacles.Select(b => Tuple.Create(b.MinY, b.MaxY)).ToList();
-            var relativeIntervals = settings.UseAvoidance && settings.ShiftAllForAvoidance
-                ? obstacles.Select(b => Tuple.Create(b.MinY - domain.MinY, b.MaxY - domain.MinY)).ToList()
-                : new List<Tuple<double, double>>();
 
-            var optimized = VxtProLayoutOptimizer.Calculate(
+            // V6.7.2 contract: build the normal grid first. "Ưu tiên dời toàn bộ" is an
+            // optional first attempt, not a license to replace the local-repair baseline
+            // with a near-miss optimized grid when no clear global offset exists.
+            var baseline = VxtProLayoutOptimizer.Calculate(
                 domain.Height,
                 settings.MainMaxSpacing,
                 settings.MainMinSpacing,
@@ -227,24 +227,47 @@ namespace HNL.VXT.Core.Preview
                 settings.MainBalanceStep,
                 requestedMode,
                 settings.OptimizationMode,
-                relativeIntervals,
+                Array.Empty<Tuple<double, double>>(),
                 settings.MainEdgeTolerance);
-            if (optimized?.Layout == null) return Array.Empty<double>();
+            if (baseline?.Layout == null) return Array.Empty<double>();
 
-            var ideal = optimized.Layout.Positions(domain.MinY)
+            var baselineIdeal = baseline.Layout.Positions(domain.MinY)
                 .Where(v => v <= domain.MaxY - (settings.MainMinEdgeOffset - 0.1) + Eps)
                 .ToList();
 
             if (!settings.UseAvoidance || absoluteIntervals.Count == 0)
-                return ideal;
+                return baselineIdeal;
 
-            // Whole-grid candidate search is used only when the user allows ShiftAll.
-            // If collisions remain, repair individual coordinates with the proven legacy adjuster.
-            if (settings.ShiftAllForAvoidance && optimized.Quality != null && optimized.Quality.IsClear)
-                return ideal;
+            if (settings.ShiftAllForAvoidance)
+            {
+                var relativeIntervals = obstacles
+                    .Select(b => Tuple.Create(b.MinY - domain.MinY, b.MaxY - domain.MinY))
+                    .ToList();
 
+                var shifted = VxtProLayoutOptimizer.Calculate(
+                    domain.Height,
+                    settings.MainMaxSpacing,
+                    settings.MainMinSpacing,
+                    settings.MainMaxEdgeOffset,
+                    settings.MainMinEdgeOffset,
+                    settings.MainBalanceStep,
+                    requestedMode,
+                    settings.OptimizationMode,
+                    relativeIntervals,
+                    settings.MainEdgeTolerance);
+
+                if (shifted?.Layout != null && shifted.Quality != null && shifted.Quality.IsClear)
+                {
+                    return shifted.Layout.Positions(domain.MinY)
+                        .Where(v => v <= domain.MaxY - (settings.MainMinEdgeOffset - 0.1) + Eps)
+                        .ToList();
+                }
+            }
+
+            // Whole-grid move disabled or failed: exactly like Lisp draw_bars(... local_bboxes),
+            // return to the normal grid and repair only the colliding XC coordinates.
             var repaired = SmartLayout1D.AdjustGrid(
-                ideal,
+                baselineIdeal,
                 absoluteIntervals,
                 domain.MinY,
                 domain.MaxY,
@@ -253,7 +276,7 @@ namespace HNL.VXT.Core.Preview
                 settings.MainMinEdgeOffset,
                 settings.MainMaxEdgeOffset,
                 settings.MainBalanceStep);
-            return repaired.Count > 0 ? repaired : ideal;
+            return repaired.Count > 0 ? repaired : baselineIdeal;
         }
 
         private static IReadOnlyList<double> BuildFurringGrid(
@@ -271,26 +294,47 @@ namespace HNL.VXT.Core.Preview
                 ? obstacles.Select(b => Tuple.Create(b.MinX, b.MaxX)).ToList()
                 : new List<Tuple<double, double>>();
 
-            var result = VxtProFurringOffsetOptimizer.Calculate(
+            // With avoidance OFF, retain the Pro profile's normal XP offset behavior.
+            if (!settings.UseAvoidance || intervals.Count == 0)
+            {
+                var baseline = VxtProFurringOffsetOptimizer.Calculate(
+                    domain.MinX,
+                    domain.MaxX,
+                    spacing,
+                    preferredOffset,
+                    null,
+                    settings.OptimizationMode,
+                    sampleStep: Math.Max(1.0, Math.Min(10.0, spacing / 20.0)));
+                return baseline?.Positions ?? Array.Empty<double>();
+            }
+
+            // V6.7.2 *shift_all*=1: try to move the complete XP grid first.
+            if (settings.ShiftAllForAvoidance)
+            {
+                var shifted = VxtProFurringOffsetOptimizer.Calculate(
+                    domain.MinX,
+                    domain.MaxX,
+                    spacing,
+                    preferredOffset,
+                    intervals,
+                    settings.OptimizationMode,
+                    sampleStep: Math.Max(1.0, Math.Min(10.0, spacing / 20.0)));
+
+                if (shifted != null && shifted.IsClear)
+                    return shifted.Positions;
+            }
+
+            // If whole-grid shift is OFF or cannot find a completely clear offset, Lisp does
+            // NOT continue from a "best near miss". It returns to offset_xp and calls draw_bars
+            // with local_bboxes_xp; draw_bars then runs adjust-grid on individual XP coordinates.
+            var ideal = BuildLegacyFurringPositions(
                 domain.MinX,
                 domain.MaxX,
                 spacing,
-                preferredOffset,
-                settings.ShiftAllForAvoidance ? intervals : null,
-                settings.OptimizationMode,
-                sampleStep: Math.Max(1.0, Math.Min(10.0, spacing / 20.0)));
-            if (result == null) return Array.Empty<double>();
+                preferredOffset);
 
-            if (!settings.UseAvoidance || intervals.Count == 0 ||
-                (settings.ShiftAllForAvoidance && result.IsClear))
-                return result.Positions;
-
-            // XP avoidance must keep the original V6.7.2 repair semantics even when
-            // a Pro optimization profile is active. Pro may try a whole-grid offset first,
-            // but if that cannot clear every selected XP/general obstacle, the fallback is
-            // the Lisp absolute-WCS adjust-grid (not the XC phase-preserving repair).
             var repaired = LegacyGridAvoidance.AdjustGridAbsoluteLisp(
-                result.Positions,
+                ideal,
                 intervals,
                 domain.MinX,
                 domain.MaxX,
@@ -299,7 +343,28 @@ namespace HNL.VXT.Core.Preview
                 0.0,
                 spacing,
                 spacing);
-            return repaired.Count > 0 ? repaired : result.Positions;
+            return repaired.Count > 0 ? repaired : ideal;
+        }
+
+        private static IReadOnlyList<double> BuildLegacyFurringPositions(
+            double minLimit,
+            double maxLimit,
+            double spacing,
+            double offset)
+        {
+            var result = new List<double>();
+            var value = minLimit + offset;
+
+            // Mirrors draw_bars/do_draw_line for XP: the generated series starts at offset_xp,
+            // but members on the boundary tolerance itself are not materialized.
+            while (value < maxLimit - 2.0 + Eps)
+            {
+                if (value > minLimit + 2.0)
+                    result.Add(value);
+                value += spacing;
+            }
+
+            return result;
         }
 
         private static List<Point2> BuildHangerRow(
