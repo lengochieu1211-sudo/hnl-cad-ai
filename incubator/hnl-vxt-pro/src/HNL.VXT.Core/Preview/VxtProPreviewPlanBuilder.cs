@@ -158,7 +158,7 @@ namespace HNL.VXT.Core.Preview
             var furringCoords = new List<double>();
             if (settings.DrawFurring)
             {
-                var furringGrid = BuildFurringGrid(domain, settings, furringObstacles, furringFromFarEdge);
+                var furringGrid = BuildFurringGrid(domain, localPolygon, settings, furringObstacles, furringFromFarEdge);
                 foreach (var x in furringGrid)
                 {
                     if (x <= domain.MinX + 2.0 || x >= domain.MaxX - 2.0) continue;
@@ -281,6 +281,7 @@ namespace HNL.VXT.Core.Preview
 
         private static IReadOnlyList<double> BuildFurringGrid(
             Box2 domain,
+            IReadOnlyList<Point2> localPolygon,
             VxtSettings settings,
             List<Box2> obstacles,
             bool fromFarEdge)
@@ -349,8 +350,8 @@ namespace HNL.VXT.Core.Preview
                 ideal,
                 repaired,
                 intervals,
-                domain.MinX,
-                domain.MaxX,
+                localPolygon,
+                domain,
                 spacing);
         }
 
@@ -358,8 +359,8 @@ namespace HNL.VXT.Core.Preview
             IReadOnlyList<double> ideal,
             IReadOnlyList<double> repaired,
             IReadOnlyList<Tuple<double, double>> intervals,
-            double minLimit,
-            double maxLimit,
+            IReadOnlyList<Point2> localPolygon,
+            Box2 domain,
             double spacing)
         {
             if (ideal == null || repaired == null || ideal.Count == 0 || repaired.Count == 0)
@@ -367,8 +368,16 @@ namespace HNL.VXT.Core.Preview
 
             const double drawTolerance = 2.0;
             const double coordinateTolerance = 0.01;
+            var minLimit = domain.MinX;
+            var maxLimit = domain.MaxX;
+
+            var targetCount = ideal
+                .Where(x => IsDrawableFurringCoordinate(localPolygon, domain, x))
+                .Count();
+
             var drawableDistinct = repaired
                 .Where(x => x > minLimit + drawTolerance && x < maxLimit - drawTolerance)
+                .Where(x => IsDrawableFurringCoordinate(localPolygon, domain, x))
                 .OrderBy(x => x)
                 .Aggregate(
                     new List<double>(),
@@ -379,23 +388,27 @@ namespace HNL.VXT.Core.Preview
                         return acc;
                     });
 
-            // Normal Lisp result: same number of distinct drawable XP rows. Leave it untouched
-            // so known field fixtures (including ne xcxp.dxf) stay byte-for-byte coordinate-compatible.
-            if (drawableDistinct.Count >= ideal.Count)
+            // Normal Lisp result: same number of distinct XP rows that really intersect the
+            // current polygon/region. Leave it untouched so known field fixtures (including
+            // ne xcxp.dxf) stay coordinate-compatible.
+            if (drawableDistinct.Count >= targetCount)
                 return repaired;
 
-            // Rare fallback: V6.7.2 adjust-grid can push two fixed-step XP coordinates onto the
-            // same absolute lattice position. AutoCAD then draws overlapping members and the user
-            // sees one XP row "missing". Keep the Lisp absolute-WCS lattice, but assign the original
-            // member count to distinct lattice slots, preferring clear slots and minimum movement.
+            // Rare fallback: adjust-grid can push two coordinates onto one lattice slot, or push
+            // a repaired row into a concave void where it no longer intersects the ceiling. Keep
+            // the Lisp absolute-WCS lattice, but choose distinct slots that actually cut the active
+            // polygon, preferring clear slots and minimum movement.
             var firstIndex = (long)Math.Ceiling((minLimit + drawTolerance + coordinateTolerance) / spacing);
             var lastIndex = (long)Math.Floor((maxLimit - drawTolerance - coordinateTolerance) / spacing);
             var slots = new List<double>();
             for (var k = firstIndex; k <= lastIndex; k++)
-                slots.Add(k * spacing);
+            {
+                var x = k * spacing;
+                if (IsDrawableFurringCoordinate(localPolygon, domain, x))
+                    slots.Add(x);
+            }
 
-            var targetCount = ideal.Count;
-            if (slots.Count < targetCount)
+            if (targetCount <= 0 || slots.Count < targetCount)
                 return repaired;
 
             var n = targetCount;
@@ -467,6 +480,23 @@ namespace HNL.VXT.Core.Preview
             }
 
             return selected;
+        }
+
+        private static bool IsDrawableFurringCoordinate(
+            IReadOnlyList<Point2> localPolygon,
+            Box2 domain,
+            double x)
+        {
+            if (localPolygon == null || localPolygon.Count < 3) return false;
+            if (x <= domain.MinX + 2.0 || x >= domain.MaxX - 2.0) return false;
+
+            foreach (var raw in PolygonScanline.ClipVertical(localPolygon, x))
+            {
+                Segment2 segment;
+                if (TryTrimVertical(raw, domain, out segment))
+                    return true;
+            }
+            return false;
         }
 
         private static IReadOnlyList<double> BuildLegacyFurringPositions(
