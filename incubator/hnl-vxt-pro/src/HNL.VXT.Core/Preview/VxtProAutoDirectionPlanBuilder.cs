@@ -10,7 +10,8 @@ namespace HNL.VXT.Core.Preview
     /// <summary>
     /// Pro-only Auto direction search. Legacy Auto remains untouched.
     /// Candidate angles come from dominant polygon edges, their perpendiculars, and 0/90.
-    /// Each candidate is solved by the normal Pro builder and scored after concave post-process.
+    /// Each candidate is solved by the normal Pro builder. Concave post-process is opt-in and
+    /// runs only when "Thêm XC cạnh khuyết" is enabled.
     ///
     /// Pro optimization must not silently rotate the construction direction just to improve
     /// material score. When legal/clear candidates exist, Auto stays on the natural polygon axis
@@ -66,8 +67,11 @@ namespace HNL.VXT.Core.Preview
                     candidateSettings.DirectionDegrees = angle;
 
                     var plan = new VxtProPreviewPlanBuilder().Build(boundary, candidateSettings, context);
-                    VxtConcaveMainPostProcessor.Apply(boundary, candidateSettings, context, plan);
-                    VxtPostProcessDimensionSynchronizer.Synchronize(boundary, candidateSettings, plan, angle);
+                    if (candidateSettings.UseLocalMainAdd)
+                    {
+                        VxtConcaveMainPostProcessor.Apply(boundary, candidateSettings, context, plan);
+                        VxtPostProcessDimensionSynchronizer.Synchronize(boundary, candidateSettings, plan, angle);
+                    }
                     var quality = VxtProPlanQualityEvaluator.Evaluate(
                         plan, candidateSettings, context, angle, angles.Count);
                     plan.Quality = quality;
@@ -93,8 +97,11 @@ namespace HNL.VXT.Core.Preview
                 fallbackSettings.MainDirection = MainDirectionMode.TwoPoints;
                 fallbackSettings.DirectionDegrees = legacyAngle;
                 var fallback = new VxtProPreviewPlanBuilder().Build(boundary, fallbackSettings, context);
-                VxtConcaveMainPostProcessor.Apply(boundary, fallbackSettings, context, fallback);
-                VxtPostProcessDimensionSynchronizer.Synchronize(boundary, fallbackSettings, fallback, legacyAngle);
+                if (fallbackSettings.UseLocalMainAdd)
+                {
+                    VxtConcaveMainPostProcessor.Apply(boundary, fallbackSettings, context, fallback);
+                    VxtPostProcessDimensionSynchronizer.Synchronize(boundary, fallbackSettings, fallback, legacyAngle);
+                }
                 fallback.Quality = VxtProPlanQualityEvaluator.Evaluate(
                     fallback, fallbackSettings, context, legacyAngle, 1);
                 VxtProPlanQualityEvaluator.AttachCompactPreviewLabel(boundary, fallback);
