@@ -30,7 +30,7 @@ namespace HNL.VXT.AutoCAD
                 var rotated = CheckRotatedRectangle();
                 var stable = CheckStableAutoOrientation();
                 var concave = CheckConcaveCeiling();
-                var mep = CheckMepAvoidance();
+                var mep = CheckMepAvoidanceMatrix();
                 var legacy = CheckLegacyIsolation();
 
                 var summary = "PASS Pro Auto QA: HCN xoay=" + rotated +
@@ -134,20 +134,110 @@ namespace HNL.VXT.AutoCAD
             return "XC" + plan.MainSegmentCount + "/XP" + plan.FurringSegmentCount + "/Ty" + plan.HangerCount;
         }
 
-        private static string CheckMepAvoidance()
+        private enum RuntimeMepScope
+        {
+            General,
+            Main,
+            Furring
+        }
+
+        private static string CheckMepAvoidanceMatrix()
+        {
+            var cases = new[]
+            {
+                CheckMepCase(RuntimeMepScope.General, true),
+                CheckMepCase(RuntimeMepScope.General, false),
+                CheckMepCase(RuntimeMepScope.Main, true),
+                CheckMepCase(RuntimeMepScope.Main, false),
+                CheckMepCase(RuntimeMepScope.Furring, true),
+                CheckMepCase(RuntimeMepScope.Furring, false)
+            };
+
+            return "6/6 " + string.Join(", ", cases);
+        }
+
+        private static string CheckMepCase(RuntimeMepScope scope, bool shiftAll)
         {
             var settings = BaseSettings(VxtOptimizationMode.ProEconomy);
             settings.MainDirection = MainDirectionMode.Horizontal;
+            settings.DrawMain = true;
+            settings.DrawFurring = true;
             settings.UseAvoidance = true;
-            settings.ShiftAllForAvoidance = true;
+            settings.ShiftAllForAvoidance = shiftAll;
             settings.ClearanceDistance = 0.0;
+
+            var boundary = Rectangle(6000.0, 4100.0);
+            var baseline = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, settings, new VxtLayoutContext());
+
+            if (baseline.MainSegmentCount <= 0 || baseline.FurringSegmentCount <= 0)
+                throw new InvalidOperationException("MEP matrix baseline không có đủ XC/XP.");
+
             var context = new VxtLayoutContext();
-            context.MainObstacles.Add(new Box2(0.0, 325.0, 6000.0, 375.0));
-            var plan = VxtMultiBoundaryPlanBuilder.Build(
-                new[] { Rectangle(6000.0, 4100.0) }, settings, context);
-            if (plan.Quality == null || plan.Quality.CollisionCount != 0 || plan.Quality.QualityScore100 != 100)
-                throw new InvalidOperationException("Quality gate phát hiện va chạm MEP sau khi có phương án dịch hợp lệ.");
-            return "Q100/VC0";
+            switch (scope)
+            {
+                case RuntimeMepScope.General:
+                    // Small box intersects one baseline XC row and one baseline XP row, so this
+                    // single case exercises both routing paths without creating an impossible band.
+                    context.GeneralObstacles.Add(new Box2(390.0, 325.0, 425.0, 375.0));
+                    break;
+                case RuntimeMepScope.Main:
+                    context.MainObstacles.Add(new Box2(1000.0, 325.0, 1200.0, 375.0));
+                    break;
+                case RuntimeMepScope.Furring:
+                    context.FurringObstacles.Add(new Box2(390.0, 1000.0, 425.0, 1200.0));
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(scope));
+            }
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, settings, context);
+            if (plan.Quality == null)
+                throw new InvalidOperationException("MEP matrix thiếu Quality telemetry.");
+
+            if (plan.Quality.CollisionCount != 0 ||
+                plan.Quality.MainCollisionCount != 0 ||
+                plan.Quality.FurringCollisionCount != 0)
+            {
+                throw new InvalidOperationException(
+                    "MEP " + scope + " ShiftAll=" + (shiftAll ? "ON" : "OFF") +
+                    " còn va chạm: VC=" + plan.Quality.CollisionCount +
+                    ", XC=" + plan.Quality.MainCollisionCount +
+                    ", XP=" + plan.Quality.FurringCollisionCount + ".");
+            }
+
+            if (plan.MainSegmentCount != baseline.MainSegmentCount)
+                throw new InvalidOperationException(
+                    "MEP " + scope + " ShiftAll=" + (shiftAll ? "ON" : "OFF") +
+                    " làm đổi số XC " + baseline.MainSegmentCount + " -> " + plan.MainSegmentCount + ".");
+
+            if (plan.FurringSegmentCount != baseline.FurringSegmentCount)
+                throw new InvalidOperationException(
+                    "MEP " + scope + " ShiftAll=" + (shiftAll ? "ON" : "OFF") +
+                    " làm đổi số XP " + baseline.FurringSegmentCount + " -> " + plan.FurringSegmentCount + ".");
+
+            var furringLines = plan.Lines.Where(x => x.Kind == PreviewLineKind.Furring).ToList();
+            var distinctFurringAxes = furringLines
+                .Select(x => Math.Round((x.A.X + x.B.X) * 0.5, 3))
+                .Distinct()
+                .Count();
+            if (distinctFurringAxes != furringLines.Count)
+                throw new InvalidOperationException(
+                    "MEP " + scope + " ShiftAll=" + (shiftAll ? "ON" : "OFF") +
+                    " tạo XP trùng tọa độ.");
+
+            var mainLines = plan.Lines.Where(x => x.Kind == PreviewLineKind.Main).ToList();
+            var distinctMainAxes = mainLines
+                .Select(x => Math.Round((x.A.Y + x.B.Y) * 0.5, 3))
+                .Distinct()
+                .Count();
+            if (distinctMainAxes != mainLines.Count)
+                throw new InvalidOperationException(
+                    "MEP " + scope + " ShiftAll=" + (shiftAll ? "ON" : "OFF") +
+                    " tạo XC trùng tọa độ.");
+
+            return scope + "-" + (shiftAll ? "ON" : "OFF") +
+                   ":XC" + plan.MainSegmentCount + "/XP" + plan.FurringSegmentCount;
         }
 
         private static string CheckLegacyIsolation()
