@@ -12,8 +12,8 @@ namespace HNL.VXT.Core.Preview
     ///
     /// Construction contract:
     /// - the normal/global XC grid is solved first;
-    /// - before adding local bars, the whole XC grid may translate together by the smallest
-    ///   amount that makes all real ceiling bands satisfy their Min/Max edge limits;
+    /// - the normal/global XC grid is immutable in this pass: no translation, re-phase or
+    ///   replacement is allowed;
     /// - a local XC is added only when a real notch band would otherwise violate MaxEdge or
     ///   MainMaxSpacing;
     /// - a required local edge XC may be closer than MainMinSpacing to a neighbouring global XC;

@@ -116,8 +116,8 @@ namespace HNL.VXT.Core.Preview
                         var part = new VxtProPreviewPlanBuilder().Build(boundaries[i], candidateSettings, context);
                         if (candidateSettings.UseLocalMainAdd)
                         {
-                            VxtConcaveMainPostProcessor.Apply(boundaries[i], candidateSettings, context, part);
-                            VxtPostProcessDimensionSynchronizer.Synchronize(boundaries[i], candidateSettings, part, angle);
+                            VxtLocalMainSpacingSafety.Apply(boundaries[i], part, candidateSettings, angle, context);
+                            VxtPostProcessDimensionSynchronizer.Synchronize(boundaries[i], candidateSettings, context, part, angle);
                         }
                         part.Quality = VxtProPlanQualityEvaluator.Evaluate(part, candidateSettings, context, angle, 1);
                         parts.Add(part);

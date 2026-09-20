@@ -57,11 +57,8 @@ namespace HNL.VXT.Core.Preview
                     // decomposition, no local XC add, and therefore no secondary Ty redistribution.
                     if (settings.UseLocalMainAdd)
                     {
-                        // Automatic notch handling is intentionally two-stage:
-                        // 1) global/rebalance/extend with automatic local/regional fallback disabled;
-                        // 2) add only the short local XC that a real MaxEdge/MaxSpacing violation needs.
-                        VxtConcaveMainPostProcessor.Apply(
-                            boundary, GlobalNotchBaseSettings(settings), boundaryContext, part);
+                        // Local-notch ON must preserve the normal XC grid exactly and may only add
+                        // the minimum short XC required by real MaxEdge/MainMaxSpacing violations.
                         VxtLocalMainSpacingSafety.Apply(
                             boundary, part, settings, angle, boundaryContext);
                         VxtPostProcessDimensionSynchronizer.Synchronize(
@@ -80,8 +77,6 @@ namespace HNL.VXT.Core.Preview
                     var angle = ResolveDirectionDegrees(settings, boundary);
                     if (settings.UseLocalMainAdd)
                     {
-                        VxtConcaveMainPostProcessor.Apply(
-                            boundary, GlobalNotchBaseSettings(settings), boundaryContext, part);
                         VxtLocalMainSpacingSafety.Apply(
                             boundary, part, settings, angle, boundaryContext);
                         VxtPostProcessDimensionSynchronizer.Synchronize(
