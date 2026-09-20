@@ -228,18 +228,19 @@ namespace HNL.VXT.UI.Views
         private static void SurfaceLayerAndDimPanel(VxtPaletteView view)
         {
             var layerTitle =
+                FindText(view, "Layer & hiển thị") ??
                 FindText(view, "LAYER & HIỂN THỊ") ??
                 FindText(view, "CÀI ĐẶT LAYER & DIM") ??
                 FindText(view, "LAYER & KIỂU NÉT") ??
                 FindText(view, "LAYER & DIM");
             if (layerTitle == null) return;
 
-            layerTitle.Text = "LAYER & HIỂN THỊ";
+            layerTitle.Text = "Layer & hiển thị";
             var layerExpander = Ancestor<Expander>(layerTitle);
             if (layerExpander != null) layerExpander.IsExpanded = false;
 
             var layerCard = AncestorBorderOwnedByStack(layerTitle);
-            var dimTitle = FindText(view, "KÍCH THƯỚC DIM");
+            var dimTitle = FindText(view, "Kích thước DIM") ?? FindText(view, "KÍCH THƯỚC DIM");
             var dimCard = AncestorBorderOwnedByStack(dimTitle);
             var stack = layerCard?.Parent as StackPanel;
             if (stack == null || dimCard == null || !ReferenceEquals(dimCard.Parent, stack)) return;
