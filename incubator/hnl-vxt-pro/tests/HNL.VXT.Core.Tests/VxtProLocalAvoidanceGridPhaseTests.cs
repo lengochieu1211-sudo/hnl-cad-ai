@@ -80,6 +80,79 @@ namespace HNL.VXT.Core.Tests
             }
         }
 
+        [TestMethod]
+        public void ProEconomy_ShiftAllOn_UsesWholeGridWhenLegal_AndDiffersFromLocalOff()
+        {
+            var found = false;
+            foreach (var height in new[] { 4100.0, 4200.0, 4300.0, 4400.0, 4500.0, 4600.0 })
+            {
+                var baseSettings = new VxtSettings
+                {
+                    OptimizationMode = VxtOptimizationMode.ProEconomy,
+                    MainDirection = MainDirectionMode.Horizontal,
+                    DrawMain = true,
+                    DrawFurring = false,
+                    DrawHangers = false,
+                    AutoDimension = false,
+                    UseAvoidance = true,
+                    ClearanceDistance = 0.0,
+                    MainMinSpacing = 700.0,
+                    MainMaxSpacing = 1000.0,
+                    MainMinEdgeOffset = 300.0,
+                    MainMaxEdgeOffset = 400.0,
+                    MainEdgeTolerance = 25.0,
+                    MainBalanceStep = 50.0
+                };
+
+                var boundary = new Boundary2(new[]
+                {
+                    new Point2(0.0, 0.0),
+                    new Point2(6000.0, 0.0),
+                    new Point2(6000.0, height),
+                    new Point2(0.0, height)
+                });
+
+                var baselineSettings = baseSettings.Clone();
+                baselineSettings.UseAvoidance = false;
+                var baseline = VxtMultiBoundaryPlanBuilder.Build(
+                    new[] { boundary }, baselineSettings, new VxtLayoutContext());
+                var baselineYs = MainYs(baseline);
+                if (baselineYs.Length < 3) continue;
+
+                var hit = baselineYs[baselineYs.Length / 2];
+                var context = new VxtLayoutContext();
+                context.MainObstacles.Add(new Box2(0.0, hit - 10.0, 6000.0, hit + 10.0));
+
+                var offSettings = baseSettings.Clone();
+                offSettings.ShiftAllForAvoidance = false;
+                var onSettings = baseSettings.Clone();
+                onSettings.ShiftAllForAvoidance = true;
+
+                var offYs = MainYs(VxtMultiBoundaryPlanBuilder.Build(
+                    new[] { boundary }, offSettings, context));
+                var onYs = MainYs(VxtMultiBoundaryPlanBuilder.Build(
+                    new[] { boundary }, onSettings, context));
+
+                if (offYs.Length != baselineYs.Length || onYs.Length != baselineYs.Length) continue;
+                if (offYs.SequenceEqual(onYs)) continue;
+
+                var deltas = onYs.Zip(baselineYs, (y, b) => y - b).ToArray();
+                var wholeGrid = deltas.All(d => Math.Abs(d - deltas[0]) <= 1e-6) &&
+                                Math.Abs(deltas[0]) >= baseSettings.MainBalanceStep - 1e-6;
+                if (!wholeGrid) continue;
+
+                Assert.IsTrue(onYs.All(y => y <= hit - 10.0 + 0.1 || y >= hit + 10.0 - 0.1),
+                    "ShiftAll ON whole-grid solution must be MEP clear.");
+                Assert.IsTrue(offYs.All(y => y <= hit - 10.0 + 0.1 || y >= hit + 10.0 - 0.1),
+                    "ShiftAll OFF local repair must also be MEP clear.");
+                found = true;
+                break;
+            }
+
+            Assert.IsTrue(found,
+                "At least one legal fixture must prove that ShiftAll ON performs a real whole-grid move while OFF remains local.");
+        }
+
         private static double[] MainYs(VxtPreviewPlan plan)
             => plan.Lines
                 .Where(x => x.Kind == PreviewLineKind.Main)

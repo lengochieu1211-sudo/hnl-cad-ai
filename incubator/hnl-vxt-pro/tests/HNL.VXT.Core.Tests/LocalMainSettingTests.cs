@@ -28,7 +28,7 @@ namespace HNL.VXT.Core.Tests
             };
             var disabled = enabled.Clone();
             disabled.UseLocalMainAdd = false;
-            var boundary = LowerLeftNotch();
+            var boundary = LowerLeftNotchUsefulSeparation();
 
             var enabledPlan = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { boundary }, enabled, new VxtLayoutContext());
@@ -171,6 +171,17 @@ namespace HNL.VXT.Core.Tests
                     return Math.Abs(y - 1800.0) < 0.1 && length > 2400.0 && length < 2600.0;
                 });
         }
+
+        private static Boundary2 LowerLeftNotchUsefulSeparation()
+            => new Boundary2(new[]
+            {
+                new Point2(0, 1300),
+                new Point2(2500, 1300),
+                new Point2(2500, 0),
+                new Point2(6000, 0),
+                new Point2(6000, 4000),
+                new Point2(0, 4000)
+            });
 
         private static Boundary2 LowerLeftNotch()
             => new Boundary2(new[]
