@@ -343,7 +343,130 @@ namespace HNL.VXT.Core.Preview
                 0.0,
                 spacing,
                 spacing);
-            return repaired.Count > 0 ? repaired : ideal;
+            if (repaired.Count == 0) return ideal;
+
+            return PreserveFurringMemberCount(
+                ideal,
+                repaired,
+                intervals,
+                domain.MinX,
+                domain.MaxX,
+                spacing);
+        }
+
+        private static IReadOnlyList<double> PreserveFurringMemberCount(
+            IReadOnlyList<double> ideal,
+            IReadOnlyList<double> repaired,
+            IReadOnlyList<Tuple<double, double>> intervals,
+            double minLimit,
+            double maxLimit,
+            double spacing)
+        {
+            if (ideal == null || repaired == null || ideal.Count == 0 || repaired.Count == 0)
+                return repaired ?? ideal ?? Array.Empty<double>();
+
+            const double drawTolerance = 2.0;
+            const double coordinateTolerance = 0.01;
+            var drawableDistinct = repaired
+                .Where(x => x > minLimit + drawTolerance && x < maxLimit - drawTolerance)
+                .OrderBy(x => x)
+                .Aggregate(
+                    new List<double>(),
+                    (acc, x) =>
+                    {
+                        if (acc.Count == 0 || Math.Abs(acc[acc.Count - 1] - x) > coordinateTolerance)
+                            acc.Add(x);
+                        return acc;
+                    });
+
+            // Normal Lisp result: same number of distinct drawable XP rows. Leave it untouched
+            // so known field fixtures (including ne xcxp.dxf) stay byte-for-byte coordinate-compatible.
+            if (drawableDistinct.Count >= ideal.Count)
+                return repaired;
+
+            // Rare fallback: V6.7.2 adjust-grid can push two fixed-step XP coordinates onto the
+            // same absolute lattice position. AutoCAD then draws overlapping members and the user
+            // sees one XP row "missing". Keep the Lisp absolute-WCS lattice, but assign the original
+            // member count to distinct lattice slots, preferring clear slots and minimum movement.
+            var firstIndex = (long)Math.Ceiling((minLimit + drawTolerance + coordinateTolerance) / spacing);
+            var lastIndex = (long)Math.Floor((maxLimit - drawTolerance - coordinateTolerance) / spacing);
+            var slots = new List<double>();
+            for (var k = firstIndex; k <= lastIndex; k++)
+                slots.Add(k * spacing);
+
+            var targetCount = ideal.Count;
+            if (slots.Count < targetCount)
+                return repaired;
+
+            var n = targetCount;
+            var m = slots.Count;
+            var previous = new int[n, m];
+            var dp = new double[n, m];
+            const double infinity = 1.0e300;
+
+            for (var i = 0; i < n; i++)
+                for (var j = 0; j < m; j++)
+                {
+                    dp[i, j] = infinity;
+                    previous[i, j] = -1;
+                }
+
+            double Cost(int memberIndex, double x)
+            {
+                var collision = (intervals ?? Array.Empty<Tuple<double, double>>())
+                    .Any(box => box != null && x > box.Item1 + 0.1 && x < box.Item2 - 0.1);
+                var collisionPenalty = collision ? 1.0e12 : 0.0;
+                var repairedReference = memberIndex < repaired.Count ? repaired[memberIndex] : ideal[memberIndex];
+                return collisionPenalty
+                     + Math.Abs(x - repairedReference) * 1000.0
+                     + Math.Abs(x - ideal[memberIndex]);
+            }
+
+            for (var j = 0; j < m; j++)
+                dp[0, j] = Cost(0, slots[j]);
+
+            for (var i = 1; i < n; i++)
+            {
+                var best = infinity;
+                var bestIndex = -1;
+                for (var j = 0; j < m; j++)
+                {
+                    if (j > 0 && dp[i - 1, j - 1] < best)
+                    {
+                        best = dp[i - 1, j - 1];
+                        bestIndex = j - 1;
+                    }
+
+                    if (bestIndex >= 0 && m - j >= n - i)
+                    {
+                        dp[i, j] = best + Cost(i, slots[j]);
+                        previous[i, j] = bestIndex;
+                    }
+                }
+            }
+
+            var end = -1;
+            var endCost = infinity;
+            for (var j = n - 1; j < m; j++)
+            {
+                if (dp[n - 1, j] < endCost)
+                {
+                    endCost = dp[n - 1, j];
+                    end = j;
+                }
+            }
+            if (end < 0 || endCost >= infinity)
+                return repaired;
+
+            var selected = new double[n];
+            var cursor = end;
+            for (var i = n - 1; i >= 0; i--)
+            {
+                selected[i] = slots[cursor];
+                cursor = previous[i, cursor];
+            }
+
+            return selected;
         }
 
         private static IReadOnlyList<double> BuildLegacyFurringPositions(
