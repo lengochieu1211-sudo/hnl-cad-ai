@@ -112,6 +112,36 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void ProEconomy_GeneralAvoidance_ShiftAllOff_ClearsXpAndPreservesMemberCount()
+        {
+            var settings = GoldenSettings(VxtOptimizationMode.ProEconomy);
+            settings.AutoDimension = false;
+            settings.UseAvoidance = true;
+            settings.ShiftAllForAvoidance = false;
+            settings.ClearanceDistance = 0.0;
+            settings.MainDirection = MainDirectionMode.Horizontal;
+
+            var boundary = Rectangle(6000.0, 4100.0);
+            var baseline = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, settings, new VxtLayoutContext());
+
+            var context = new VxtLayoutContext();
+            context.GeneralObstacles.Add(new Box2(390.0, 325.0, 425.0, 375.0));
+            var plan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, settings, context);
+
+            Assert.IsNotNull(plan.Quality);
+            Assert.AreEqual(0, plan.Quality.FurringCollisionCount,
+                "ShiftAll OFF must locally move the colliding XP clear of General MEP.");
+            Assert.AreEqual(baseline.FurringSegmentCount, plan.FurringSegmentCount,
+                "Local XP repair must preserve the full XP member count.");
+            Assert.AreEqual(
+                plan.FurringSegmentCount,
+                FurringCoordinates(plan).Length,
+                "Local XP repair must not collapse two XP rows onto one axis.");
+        }
+
+        [TestMethod]
         public void ProEconomy_CombinedMainAndFurringAvoidance_AppliesBothIndependentEquipmentSets()
         {
             var settings = GoldenSettings(VxtOptimizationMode.ProEconomy);

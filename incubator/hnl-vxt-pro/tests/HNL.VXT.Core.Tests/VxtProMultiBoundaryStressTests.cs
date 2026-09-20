@@ -177,6 +177,8 @@ namespace HNL.VXT.Core.Tests
             Assert.AreEqual(0, plan.Quality.HardViolationCount);
             Assert.AreEqual(0, plan.Quality.MainCollisionCount,
                 "XC must remain clear after whole-grid/local repair and its dedicated final safety fallback.");
+            Assert.AreEqual(0, plan.Quality.FurringCollisionCount,
+                "XP must remain clear without fragmenting or deleting the V6.7.2 logical XP chain.");
             Assert.AreEqual(0, plan.Quality.HangerCollisionCount,
                 "Ty must remain clear in the dense-MEP fixture.");
             // ObstacleSplitFallbackCount is XC-only. XP integrity is verified below by

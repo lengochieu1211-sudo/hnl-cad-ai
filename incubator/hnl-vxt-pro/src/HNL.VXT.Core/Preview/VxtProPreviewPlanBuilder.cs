@@ -394,25 +394,43 @@ namespace HNL.VXT.Core.Preview
                         return acc;
                     });
 
-            // Normal Lisp result: same number of distinct XP rows that really intersect the
-            // current polygon/region. Leave it untouched so known field fixtures (including
-            // ne xcxp.dxf) stay coordinate-compatible.
-            if (drawableDistinct.Count >= targetCount)
+            bool IsClear(double x)
+                => !(intervals ?? Array.Empty<Tuple<double, double>>())
+                    .Any(box => box != null && x > box.Item1 + 0.1 && x < box.Item2 - 0.1);
+
+            // Keep the field-compatible repaired chain only when it is both complete and clear.
+            // The old early return checked count only, which allowed one or more XP rows to remain
+            // inside MEP bands (Runtime QA: General ShiftAll=OFF and dense-MEP stress).
+            if (drawableDistinct.Count >= targetCount && drawableDistinct.All(IsClear))
                 return repaired;
 
-            // Rare fallback: adjust-grid can push two coordinates onto one lattice slot, or push
-            // a repaired row into a concave void where it no longer intersects the ceiling. Keep
-            // the Lisp absolute-WCS lattice, but choose distinct slots that actually cut the active
-            // polygon, preferring clear slots and minimum movement.
+            // Recovery keeps the complete XP chain and never fragments a member. Start with the
+            // original absolute-WCS lattice, then add the original/repaired coordinates and safe
+            // obstacle-edge candidates. Dynamic programming picks targetCount distinct clear rows
+            // with minimum movement from the normal XP chain.
+            var slotSet = new HashSet<double>(new DoubleToleranceComparer());
             var firstIndex = (long)Math.Ceiling((minLimit + drawTolerance + coordinateTolerance) / spacing);
             var lastIndex = (long)Math.Floor((maxLimit - drawTolerance - coordinateTolerance) / spacing);
-            var slots = new List<double>();
             for (var k = firstIndex; k <= lastIndex; k++)
+                slotSet.Add(k * spacing);
+
+            foreach (var x in ideal ?? Array.Empty<double>()) slotSet.Add(x);
+            foreach (var x in repaired ?? Array.Empty<double>()) slotSet.Add(x);
+
+            const double safeMargin = 0.2;
+            foreach (var box in intervals ?? Array.Empty<Tuple<double, double>>())
             {
-                var x = k * spacing;
-                if (IsDrawableFurringCoordinate(localPolygon, domain, x))
-                    slots.Add(x);
+                if (box == null) continue;
+                slotSet.Add(Math.Min(box.Item1, box.Item2) - safeMargin);
+                slotSet.Add(Math.Max(box.Item1, box.Item2) + safeMargin);
             }
+
+            var slots = slotSet
+                .Where(x => x > minLimit + drawTolerance && x < maxLimit - drawTolerance)
+                .Where(x => IsDrawableFurringCoordinate(localPolygon, domain, x))
+                .Where(IsClear)
+                .OrderBy(x => x)
+                .ToList();
 
             if (targetCount <= 0 || slots.Count < targetCount)
                 return repaired;
@@ -432,12 +450,8 @@ namespace HNL.VXT.Core.Preview
 
             double Cost(int memberIndex, double x)
             {
-                var collision = (intervals ?? Array.Empty<Tuple<double, double>>())
-                    .Any(box => box != null && x > box.Item1 + 0.1 && x < box.Item2 - 0.1);
-                var collisionPenalty = collision ? 1.0e12 : 0.0;
                 var repairedReference = memberIndex < repaired.Count ? repaired[memberIndex] : ideal[memberIndex];
-                return collisionPenalty
-                     + Math.Abs(x - repairedReference) * 1000.0
+                return Math.Abs(x - repairedReference) * 1000.0
                      + Math.Abs(x - ideal[memberIndex]);
             }
 
@@ -485,7 +499,22 @@ namespace HNL.VXT.Core.Preview
                 cursor = previous[i, cursor];
             }
 
+            // Never return a recovered chain that still contains a collision or duplicate.
+            // If no fully clear same-count chain exists, keep the legacy repaired result visible so
+            // Quality/QA can report the impossible condition instead of silently deleting XP.
+            if (selected.Any(x => !IsClear(x)))
+                return repaired;
+            for (var i = 1; i < selected.Length; i++)
+                if (selected[i] - selected[i - 1] <= coordinateTolerance)
+                    return repaired;
+
             return selected;
+        }
+
+        private sealed class DoubleToleranceComparer : IEqualityComparer<double>
+        {
+            public bool Equals(double x, double y) => Math.Abs(x - y) <= 1e-6;
+            public int GetHashCode(double obj) => Math.Round(obj, 6).GetHashCode();
         }
 
         private static bool IsDrawableFurringCoordinate(
