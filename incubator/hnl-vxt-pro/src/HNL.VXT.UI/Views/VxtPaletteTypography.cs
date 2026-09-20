@@ -24,7 +24,7 @@ namespace HNL.VXT.UI.Views
         private const double ProductTitleSize = 13.0;
         private const double SectionTitleSize = 12.0;
         private const double BodySize = 12.0;
-        private const double PrimaryActionSize = 12.0;
+        private const double PrimaryActionSize = SectionTitleSize;
         private const double HintSize = 11.0;
         private const double VersionSize = 10.5;
 
@@ -38,7 +38,7 @@ namespace HNL.VXT.UI.Views
                 { "TY TREO", "Ty treo" },
                 { "NÉ THIẾT BỊ", "Né thiết bị" },
                 { "NÉ THIẾT BỊ MEP", "Né thiết bị MEP" },
-                { "KÍCH THƯỚC DIM", "DIM" },
+                { "KÍCH THƯỚC DIM", "Kích thước DIM" },
                 { "CÀI ĐẶT LAYER & DIM", "Cài đặt Layer & DIM" },
                 { "LAYER & DIM", "Layer & DIM" },
                 { "LAYER & HIỂN THỊ", "Layer & hiển thị" },
@@ -46,7 +46,8 @@ namespace HNL.VXT.UI.Views
                 { "XEM TRƯỚC TRÊN BẢN VẼ", "Xem trước trên bản vẽ" },
                 { "PHÂN TÍCH & KIỂM TRA LỖI", "Phân tích & kiểm tra lỗi" },
                 { "GIAO DIỆN", "Giao diện" },
-                { "CHẾ ĐỘ TỐI ƯU", "Chế độ tối ưu" }
+                { "CHẾ ĐỘ TỐI ƯU", "Chế độ tối ưu" },
+                { "CHẨN ĐOÁN", "Chẩn đoán" }
             };
 
         public static void Apply(VxtPaletteView view)
