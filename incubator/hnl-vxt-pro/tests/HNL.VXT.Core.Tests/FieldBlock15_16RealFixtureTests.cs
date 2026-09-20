@@ -50,6 +50,7 @@ namespace HNL.VXT.Core.Tests
 
             Assert.IsTrue(onPlan.MainSegmentCount >= offPlan.MainSegmentCount,
                 "Local-edge ON may add short XC required by MaxEdge/MaxSpacing, but must never lose the continuous OFF base grid.");
+            AssertBaseMainGeometryPreserved(offPlan, onPlan);
 
             AssertEverySubMinPairIsHardMaxJustified(onPlan, boundaries, enabled);
             Assert.IsTrue(offPlan.MainSegmentCount > 0);
@@ -133,6 +134,24 @@ namespace HNL.VXT.Core.Tests
                     new Point2(783445.4001939078, -11765.6080526812)
                 })
             };
+
+        private static void AssertBaseMainGeometryPreserved(VxtPreviewPlan offPlan, VxtPreviewPlan onPlan)
+        {
+            var baseline = MainRecords(offPlan);
+            var actual = MainRecords(onPlan);
+
+            foreach (var expected in baseline)
+            {
+                Assert.IsTrue(actual.Any(candidate =>
+                    Math.Abs(candidate.Y - expected.Y) <= 0.5 &&
+                    Math.Abs(candidate.X1 - expected.X1) <= 0.5 &&
+                    Math.Abs(candidate.X2 - expected.X2) <= 0.5),
+                    "Bật 'Thêm XC cạnh khuyết' chỉ được thêm XC cục bộ; không được dịch, thay pha hoặc làm mất XC nền. " +
+                    "Thiếu XC nền Y=" + expected.Y.ToString("0.###") +
+                    ", X1=" + expected.X1.ToString("0.###") +
+                    ", X2=" + expected.X2.ToString("0.###"));
+            }
+        }
 
         private static int CountJustifiedSubMinPairs(VxtPreviewPlan plan, IReadOnlyList<Boundary2> boundaries, VxtSettings settings)
         {
