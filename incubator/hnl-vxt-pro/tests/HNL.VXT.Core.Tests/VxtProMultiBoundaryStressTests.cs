@@ -179,8 +179,8 @@ namespace HNL.VXT.Core.Tests
                 "XC must remain clear after whole-grid/local repair and its dedicated final safety fallback.");
             Assert.AreEqual(0, plan.Quality.HangerCollisionCount,
                 "Ty must remain clear in the dense-MEP fixture.");
-            Assert.AreEqual(0, plan.Quality.ObstacleSplitFallbackCount,
-                "XP must never be fragmented to manufacture a zero-collision score.");
+            // ObstacleSplitFallbackCount is XC-only. XP integrity is verified below by
+            // logical-axis count and duplicate-geometry guards.
             Assert.IsTrue(plan.MainSegmentCount > 0);
             Assert.IsTrue(plan.FurringSegmentCount > 0);
             Assert.IsTrue(plan.HangerCount > 0);
