@@ -43,30 +43,6 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void SmartLayout_6550BalancedRun_DistributesRemainderAcrossGridInsteadOfPinningEdgesToMinimum()
-        {
-            var result = SmartLayout1D.Calculate(
-                6550.0,
-                maxSpacing: 1000.0,
-                minSpacing: 700.0,
-                maxEdge: 400.0,
-                minEdge: 300.0,
-                increment: 50.0,
-                mode: MainLayoutMode.BalancedTwoEnds);
-
-            Assert.IsNotNull(result);
-            Assert.AreEqual(350.0, result.StartOffset, 1e-8);
-            CollectionAssert.AreEqual(
-                new[] { 950.0, 1000.0, 950.0, 1000.0, 950.0, 1000.0 },
-                result.Steps.ToArray(),
-                "When one exact repeated step is impossible, the 50-mm remainder should be spread evenly instead of creating 300-mm edges and one isolated 950-mm bay.");
-            Assert.AreEqual(350.0, result.EndOffset, 1e-8);
-            CollectionAssert.AreEqual(
-                new[] { 350.0, 1300.0, 2300.0, 3250.0, 4250.0, 5200.0, 6200.0 },
-                result.Positions(0).ToArray());
-        }
-
-        [TestMethod]
         public void SmartLayout_ExactV67615ResultFor4000Run_Is300_850x4_300()
         {
             // V6.7.6.15 strict-multiple policy: use the minimum K first; within that K,

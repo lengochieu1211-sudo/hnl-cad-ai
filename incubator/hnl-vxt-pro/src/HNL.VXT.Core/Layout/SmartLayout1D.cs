@@ -149,11 +149,7 @@ namespace HNL.VXT.Core.Layout
 
                 var lower = Math.Max(k * minDiscrete, length - 2.0 * maxEdge);
                 var upper = Math.Min(k * maxDiscrete, length - 2.0 * minEdge);
-                var preferredTotalUnits = oneSided
-                    ? (int?)null
-                    : PreferredBalancedTotalUnits(length, minEdge, maxEdge, increment);
-                var totalUnits = SelectTotalUnits(
-                    lower, upper, increment, k, minUnits, maxUnits, preferredTotalUnits);
+                var totalUnits = SelectTotalUnits(lower, upper, increment, k, minUnits, maxUnits);
                 if (!totalUnits.HasValue) continue;
 
                 var unitSteps = BuildBalancedUnits(k, totalUnits.Value, minUnits, maxUnits);
@@ -198,11 +194,7 @@ namespace HNL.VXT.Core.Layout
 
                 var lower = Math.Max(k * increment, length - 2.0 * maxEdge);
                 var upper = Math.Min(k * maxDiscrete, length - 2.0 * minEdge);
-                var preferredTotalUnits = oneSided
-                    ? (int?)null
-                    : PreferredBalancedTotalUnits(length, minEdge, maxEdge, increment);
-                var totalUnits = SelectTotalUnits(
-                    lower, upper, increment, k, 1, maxUnits, preferredTotalUnits);
+                var totalUnits = SelectTotalUnits(lower, upper, increment, k, 1, maxUnits);
                 if (!totalUnits.HasValue) continue;
 
                 var unitSteps = BuildBalancedUnits(k, totalUnits.Value, 1, maxUnits);
@@ -253,8 +245,7 @@ namespace HNL.VXT.Core.Layout
             double increment,
             int k,
             int minUnits,
-            int maxUnits,
-            int? preferredTotalUnits = null)
+            int maxUnits)
         {
             if (increment <= 0.0 || k <= 0 || lower > upper + Tol) return null;
 
@@ -266,33 +257,7 @@ namespace HNL.VXT.Core.Layout
 
             var uniformLow = Math.Max(minUnits, LispFix((double)lo / k + 0.999999));
             var uniformHigh = Math.Min(maxUnits, LispFix((double)hi / k));
-
-            // Preserve the strongest result first: if one repeated exact-multiple step can satisfy
-            // the full run, keep the legacy near-Max uniform spacing unchanged.
-            if (uniformHigh >= uniformLow)
-                return k * uniformHigh;
-
-            // When an exactly uniform step is impossible, BalancedTwoEnds should not push both
-            // edges to Min merely to maximize the interior span. Prefer the legal total span whose
-            // leftover edge sum is closest to the midpoint of the configured Min/Max edge range,
-            // then BuildBalancedUnits distributes the two adjacent step sizes evenly.
-            if (preferredTotalUnits.HasValue)
-                return Math.Max(lo, Math.Min(hi, preferredTotalUnits.Value));
-
-            // OneSide / greedy behavior keeps the legacy economy-first choice.
-            return hi;
-        }
-
-        private static int PreferredBalancedTotalUnits(
-            double length,
-            double minEdge,
-            double maxEdge,
-            double increment)
-        {
-            if (increment <= Eps) return 0;
-            var targetEdge = (minEdge + maxEdge) * 0.5;
-            var targetSpan = Math.Max(0.0, length - 2.0 * targetEdge);
-            return LispFix(targetSpan / increment + 0.5);
+            return uniformHigh >= uniformLow ? k * uniformHigh : hi;
         }
 
         private static IReadOnlyList<int> BuildBalancedUnits(
