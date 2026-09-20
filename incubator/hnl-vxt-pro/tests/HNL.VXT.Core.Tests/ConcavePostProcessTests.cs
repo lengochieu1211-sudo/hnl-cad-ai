@@ -54,7 +54,7 @@ namespace HNL.VXT.Core.Tests
         {
             var enabled = new VxtSettings
             {
-                MainDirection = MainDirectionMode.RectangleRegions,
+                MainDirection = MainDirectionMode.Horizontal,
                 DrawFurring = false,
                 DrawHangers = true,
                 AutoDimension = true,
@@ -99,7 +99,7 @@ namespace HNL.VXT.Core.Tests
         {
             var enabled = new VxtSettings
             {
-                MainDirection = MainDirectionMode.RectangleRegions,
+                MainDirection = MainDirectionMode.Horizontal,
                 DrawFurring = false,
                 DrawHangers = true,
                 AutoDimension = true,
@@ -137,7 +137,7 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void RectangleRegion_ConcaveLocalFallbackRefreshesMainAndHangerDimensions()
+        public void RectangleRegion_LocalMainToggleDoesNotInjectAutomaticNotchGeometry()
         {
             var enabled = new VxtSettings
             {
@@ -165,20 +165,20 @@ namespace HNL.VXT.Core.Tests
             var onPlan = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { boundary }, enabled, onContext);
 
-            var local = AddedMainLines(offPlan, onPlan)
-                .OrderBy(x => Math.Abs(x.B.X - x.A.X))
-                .FirstOrDefault();
-            Assert.IsNotNull(local, "Rectangle-region fixture must add a local concave XC without replacing the base grid.");
-            var y = (local.A.Y + local.B.Y) * 0.5;
+            CollectionAssert.AreEqual(
+                offPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main).Select(LineKey).OrderBy(x => x).ToArray(),
+                onPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main).Select(LineKey).OrderBy(x => x).ToArray(),
+                "Manual HCN regions own their XC grids; automatic local-notch must not inject or re-phase XC.");
 
-            Assert.IsTrue(onPlan.HangerPoints.Any(p => Math.Abs(p.Y - y) < 0.1),
-                "Rectangle-region local XC must receive Ty.");
-            Assert.IsTrue(onPlan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&
-                (Math.Abs(d.ExtensionPoint1.Y - y) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - y) < 0.1)),
-                "Rectangle-region Dim Xương chính must include the added local XC.");
-            Assert.IsTrue(onPlan.Dimensions.Any(d => d.Target == DimensionTarget.Hanger &&
-                Math.Abs(d.ExtensionPoint1.Y - y) < 0.1 && Math.Abs(d.ExtensionPoint2.Y - y) < 0.1),
-                "Rectangle-region Dim Ty must include the local Ty row.");
+            CollectionAssert.AreEqual(
+                offPlan.HangerPoints.Select(PointKey).OrderBy(x => x).ToArray(),
+                onPlan.HangerPoints.Select(PointKey).OrderBy(x => x).ToArray(),
+                "Manual HCN regions must not receive automatic extra Ty from the local-notch toggle.");
+
+            CollectionAssert.AreEqual(
+                offPlan.Dimensions.Select(DimensionKey).OrderBy(x => x).ToArray(),
+                onPlan.Dimensions.Select(DimensionKey).OrderBy(x => x).ToArray(),
+                "Manual HCN Dim must remain owned by the explicit regional layout.");
         }
 
         [TestMethod]
@@ -218,6 +218,21 @@ namespace HNL.VXT.Core.Tests
 
             CollectionAssert.AreEqual(new[] { 300.0, 1150.0, 2000.0, 2850.0, 3700.0 }, ys);
         }
+
+        private static string PointKey(Point2 p)
+            => Math.Round(p.X, 3).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + "," +
+               Math.Round(p.Y, 3).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
+
+        private static string LineKey(PreviewLine line)
+        {
+            var a = PointKey(line.A);
+            var b = PointKey(line.B);
+            return string.CompareOrdinal(a, b) <= 0 ? a + "|" + b : b + "|" + a;
+        }
+
+        private static string DimensionKey(PreviewDimension d)
+            => ((int)d.Target).ToString() + "|" + PointKey(d.ExtensionPoint1) + "|" +
+               PointKey(d.ExtensionPoint2) + "|" + PointKey(d.DimensionLinePoint);
 
         private static PreviewLine[] AddedMainLines(VxtPreviewPlan baseline, VxtPreviewPlan actual)
             => actual.Lines

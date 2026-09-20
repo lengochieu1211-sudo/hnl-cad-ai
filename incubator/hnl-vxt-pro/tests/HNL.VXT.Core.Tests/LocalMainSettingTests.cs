@@ -16,7 +16,7 @@ namespace HNL.VXT.Core.Tests
         {
             var enabled = new VxtSettings
             {
-                MainDirection = MainDirectionMode.RectangleRegions,
+                MainDirection = MainDirectionMode.Horizontal,
                 DrawFurring = false,
                 DrawHangers = false,
                 AutoDimension = true,
