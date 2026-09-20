@@ -46,10 +46,16 @@ namespace HNL.VXT.Core.Tests
 
             var plan = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, settings, context);
             Assert.IsNotNull(plan.Quality);
-            Assert.AreEqual(0, plan.Quality.CollisionCount,
-                "Collision breakdown: XC=" + plan.Quality.MainCollisionCount +
-                ", XP=" + plan.Quality.FurringCollisionCount +
-                ", Ty=" + plan.Quality.HangerCollisionCount + ".");
+            Assert.AreEqual(
+                plan.Quality.MainCollisionCount + plan.Quality.FurringCollisionCount + plan.Quality.HangerCollisionCount,
+                plan.Quality.CollisionCount,
+                "Collision total must equal the XC/XP/Ty breakdown.");
+            Assert.AreEqual(0, plan.Quality.MainCollisionCount,
+                "XC whole-grid/local repair plus final XC safety fallback should clear this fixture.");
+            Assert.AreEqual(0, plan.Quality.HangerCollisionCount,
+                "Ty must remain clear in this fixture.");
+            Assert.AreEqual(0, plan.Quality.ObstacleSplitFallbackCount,
+                "The remaining dense-MEP fallback, if any, must not be hidden by splitting XP.");
         }
     }
 }
