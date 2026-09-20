@@ -48,13 +48,11 @@ namespace HNL.VXT.Core.Preview
 
             var obstacles = TransformMainObstacles(context, radians, settings.ClearanceDistance);
 
-            // Shallow steps such as the real block10 case are best solved by translating the
-            // complete XC lattice a few millimetres. This keeps every XC continuous and preserves
-            // all centre-to-centre spacing while satisfying the regional edge range.
-            TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles);
-
-            // Next enforce the reason the local-notch feature exists: local ceiling edge/gap must
-            // respect configured maxima. Added rows stay on the final global lattice phase.
+            // "Thêm XC cạnh khuyết" is a local-add feature only. The normal/global XC grid
+            // has already been solved by the base layout (and by MEP avoidance when enabled).
+            // Never re-phase or translate that base grid merely because this notch option is ON:
+            // field parity requires Local ON to preserve every Local OFF XC and only add the
+            // minimum short XC needed by a real MaxEdge/MainMaxSpacing violation.
             EnsureHardMaxCoverage(plan, polygon, radians, settings, obstacles);
 
             // Finally remove only truly redundant close local bars. A bar protecting MaxEdge or a
