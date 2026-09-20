@@ -186,17 +186,18 @@ namespace HNL.VXT.Core.Tests
             Assert.IsTrue(plan.HangerCount > 0);
 
             var baselineSettings = settings.Clone();
+            baselineSettings.OptimizationMode = VxtOptimizationMode.Legacy;
             baselineSettings.MainDirection = MainDirectionMode.TwoPoints;
             baselineSettings.DirectionDegrees = plan.Quality.SelectedDirectionDegrees;
             baselineSettings.UseAvoidance = false;
             baselineSettings.ShiftAllForAvoidance = false;
-            var baseline = VxtMultiBoundaryPlanBuilder.Build(
-                new[] { boundary }, baselineSettings, new VxtLayoutContext());
+            var baseline = new VxtPreviewPlanBuilder().Build(
+                boundary, baselineSettings, new VxtLayoutContext());
 
             Assert.AreEqual(
                 CountFurringAxes(baseline, plan.Quality.SelectedDirectionDegrees),
                 CountFurringAxes(plan, plan.Quality.SelectedDirectionDegrees),
-                "MEP avoidance must keep the complete logical XP chain; failed whole-grid avoidance may move rows locally but must not delete a row.");
+                "MEP avoidance must preserve the complete V6.7.2 logical XP chain for the same direction; local repair may move rows but must not delete a Legacy row.");
 
             var furringGeometryKeys = plan.Lines
                 .Where(x => x.Kind == PreviewLineKind.Furring)
