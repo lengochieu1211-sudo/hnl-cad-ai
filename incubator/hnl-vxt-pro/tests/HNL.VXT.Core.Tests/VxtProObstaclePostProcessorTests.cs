@@ -83,6 +83,20 @@ namespace HNL.VXT.Core.Tests
             Assert.AreEqual(20, before.Length,
                 "The supplied field fixture must start with the same 20 XP members as the Lisp drawing.");
 
+            var expectedXp = new[]
+            {
+                760466.667, 760873.333, 761280.000, 761686.667, 762093.333,
+                762500.000, 762906.667, 763313.333, 763720.000, 764126.667,
+                764533.333, 764940.000, 765346.667, 765753.333, 766160.000,
+                766566.667, 766973.333, 767380.000, 767786.667, 768193.333
+            };
+            var actualXp = before
+                .Select(x => Math.Round((x.A.X + x.B.X) * 0.5, 3))
+                .OrderBy(x => x)
+                .ToArray();
+            CollectionAssert.AreEqual(expectedXp, actualXp,
+                "Whole-grid failure must return to the original XP phase and then apply the same local adjust-grid result as V6.7.2 / ne xcxp.dxf.");
+
             var quality = VxtProPlanQualityEvaluator.Evaluate(plan, settings, context, 0.0, 1);
             var after = plan.Lines.Where(x => x.Kind == PreviewLineKind.Furring).ToArray();
             var uniqueCoordinates = after
