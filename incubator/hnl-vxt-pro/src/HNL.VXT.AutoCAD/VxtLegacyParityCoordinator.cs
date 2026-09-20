@@ -66,7 +66,7 @@ namespace HNL.VXT.AutoCAD
 
             if (!settings.DrawMain && (settings.DrawHangers || (settings.AutoDimension && settings.DimMain)))
             {
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Đã tắt Rải Xương Chính. Quét chọn Xương Chính có sẵn để rải Ty hoặc DIM.");
+                ed.WriteMessage("\nHNL Tool - VXT Pro: Đã tắt Rải Xương Chính. Quét chọn Xương Chính có sẵn để rải Ty hoặc Dim.");
                 if (!TrySelectExisting(ed, "LINE,LWPOLYLINE,POLYLINE,INSERT", out var ids)) return;
                 session.ManualMainIds = ids;
             }

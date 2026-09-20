@@ -511,7 +511,7 @@ namespace HNL.VXT.AutoCAD
                 return;
             }
 
-            var result = ed.GetPoint("\nHNL Tool - VXT Pro: Chọn vị trí đặt đường DIM: ");
+            var result = ed.GetPoint("\nHNL Tool - VXT Pro: Chọn vị trí đặt đường Dim: ");
             if (result.Status != PromptStatus.OK) return;
             var settings = session.Settings;
             var angle = ResolveCurrentMainAngle(settings);

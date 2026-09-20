@@ -117,13 +117,13 @@ namespace HNL.VXT.AutoCAD
                         // PreviewLineKind.Hanger contains two internal cross-lines per Ty, but those
                         // lines are never rendered because Ty uses one lightweight Circle marker.
                         // Counting the hidden cross-lines made large ceilings enter XC/XP-only mode
-                        // too early and caused DIM to disappear even though Create still had DIM.
+                        // too early and caused Dim to disappear even though Create still had Dim.
                         renderDecision = VxtPreviewLoadSheddingPolicy.Evaluate(
                             plan, settings, FullPreviewDrawableLimit);
 
                         RenderStructuralLines(plan, settings, db, layerTable, linetypeTable);
 
-                        // DIM is the highest-priority overlay after XC/XP. Render it before Ty/guides
+                        // Dim is the highest-priority overlay after XC/XP. Render it before Ty/guides
                         // so a large hanger population cannot unnecessarily hide WYSIWYG dimensions.
                         if (renderDecision.RenderDimensions)
                             RenderDimensions(plan, settings, db, dimStyleTable, layerTable, linetypeTable);
@@ -142,12 +142,12 @@ namespace HNL.VXT.AutoCAD
                             if (dimensionsRequested && renderDecision.RenderDimensions)
                             {
                                 previewNotice =
-                                    "Bản vẽ lớn: HNL Tool vẫn hiển thị XC/XP + DIM; tạm ẩn Ty và đường hướng Preview để bảo vệ AutoCAD.";
+                                    "Bản vẽ lớn: HNL Tool vẫn hiển thị XC/XP + Dim; tạm ẩn Ty và đường hướng Preview để bảo vệ AutoCAD.";
                             }
                             else if (dimensionsRequested)
                             {
                                 previewNotice =
-                                    "Bản vẽ rất lớn: HNL Tool tạm ẩn Ty/DIM/đường hướng Preview để bảo vệ AutoCAD. DIM vẫn được tính đầy đủ và sẽ tạo thật.";
+                                    "Bản vẽ rất lớn: HNL Tool tạm ẩn Ty/Dim/đường hướng Preview để bảo vệ AutoCAD. Dim vẫn được tính đầy đủ và sẽ tạo thật.";
                             }
                             else
                             {
@@ -391,7 +391,7 @@ namespace HNL.VXT.AutoCAD
                 // A transient Dimension is not database-resident, so AutoCAD does not get the
                 // normal close/post-to-database opportunity that generates its display geometry.
                 // GenerateLayout builds that geometry in memory and is explicitly supported for
-                // non-resident dimensions. This keeps Preview DIM visually consistent with Create.
+                // non-resident dimensions. This keeps Preview Dim visually consistent with Create.
                 try { dim.GenerateLayout(); }
                 catch
                 {
@@ -555,7 +555,7 @@ namespace HNL.VXT.AutoCAD
                 text.SetDatabaseDefaults(db);
                 AddDrawable(text);
 
-                // Exercise the exact non-database-resident DIM path used by live Preview.
+                // Exercise the exact non-database-resident Dim path used by live Preview.
                 // GenerateLayout creates in-memory dimension geometry before AddTransient.
                 var dimension = new RotatedDimension(
                     0.0,

@@ -49,12 +49,12 @@ namespace HNL.VXT.AutoCAD
                 var expectedRenderedDimensions = decision.RenderDimensions ? metrics.DimensionCount : 0;
                 if (preview.LastRenderedDimensionCount != expectedRenderedDimensions)
                     throw new InvalidOperationException(
-                        "Plan có " + metrics.DimensionCount + " DIM, chế độ render yêu cầu " +
-                        expectedRenderedDimensions + " DIM nhưng AutoCAD chỉ giữ " +
+                        "Plan có " + metrics.DimensionCount + " Dim, chế độ render yêu cầu " +
+                        expectedRenderedDimensions + " Dim nhưng AutoCAD chỉ giữ " +
                         preview.LastRenderedDimensionCount + " RotatedDimension transient.");
 
                 var mode = decision.IsReduced
-                    ? (decision.RenderDimensions ? "REDUCED-DIM-KEPT" : "REDUCED-STRUCTURAL-ONLY")
+                    ? (decision.RenderDimensions ? "REDUCED-Dim-KEPT" : "REDUCED-STRUCTURAL-ONLY")
                     : "FULL";
 
                 var summary =
@@ -63,8 +63,8 @@ namespace HNL.VXT.AutoCAD
                     ", XP=" + metrics.FurringCount +
                     " (" + metrics.FurringLengthM.ToString("0.00", CultureInfo.InvariantCulture) + "m)" +
                     ", Ty=" + metrics.HangerCount +
-                    ", DIM=" + metrics.DimensionCount +
-                    " | render DIM=" + preview.LastRenderedDimensionCount +
+                    ", Dim=" + metrics.DimensionCount +
+                    " | render Dim=" + preview.LastRenderedDimensionCount +
                     "/" + expectedRenderedDimensions +
                     " | transient=" + preview.LastActualDrawableCount +
                     "/" + preview.LastExpectedDrawableCount +

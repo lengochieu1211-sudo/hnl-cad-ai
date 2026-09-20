@@ -149,7 +149,7 @@ namespace HNL.VXT.AutoCAD
                 var engineLabel = isPro ? "Pro Economy" : "Legacy Golden";
                 var summary = "PASS " + testName + ": AutoCAD DB API + " + engineLabel + " 6000x4000 OK | XC " +
                               ExpectedMain + " • XP " + ExpectedFurring + " • Ty " + ExpectedHangers +
-                              " • DIM " + ExpectedDimensions + " | Resource rollback OK | " + sw.ElapsedMilliseconds +
+                              " • Dim " + ExpectedDimensions + " | Resource rollback OK | " + sw.ElapsedMilliseconds +
                               " ms | DWG không bị thay đổi.";
                 WriteGoldenLog("PASS", stageName, optimizationMode, summary, counts, null);
                 doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
@@ -202,7 +202,7 @@ namespace HNL.VXT.AutoCAD
         {
             if (main != ExpectedMain || furring != ExpectedFurring || hangers != ExpectedHangers || dimensions != ExpectedDimensions)
                 throw new InvalidOperationException(
-                    "Sai Golden counts. Kỳ vọng XC/XP/Ty/DIM=" + ExpectedMain + "/" + ExpectedFurring + "/" +
+                    "Sai Golden counts. Kỳ vọng XC/XP/Ty/Dim=" + ExpectedMain + "/" + ExpectedFurring + "/" +
                     ExpectedHangers + "/" + ExpectedDimensions + ", thực tế=" + main + "/" + furring + "/" +
                     hangers + "/" + dimensions + ".");
         }

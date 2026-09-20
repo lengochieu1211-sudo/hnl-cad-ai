@@ -202,7 +202,7 @@ namespace HNL.VXT.AutoCAD
 
             var category = Classify(exception, issues, stage);
             var summary = issues.Count == 0
-                ? "PASS sơ bộ - chưa phát hiện lỗi cấu hình/tài nguyên. Vẫn cần Runtime Golden trong CAD thật."
+                ? "PASS sơ bộ - chưa phát hiện lỗi cấu hình/tài nguyên. Vẫn cần Runtime Golden trong Cad thật."
                 : "Phát hiện " + issues.Count + " vấn đề. Nhóm lỗi: " + category + ".";
             return new AnalysisResult(category, summary, issues);
         }
@@ -407,7 +407,7 @@ namespace HNL.VXT.AutoCAD
             sb.AppendLine();
             sb.AppendLine("[NEXT ACTION]");
             sb.AppendLine(analysis.Issues.Count == 0
-                ? "Run Runtime Golden: Preview -> VXTCREATE -> verify XC/XP/Ty/DIM -> UNDO."
+                ? "Run Runtime Golden: Preview -> VXTCREATE -> verify XC/XP/Ty/Dim -> UNDO."
                 : "Resolve issues above, then rerun Preview and VXTCREATE. Send this ZIP if the failure persists.");
             return sb.ToString();
         }
@@ -423,7 +423,7 @@ namespace HNL.VXT.AutoCAD
             sb.AppendLine("5. Restore rectangle regions/equipment selections if used.");
             sb.AppendLine("6. Refresh Preview and verify summary.");
             sb.AppendLine("7. Run VXTCREATE.");
-            sb.AppendLine("8. If creation succeeds, verify XC/XP/Ty/DIM then UNDO.");
+            sb.AppendLine("8. If creation succeeds, verify XC/XP/Ty/Dim then UNDO.");
             sb.AppendLine("9. If it fails, export a new diagnostic ZIP immediately.");
             sb.AppendLine();
             sb.AppendLine("Analyzer: " + analysis.Summary);

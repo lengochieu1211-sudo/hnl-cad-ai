@@ -163,7 +163,7 @@ namespace HNL.VXT.AutoCAD
                 doc.Editor.WriteMessage(
                     "\nHNL Tool - VXT Pro: Đã tạo thành công " + counts.Main + " Xương chính, " +
                     counts.Furring + " Xương phụ, " + counts.Hangers + " Ty treo, " +
-                    counts.Dimensions + " DIM. Dùng UNDO để hoàn tác toàn bộ thao tác tạo." + fallbackWarning);
+                    counts.Dimensions + " Dim. Dùng UNDO để hoàn tác toàn bộ thao tác tạo." + fallbackWarning);
 
                 if (session.HasBoundary) VxtTransientPreview.Instance.Refresh();
                 else VxtTransientPreview.Instance.Clear();
@@ -203,11 +203,11 @@ namespace HNL.VXT.AutoCAD
                 "Preview/Create parity guard: plan XC=" + expectedMain +
                 ", XP=" + expectedFurring +
                 ", Ty=" + expectedHangers +
-                ", DIM=" + expectedDimensions +
+                ", Dim=" + expectedDimensions +
                 " nhưng Create đã materialize XC=" + counts.Main +
                 ", XP=" + counts.Furring +
                 ", Ty=" + counts.Hangers +
-                ", DIM=" + counts.Dimensions + ". Đã rollback để tránh tạo bản vẽ khác Preview.");
+                ", Dim=" + counts.Dimensions + ". Đã rollback để tránh tạo bản vẽ khác Preview.");
         }
 
         private static string BuildFallbackWarning(CreateCounts counts)
