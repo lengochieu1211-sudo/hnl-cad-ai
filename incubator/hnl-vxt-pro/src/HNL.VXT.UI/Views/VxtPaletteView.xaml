@@ -282,7 +282,7 @@
                 <Border Style="{StaticResource SectionCard}">
                     <StackPanel>
                         <TextBlock Text="Phạm vi bố trí" Style="{StaticResource SectionTitle}" Margin="0,0,0,9"/>
-                        <Button Content="⌖  Chọn / Chọn lại biên trần trên CAD"
+                        <Button Content="⌖  Chọn biên trần trên CAD"
                                 Command="{Binding SelectBoundaryCommand}"
                                 HorizontalAlignment="Stretch" Margin="0,0,0,7"/>
                         <Border Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}"
@@ -568,7 +568,7 @@
                                     </Grid>
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="Khoảng cách hàng Dim" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
+                                        <TextBlock Text="Khoảng cách hàng DIM" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
                                         <controls:HnlNumericBox Grid.Column="1" Value="{Binding DimensionSpacing, Mode=TwoWay}" Step="50" Minimum="1"/>
                                     </Grid>
                                 </StackPanel>
