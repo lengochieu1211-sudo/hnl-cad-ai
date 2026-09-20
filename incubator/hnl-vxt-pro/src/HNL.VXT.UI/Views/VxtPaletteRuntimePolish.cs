@@ -144,7 +144,7 @@ namespace HNL.VXT.UI.Views
                 var element = child as FrameworkElement;
                 if (element == null) continue;
 
-                if (dimCard == null && ContainsText(element, "KÍCH THƯỚC DIM"))
+                if (dimCard == null && (ContainsText(element, "Kích thước DIM") || ContainsText(element, "KÍCH THƯỚC DIM")))
                     dimCard = element;
 
                 var border = element as Border;
@@ -247,7 +247,7 @@ namespace HNL.VXT.UI.Views
             };
             var title = new TextBlock
             {
-                Text = "LAYER & HIỂN THỊ",
+                Text = "Layer & hiển thị",
                 Style = view.TryFindResource("SectionTitle") as Style,
                 VerticalAlignment = VerticalAlignment.Center
             };
