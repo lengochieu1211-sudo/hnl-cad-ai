@@ -16,10 +16,7 @@ namespace HNL.VXT.Core.Preview
     ///   replacement is allowed;
     /// - a local XC is added only when a real notch band would otherwise violate MaxEdge or
     ///   MainMaxSpacing;
-    /// - a required local edge XC may be closer than MainMinSpacing, but it must still keep a
-    ///   useful separation from the nearest overlapping XC. The threshold is derived from the
-    ///   existing settings: max(MainBalanceStep, MainMinEdgeOffset), capped by MainMinSpacing;
-    ///   with defaults this is 300 mm;
+    /// - a required local edge XC may be closer than MainMinSpacing to a neighbouring global XC;
     /// - a sub-MinSpacing local XC is removed only when it is redundant and the local band remains
     ///   hard-max safe without it.
     ///
@@ -429,7 +426,6 @@ namespace HNL.VXT.Core.Preview
                 var local = new Segment2(new Point2(x1, spec.Y), new Point2(x2, spec.Y));
                 if (settings.UseAvoidance && !SegmentClear(local, obstacles)) continue;
                 if (MainAlreadyCovers(plan, local, radians)) continue;
-                if (!HasUsefulLocalMainSeparation(plan, local, radians, settings)) continue;
 
                 plan.Lines.Add(new PreviewLine(
                     Transform2.ToWorld(local.A, radians),
@@ -511,34 +507,6 @@ namespace HNL.VXT.Core.Preview
                 plan.Lines.Add(new PreviewLine(h1, h2, PreviewLineKind.Hanger));
                 plan.Lines.Add(new PreviewLine(v1, v2, PreviewLineKind.Hanger));
             }
-        }
-
-        private static bool HasUsefulLocalMainSeparation(
-            VxtPreviewPlan plan,
-            Segment2 local,
-            double radians,
-            VxtSettings settings)
-        {
-            var minSeparation = Math.Min(
-                settings.MainMinSpacing,
-                Math.Max(settings.MainBalanceStep, settings.MainMinEdgeOffset));
-            if (minSeparation <= Tol) return true;
-
-            foreach (var line in plan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
-            {
-                var a = Transform2.ToLocal(line.A, radians);
-                var b = Transform2.ToLocal(line.B, radians);
-                var y = (a.Y + b.Y) * 0.5;
-                var dy = Math.Abs(y - local.A.Y);
-                if (dy <= Tol || dy >= minSeparation - Tol) continue;
-
-                var x1 = Math.Min(a.X, b.X);
-                var x2 = Math.Max(a.X, b.X);
-                var overlap = Math.Min(x2, local.B.X) - Math.Max(x1, local.A.X);
-                if (overlap > MinOverlap) return false;
-            }
-
-            return true;
         }
 
         private static bool MainAlreadyCovers(VxtPreviewPlan plan, Segment2 local, double radians)

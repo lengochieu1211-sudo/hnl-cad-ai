@@ -30,7 +30,6 @@ namespace HNL.VXT.Core.Tests
                 "Real block15 fixture must retain at least one required local edge XC below MainMinSpacing when that XC protects a hard MaxEdge/MaxSpacing condition.");
 
             AssertEverySubMinPairIsHardMaxJustified(plan, boundaries, settings);
-            AssertEveryOverlappingPairRespectsUsefulLocalSeparation(plan, settings);
             AssertEveryHangerStillBelongsToAMain(plan);
         }
 
@@ -54,7 +53,6 @@ namespace HNL.VXT.Core.Tests
             AssertBaseMainGeometryPreserved(offPlan, onPlan);
 
             AssertEverySubMinPairIsHardMaxJustified(onPlan, boundaries, enabled);
-            AssertEveryOverlappingPairRespectsUsefulLocalSeparation(onPlan, enabled);
             Assert.IsTrue(offPlan.MainSegmentCount > 0);
         }
 
@@ -191,29 +189,6 @@ namespace HNL.VXT.Core.Tests
                     "A sub-MinSpacing overlapping pair with equal spans is not a local-edge repair and needs separate strategy resolution.");
                 Assert.IsTrue(IsHardMaxRequired(shorter, mains, boundaries, settings),
                     "A short XC below MainMinSpacing may survive only when removing it would violate MaxEdge or MainMaxSpacing in its actual notch band. dy=" + dy.ToString("0.###"));
-            }
-        }
-
-        private static void AssertEveryOverlappingPairRespectsUsefulLocalSeparation(
-            VxtPreviewPlan plan,
-            VxtSettings settings)
-        {
-            var minimum = Math.Min(
-                settings.MainMinSpacing,
-                Math.Max(settings.MainBalanceStep, settings.MainMinEdgeOffset));
-            var mains = MainRecords(plan);
-            for (var i = 0; i + 1 < mains.Count; i++)
-            for (var j = i + 1; j < mains.Count; j++)
-            {
-                var a = mains[i];
-                var b = mains[j];
-                var overlap = Math.Min(a.X2, b.X2) - Math.Max(a.X1, b.X1);
-                if (overlap <= 1.0) continue;
-                var dy = Math.Abs(a.Y - b.Y);
-                if (dy <= 0.5) continue;
-                Assert.IsTrue(dy >= minimum - 0.5,
-                    "XC gia cố cạnh khuyết không được đặt quá sát XC gần nhất. Min=" +
-                    minimum.ToString("0.###") + ", actual=" + dy.ToString("0.###"));
             }
         }
 

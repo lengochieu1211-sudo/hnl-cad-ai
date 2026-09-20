@@ -50,7 +50,7 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void ConcaveBand_LocalFallbackSuppressesUselessTooCloseXc()
+        public void ConcaveBand_LocalFallbackAddsOnlyRequiredShortXcAndGetsTy()
         {
             var enabled = new VxtSettings
             {
@@ -72,15 +72,26 @@ namespace HNL.VXT.Core.Tests
             var onPlan = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { boundary }, enabled, new VxtLayoutContext());
 
-            CollectionAssert.AreEqual(
-                offPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main).Select(LineKey).OrderBy(x => x).ToArray(),
-                onPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main).Select(LineKey).OrderBy(x => x).ToArray(),
-                "A local XC only 200 mm from the neighbouring base XC is not useful reinforcement and must be suppressed.");
+            var added = AddedMainLines(offPlan, onPlan);
+            Assert.IsTrue(added.Length > 0,
+                "A real unresolved notch must add at least one local XC when the option is ON.");
 
-            CollectionAssert.AreEqual(
-                offPlan.HangerPoints.Select(PointKey).OrderBy(x => x).ToArray(),
-                onPlan.HangerPoints.Select(PointKey).OrderBy(x => x).ToArray(),
-                "Suppressing an unusably close local XC must not create orphan Ty.");
+            foreach (var baseline in offPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
+                Assert.IsTrue(onPlan.Lines.Any(x => x.Kind == PreviewLineKind.Main && SameLine(x, baseline)),
+                    "Adding a notch XC must not move or delete the normal XC grid.");
+
+            var local = added.OrderBy(x => Math.Abs(x.B.X - x.A.X)).First();
+            var localLength = Math.Abs(local.B.X - local.A.X);
+            var localY = (local.A.Y + local.B.Y) * 0.5;
+            Assert.IsTrue(localLength >= enabled.MinLocalMainLength - 0.1 &&
+                          localLength < 3000.0,
+                "Notch fallback must add a short local XC, not replace the global grid.");
+
+            Assert.IsTrue(onPlan.HangerPoints.Any(p =>
+                Math.Abs(p.Y - localY) < 0.1 &&
+                p.X >= Math.Min(local.A.X, local.B.X) - 0.1 &&
+                p.X <= Math.Max(local.A.X, local.B.X) + 0.1),
+                "Every added local XC must receive Ty using the same strict Ty solver.");
         }
 
         [TestMethod]
@@ -100,7 +111,7 @@ namespace HNL.VXT.Core.Tests
             };
             var disabled = enabled.Clone();
             disabled.UseLocalMainAdd = false;
-            var boundary = LowerLeftNotchUsefulSeparation();
+            var boundary = LowerLeftNotch();
 
             var offPlan = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { boundary }, disabled, new VxtLayoutContext());
@@ -110,7 +121,7 @@ namespace HNL.VXT.Core.Tests
             var local = AddedMainLines(offPlan, onPlan)
                 .OrderBy(x => Math.Abs(x.B.X - x.A.X))
                 .FirstOrDefault();
-            Assert.IsNotNull(local, "Audit fixture must produce a useful local concave XC.");
+            Assert.IsNotNull(local, "Audit fixture must produce a local concave XC.");
             var y = (local.A.Y + local.B.Y) * 0.5;
 
             Assert.IsTrue(onPlan.HangerPoints.Any(p => Math.Abs(p.Y - y) < 0.1),
@@ -242,17 +253,6 @@ namespace HNL.VXT.Core.Tests
                 new Point2(6000, 0),
                 new Point2(6000, 3900),
                 new Point2(5900, 4000),
-                new Point2(0, 4000)
-            });
-
-        private static Boundary2 LowerLeftNotchUsefulSeparation()
-            => new Boundary2(new[]
-            {
-                new Point2(0, 1300),
-                new Point2(2500, 1300),
-                new Point2(2500, 0),
-                new Point2(6000, 0),
-                new Point2(6000, 4000),
                 new Point2(0, 4000)
             });
 
