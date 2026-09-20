@@ -47,9 +47,9 @@ namespace HNL.VXT.AutoCAD
                 if (restorePreview) preview.Refresh();
 
                 var summary = "PASS Transient Soak QA: " + Cycles +
-                              " vòng Add/Erase x 4 drawable (Line/Circle/Text/DIM) | active=0 | quarantine=" +
+                              " vòng Add/Erase x 4 drawable (Line/Circle/Text/Dim) | active=0 | quarantine=" +
                               preview.RetiredDrawableCount +
-                              " | delayed-dispose guard ON | DIM GenerateLayout ON | Preview chạy trong command context.";
+                              " | delayed-dispose guard ON | Dim GenerateLayout ON | Preview chạy trong command context.";
                 WriteLog("PASS", summary);
                 doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
                 return summary;

@@ -50,7 +50,7 @@ namespace HNL.VXT.Core.Models
         public bool ShiftAllForAvoidance = true;
         public double ClearanceDistance { get; set; } = 20.0;
 
-        // DIM
+        // Dim
         public bool AutoDimension = false;
         public bool DimMain = false;
         public bool DimFurring = false;
@@ -163,12 +163,12 @@ namespace HNL.VXT.Core.Models
             {
                 if (DimensionDistance < 0)
                 {
-                    error = "Khoảng cách DIM không được âm.";
+                    error = "Khoảng cách Dim không được âm.";
                     return false;
                 }
                 if (DimensionSpacing <= 0)
                 {
-                    error = "Khoảng cách giữa các hàng DIM phải lớn hơn 0.";
+                    error = "Khoảng cách giữa các hàng Dim phải lớn hơn 0.";
                     return false;
                 }
             }
