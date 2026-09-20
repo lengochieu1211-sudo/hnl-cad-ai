@@ -21,7 +21,7 @@ namespace HNL.VXT.UI.Views
         {
             if (view == null) return;
 
-            var mainExpander = FindExpanderByHeader(view, "XƯƠNG CHÍNH");
+            var mainExpander = FindExpanderByHeader(view, "Xương chính") ?? FindExpanderByHeader(view, "XƯƠNG CHÍNH");
             var body = mainExpander?.Content as StackPanel;
             if (body == null || ContainsTag(body, LocalMainUiTag)) return;
 
