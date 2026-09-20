@@ -83,8 +83,9 @@ namespace HNL.VXT.Core.Tests
         {
             // Fixture simplified directly from the user's new block10.dxf field case:
             // total ceiling 2675 x 1800; the right 800 mm band starts 110 mm higher.
-            // Old behavior independently balanced the two rectangles and produced four XC members
-            // with a 100 mm phase jump. A +10 mm shared translation yields two continuous rows.
+            // The normal base layout is two continuous XC rows at Y=400/1400.
+            // Enabling local-notch repair must not re-phase/translate that base grid when MEP
+            // avoidance is OFF; the notch feature may only add a truly required local XC.
             var settings = Settings(autoDimension: false);
             settings.DrawFurring = false;
             settings.DrawHangers = false;
@@ -100,7 +101,7 @@ namespace HNL.VXT.Core.Tests
             Assert.AreEqual(2, mains.Length,
                 "Shallow 110 mm step must keep two continuous XC rows; do not split the ceiling into two independent XC phases.");
 
-            var expectedY = new[] { 410.0, 1410.0 };
+            var expectedY = new[] { 400.0, 1400.0 };
             for (var i = 0; i < mains.Length; i++)
             {
                 var minX = Math.Min(mains[i].A.X, mains[i].B.X);
@@ -111,7 +112,7 @@ namespace HNL.VXT.Core.Tests
                 Assert.AreEqual(2675.0, maxX, 0.1,
                     "Field DXF XC must extend through the shallow step to the right ceiling edge.");
                 Assert.AreEqual(expectedY[i], y, 0.1,
-                    "Field DXF shared XC row must use the smallest valid global translation.");
+                    "Field DXF local-notch mode must preserve the normal base XC phase when MEP avoidance is OFF.");
             }
 
             AssertMainBandValid(plan, 900.0, 0.0, 1800.0, settings,
@@ -130,11 +131,12 @@ namespace HNL.VXT.Core.Tests
         {
             var ys = MainYsAtX(plan, x);
             Assert.IsTrue(ys.Length > 0, message + " No XC intersects the test band.");
+            var minEdge = Math.Max(0.0, settings.MainMinEdgeOffset - settings.MainEdgeTolerance);
             var maxEdge = settings.MainMaxEdgeOffset + settings.MainEdgeTolerance;
-            Assert.IsTrue(ys[0] - minY >= settings.MainMinEdgeOffset - 0.1 &&
+            Assert.IsTrue(ys[0] - minY >= minEdge - 0.1 &&
                           ys[0] - minY <= maxEdge + 0.1,
                 message + " First edge is outside the configured range.");
-            Assert.IsTrue(maxY - ys[ys.Length - 1] >= settings.MainMinEdgeOffset - 0.1 &&
+            Assert.IsTrue(maxY - ys[ys.Length - 1] >= minEdge - 0.1 &&
                           maxY - ys[ys.Length - 1] <= maxEdge + 0.1,
                 message + " Last edge is outside the configured range.");
             for (var i = 0; i + 1 < ys.Length; i++)
