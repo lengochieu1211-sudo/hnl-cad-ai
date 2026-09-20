@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using HNL.VXT.Core.Geometry;
 using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
@@ -10,7 +12,7 @@ namespace HNL.VXT.Core.Tests
     public sealed class VxtProObstaclePostProcessorTests
     {
         [TestMethod]
-        public void Evaluate_SplitsResidualMainAndFurringCrossings_AndReturnsVC0()
+        public void Evaluate_SplitsResidualMain_ButPreservesFullFurringMember()
         {
             var settings = BuildSettings();
             var context = BuildContext();
@@ -18,13 +20,84 @@ namespace HNL.VXT.Core.Tests
 
             var quality = VxtProPlanQualityEvaluator.Evaluate(plan, settings, context, 0.0, 1);
 
-            Assert.AreEqual(0, quality.CollisionCount);
+            Assert.AreEqual(1, quality.CollisionCount,
+                "The impossible residual XP crossing must stay visible to QA instead of being hidden by a split.");
             Assert.AreEqual(0, quality.MainCollisionCount);
-            Assert.AreEqual(0, quality.FurringCollisionCount);
-            Assert.AreEqual(2, quality.ObstacleSplitFallbackCount);
+            Assert.AreEqual(1, quality.FurringCollisionCount);
+            Assert.AreEqual(1, quality.ObstacleSplitFallbackCount,
+                "Only XC is allowed to use the final split fallback.");
             Assert.AreEqual(2, plan.MainSegmentCount);
-            Assert.AreEqual(2, plan.FurringSegmentCount);
+            Assert.AreEqual(1, plan.FurringSegmentCount,
+                "XP must remain one full member after Lisp-parity repair.");
             Assert.AreEqual(0, quality.HardViolationCount);
+        }
+
+        [TestMethod]
+        public void DxfFieldFixture_ImpossibleXpAvoidance_PreservesTwentyFullMembers()
+        {
+            // Geometry reconstructed from the supplied "ne xcxp.dxf" field case.
+            // The 950 mm-wide lighting band is wider than two 1220/3 XP steps, so a
+            // globally clear fixed-spacing offset does not exist. V6.7.2 keeps the
+            // complete XP chain after its 100-pass best-effort repair.
+            var boundary = new Boundary2(new[]
+            {
+                new Point2(768700.400, 1488.608),
+                new Point2(768700.300, 2521.108),
+                new Point2(760390.367, 2521.108),
+                new Point2(760390.367, -921.392),
+                new Point2(765340.400, -921.392),
+                new Point2(765340.400, 888.608),
+                new Point2(767540.400, 888.608),
+                new Point2(767540.400, 1488.608)
+            });
+
+            var settings = new VxtSettings
+            {
+                OptimizationMode = VxtOptimizationMode.ProBalanced,
+                MainDirection = MainDirectionMode.Horizontal,
+                DrawMain = false,
+                DrawFurring = true,
+                DrawHangers = false,
+                AutoDimension = false,
+                UseAvoidance = true,
+                ShiftAllForAvoidance = true,
+                ClearanceDistance = 0.0,
+                FurringSpacing = 1220.0 / 3.0,
+                MainSkipLimit = 0.0,
+                UseDynamicMainBlock = false,
+                UseDynamicFurringBlock = false
+            };
+
+            var context = new VxtLayoutContext();
+            context.GeneralObstacles.Add(new Box2(761650.2, -31.8, 761870.2, 188.2));
+            context.GeneralObstacles.Add(new Box2(763100.2, -31.8, 763320.2, 188.2));
+            context.GeneralObstacles.Add(new Box2(764550.2, -31.8, 764770.2, 188.2));
+            context.GeneralObstacles.Add(new Box2(762735.2, 567.0, 763685.2, 1517.0));
+            context.GeneralObstacles.Add(new Box2(761650.2, 1895.9, 761870.2, 2115.9));
+            context.GeneralObstacles.Add(new Box2(764550.2, 1895.9, 764770.2, 2115.9));
+            context.GeneralObstacles.Add(new Box2(766280.1, 1895.9, 766500.1, 2115.9));
+            context.GeneralObstacles.Add(new Box2(768010.1, 1895.8, 768230.1, 2115.8));
+
+            var plan = new VxtProPreviewPlanBuilder().Build(boundary, settings, context);
+            var before = plan.Lines.Where(x => x.Kind == PreviewLineKind.Furring).ToArray();
+            Assert.AreEqual(20, before.Length,
+                "The supplied field fixture must start with the same 20 XP members as the Lisp drawing.");
+
+            var quality = VxtProPlanQualityEvaluator.Evaluate(plan, settings, context, 0.0, 1);
+            var after = plan.Lines.Where(x => x.Kind == PreviewLineKind.Furring).ToArray();
+            var uniqueCoordinates = after
+                .Select(x => Math.Round((x.A.X + x.B.X) * 0.5, 3))
+                .Distinct()
+                .Count();
+
+            Assert.AreEqual(20, after.Length,
+                "Final Pro QA must not cut or delete XP members when the Lisp repair cannot clear every obstacle.");
+            Assert.AreEqual(20, uniqueCoordinates,
+                "Each field XP coordinate must remain represented by one complete member.");
+            Assert.IsTrue(quality.FurringCollisionCount > 0,
+                "This impossible fixture should report residual XP collisions instead of hiding them by fragmentation.");
+            Assert.AreEqual(0, quality.ObstacleSplitFallbackCount,
+                "Furring-only field fixture must never use the split fallback.");
         }
 
         [TestMethod]
