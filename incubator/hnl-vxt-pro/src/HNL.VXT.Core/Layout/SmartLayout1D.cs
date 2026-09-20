@@ -333,6 +333,11 @@ namespace HNL.VXT.Core.Layout
             if (x.Count == 0 || obstacles.Count == 0) return x;
             if (increment <= Eps) increment = 1.0;
 
+            // Local MEP repair must stay on the phase of the normal XC/Ty grid.
+            // Snapping against absolute WCS zero mixes phases when a ceiling lives at a
+            // non-round coordinate and produces odd spacings even though BalanceStep is fixed.
+            var gridOrigin = ideal[0];
+
             var effectiveMin = minSpacing;
             if (x.Count > 1)
             {
@@ -358,8 +363,8 @@ namespace HNL.VXT.Core.Layout
                     }
                     if (collision != null)
                     {
-                        var left = FloorMultiple(collision.Item1, increment);
-                        var right = CeilMultiple(collision.Item2, increment);
+                        var left = FloorMultipleOnPhase(collision.Item1, gridOrigin, increment);
+                        var right = CeilMultipleOnPhase(collision.Item2, gridOrigin, increment);
                         value = value - left <= right - value ? left : right;
                         x[index] = value;
                         changed = true;
@@ -373,7 +378,7 @@ namespace HNL.VXT.Core.Layout
                     {
                         if (value - minLimit < minEdge - Tol)
                         {
-                            x[i] = CeilMultiple(minLimit + minEdge, increment);
+                            x[i] = CeilMultipleOnPhase(minLimit + minEdge, gridOrigin, increment);
                             changed = true;
                         }
                     }
@@ -382,13 +387,13 @@ namespace HNL.VXT.Core.Layout
                         var previous = x[i - 1];
                         if (value - previous < effectiveMin - Tol)
                         {
-                            value = CeilMultiple(previous + effectiveMin, increment);
+                            value = CeilMultipleOnPhase(previous + effectiveMin, gridOrigin, increment);
                             x[i] = value;
                             changed = true;
                         }
                         if (value - previous > maxSpacing + Tol)
                         {
-                            value = FloorMultiple(previous + maxSpacing, increment);
+                            value = FloorMultipleOnPhase(previous + maxSpacing, gridOrigin, increment);
                             x[i] = value;
                             changed = true;
                         }
@@ -402,7 +407,7 @@ namespace HNL.VXT.Core.Layout
                     {
                         if (maxLimit - value < minEdge - Tol)
                         {
-                            x[i] = FloorMultiple(maxLimit - minEdge, increment);
+                            x[i] = FloorMultipleOnPhase(maxLimit - minEdge, gridOrigin, increment);
                             changed = true;
                         }
                     }
@@ -411,13 +416,13 @@ namespace HNL.VXT.Core.Layout
                         var next = x[i + 1];
                         if (next - value < effectiveMin - Tol)
                         {
-                            value = FloorMultiple(next - effectiveMin, increment);
+                            value = FloorMultipleOnPhase(next - effectiveMin, gridOrigin, increment);
                             x[i] = value;
                             changed = true;
                         }
                         if (next - value > maxSpacing + Tol)
                         {
-                            value = CeilMultiple(next - maxSpacing, increment);
+                            value = CeilMultipleOnPhase(next - maxSpacing, gridOrigin, increment);
                             x[i] = value;
                             changed = true;
                         }
@@ -434,7 +439,7 @@ namespace HNL.VXT.Core.Layout
                     if (!Collides(x[i], obstacles)) continue;
                     var safe = FindSafetyCoordinate(
                         i, x, ideal, obstacles, minLimit, maxLimit,
-                        effectiveMin, maxSpacing, minEdge, maxEdge, increment);
+                        effectiveMin, maxSpacing, minEdge, maxEdge, increment, gridOrigin);
                     if (!double.IsNaN(safe) && Math.Abs(safe - x[i]) > Eps)
                     {
                         x[i] = safe;
@@ -488,13 +493,14 @@ namespace HNL.VXT.Core.Layout
             double maxSpacing,
             double minEdge,
             double maxEdge,
-            double increment)
+            double increment,
+            double gridOrigin)
         {
             var candidates = new HashSet<double>();
             foreach (var box in obstacles)
             {
-                var left = FloorMultiple(box.Item1, increment);
-                var right = CeilMultiple(box.Item2, increment);
+                var left = FloorMultipleOnPhase(box.Item1, gridOrigin, increment);
+                var right = CeilMultipleOnPhase(box.Item2, gridOrigin, increment);
                 candidates.Add(left);
                 candidates.Add(right);
                 for (var k = 1; k <= 8; k++)
@@ -607,5 +613,11 @@ namespace HNL.VXT.Core.Layout
 
         private static double CeilMultiple(double value, double increment)
             => Math.Ceiling((value - 1e-10) / increment) * increment;
+
+        private static double FloorMultipleOnPhase(double value, double origin, double increment)
+            => origin + FloorMultiple(value - origin, increment);
+
+        private static double CeilMultipleOnPhase(double value, double origin, double increment)
+            => origin + CeilMultiple(value - origin, increment);
     }
 }
