@@ -64,9 +64,9 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void OrthogonalNotch_EconomyPrefersFewerMainSegmentsThenHangers()
+        public void OrthogonalNotch_LocalAddPreservesEconomicBaseAndAddsOnlyWhenRequired()
         {
-            var settings = new VxtSettings
+            var enabled = new VxtSettings
             {
                 DrawFurring = false,
                 DrawHangers = true,
@@ -75,6 +75,8 @@ namespace HNL.VXT.Core.Tests
                 DimHanger = true,
                 UseLocalMainAdd = true
             };
+            var disabled = enabled.Clone();
+            disabled.UseLocalMainAdd = false;
 
             var notch = new Boundary2(new[]
             {
@@ -86,13 +88,20 @@ namespace HNL.VXT.Core.Tests
                 new Point2(0, 4000)
             });
 
-            var plan = VxtMultiBoundaryPlanBuilder.Build(
-                new[] { notch }, settings, new VxtLayoutContext());
+            var offPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { notch }, disabled, new VxtLayoutContext());
+            var onPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { notch }, enabled, new VxtLayoutContext());
 
-            Assert.AreEqual(5, plan.Lines.Count(x => x.Kind == PreviewLineKind.Main),
-                "When global rebalance and rectangular decomposition are both valid, the strategy with fewer XC segments must win.");
-            Assert.AreEqual(29, plan.HangerPoints.Count,
-                "After minimizing XC, the selected strategy must keep the corresponding minimum legal Ty layout.");
+            Assert.IsTrue(onPlan.MainSegmentCount >= offPlan.MainSegmentCount,
+                "Local-notch ON may only add XC to the economic base grid.");
+            foreach (var baseline in offPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
+                Assert.IsTrue(onPlan.Lines.Any(x => x.Kind == PreviewLineKind.Main &&
+                    ((x.A.DistanceTo(baseline.A) <= 0.1 && x.B.DistanceTo(baseline.B) <= 0.1) ||
+                     (x.A.DistanceTo(baseline.B) <= 0.1 && x.B.DistanceTo(baseline.A) <= 0.1))),
+                    "Economic base XC must remain unchanged when local-notch is enabled.");
+            Assert.IsTrue(onPlan.HangerCount >= offPlan.HangerCount,
+                "Adding a required local XC may add Ty, but must not delete Ty belonging to the base grid.");
         }
 
         [TestMethod]

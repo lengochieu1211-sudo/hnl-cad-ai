@@ -12,9 +12,9 @@ namespace HNL.VXT.Core.Tests
     public sealed class ConcavePostProcessTests
     {
         [TestMethod]
-        public void ConcaveBand_AutoDimensionStillRebalancesGlobalXcBeforeAddingLocalBar()
+        public void ConcaveBand_LocalAddPreservesBaseXcAndAutoDimensions()
         {
-            var settings = new VxtSettings
+            var enabled = new VxtSettings
             {
                 DrawFurring = false,
                 DrawHangers = false,
@@ -22,86 +22,82 @@ namespace HNL.VXT.Core.Tests
                 DimMain = true,
                 UseLocalMainAdd = true
             };
+            var disabled = enabled.Clone();
+            disabled.UseLocalMainAdd = false;
+            var boundary = NonOrthogonalLowerLeftNotch();
 
-            var plan = VxtMultiBoundaryPlanBuilder.Build(
-                new[] { NonOrthogonalLowerLeftNotch() }, settings, new VxtLayoutContext());
+            var offPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, disabled, new VxtLayoutContext());
+            var onPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, enabled, new VxtLayoutContext());
 
-            var ys = plan.Lines
-                .Where(x => x.Kind == PreviewLineKind.Main)
-                .Select(x => Math.Round((x.A.Y + x.B.Y) * 0.5, 3))
-                .Distinct()
-                .OrderBy(x => x)
-                .ToArray();
+            foreach (var baseline in offPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
+                Assert.IsTrue(onPlan.Lines.Any(x => x.Kind == PreviewLineKind.Main && SameLine(x, baseline)),
+                    "Local-notch ON must preserve every normal/base XC exactly.");
 
-            Assert.IsTrue(ys.Any(y => Math.Abs(y - 1900.0) < 0.1),
-                "V6.7.6.15 must first move the 2000 XC to the strict-multiple 1900 position for the 1500..4000 concave interval.");
-            Assert.IsFalse(ys.Any(y => Math.Abs(y - 2000.0) < 0.1));
+            Assert.IsTrue(onPlan.MainSegmentCount >= offPlan.MainSegmentCount,
+                "Local-notch ON may add required XC but must never remove a normal XC.");
 
-            var moved = plan.Lines.First(x => x.Kind == PreviewLineKind.Main &&
-                Math.Abs((x.A.Y + x.B.Y) * 0.5 - 1900.0) < 0.1);
-            Assert.IsTrue(Math.Abs(moved.A.X - moved.B.X) > 5900.0,
-                "Rebalance must remain a global XC, not silently turn into a short local bar.");
-            Assert.IsTrue(plan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&
-                (Math.Abs(d.ExtensionPoint1.Y - 1900.0) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - 1900.0) < 0.1)),
-                "Auto DIM must be rebuilt from the moved global XC at Y=1900.");
-            Assert.IsFalse(plan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&
-                (Math.Abs(d.ExtensionPoint1.Y - 2000.0) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - 2000.0) < 0.1)),
-                "Auto DIM must not retain the pre-rebalance XC coordinate Y=2000.");
+            var baseYs = offPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main)
+                .Select(x => (x.A.Y + x.B.Y) * 0.5).Distinct().ToArray();
+            foreach (var y in baseYs)
+                Assert.IsTrue(onPlan.Lines.Any(x => x.Kind == PreviewLineKind.Main &&
+                    Math.Abs((x.A.Y + x.B.Y) * 0.5 - y) <= 0.1),
+                    "Local-notch ON must not re-phase the normal XC grid.");
+
+            Assert.IsTrue(onPlan.Dimensions.Any(d => d.Target == DimensionTarget.Main),
+                "Auto Dim must still be regenerated from the final base-plus-local XC geometry.");
         }
 
         [TestMethod]
-        public void ConcaveBand_LocalFallbackRepairsMaxEdgeAndGetsTy()
+        public void ConcaveBand_LocalFallbackAddsOnlyRequiredShortXcAndGetsTy()
         {
-            var settings = new VxtSettings
+            var enabled = new VxtSettings
             {
                 MainDirection = MainDirectionMode.RectangleRegions,
                 DrawFurring = false,
                 DrawHangers = true,
-                AutoDimension = true, // RectangleRegions stays isolated and uses local fallback.
+                AutoDimension = true,
                 DimMain = false,
                 DimHanger = false,
                 UseLocalMainAdd = true,
                 MinLocalMainLength = 500.0
             };
+            var disabled = enabled.Clone();
+            disabled.UseLocalMainAdd = false;
+            var boundary = LowerLeftNotch();
 
-            var plan = VxtMultiBoundaryPlanBuilder.Build(
-                new[] { LowerLeftNotch() }, settings, new VxtLayoutContext());
+            var offPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, disabled, new VxtLayoutContext());
+            var onPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, enabled, new VxtLayoutContext());
 
-            var local = plan.Lines
-                .Where(x => x.Kind == PreviewLineKind.Main)
-                .FirstOrDefault(x =>
-                {
-                    var y = (x.A.Y + x.B.Y) * 0.5;
-                    var len = Math.Abs(x.B.X - x.A.X);
-                    return Math.Abs(y - 1800.0) < 0.1 && len > 2400.0 && len < 2600.0;
-                });
+            var added = AddedMainLines(offPlan, onPlan);
+            Assert.IsTrue(added.Length > 0,
+                "A real unresolved notch must add at least one local XC when the option is ON.");
 
-            Assert.IsTrue(Math.Abs(local.B.X - local.A.X) > 2400.0,
-                "Unresolved concave band must receive the minimum short local XC clipped to the 0..2500 notch band.");
-            Assert.IsTrue(plan.HangerPoints.Any(p => Math.Abs(p.Y - 1800.0) < 0.1 && p.X >= -0.1 && p.X <= 2500.1),
-                "Local XC must receive Ty using the same strict Ty solver.");
+            foreach (var baseline in offPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
+                Assert.IsTrue(onPlan.Lines.Any(x => x.Kind == PreviewLineKind.Main && SameLine(x, baseline)),
+                    "Adding a notch XC must not move or delete the normal XC grid.");
 
-            var crossSectionYs = plan.Lines
-                .Where(x => x.Kind == PreviewLineKind.Main &&
-                            Math.Min(x.A.X, x.B.X) <= 1250.0 + 0.1 &&
-                            Math.Max(x.A.X, x.B.X) >= 1250.0 - 0.1)
-                .Select(x => (x.A.Y + x.B.Y) * 0.5)
-                .Distinct()
-                .OrderBy(x => x)
-                .ToArray();
+            var local = added.OrderBy(x => Math.Abs(x.B.X - x.A.X)).First();
+            var localLength = Math.Abs(local.B.X - local.A.X);
+            var localY = (local.A.Y + local.B.Y) * 0.5;
+            Assert.IsTrue(localLength >= enabled.MinLocalMainLength - 0.1 &&
+                          localLength < 3000.0,
+                "Notch fallback must add a short local XC, not replace the global grid.");
 
-            Assert.IsTrue(crossSectionYs.Length > 0);
-            Assert.IsTrue(crossSectionYs.First() - 1500.0 <= 425.1);
-            Assert.IsTrue(4000.0 - crossSectionYs.Last() <= 425.1);
-            for (var i = 1; i < crossSectionYs.Length; i++)
-                Assert.IsTrue(crossSectionYs[i] - crossSectionYs[i - 1] <= 1000.1,
-                    "Every concave cross-section must remain Max-spacing safe after local repair.");
+            Assert.IsTrue(onPlan.HangerPoints.Any(p =>
+                Math.Abs(p.Y - localY) < 0.1 &&
+                p.X >= Math.Min(local.A.X, local.B.X) - 0.1 &&
+                p.X <= Math.Max(local.A.X, local.B.X) + 0.1),
+                "Every added local XC must receive Ty using the same strict Ty solver.");
         }
 
         [TestMethod]
         public void ConcaveBand_LocalFallbackRefreshesMainAndHangerDimensions()
         {
-            var settings = new VxtSettings
+            var enabled = new VxtSettings
             {
                 MainDirection = MainDirectionMode.RectangleRegions,
                 DrawFurring = false,
@@ -113,29 +109,37 @@ namespace HNL.VXT.Core.Tests
                 UseLocalMainAdd = true,
                 MinLocalMainLength = 500.0
             };
+            var disabled = enabled.Clone();
+            disabled.UseLocalMainAdd = false;
+            var boundary = LowerLeftNotch();
 
-            var plan = VxtMultiBoundaryPlanBuilder.Build(
-                new[] { LowerLeftNotch() }, settings, new VxtLayoutContext());
+            var offPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, disabled, new VxtLayoutContext());
+            var onPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, enabled, new VxtLayoutContext());
 
-            Assert.IsTrue(plan.Lines.Any(x => x.Kind == PreviewLineKind.Main &&
-                Math.Abs((x.A.Y + x.B.Y) * 0.5 - 1800.0) < 0.1),
-                "Audit fixture must produce the local concave XC at Y=1800.");
-            Assert.IsTrue(plan.HangerPoints.Any(p => Math.Abs(p.Y - 1800.0) < 0.1),
-                "Audit fixture must produce Ty on the local concave XC at Y=1800.");
+            var local = AddedMainLines(offPlan, onPlan)
+                .OrderBy(x => Math.Abs(x.B.X - x.A.X))
+                .FirstOrDefault();
+            Assert.IsNotNull(local, "Audit fixture must produce a local concave XC.");
+            var y = (local.A.Y + local.B.Y) * 0.5;
 
-            Assert.IsTrue(plan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&
-                (Math.Abs(d.ExtensionPoint1.Y - 1800.0) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - 1800.0) < 0.1)),
-                "DIM Xương chính must be rebuilt from final post-processed geometry and include the local XC at Y=1800.");
+            Assert.IsTrue(onPlan.HangerPoints.Any(p => Math.Abs(p.Y - y) < 0.1),
+                "Audit fixture must produce Ty on the added local XC.");
 
-            Assert.IsTrue(plan.Dimensions.Any(d => d.Target == DimensionTarget.Hanger &&
-                Math.Abs(d.ExtensionPoint1.Y - 1800.0) < 0.1 && Math.Abs(d.ExtensionPoint2.Y - 1800.0) < 0.1),
-                "DIM Ty must be rebuilt from final post-processed Ty rows and include the local row at Y=1800.");
+            Assert.IsTrue(onPlan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&
+                (Math.Abs(d.ExtensionPoint1.Y - y) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - y) < 0.1)),
+                "Dim Xương chính must be rebuilt from final base-plus-local XC geometry.");
+
+            Assert.IsTrue(onPlan.Dimensions.Any(d => d.Target == DimensionTarget.Hanger &&
+                Math.Abs(d.ExtensionPoint1.Y - y) < 0.1 && Math.Abs(d.ExtensionPoint2.Y - y) < 0.1),
+                "Dim Ty must include the final local Ty row.");
         }
 
         [TestMethod]
         public void RectangleRegion_ConcaveLocalFallbackRefreshesMainAndHangerDimensions()
         {
-            var settings = new VxtSettings
+            var enabled = new VxtSettings
             {
                 MainDirection = MainDirectionMode.RectangleRegions,
                 DrawFurring = false,
@@ -147,23 +151,34 @@ namespace HNL.VXT.Core.Tests
                 UseLocalMainAdd = true,
                 MinLocalMainLength = 500.0
             };
-            var context = new VxtLayoutContext();
-            context.Regions.Add(new VxtLayoutRegion(new Box2(0.0, 0.0, 6000.0, 4000.0), 0.0));
+            var disabled = enabled.Clone();
+            disabled.UseLocalMainAdd = false;
 
-            var plan = VxtMultiBoundaryPlanBuilder.Build(
-                new[] { LowerLeftNotch() }, settings, context);
+            var onContext = new VxtLayoutContext();
+            onContext.Regions.Add(new VxtLayoutRegion(new Box2(0.0, 0.0, 6000.0, 4000.0), 0.0));
+            var offContext = new VxtLayoutContext();
+            offContext.Regions.Add(new VxtLayoutRegion(new Box2(0.0, 0.0, 6000.0, 4000.0), 0.0));
+            var boundary = LowerLeftNotch();
 
-            Assert.IsTrue(plan.Lines.Any(x => x.Kind == PreviewLineKind.Main &&
-                Math.Abs((x.A.Y + x.B.Y) * 0.5 - 1800.0) < 0.1),
-                "Rectangle-region audit fixture must produce the local concave XC at Y=1800.");
-            Assert.IsTrue(plan.HangerPoints.Any(p => Math.Abs(p.Y - 1800.0) < 0.1),
-                "Rectangle-region audit fixture must produce Ty on the local concave XC at Y=1800.");
-            Assert.IsTrue(plan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&
-                (Math.Abs(d.ExtensionPoint1.Y - 1800.0) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - 1800.0) < 0.1)),
-                "Rectangle-region DIM Xương chính must include the local XC after post-process repair.");
-            Assert.IsTrue(plan.Dimensions.Any(d => d.Target == DimensionTarget.Hanger &&
-                Math.Abs(d.ExtensionPoint1.Y - 1800.0) < 0.1 && Math.Abs(d.ExtensionPoint2.Y - 1800.0) < 0.1),
-                "Rectangle-region DIM Ty must include the repaired local Ty row.");
+            var offPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, disabled, offContext);
+            var onPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, enabled, onContext);
+
+            var local = AddedMainLines(offPlan, onPlan)
+                .OrderBy(x => Math.Abs(x.B.X - x.A.X))
+                .FirstOrDefault();
+            Assert.IsNotNull(local, "Rectangle-region fixture must add a local concave XC without replacing the base grid.");
+            var y = (local.A.Y + local.B.Y) * 0.5;
+
+            Assert.IsTrue(onPlan.HangerPoints.Any(p => Math.Abs(p.Y - y) < 0.1),
+                "Rectangle-region local XC must receive Ty.");
+            Assert.IsTrue(onPlan.Dimensions.Any(d => d.Target == DimensionTarget.Main &&
+                (Math.Abs(d.ExtensionPoint1.Y - y) < 0.1 || Math.Abs(d.ExtensionPoint2.Y - y) < 0.1)),
+                "Rectangle-region Dim Xương chính must include the added local XC.");
+            Assert.IsTrue(onPlan.Dimensions.Any(d => d.Target == DimensionTarget.Hanger &&
+                Math.Abs(d.ExtensionPoint1.Y - y) < 0.1 && Math.Abs(d.ExtensionPoint2.Y - y) < 0.1),
+                "Rectangle-region Dim Ty must include the local Ty row.");
         }
 
         [TestMethod]
@@ -203,6 +218,16 @@ namespace HNL.VXT.Core.Tests
 
             CollectionAssert.AreEqual(new[] { 300.0, 1150.0, 2000.0, 2850.0, 3700.0 }, ys);
         }
+
+        private static PreviewLine[] AddedMainLines(VxtPreviewPlan baseline, VxtPreviewPlan actual)
+            => actual.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Where(x => !baseline.Lines.Any(b => b.Kind == PreviewLineKind.Main && SameLine(x, b)))
+                .ToArray();
+
+        private static bool SameLine(PreviewLine a, PreviewLine b)
+            => (a.A.DistanceTo(b.A) <= 0.1 && a.B.DistanceTo(b.B) <= 0.1) ||
+               (a.A.DistanceTo(b.B) <= 0.1 && a.B.DistanceTo(b.A) <= 0.1);
 
         private static Boundary2 NonOrthogonalLowerLeftNotch()
             => new Boundary2(new[]

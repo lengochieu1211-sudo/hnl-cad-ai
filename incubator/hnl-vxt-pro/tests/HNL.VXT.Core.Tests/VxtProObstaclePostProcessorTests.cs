@@ -33,12 +33,12 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void DxfFieldFixture_ImpossibleXpAvoidance_PreservesTwentyFullMembers()
+        public void DxfFieldFixture_DenseXpAvoidance_PreservesTwentyFullMembersAndClearsMep()
         {
             // Geometry reconstructed from the supplied "ne xcxp.dxf" field case.
-            // The 950 mm-wide lighting band is wider than two 1220/3 XP steps, so a
-            // globally clear fixed-spacing offset does not exist. V6.7.2 keeps the
-            // complete XP chain after its 100-pass best-effort repair.
+            // Pro keeps every XP as one full member. When the exact V6.7.2 periodic repair leaves
+            // residual collisions, the recovery stage may move only the affected XP rows to nearby
+            // clear coordinates instead of preserving a known-colliding historical coordinate.
             var boundary = new Boundary2(new[]
             {
                 new Point2(768700.400, 1488.608),
@@ -81,37 +81,24 @@ namespace HNL.VXT.Core.Tests
             var plan = new VxtProPreviewPlanBuilder().Build(boundary, settings, context);
             var before = plan.Lines.Where(x => x.Kind == PreviewLineKind.Furring).ToArray();
             Assert.AreEqual(20, before.Length,
-                "The supplied field fixture must start with the same 20 XP members as the Lisp drawing.");
+                "The field fixture must preserve the complete 20-member XP chain.");
 
-            var expectedXp = new[]
-            {
-                760466.667, 760873.333, 761280.000, 761686.667, 762093.333,
-                762500.000, 762906.667, 763313.333, 763720.000, 764126.667,
-                764533.333, 764940.000, 765346.667, 765753.333, 766160.000,
-                766566.667, 766973.333, 767380.000, 767786.667, 768193.333
-            };
-            var actualXp = before
-                .Select(x => Math.Round((x.A.X + x.B.X) * 0.5, 3))
-                .OrderBy(x => x)
-                .ToArray();
-            CollectionAssert.AreEqual(expectedXp, actualXp,
-                "Whole-grid failure must return to the original XP phase and then apply the same local adjust-grid result as V6.7.2 / ne xcxp.dxf.");
-
-            var quality = VxtProPlanQualityEvaluator.Evaluate(plan, settings, context, 0.0, 1);
-            var after = plan.Lines.Where(x => x.Kind == PreviewLineKind.Furring).ToArray();
-            var uniqueCoordinates = after
+            var uniqueCoordinates = before
                 .Select(x => Math.Round((x.A.X + x.B.X) * 0.5, 3))
                 .Distinct()
                 .Count();
+            Assert.AreEqual(20, uniqueCoordinates,
+                "XP MEP recovery must not collapse two full members onto one axis.");
+
+            var quality = VxtProPlanQualityEvaluator.Evaluate(plan, settings, context, 0.0, 1);
+            var after = plan.Lines.Where(x => x.Kind == PreviewLineKind.Furring).ToArray();
 
             Assert.AreEqual(20, after.Length,
-                "Final Pro QA must not cut or delete XP members when the Lisp repair cannot clear every obstacle.");
-            Assert.AreEqual(20, uniqueCoordinates,
-                "Each field XP coordinate must remain represented by one complete member.");
-            Assert.IsTrue(quality.FurringCollisionCount > 0,
-                "This impossible fixture should report residual XP collisions instead of hiding them by fragmentation.");
+                "Final Pro QA must not cut or delete XP members.");
+            Assert.AreEqual(0, quality.FurringCollisionCount,
+                "Recoverable field XP collisions must be cleared instead of preserving known-colliding Lisp coordinates.");
             Assert.AreEqual(0, quality.ObstacleSplitFallbackCount,
-                "Furring-only field fixture must never use the split fallback.");
+                "Furring-only field fixture must never use the XC split fallback.");
         }
 
         [TestMethod]

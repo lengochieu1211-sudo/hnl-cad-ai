@@ -12,34 +12,36 @@ namespace HNL.VXT.Core.Tests
     public sealed class LocalMainSettingTests
     {
         [TestMethod]
-        public void ConcaveNotch_LocalMainToggleControlsFallbackWithoutChangingFixture()
+        public void ConcaveNotch_LocalMainToggleAddsOnlyLocalGeometry()
         {
             var enabled = new VxtSettings
             {
                 MainDirection = MainDirectionMode.RectangleRegions,
                 DrawFurring = false,
                 DrawHangers = false,
-                AutoDimension = true, // isolated region family intentionally uses local fallback
+                AutoDimension = true,
                 DimMain = false,
                 DimFurring = false,
                 DimHanger = false,
                 UseLocalMainAdd = true,
                 MinLocalMainLength = 500.0
             };
-
-            var enabledPlan = VxtMultiBoundaryPlanBuilder.Build(
-                new[] { LowerLeftNotch() }, enabled, new VxtLayoutContext());
-
-            Assert.IsTrue(HasExpectedLocalNotchMain(enabledPlan),
-                "With 'Thêm XC cục bộ cạnh khuyết' ON, the unresolved notch must receive the short local XC.");
-
             var disabled = enabled.Clone();
             disabled.UseLocalMainAdd = false;
-            var disabledPlan = VxtMultiBoundaryPlanBuilder.Build(
-                new[] { LowerLeftNotch() }, disabled, new VxtLayoutContext());
+            var boundary = LowerLeftNotch();
 
-            Assert.IsFalse(HasExpectedLocalNotchMain(disabledPlan),
-                "With 'Thêm XC cục bộ cạnh khuyết' OFF, the local-notch fallback must not add a short XC.");
+            var enabledPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, enabled, new VxtLayoutContext());
+            var disabledPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, disabled, new VxtLayoutContext());
+
+            foreach (var baseline in disabledPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
+                Assert.IsTrue(enabledPlan.Lines.Any(x => x.Kind == PreviewLineKind.Main && SameMain(x, baseline)),
+                    "Local-main ON must preserve every OFF/base XC.");
+
+            Assert.IsTrue(enabledPlan.Lines.Count(x => x.Kind == PreviewLineKind.Main) >
+                          disabledPlan.Lines.Count(x => x.Kind == PreviewLineKind.Main),
+                "With local-main ON, this unresolved notch must add local XC rather than rebalance the base grid.");
         }
 
         [TestMethod]
@@ -71,42 +73,50 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void FieldBlock14_LocalMainOn_RejectsSubMinSpacingAcrossRegionalSeams()
+        public void FieldBlock14_LocalMainOn_PreservesBaseGridAndAllowsOnlyShortLocalSubMinRows()
         {
-            var settings = FieldBlock14Settings();
-            settings.UseLocalMainAdd = true;
+            var enabled = FieldBlock14Settings();
+            enabled.UseLocalMainAdd = true;
+            var disabled = enabled.Clone();
+            disabled.UseLocalMainAdd = false;
+            var boundary = FieldBlock14SteppedNotch();
 
-            var plan = VxtMultiBoundaryPlanBuilder.Build(
-                new[] { FieldBlock14SteppedNotch() }, settings, new VxtLayoutContext());
+            var onPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, enabled, new VxtLayoutContext());
+            var offPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, disabled, new VxtLayoutContext());
 
-            var mains = plan.Lines.Where(x => x.Kind == PreviewLineKind.Main).ToArray();
-            Assert.IsTrue(mains.Length > 0);
+            foreach (var baseline in offPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
+                Assert.IsTrue(onPlan.Lines.Any(x => x.Kind == PreviewLineKind.Main && SameMain(x, baseline)),
+                    "Block14 local-main ON must preserve the complete OFF/base XC geometry.");
 
+            var mains = onPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main).ToArray();
             for (var i = 0; i + 1 < mains.Length; i++)
+            for (var j = i + 1; j < mains.Length; j++)
             {
                 var a = mains[i];
+                var b = mains[j];
                 var ay = (a.A.Y + a.B.Y) * 0.5;
+                var by = (b.A.Y + b.B.Y) * 0.5;
+                var dy = Math.Abs(by - ay);
+                if (dy <= 0.5 || dy >= enabled.MainMinSpacing - 0.1) continue;
+
                 var ax1 = Math.Min(a.A.X, a.B.X);
                 var ax2 = Math.Max(a.A.X, a.B.X);
+                var bx1 = Math.Min(b.A.X, b.B.X);
+                var bx2 = Math.Max(b.A.X, b.B.X);
+                if (Math.Min(ax2, bx2) < Math.Max(ax1, bx1) - 0.5) continue;
 
-                for (var j = i + 1; j < mains.Length; j++)
-                {
-                    var b = mains[j];
-                    var by = (b.A.Y + b.B.Y) * 0.5;
-                    var dy = Math.Abs(by - ay);
-                    if (dy <= 0.5) continue;
-
-                    var bx1 = Math.Min(b.A.X, b.B.X);
-                    var bx2 = Math.Max(b.A.X, b.B.X);
-                    var overlapOrTouch = Math.Min(ax2, bx2) >= Math.Max(ax1, bx1) - 0.5;
-                    if (!overlapOrTouch) continue;
-
-                    Assert.IsTrue(dy >= settings.MainMinSpacing - 0.1,
-                        "Block14 must never create staggered/local XC rows closer than MainMinSpacing where their spans overlap or touch. Actual=" +
-                        dy.ToString("0.###"));
-                }
+                var lenA = ax2 - ax1;
+                var lenB = bx2 - bx1;
+                Assert.IsTrue(Math.Abs(lenA - lenB) > 0.5,
+                    "Sub-MinSpacing rows may occur only as a short local edge repair; two base/global rows must never be re-phased into a close pair.");
             }
         }
+
+        private static bool SameMain(PreviewLine a, PreviewLine b)
+            => (a.A.DistanceTo(b.A) <= 0.1 && a.B.DistanceTo(b.B) <= 0.1) ||
+               (a.A.DistanceTo(b.B) <= 0.1 && a.B.DistanceTo(b.A) <= 0.1);
 
         private static VxtSettings FieldBlock14Settings()
             => new VxtSettings

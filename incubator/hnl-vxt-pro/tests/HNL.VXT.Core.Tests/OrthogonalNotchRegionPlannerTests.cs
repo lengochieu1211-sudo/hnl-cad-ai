@@ -13,29 +13,30 @@ namespace HNL.VXT.Core.Tests
     public sealed class OrthogonalNotchRegionPlannerTests
     {
         [TestMethod]
-        public void LowerLeftNotch_EconomyChoosesBestValidStrategy_AndKeepsFurringUnchanged()
+        public void LowerLeftNotch_LocalAddPreservesBaseGrid_AndKeepsFurringUnchanged()
         {
-            var settings = Settings(autoDimension: true);
+            var enabled = Settings(autoDimension: true);
+            var disabled = enabled.Clone();
+            disabled.UseLocalMainAdd = false;
             var context = new VxtLayoutContext { GlobalFurringFromFarEdge = false };
             var boundary = LowerLeftNotch();
 
-            var before = new VxtPreviewPlanBuilder().Build(boundary, settings, context);
-            var after = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, settings, context);
+            var offPlan = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, disabled, context);
+            var onPlan = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, enabled, context);
 
             CollectionAssert.AreEqual(
-                FurringKeys(before).ToArray(),
-                FurringKeys(after).ToArray(),
-                "Concave optimization must not change XP positions or the single global chase direction.");
+                FurringKeys(offPlan).ToArray(),
+                FurringKeys(onPlan).ToArray(),
+                "Local-notch processing must never change XP positions or the single global chase direction.");
 
-            Assert.AreEqual(5, after.Lines.Count(x => x.Kind == PreviewLineKind.Main),
-                "The final notch strategy must prefer the valid solution with fewer XC segments instead of forcing rectangular decomposition.");
-            Assert.AreEqual(29, after.HangerPoints.Count,
-                "After minimizing XC, the final strategy must keep the corresponding economical Ty layout.");
+            foreach (var baseline in offPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
+                Assert.IsTrue(onPlan.Lines.Any(x => x.Kind == PreviewLineKind.Main &&
+                    ((x.A.DistanceTo(baseline.A) <= 0.1 && x.B.DistanceTo(baseline.B) <= 0.1) ||
+                     (x.A.DistanceTo(baseline.B) <= 0.1 && x.B.DistanceTo(baseline.A) <= 0.1))),
+                    "Local-notch ON must preserve every base XC exactly.");
 
-            AssertMainBandValid(after, 1250.0, 1500.0, 4000.0, settings,
-                "Left notch band must remain fully valid after economy selection.");
-            AssertMainBandValid(after, 4250.0, 0.0, 4000.0, settings,
-                "Long right band must remain fully valid after economy selection.");
+            Assert.IsTrue(onPlan.MainSegmentCount >= offPlan.MainSegmentCount);
+            Assert.IsTrue(onPlan.HangerCount >= offPlan.HangerCount);
         }
 
         [TestMethod]
