@@ -9,10 +9,12 @@ using HNL.VXT.Core.Models;
 namespace HNL.VXT.Core.Preview
 {
     /// <summary>
-    /// Finalizes and scores an already-built Pro plan. Residual MEP crossings that remain after
-    /// whole-grid shift / coordinate repair are split at the exact solver clearance envelope
-    /// before scoring. Fallback fragmentation is explicitly penalized so Auto never mistakes
-    /// shortened members for a free material improvement.
+    /// Finalizes and scores an already-built Pro plan. Residual XC crossings that remain after
+    /// whole-grid shift / coordinate repair may be split at the exact solver clearance envelope.
+    /// XP is never split by the final safety pass: impossible residual XP crossings stay visible
+    /// and are counted as collisions, preserving the full V6.7.2-style member chain.
+    /// XC fallback fragmentation is explicitly penalized so Auto never mistakes shortened
+    /// members for a free material improvement.
     /// </summary>
     public static class VxtProPlanQualityEvaluator
     {
@@ -35,9 +37,10 @@ namespace HNL.VXT.Core.Preview
 
             // DIM must describe the final framing geometry, not the pre-MEP geometry. The normal
             // builders already create/synchronize DIM before Quality evaluation; however this final
-            // MEP safety pass may split or completely remove an XC/XP segment. Rebuild Auto DIM once
-            // more from the surviving geometry before material/SortScore is calculated. Boundary
-            // lines are retained in every single-boundary plan, so no AutoCAD/runtime state is needed.
+            // MEP safety pass may split or completely remove an XC segment. XP remains intact after
+            // its Lisp-parity coordinate repair. Rebuild Auto DIM once more from the surviving
+            // geometry before material/SortScore is calculated. Boundary lines are retained in
+            // every single-boundary plan, so no AutoCAD/runtime state is needed.
             SynchronizeDimensionsAfterFinalGeometry(plan, settings, context, selectedDirectionDegrees);
 
             var mainLength = plan.Lines
