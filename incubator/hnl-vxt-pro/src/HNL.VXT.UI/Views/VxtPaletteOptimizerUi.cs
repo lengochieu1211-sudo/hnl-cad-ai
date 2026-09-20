@@ -39,7 +39,7 @@ namespace HNL.VXT.UI.Views
 
             var label = new TextBlock
             {
-                Text = "CHẾ ĐỘ TỐI ƯU",
+                Text = "Chế độ tối ưu",
                 Style = view.TryFindResource("SectionTitle") as Style,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -68,7 +68,7 @@ namespace HNL.VXT.UI.Views
             foreach (var node in Walk(root))
             {
                 var border = node as Border;
-                if (border != null && ContainsText(border, "CẤU HÌNH")) return border;
+                if (border != null && (ContainsText(border, "Cấu hình") || ContainsText(border, "CẤU HÌNH"))) return border;
             }
             return null;
         }
