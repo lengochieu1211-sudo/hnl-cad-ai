@@ -132,7 +132,7 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void Stress_ConcaveCeiling_WithManyMepBands_RemainsClearAndHardValid()
+        public void Stress_ConcaveCeiling_WithManyMepBands_PreservesFullXpAndHardValidity()
         {
             var settings = BaseSettings(VxtOptimizationMode.ProConservative);
             settings.MainDirection = MainDirectionMode.Auto;
@@ -175,11 +175,37 @@ namespace HNL.VXT.Core.Tests
 
             Assert.IsNotNull(plan.Quality);
             Assert.AreEqual(0, plan.Quality.HardViolationCount);
-            Assert.AreEqual(0, plan.Quality.CollisionCount,
-                "Dense MEP stress must remain collision-free when a legal Pro layout exists.");
+            Assert.AreEqual(0, plan.Quality.MainCollisionCount,
+                "XC must remain clear after whole-grid/local repair and its dedicated final safety fallback.");
+            Assert.AreEqual(0, plan.Quality.HangerCollisionCount,
+                "Ty must remain clear in the dense-MEP fixture.");
+            Assert.AreEqual(0, plan.Quality.ObstacleSplitFallbackCount,
+                "XP must never be fragmented to manufacture a zero-collision score.");
             Assert.IsTrue(plan.MainSegmentCount > 0);
             Assert.IsTrue(plan.FurringSegmentCount > 0);
             Assert.IsTrue(plan.HangerCount > 0);
+
+            var baselineSettings = settings.Clone();
+            baselineSettings.MainDirection = MainDirectionMode.TwoPoints;
+            baselineSettings.DirectionDegrees = plan.Quality.SelectedDirectionDegrees;
+            baselineSettings.UseAvoidance = false;
+            baselineSettings.ShiftAllForAvoidance = false;
+            var baseline = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, baselineSettings, new VxtLayoutContext());
+
+            Assert.AreEqual(
+                CountFurringAxes(baseline, plan.Quality.SelectedDirectionDegrees),
+                CountFurringAxes(plan, plan.Quality.SelectedDirectionDegrees),
+                "MEP avoidance must keep the complete logical XP chain; failed whole-grid avoidance may move rows locally but must not delete a row.");
+
+            var furringGeometryKeys = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Furring)
+                .Select(LineGeometryKey)
+                .ToList();
+            Assert.AreEqual(
+                furringGeometryKeys.Count,
+                furringGeometryKeys.Distinct(StringComparer.Ordinal).Count(),
+                "Local XP repair must not collapse two members onto exactly the same geometry.");
 
             var finalMain = plan.Lines.Where(x => x.Kind == PreviewLineKind.Main).ToList();
             Assert.IsTrue(finalMain.Count > 0);
@@ -189,6 +215,34 @@ namespace HNL.VXT.Core.Tests
                     "Every final Ty must remain supported by a surviving final XC segment after MEP split; unsupported Ty=" +
                     hanger.X.ToString("0.###") + "," + hanger.Y.ToString("0.###"));
             }
+        }
+
+        private static int CountFurringAxes(VxtPreviewPlan plan, double degrees)
+        {
+            var radians = degrees * Math.PI / 180.0;
+            var c = Math.Cos(radians);
+            var s = Math.Sin(radians);
+            return plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Furring)
+                .Select(x =>
+                {
+                    var mx = (x.A.X + x.B.X) * 0.5;
+                    var my = (x.A.Y + x.B.Y) * 0.5;
+                    return Math.Round(mx * c + my * s, 3);
+                })
+                .Distinct()
+                .Count();
+        }
+
+        private static string LineGeometryKey(PreviewLine line)
+        {
+            string PointKey(Point2 p) =>
+                Math.Round(p.X, 3).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + "," +
+                Math.Round(p.Y, 3).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
+
+            var a = PointKey(line.A);
+            var b = PointKey(line.B);
+            return string.CompareOrdinal(a, b) <= 0 ? a + "|" + b : b + "|" + a;
         }
 
         private static double DistanceToSegment(Point2 p, Point2 a, Point2 b)
