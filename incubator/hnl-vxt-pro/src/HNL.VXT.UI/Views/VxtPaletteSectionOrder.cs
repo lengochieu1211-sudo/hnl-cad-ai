@@ -10,7 +10,7 @@ namespace HNL.VXT.UI.Views
     /// Deterministic production order for the AutoCAD palette sections.
     /// Keep calculation/binding logic untouched; only reorders top-level cards.
     /// Desired order after the structural sections:
-    /// MEP avoidance -> DIM -> Layer/Display resources -> Diagnostics -> Preview.
+    /// MEP avoidance -> Dim -> Layer/Display resources -> Diagnostics -> Preview.
     /// </summary>
     public static class VxtPaletteSectionOrder
     {
@@ -52,7 +52,7 @@ namespace HNL.VXT.UI.Views
                     continue;
                 }
 
-                if (ContainsText(element, "KÍCH THƯỚC DIM"))
+                if (ContainsText(element, "KÍCH THƯỚC Dim"))
                     dim = child;
                 else if (ContainsText(element, "NÉ THIẾT BỊ MEP") || ContainsText(element, "NÉ THIẾT BỊ"))
                     avoidance = child;

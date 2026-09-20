@@ -10,7 +10,7 @@ namespace HNL.VXT.UI.Views
 {
     /// <summary>
     /// Final visual-identity pass for user-facing controls.
-    /// Presentation only: does not read or modify VxtSettings or CAD geometry.
+    /// Presentation only: does not read or modify VxtSettings or Cad geometry.
     /// </summary>
     public static class VxtPaletteVisualIdentity
     {
@@ -27,7 +27,7 @@ namespace HNL.VXT.UI.Views
             new LayerDimIdentity { Title = "Xương chính", Badge = "XC",  ColorHex = "#22D3EE", DarkBadgeText = true },
             new LayerDimIdentity { Title = "Xương phụ",   Badge = "XP",  ColorHex = "#FACC15", DarkBadgeText = true },
             new LayerDimIdentity { Title = "Ty treo",     Badge = "TY",  ColorHex = "#22C55E", DarkBadgeText = true },
-            new LayerDimIdentity { Title = "DIM",         Badge = "DIM", ColorHex = "#D946EF", DarkBadgeText = false }
+            new LayerDimIdentity { Title = "Dim",         Badge = "Dim", ColorHex = "#D946EF", DarkBadgeText = false }
         };
 
         public static void Apply(VxtPaletteView view)
@@ -121,8 +121,8 @@ namespace HNL.VXT.UI.Views
                 if (expander == null) continue;
 
                 var title = HeaderText(expander.Header);
-                if (string.Equals(title, "Cài đặt Layer & DIM", StringComparison.Ordinal) ||
-                    string.Equals(title, "CÀI ĐẶT LAYER & DIM", StringComparison.Ordinal) ||
+                if (string.Equals(title, "Cài đặt Layer & Dim", StringComparison.Ordinal) ||
+                    string.Equals(title, "CÀI ĐẶT LAYER & Dim", StringComparison.Ordinal) ||
                     string.Equals(title, "Layer & hiển thị", StringComparison.Ordinal) ||
                     string.Equals(title, "LAYER & HIỂN THỊ", StringComparison.Ordinal))
                     return expander;
@@ -149,7 +149,7 @@ namespace HNL.VXT.UI.Views
 
             var badge = new Border
             {
-                Width = identity.Badge == "DIM" ? 34.0 : 28.0,
+                Width = identity.Badge == "Dim" ? 34.0 : 28.0,
                 Height = 20.0,
                 CornerRadius = new CornerRadius(4),
                 Background = badgeBrush,

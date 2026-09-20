@@ -12,7 +12,7 @@ namespace HNL.VXT.UI.Views
     /// Final user-facing typography pass for the AutoCAD palette.
     ///
     /// Rules:
-    /// - Sentence/title case for section names; keep technical acronyms such as DIM/HNL/ACI/CAD.
+    /// - Sentence/title case for section names; keep technical acronyms such as Dim/HNL/ACI/Cad.
     /// - One deterministic type scale for XAML and dynamically-created panels.
     /// - Section titles use the dynamic HNL accent so theme/accent changes stay synchronized.
     /// - Preserve the existing user TextScale preference (90/100/110/120%).
@@ -38,9 +38,9 @@ namespace HNL.VXT.UI.Views
                 { "TY TREO", "Ty treo" },
                 { "NÉ THIẾT BỊ", "Né thiết bị" },
                 { "NÉ THIẾT BỊ MEP", "Né thiết bị MEP" },
-                { "KÍCH THƯỚC DIM", "Kích thước DIM" },
-                { "CÀI ĐẶT LAYER & DIM", "Cài đặt Layer & DIM" },
-                { "LAYER & DIM", "Layer & DIM" },
+                { "KÍCH THƯỚC Dim", "Kích thước Dim" },
+                { "CÀI ĐẶT LAYER & Dim", "Cài đặt Layer & Dim" },
+                { "LAYER & Dim", "Layer & Dim" },
                 { "LAYER & HIỂN THỊ", "Layer & hiển thị" },
                 { "LAYER & KIỂU NÉT", "Layer & kiểu nét" },
                 { "XEM TRƯỚC TRÊN BẢN VẼ", "Xem trước trên bản vẽ" },

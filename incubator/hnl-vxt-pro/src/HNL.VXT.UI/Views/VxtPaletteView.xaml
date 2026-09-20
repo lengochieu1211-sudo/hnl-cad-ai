@@ -282,7 +282,7 @@
                 <Border Style="{StaticResource SectionCard}">
                     <StackPanel>
                         <TextBlock Text="Phạm vi bố trí" Style="{StaticResource SectionTitle}" Margin="0,0,0,9"/>
-                        <Button Content="⌖  Chọn biên trần trên CAD"
+                        <Button Content="⌖  Chọn biên trần trên Cad"
                                 Command="{Binding SelectBoundaryCommand}"
                                 HorizontalAlignment="Stretch" Margin="0,0,0,7"/>
                         <Border Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}"
@@ -313,7 +313,7 @@
                                 <TextBlock Text="Hướng bố trí" Style="{StaticResource FieldLabel}"/>
                                 <ComboBox Grid.Column="1" ItemsSource="{Binding MainDirectionOptions}" SelectedItem="{Binding SelectedMainDirection}"/>
                                 <Button Grid.Column="2" Content="Thiết lập" Command="{Binding PickDirectionCommand}" Style="{StaticResource CompactButton}" Margin="8,0,0,0"
-                                        ToolTip="Tự động: chọn Shadowline • 2 điểm/HCN: thiết lập trực tiếp trên CAD"/>
+                                        ToolTip="Tự động: chọn Shadowline • 2 điểm/HCN: thiết lập trực tiếp trên Cad"/>
                             </Grid>
 
                             <Grid Margin="0,0,0,7">
@@ -519,7 +519,7 @@
                     </Expander>
                 </Border>
 
-                <!-- DIM -->
+                <!-- Dim -->
                 <Border Style="{StaticResource SectionCard}" BorderBrush="{DynamicResource AccentBorder}">
                     <Expander IsExpanded="{Binding AutoDimension, Mode=OneWay}">
                         <Expander.Header>
@@ -527,12 +527,12 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Rectangle Width="4" Height="18" Fill="#D946EF" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
-                                    <TextBlock Text="Kích thước DIM" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Text="Kích thước Dim" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <CheckBox Grid.Column="1"
                                           IsChecked="{Binding AutoDimension}"
                                           Style="{StaticResource ToggleSwitch}"
-                                          ToolTip="Bật/tắt tạo DIM"/>
+                                          ToolTip="Bật/tắt tạo Dim"/>
                             </Grid>
                         </Expander.Header>
 
@@ -563,7 +563,7 @@
                                 <StackPanel>
                                     <Grid Margin="0,0,0,7">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="Khoảng cách DIM" Style="{StaticResource FieldLabel}"/>
+                                        <TextBlock Text="Khoảng cách Dim" Style="{StaticResource FieldLabel}"/>
                                         <controls:HnlNumericBox Grid.Column="1" Value="{Binding DimensionDistance, Mode=TwoWay}" Step="50" Minimum="0"/>
                                     </Grid>
                                     <Grid>
@@ -590,7 +590,7 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#22D3EE" VerticalAlignment="Center"/><TextBlock Text=" Xương chính" FontSize="11"/></StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#FACC15" VerticalAlignment="Center"/><TextBlock Text=" Xương phụ" FontSize="11"/></StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#22C55E" VerticalAlignment="Center"/><TextBlock Text=" Ty" FontSize="11"/></StackPanel>
-                            <StackPanel Orientation="Horizontal"><Rectangle Width="20" Height="3" Fill="#D946EF" VerticalAlignment="Center"/><TextBlock Text=" DIM" FontSize="11"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><Rectangle Width="20" Height="3" Fill="#D946EF" VerticalAlignment="Center"/><TextBlock Text=" Dim" FontSize="11"/></StackPanel>
                         </WrapPanel>
 
                         <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="11"/>

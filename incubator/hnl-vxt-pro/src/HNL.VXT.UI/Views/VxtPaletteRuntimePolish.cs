@@ -144,7 +144,7 @@ namespace HNL.VXT.UI.Views
                 var element = child as FrameworkElement;
                 if (element == null) continue;
 
-                if (dimCard == null && (ContainsText(element, "Kích thước DIM") || ContainsText(element, "KÍCH THƯỚC DIM")))
+                if (dimCard == null && (ContainsText(element, "Kích thước Dim") || ContainsText(element, "KÍCH THƯỚC Dim")))
                     dimCard = element;
 
                 var border = element as Border;
@@ -154,13 +154,13 @@ namespace HNL.VXT.UI.Views
                     continue;
                 }
 
-                if (ContainsText(element, "LAYER & KIỂU NÉT") || ContainsText(element, "LAYER & DIM"))
+                if (ContainsText(element, "LAYER & KIỂU NÉT") || ContainsText(element, "LAYER & Dim"))
                     legacyCards.Add(child);
             }
 
             // The old Enhancer-created panel lived near Preview and depended on a later move.
-            // Remove that copy and own one deterministic panel directly after DIM so the
-            // primary workflow remains: Scope -> XC -> XP -> Ty -> MEP -> DIM -> Layer.
+            // Remove that copy and own one deterministic panel directly after Dim so the
+            // primary workflow remains: Scope -> XC -> XP -> Ty -> MEP -> Dim -> Layer.
             foreach (var legacy in legacyCards)
                 stack.Children.Remove(legacy);
 
@@ -220,7 +220,7 @@ namespace HNL.VXT.UI.Views
                 nameof(VxtPaletteViewModel.HangerLinetype),
                 nameof(VxtPaletteViewModel.HangerLineweight)));
             body.Children.Add(CreateResourceExpander(
-                view, "DIM", true,
+                view, "Dim", true,
                 nameof(VxtPaletteViewModel.DimensionLayer),
                 nameof(VxtPaletteViewModel.DimensionColorIndex),
                 nameof(VxtPaletteViewModel.DimensionLinetype),
@@ -285,12 +285,12 @@ namespace HNL.VXT.UI.Views
             panel.Children.Add(CreateEditableComboRow(view, "Linetype", linetypePath, view.ViewModel.LinetypeOptions));
             panel.Children.Add(CreateEditableComboRow(view, "Lineweight", lineweightPath, view.ViewModel.LineweightOptions));
 
-            if (title == "DIM")
+            if (title == "Dim")
             {
                 panel.Children.Add(CreateDimStyleRow(view));
                 panel.Children.Add(new TextBlock
                 {
-                    Text = "Layer/DimStyle này được dùng cho cả Preview DIM và DIM tạo thật.",
+                    Text = "Layer/DimStyle này được dùng cho cả Preview Dim và Dim tạo thật.",
                     Style = view.TryFindResource("HintText") as Style,
                     Margin = new Thickness(CommonLabelWidth, 2, 0, 0)
                 });
@@ -434,7 +434,7 @@ namespace HNL.VXT.UI.Views
                 return;
             }
 
-            // DIM target rows: checkbox + label + selector + pick button.
+            // Dim target rows: checkbox + label + selector + pick button.
             if (columns.Count == 4 &&
                 columns[0].Width.IsAbsolute && columns[1].Width.IsAbsolute &&
                 columns[0].Width.Value >= 20.0 && columns[0].Width.Value <= 45.0 &&

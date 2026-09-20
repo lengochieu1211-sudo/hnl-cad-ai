@@ -24,7 +24,7 @@ namespace HNL.VXT.UI.Views
 
         private void AddDimensionResourceFields()
         {
-            var dimExpander = FindExpanderByHeaderText(this, "KÍCH THƯỚC DIM");
+            var dimExpander = FindExpanderByHeaderText(this, "KÍCH THƯỚC Dim");
             var content = dimExpander?.Content as StackPanel;
             if (content == null) return;
 
@@ -38,13 +38,13 @@ namespace HNL.VXT.UI.Views
 
             var panel = new StackPanel();
             panel.Children.Add(CreateDimensionResourceRow(
-                "Layer DIM",
+                "Layer Dim",
                 nameof(VxtPaletteViewModel.DimensionLayer),
-                "Layer dùng cho DIM và Preview DIM. Nếu layer không tồn tại, Preview dùng thiết lập hiện hành."));
+                "Layer dùng cho Dim và Preview Dim. Nếu layer không tồn tại, Preview dùng thiết lập hiện hành."));
             panel.Children.Add(CreateDimensionResourceRow(
                 "DimStyle",
                 nameof(VxtPaletteViewModel.DimensionStyle),
-                "Tên DimStyle dùng cho DIM. Để trống để dùng DimStyle hiện hành của bản vẽ.",
+                "Tên DimStyle dùng cho Dim. Để trống để dùng DimStyle hiện hành của bản vẽ.",
                 new Thickness(0, 7, 0, 0)));
 
             var hint = new TextBlock
