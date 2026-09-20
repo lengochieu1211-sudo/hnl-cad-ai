@@ -74,6 +74,7 @@ namespace HNL.VXT.UI.Views
                 switch (text.Text.Trim())
                 {
                     case "CẤU HÌNH": text.Text = "Cấu hình"; break;
+                    case "CHẾ ĐỘ TỐI ƯU": text.Text = "Chế độ tối ưu"; break;
                     case "PHẠM VI BỐ TRÍ": text.Text = "Phạm vi bố trí"; break;
                     case "XƯƠNG CHÍNH": text.Text = "Xương chính"; break;
                     case "XƯƠNG PHỤ": text.Text = "Xương phụ"; break;
