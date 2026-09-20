@@ -10,7 +10,10 @@ namespace HNL.VXT.Core.Preview
     /// <summary>
     /// Final Pro-only safety net for residual MEP crossings.
     /// The normal solvers still get first priority: whole-grid shift and coordinate repair.
-    /// Only a segment that still crosses an expanded obstacle is split at the clearance box.
+    /// Residual XC may be split at the clearance box as a last resort.
+    /// XP is never split here: after the Pro whole-grid attempt and the V6.7.2
+    /// AdjustGridAbsoluteLisp fallback, the full XP member is preserved and any impossible
+    /// residual crossing remains visible to Quality/QA instead of being turned into a missing bar.
     /// Legacy geometry never passes through this post-processor.
     /// </summary>
     public static class VxtProObstaclePostProcessor
@@ -40,10 +43,12 @@ namespace HNL.VXT.Core.Preview
             var radians = Normalize180(selectedDirectionDegrees) * Math.PI / 180.0;
             var mainObstacles = TransformAndExpand(
                 context.GeneralObstacles.Concat(context.MainObstacles), radians, settings.ClearanceDistance);
-            var furringObstacles = TransformAndExpand(
-                context.GeneralObstacles.Concat(context.FurringObstacles), radians, settings.ClearanceDistance);
 
-            if (mainObstacles.Count == 0 && furringObstacles.Count == 0)
+            // XP residual crossings are deliberately not fragmented. BuildFurringGrid already
+            // applies the Pro offset search followed by the exact Lisp absolute-WCS repair.
+            // If that cannot clear an impossible band, preserve the full XP and let Quality/QA
+            // report the remaining collision.
+            if (mainObstacles.Count == 0)
                 return existingFallbackCount;
 
             var output = new List<PreviewLine>(plan.Lines.Count + 8);
@@ -51,7 +56,15 @@ namespace HNL.VXT.Core.Preview
 
             foreach (var line in plan.Lines)
             {
-                if (line.Kind != PreviewLineKind.Main && line.Kind != PreviewLineKind.Furring)
+                if (line.Kind == PreviewLineKind.Furring)
+                {
+                    // Never cut XP into pieces. A residual impossible crossing is preferable to
+                    // a visually missing furring member and matches the V6.7.2 best-effort contract.
+                    output.Add(line);
+                    continue;
+                }
+
+                if (line.Kind != PreviewLineKind.Main)
                 {
                     output.Add(line);
                     continue;
@@ -59,13 +72,10 @@ namespace HNL.VXT.Core.Preview
 
                 var localA = Transform2.ToLocal(line.A, radians);
                 var localB = Transform2.ToLocal(line.B, radians);
-                var obstacles = line.Kind == PreviewLineKind.Main ? mainObstacles : furringObstacles;
                 IReadOnlyList<Segment2> pieces;
 
-                if (line.Kind == PreviewLineKind.Main && Math.Abs(localA.Y - localB.Y) <= 0.5)
-                    pieces = SplitHorizontal(new Segment2(localA, localB), obstacles);
-                else if (line.Kind == PreviewLineKind.Furring && Math.Abs(localA.X - localB.X) <= 0.5)
-                    pieces = SplitVertical(new Segment2(localA, localB), obstacles);
+                if (Math.Abs(localA.Y - localB.Y) <= 0.5)
+                    pieces = SplitHorizontal(new Segment2(localA, localB), mainObstacles);
                 else
                     pieces = new[] { new Segment2(localA, localB) };
 
