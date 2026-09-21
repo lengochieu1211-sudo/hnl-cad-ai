@@ -57,6 +57,9 @@ namespace HNL.VXT.AutoCAD
         internal int LastRenderedDimensionCount { get; private set; }
 
         public void Refresh()
+            => Refresh(writeConstraintSummary: true);
+
+        internal void Refresh(bool writeConstraintSummary)
         {
             if (_isMutating)
             {
@@ -184,7 +187,7 @@ namespace HNL.VXT.AutoCAD
                     session.ViewModel?.SetPreviewActualStats(metrics);
                     session.ViewModel?.SetConstraintDiagnostics(plan.Diagnostics);
 
-                    if (plan.Diagnostics.Any(x => x != null))
+                    if (writeConstraintSummary && plan.Diagnostics.Any(x => x != null))
                     {
                         var constraintSummary = VxtConstraintReport.FormatSummary(plan.Diagnostics);
                         doc.Editor.WriteMessage(

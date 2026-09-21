@@ -197,7 +197,9 @@ namespace HNL.VXT.AutoCAD
                     (string.IsNullOrWhiteSpace(diagnosticPath) ? string.Empty : " | Diagnostic: " + diagnosticPath));
                 session.ViewModel?.SetPreviewError(
                     "Tạo thất bại - đã rollback. Diagnostic ZIP đã được ghi tự động.");
-                try { if (session.HasBoundary) VxtTransientPreview.Instance.Refresh(); } catch { }
+                // Restore the transient preview after rollback, but do not print the same
+                // constraint summary a second time; the Create failure line already explains the block.
+                try { if (session.HasBoundary) VxtTransientPreview.Instance.Refresh(writeConstraintSummary: false); } catch { }
             }
         }
 
