@@ -757,7 +757,19 @@ namespace HNL.VXT.Core.Preview
                                 .OrderBy(y => y)
                                 .ToList();
 
-                            foreach (var y in RequiredRows(rows, a, b, latticeOrigin, step, settings, maxEdge))
+                            var safeMin = a > domain.MinY + Tol
+                                ? a + MinNotchWallMainClearance
+                                : a + Tol;
+                            var safeMax = b < domain.MaxY - Tol
+                                ? b - MinNotchWallMainClearance
+                                : b - Tol;
+
+                            if (safeMax <= safeMin + Tol)
+                                continue;
+
+                            foreach (var y in RequiredRows(
+                                rows, a, b, safeMin, safeMax,
+                                latticeOrigin, step, settings, maxEdge))
                                 AddOrMergeSpec(specs, y, notchBand.X1, notchBand.X2);
                         }
                     }
@@ -778,17 +790,24 @@ namespace HNL.VXT.Core.Preview
             IReadOnlyList<double> current,
             double a,
             double b,
+            double safeMin,
+            double safeMax,
             double latticeOrigin,
             double step,
             VxtSettings settings,
             double maxEdge)
         {
             var result = new List<double>();
-            var rows = (current ?? new double[0]).OrderBy(y => y).ToList();
+            var rows = (current ?? new double[0])
+                .Where(y => y >= safeMin - Tol && y <= safeMax + Tol)
+                .OrderBy(y => y)
+                .ToList();
 
             if (rows.Count == 0)
             {
-                var first = EdgePointFromBottom(a, b, latticeOrigin, step, settings, maxEdge);
+                var first = EdgePointFromBottom(
+                    a, b, safeMin, safeMax,
+                    latticeOrigin, step, settings, maxEdge);
                 if (first.HasValue)
                 {
                     AddUnique(result, first.Value);
@@ -798,7 +817,9 @@ namespace HNL.VXT.Core.Preview
 
             if (rows.Count > 0 && rows[0] - a > maxEdge + Tol)
             {
-                var y = EdgePointFromBottom(a, rows[0], latticeOrigin, step, settings, maxEdge);
+                var y = EdgePointFromBottom(
+                    a, rows[0], safeMin, safeMax,
+                    latticeOrigin, step, settings, maxEdge);
                 if (y.HasValue) AddUnique(result, y.Value);
             }
 
@@ -829,41 +850,52 @@ namespace HNL.VXT.Core.Preview
             combined = rows.Concat(result).OrderBy(y => y).ToList();
             if (combined.Count > 0 && b - combined[combined.Count - 1] > maxEdge + Tol)
             {
-                var y = EdgePointFromTop(combined[combined.Count - 1], b, latticeOrigin, step, settings, maxEdge);
+                var y = EdgePointFromTop(
+                    combined[combined.Count - 1], b, safeMin, safeMax,
+                    latticeOrigin, step, settings, maxEdge);
                 if (y.HasValue) AddUnique(result, y.Value);
             }
 
-            return result.Where(y => y > a + Tol && y < b - Tol).OrderBy(y => y);
+            return result
+                .Where(y => y >= safeMin - Tol && y <= safeMax + Tol)
+                .OrderBy(y => y);
         }
 
         private static double? EdgePointFromBottom(
             double a,
             double b,
+            double safeMin,
+            double safeMax,
             double origin,
             double step,
             VxtSettings settings,
             double maxEdge)
         {
-            var hardHigh = Math.Min(b - Tol, a + maxEdge);
-            if (hardHigh <= a + Tol) return null;
+            var hardLow = Math.Max(a + Tol, safeMin);
+            var hardHigh = Math.Min(Math.Min(b - Tol, a + maxEdge), safeMax);
+            if (hardHigh < hardLow - Tol) return null;
 
-            // Put the reinforcement as close to the notch edge as the preferred Min permits.
-            // This maximizes separation from the neighbouring global XC instead of pinning the
-            // local XC near MaxEdge (the old behavior that could leave only 50-100 mm).
-            var preferredLow = a + Math.Max(0.0, settings.MainMinEdgeOffset);
+            // Prefer the configured Min edge, but never choose a lattice point inside the
+            // sub-100-mm notch-wall exclusion zone.
+            var preferredLow = Math.Max(
+                hardLow,
+                a + Math.Max(0.0, settings.MainMinEdgeOffset));
             var candidate = SnapAtOrAbove(preferredLow, origin, step);
-            if (candidate <= hardHigh + Tol && candidate > a + Tol)
+            if (candidate >= hardLow - Tol && candidate <= hardHigh + Tol)
                 return candidate;
 
             var toleratedMin = Math.Max(
                 0.0,
                 settings.MainMinEdgeOffset - Math.Max(0.0, settings.MainEdgeTolerance));
-            candidate = SnapAtOrAbove(a + toleratedMin, origin, step);
-            if (candidate <= hardHigh + Tol && candidate > a + Tol)
+            candidate = SnapAtOrAbove(
+                Math.Max(hardLow, a + toleratedMin),
+                origin,
+                step);
+            if (candidate >= hardLow - Tol && candidate <= hardHigh + Tol)
                 return candidate;
 
-            candidate = SnapAtOrAbove(a + Tol, origin, step);
-            return candidate <= hardHigh + Tol && candidate > a + Tol
+            candidate = SnapAtOrAbove(hardLow, origin, step);
+            return candidate >= hardLow - Tol && candidate <= hardHigh + Tol
                 ? (double?)candidate
                 : null;
         }
@@ -871,30 +903,38 @@ namespace HNL.VXT.Core.Preview
         private static double? EdgePointFromTop(
             double a,
             double b,
+            double safeMin,
+            double safeMax,
             double origin,
             double step,
             VxtSettings settings,
             double maxEdge)
         {
-            var hardLow = Math.Max(a + Tol, b - maxEdge);
-            if (hardLow >= b - Tol) return null;
+            var hardLow = Math.Max(Math.Max(a + Tol, b - maxEdge), safeMin);
+            var hardHigh = Math.Min(b - Tol, safeMax);
+            if (hardHigh < hardLow - Tol) return null;
 
-            // Symmetric rule for the top notch edge: choose the largest legal lattice point,
-            // i.e. nearest to the edge, before relaxing Min edge.
-            var preferredHigh = b - Math.Max(0.0, settings.MainMinEdgeOffset);
+            // Symmetric rule for the top notch edge: prefer Min edge while staying outside
+            // the sub-100-mm notch-wall exclusion zone.
+            var preferredHigh = Math.Min(
+                hardHigh,
+                b - Math.Max(0.0, settings.MainMinEdgeOffset));
             var candidate = SnapAtOrBelow(preferredHigh, origin, step);
-            if (candidate >= hardLow - Tol && candidate < b - Tol)
+            if (candidate >= hardLow - Tol && candidate <= hardHigh + Tol)
                 return candidate;
 
             var toleratedMin = Math.Max(
                 0.0,
                 settings.MainMinEdgeOffset - Math.Max(0.0, settings.MainEdgeTolerance));
-            candidate = SnapAtOrBelow(b - toleratedMin, origin, step);
-            if (candidate >= hardLow - Tol && candidate < b - Tol)
+            candidate = SnapAtOrBelow(
+                Math.Min(hardHigh, b - toleratedMin),
+                origin,
+                step);
+            if (candidate >= hardLow - Tol && candidate <= hardHigh + Tol)
                 return candidate;
 
-            candidate = SnapAtOrBelow(b - Tol, origin, step);
-            return candidate >= hardLow - Tol && candidate < b - Tol
+            candidate = SnapAtOrBelow(hardHigh, origin, step);
+            return candidate >= hardLow - Tol && candidate <= hardHigh + Tol
                 ? (double?)candidate
                 : null;
         }
