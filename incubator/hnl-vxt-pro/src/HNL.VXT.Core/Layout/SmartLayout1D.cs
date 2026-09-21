@@ -90,18 +90,30 @@ namespace HNL.VXT.Core.Layout
             var explicitOneSide = mode == MainLayoutMode.OneSide;
             var oneSided = obstacleGreedy || explicitOneSide;
 
-            // One-side "chase" contract: keep the configured Min edge at the selected start side,
-            // then run exact Max-spacing lattice gaps continuously. Any dimensional remainder is
-            // absorbed only by the far edge. This must be tried before balanced unit distribution,
-            // otherwise a remainder such as 50 mm gets injected into the middle of the chain
-            // (e.g. 1000,1000,950,1000,1000), which is not a one-side chase.
+            // Explicit OneSide contract:
+            // 1) minimize member count first (HARD Max spacing + HARD Max edge);
+            // 2) with that same count, search the largest uniform lattice spacing that keeps
+            //    both edges inside the normal Min/Max range;
+            // 3) only after strict Min-spacing candidates fail, use the existing Dense fallback;
+            // 4) only after strict-edge candidates fail, relax Min edge through its SOFT passes.
             //
-            // Scope is intentionally narrow: obstacleGreedy keeps the legacy behavior and only the
-            // explicit OneSide user mode gets this ordering.
+            // This prevents "Max at any cost". Example: L=3442, Max=1000, Min=700,
+            // edge=300..400, step=50 has the same member count at 1000/950/900.
+            // 1000 would force a short far edge, but 900 gives 350|900|900|900|392,
+            // so the strict 900 solution must win before SOFT edge is considered.
             if (explicitOneSide)
             {
                 var chase = CalculateOneSideChase(
-                    length, maxSpacing, maxEdge, minEdge, increment, minEdge,
+                    length, maxSpacing, minSpacing, minSpacing,
+                    maxEdge, minEdge, increment, minEdge,
+                    reverse, usedSoftEdge: false);
+                if (chase != null) return chase;
+
+                // Existing Dense contract: Min spacing is SOFT, but keep the same minimum
+                // member count and strict edges before relaxing Min edge.
+                chase = CalculateOneSideChase(
+                    length, maxSpacing, increment, minSpacing,
+                    maxEdge, minEdge, increment, minEdge,
                     reverse, usedSoftEdge: false);
                 if (chase != null) return chase;
 
@@ -110,17 +122,31 @@ namespace HNL.VXT.Core.Layout
                 if (toleratedMinEdgeForChase < minEdge - Eps)
                 {
                     chase = CalculateOneSideChase(
-                        length, maxSpacing, maxEdge, minEdge, increment,
-                        toleratedMinEdgeForChase, reverse, usedSoftEdge: true);
+                        length, maxSpacing, minSpacing, minSpacing,
+                        maxEdge, minEdge, increment, toleratedMinEdgeForChase,
+                        reverse, usedSoftEdge: true);
+                    if (chase != null) return chase;
+
+                    chase = CalculateOneSideChase(
+                        length, maxSpacing, increment, minSpacing,
+                        maxEdge, minEdge, increment, toleratedMinEdgeForChase,
+                        reverse, usedSoftEdge: true);
                     if (chase != null) return chase;
                 }
 
-                // Min edge is SOFT. If the configured tolerance is still insufficient, preserve
-                // the existing final fallback semantics without relaxing Max edge or Max spacing.
+                // Final Min-edge fallback remains last. HARD Max spacing/edge and the minimum
+                // achievable member count are never relaxed.
                 if (toleratedMinEdgeForChase > Eps)
                 {
                     chase = CalculateOneSideChase(
-                        length, maxSpacing, maxEdge, minEdge, increment, 0.0,
+                        length, maxSpacing, minSpacing, minSpacing,
+                        maxEdge, minEdge, increment, 0.0,
+                        reverse, usedSoftEdge: true);
+                    if (chase != null) return chase;
+
+                    chase = CalculateOneSideChase(
+                        length, maxSpacing, increment, minSpacing,
+                        maxEdge, minEdge, increment, 0.0,
                         reverse, usedSoftEdge: true);
                     if (chase != null) return chase;
                 }
@@ -175,6 +201,8 @@ namespace HNL.VXT.Core.Layout
         private static Result CalculateOneSideChase(
             double length,
             double maxSpacing,
+            double minCandidateSpacing,
+            double configuredMinSpacing,
             double maxEdge,
             double startEdge,
             double increment,
@@ -183,43 +211,81 @@ namespace HNL.VXT.Core.Layout
             bool usedSoftEdge)
         {
             var maxDiscrete = FloorMultiple(maxSpacing, increment);
-            if (maxDiscrete < increment - Eps) return null;
+            var minDiscrete = Math.Max(increment, CeilMultiple(minCandidateSpacing, increment));
+            if (maxDiscrete < increment - Eps || minDiscrete > maxDiscrete + Tol) return null;
             if (startEdge < -Tol || startEdge > maxEdge + Tol) return null;
 
-            var available = length - startEdge;
-            if (available <= 2.0 + Tol) return null;
+            // First determine the minimum number of internal gaps required by HARD constraints
+            // at the configured Max spacing. The count is then frozen while candidate spacing is
+            // searched downward. Therefore reducing 1000 -> 900 never adds an XC when k is unchanged.
+            var hardInteriorNeed = Math.Max(0.0, length - 2.0 * maxEdge);
+            var k = hardInteriorNeed <= Tol
+                ? 0
+                : LispFix(hardInteriorNeed / maxDiscrete + 0.999999);
 
-            // First choose the greatest number of complete Max-spacing gaps that still leaves
-            // the accepted far-edge allowance. OneSide is allowed to shift the whole chain away
-            // from the selected start edge by the minimum configured increment needed to bring
-            // the far edge back under HARD Max. This preserves the chase ordering:
-            // 3442 => 350 | 900 | 900 | 900 | 392, not a balanced/remainder-in-middle layout.
-            var usable = Math.Max(0.0, available - Math.Max(0.0, minAcceptedFarEdge));
-            var k = Math.Max(0, LispFix((usable + Tol) / maxDiscrete));
-            var farEdgeAtStart = available - k * maxDiscrete;
+            if (k == 0)
+            {
+                var edgeSum = length;
+                if (edgeSum < startEdge + minAcceptedFarEdge - Tol ||
+                    edgeSum > 2.0 * maxEdge + Tol)
+                    return null;
 
-            var shift = 0.0;
-            if (farEdgeAtStart > maxEdge + Tol)
-                shift = CeilMultiple(farEdgeAtStart - maxEdge, increment);
+                var shift0 = Math.Max(0.0, edgeSum - startEdge - maxEdge);
+                if (shift0 > Tol) shift0 = CeilMultiple(shift0, increment);
+                var start0 = startEdge + shift0;
+                var end0 = edgeSum - start0;
+                if (start0 > maxEdge + Tol ||
+                    end0 < minAcceptedFarEdge - Tol ||
+                    end0 > maxEdge + Tol)
+                    return null;
 
-            var shiftedStartEdge = startEdge + shift;
-            var farEdge = farEdgeAtStart - shift;
+                return MaybeReverse(
+                    new Result(
+                        start0,
+                        Array.Empty<double>(),
+                        end0,
+                        isDense: false,
+                        usedSoftEdge: usedSoftEdge || end0 < startEdge - Tol),
+                    reverse);
+            }
 
-            if (shiftedStartEdge < startEdge - Tol ||
-                shiftedStartEdge > maxEdge + Tol ||
-                farEdge <= 2.0 + Tol ||
-                farEdge < minAcceptedFarEdge - Tol ||
-                farEdge > maxEdge + Tol)
-                return null;
+            // For the fixed minimum count, take the largest uniform lattice spacing that
+            // satisfies the current edge pass. This is the exact "same number of XC -> choose
+            // the largest spacing that gives better two-edge distribution" rule.
+            for (var spacing = maxDiscrete; spacing >= minDiscrete - Tol; spacing -= increment)
+            {
+                var edgeSum = length - k * spacing;
 
-            var steps = Enumerable.Repeat(maxDiscrete, k).ToArray();
-            var result = new Result(
-                shiftedStartEdge,
-                steps,
-                farEdge,
-                isDense: false,
-                usedSoftEdge: usedSoftEdge || farEdge < startEdge - Tol);
-            return MaybeReverse(result, reverse);
+                // Both edges are HARD <= Max. Current pass also enforces its accepted Min edge.
+                if (edgeSum > 2.0 * maxEdge + Tol) break;
+                if (edgeSum < startEdge + minAcceptedFarEdge - Tol) continue;
+
+                // Keep the selected start edge at Min when possible. If the far edge would exceed
+                // HARD Max, shift the entire grid only by the minimum lattice increment needed.
+                var shift = Math.Max(0.0, edgeSum - startEdge - maxEdge);
+                if (shift > Tol) shift = CeilMultiple(shift, increment);
+
+                var shiftedStartEdge = startEdge + shift;
+                var farEdge = edgeSum - shiftedStartEdge;
+
+                if (shiftedStartEdge < startEdge - Tol ||
+                    shiftedStartEdge > maxEdge + Tol ||
+                    farEdge <= 2.0 + Tol ||
+                    farEdge < minAcceptedFarEdge - Tol ||
+                    farEdge > maxEdge + Tol)
+                    continue;
+
+                var steps = Enumerable.Repeat(spacing, k).ToArray();
+                var result = new Result(
+                    shiftedStartEdge,
+                    steps,
+                    farEdge,
+                    isDense: spacing < configuredMinSpacing - Tol,
+                    usedSoftEdge: usedSoftEdge || farEdge < startEdge - Tol);
+                return MaybeReverse(result, reverse);
+            }
+
+            return null;
         }
 
         private static Result CalculateStrict(

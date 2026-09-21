@@ -57,36 +57,67 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void SmartLayout_OneSide3442_ShiftsStartByOneStep_ToKeepFarEdgeUnderHardMax()
+        public void SmartLayout_OneSide3442_Max1000_PrefersStrict900WithSameMemberCount()
         {
             var result = SmartLayout1D.Calculate(
-                3442.0, 900.0, 700.0, 400.0, 300.0, 50.0,
+                3442.0, 1000.0, 700.0, 400.0, 300.0, 50.0,
                 MainLayoutMode.OneSide,
                 minEdgeTolerance: 25.0);
 
             Assert.IsNotNull(result);
-            Assert.AreEqual(350.0, result.StartOffset, 1e-8,
-                "OneSide must shift the whole chain by the minimum 50-mm step needed to satisfy HARD Max edge.");
+            Assert.AreEqual(4, result.PointCount, "900 mm must keep the same minimum XC count as the invalid 1000-mm attempt.");
+            Assert.AreEqual(350.0, result.StartOffset, 1e-8);
             CollectionAssert.AreEqual(
                 new[] { 900.0, 900.0, 900.0 },
-                result.Steps.ToArray());
+                result.Steps.ToArray(),
+                "With the same XC count, the largest strict lattice spacing must win before SOFT edge.");
             Assert.AreEqual(392.0, result.EndOffset, 1e-8);
+            Assert.IsFalse(result.IsDense);
             Assert.IsFalse(result.UsedSoftEdge);
         }
 
         [TestMethod]
-        public void SmartLayout_OneSide3442_ReverseMirrors350_900x3_392()
+        public void SmartLayout_OneSide3442_Max1000_ReverseMirrors350_900x3_392()
         {
             var result = SmartLayout1D.Calculate(
-                3442.0, 900.0, 700.0, 400.0, 300.0, 50.0,
+                3442.0, 1000.0, 700.0, 400.0, 300.0, 50.0,
                 MainLayoutMode.OneSide,
                 reverse: true,
                 minEdgeTolerance: 25.0);
 
             Assert.IsNotNull(result);
+            Assert.AreEqual(4, result.PointCount);
             Assert.AreEqual(392.0, result.StartOffset, 1e-8);
             CollectionAssert.AreEqual(new[] { 900.0, 900.0, 900.0 }, result.Steps.ToArray());
             Assert.AreEqual(350.0, result.EndOffset, 1e-8);
+        }
+
+        [TestMethod]
+        public void MainOneSide3442_Max1000_RuntimePlan_Uses350_900x3_392()
+        {
+            var settings = new VxtSettings
+            {
+                MainLayout = MainLayoutMode.OneSide,
+                MainMaxSpacing = 1000.0,
+                MainMinSpacing = 700.0,
+                MainMaxEdgeOffset = 400.0,
+                MainMinEdgeOffset = 300.0,
+                MainBalanceStep = 50.0,
+                DrawFurring = false,
+                DrawHangers = false
+            };
+
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000.0, 3442.0), settings);
+            var ys = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Select(x => Math.Round(x.A.Y, 3))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+
+            CollectionAssert.AreEqual(
+                new[] { 350.0, 1250.0, 2150.0, 3050.0 },
+                ys);
         }
 
         [TestMethod]
