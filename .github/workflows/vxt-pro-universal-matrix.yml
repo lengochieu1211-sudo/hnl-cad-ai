@@ -45,9 +45,10 @@ jobs:
           $buildInfo = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Infrastructure\VxtBuildInfo.cs" -Raw
           if (-not $vm.Contains('VxtBuildInfo.VersionLabel')) { throw 'Palette ViewModel is not bound to canonical VxtBuildInfo.VersionLabel.' }
           if (-not $buildInfo.Contains('public const string Version = "v7.0.0-beta.1"')) { throw 'Canonical beta.1 version label missing.' }
+          $registeredCommands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
+          if (-not $registeredCommands.Contains('[CommandMethod("HNLVXTCREATE"')) { throw 'HNLVXTCREATE command missing.' }
+          if (-not $registeredCommands.Contains('[CommandMethod("HNLVXTFOCUSBOUNDARY"')) { throw 'Mxx focus command is not registered on HnlVxtCommands.' }
           $commands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
-          if (-not $commands.Contains('[CommandMethod("HNLVXTCREATE"')) { throw 'HNLVXTCREATE command missing.' }
-          if (-not $commands.Contains('[CommandMethod("HNLVXTFOCUSBOUNDARY"')) { throw 'Mxx focus command is not registered on HnlVxtCommands.' }
           if (-not $commands.Contains('GetSelection(options, filter)')) { throw 'Multi-selection boundary/equipment parity gate missing.' }
           $session = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtSession.cs" -Raw
           if (-not $session.Contains('List<Boundary2> Boundaries')) { throw 'Multi-polyline boundary collection missing.' }
