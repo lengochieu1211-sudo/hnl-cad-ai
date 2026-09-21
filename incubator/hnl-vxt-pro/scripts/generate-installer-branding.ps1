@@ -8,7 +8,7 @@ Add-Type -AssemblyName System.Drawing
 $out = Join-Path $Root 'artifacts\installer-assets'
 $logoB64 = Join-Path $Root 'src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64'
 # Dedicated Windows EXE/installer artwork. Keep this separate from the in-app HNL logo.
-$exeLogoB64 = Join-Path $Root 'installer\assets\HNL-VXT-EXE-Logo.b64'
+$exeLogoPng = Join-Path $Root 'installer\assets\HNL-VXT-EXE-Logo.png'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $Root)
 $sharedLogo = Join-Path $repoRoot 'public\hnl-logo.png'
 $officialPng = Join-Path $out 'HNL-Logo-Official.png'
@@ -185,9 +185,8 @@ try {
   [IO.File]::WriteAllBytes($officialPng, $refBytes)
 
   # EXE/installer branding is intentionally isolated from the Palette/UI logo.
-  if (-not (Test-Path $exeLogoB64)) { throw "Missing dedicated HNL VXT EXE logo asset: $exeLogoB64" }
-  $exeBase64 = (Get-Content $exeLogoB64 -Raw) -replace '\s',''
-  $exeBytes = [Convert]::FromBase64String($exeBase64)
+  if (-not (Test-Path $exeLogoPng)) { throw "Missing dedicated HNL VXT EXE logo asset: $exeLogoPng" }
+  $exeBytes = [IO.File]::ReadAllBytes($exeLogoPng)
   if ($exeBytes.Length -lt 8 -or
       $exeBytes[0] -ne 0x89 -or $exeBytes[1] -ne 0x50 -or $exeBytes[2] -ne 0x4E -or $exeBytes[3] -ne 0x47 -or
       $exeBytes[4] -ne 0x0D -or $exeBytes[5] -ne 0x0A -or $exeBytes[6] -ne 0x1A -or $exeBytes[7] -ne 0x0A) {
@@ -254,6 +253,6 @@ for ($entry = 0; $entry -lt $count; $entry++) {
 Write-Host 'HNL branding generated and decode-verified:'
 Write-Host "  UI SOURCE (unchanged): $sourceLabel"
 Write-Host "  UI PNG: $officialPng (256x256 normalized reference)"
-Write-Host ("  EXE SOURCE (dedicated): {0} ({1}x{2})" -f $exeLogoB64, $exeWidth, $exeHeight)
+Write-Host ("  EXE SOURCE (dedicated): {0} ({1}x{2})" -f $exeLogoPng, $exeWidth, $exeHeight)
 Write-Host "  EXE ICO: $iconPath (16/24/32/48/64/128/256 ascending, every frame round-trip decoded)"
 Write-Host "  INSTALLER BMP: $smallPath"
