@@ -38,6 +38,7 @@ namespace HNL.VXT.AutoCAD
             var db = doc.Database;
             var counts = new CreateCounts();
             var constraintReport = string.Empty;
+            VxtPreviewPlan diagnosticPlan = null;
 
             try
             {
@@ -54,6 +55,7 @@ namespace HNL.VXT.AutoCAD
                         plan = new VxtPreviewPlan();
                     }
 
+                    diagnosticPlan = plan;
                     constraintReport = plan.Diagnostics.Any(x => x != null)
                         ? VxtConstraintReport.FormatSummary(plan.Diagnostics)
                         : string.Empty;
@@ -190,7 +192,7 @@ namespace HNL.VXT.AutoCAD
             catch (System.Exception ex)
             {
                 var diagnosticPath = VxtDiagnosticService.CaptureCreateFailure(
-                    settings, ex, "VxtCreateEngine.Execute");
+                    settings, ex, "VxtCreateEngine.Execute", diagnosticPlan);
 
                 doc.Editor.WriteMessage(
                     "\nHNL Tool - VXT Pro: Không tạo được khung xương. Đã rollback toàn bộ. " + ex.Message +

@@ -74,7 +74,11 @@ namespace HNL.VXT.AutoCAD
             }
         }
 
-        public static string CaptureCreateFailure(VxtSettings settings, System.Exception exception, string stage)
+        public static string CaptureCreateFailure(
+            VxtSettings settings,
+            System.Exception exception,
+            string stage,
+            VxtPreviewPlan plan = null)
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             try
@@ -84,7 +88,7 @@ namespace HNL.VXT.AutoCAD
                     "HNL Tool", "VXT Pro", "Diagnostics");
                 Directory.CreateDirectory(folder);
                 var file = Path.Combine(folder, "HNL-VXT-DIAGNOSTIC-ERROR-" + DateTime.Now.ToString("yyyy-MM-dd-HHmmssfff") + ".zip");
-                var path = BuildPackage(file, settings, exception, stage, true, null);
+                var path = BuildPackage(file, settings, exception, stage, true, null, plan);
                 RecordGolden("FAIL", settings, null, exception, path, stage);
                 if (doc != null)
                     doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Đã tự lưu gói phân tích lỗi: " + path);
@@ -113,7 +117,8 @@ namespace HNL.VXT.AutoCAD
             System.Exception exception,
             string stage,
             bool automatic,
-            Dictionary<string, int> counts)
+            Dictionary<string, int> counts,
+            VxtPreviewPlan plan = null)
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             if (doc == null) throw new InvalidOperationException("Không có bản vẽ AutoCAD đang hoạt động.");
@@ -128,6 +133,8 @@ namespace HNL.VXT.AutoCAD
             var environmentJson = BuildEnvironmentJson(doc, stage, automatic);
             var settingsJson = BuildSettingsJson(settings);
             var geometryJson = BuildGeometryJson();
+            var constraintsJson = BuildConstraintsJson(plan);
+            var finalPlanJson = BuildFinalPlanJson(plan);
             var diagnosticJson = BuildDiagnosticJson(doc, settings, analysis, exception, stage, automatic, counts);
             var report = BuildHumanReport(doc, settings, analysis, exception, stage, automatic, fullPath);
             var stack = exception == null ? "No exception captured." : exception.ToString();
@@ -141,6 +148,8 @@ namespace HNL.VXT.AutoCAD
                 AddText(zip, "HNL-VXT-ERROR-REPORT.txt", report);
                 AddText(zip, "settings.json", settingsJson);
                 AddText(zip, "geometry.json", geometryJson);
+                AddText(zip, "constraints.json", constraintsJson);
+                AddText(zip, "final-plan.json", finalPlanJson);
                 AddText(zip, "environment.json", environmentJson);
                 AddText(zip, "stacktrace.txt", stack);
                 AddText(zip, "runtime-golden-last.jsonl", golden);
@@ -293,6 +302,7 @@ namespace HNL.VXT.AutoCAD
             if (s == null) return "{}";
             var sb = new StringBuilder(4096);
             sb.Append("{\n");
+            JsonProp(sb, "optimizationMode", s.OptimizationMode.ToString(), true);
             JsonProp(sb, "drawMain", s.DrawMain, true);
             JsonProp(sb, "useDynamicMainBlock", s.UseDynamicMainBlock, true);
             JsonProp(sb, "mainBlockName", s.MainBlockName, true);
@@ -301,9 +311,14 @@ namespace HNL.VXT.AutoCAD
             JsonProp(sb, "mainMinEdgeOffset", s.MainMinEdgeOffset, true);
             JsonProp(sb, "mainMaxEdgeOffset", s.MainMaxEdgeOffset, true);
             JsonProp(sb, "mainBalanceStep", s.MainBalanceStep, true);
+            JsonProp(sb, "mainEdgeTolerance", s.MainEdgeTolerance, true);
+            JsonProp(sb, "useLocalMainAdd", s.UseLocalMainAdd, true);
+            JsonProp(sb, "minLocalMainLength", s.MinLocalMainLength, true);
             JsonProp(sb, "mainSkipLimit", s.MainSkipLimit, true);
             JsonProp(sb, "mainDirection", s.MainDirection.ToString(), true);
             JsonProp(sb, "mainLayout", s.MainLayout.ToString(), true);
+            JsonProp(sb, "autoShadowline", s.AutoShadowline, true);
+            JsonProp(sb, "autoShadowlineConfigured", s.AutoShadowlineConfigured, true);
             JsonProp(sb, "directionDegrees", s.DirectionDegrees, true);
             JsonProp(sb, "drawFurring", s.DrawFurring, true);
             JsonProp(sb, "useDynamicFurringBlock", s.UseDynamicFurringBlock, true);
@@ -317,6 +332,7 @@ namespace HNL.VXT.AutoCAD
             JsonProp(sb, "hangerMinEdgeOffset", s.HangerMinEdgeOffset, true);
             JsonProp(sb, "hangerMaxEdgeOffset", s.HangerMaxEdgeOffset, true);
             JsonProp(sb, "hangerBalanceStep", s.HangerBalanceStep, true);
+            JsonProp(sb, "hangerEdgeTolerance", s.HangerEdgeTolerance, true);
             JsonProp(sb, "hangerLayout", s.HangerLayout.ToString(), true);
             JsonProp(sb, "useAvoidance", s.UseAvoidance, true);
             JsonProp(sb, "shiftAllForAvoidance", s.ShiftAllForAvoidance, true);
@@ -342,13 +358,16 @@ namespace HNL.VXT.AutoCAD
         private static string BuildGeometryJson()
         {
             var session = VxtSession.Current;
-            var sb = new StringBuilder(8192);
+            var sb = new StringBuilder(65536);
             sb.Append("{\n");
             JsonProp(sb, "hasBoundary", session.HasBoundary, true);
+            JsonProp(sb, "boundaryCount", session.Boundaries.Count, true);
             JsonProp(sb, "globalFurringFromFarEdge", session.GlobalFurringFromFarEdge, true);
             JsonProp(sb, "generalEquipmentCount", session.GeneralEquipmentIds.Length, true);
             JsonProp(sb, "mainEquipmentCount", session.MainEquipmentIds.Length, true);
             JsonProp(sb, "furringEquipmentCount", session.FurringEquipmentIds.Length, true);
+
+            // Backward-compatible first boundary for older analyzers.
             sb.Append("  \"boundary\": [");
             if (session.HasBoundary)
             {
@@ -360,6 +379,32 @@ namespace HNL.VXT.AutoCAD
                 }
                 if (session.Boundary.Vertices.Count > 0) sb.Append("\n  ");
             }
+
+            // Full multi-boundary capture. Index maps 1:1 to M01/M02/... diagnostics.
+            sb.Append("],\n  \"boundaries\": [");
+            for (var bi = 0; bi < session.Boundaries.Count; bi++)
+            {
+                var boundary = session.Boundaries[bi];
+                if (bi > 0) sb.Append(",");
+                var fromFar = bi < session.BoundaryFurringFromFarEdges.Count &&
+                              session.BoundaryFurringFromFarEdges[bi];
+                sb.Append("\n    {\"boundaryIndex\": ").Append(bi)
+                  .Append(", \"boundaryCode\": \"M")
+                  .Append((bi + 1).ToString("00", CultureInfo.InvariantCulture))
+                  .Append("\", \"furringFromFarEdge\": ")
+                  .Append(fromFar ? "true" : "false")
+                  .Append(", \"vertices\": [");
+                for (var vi = 0; vi < boundary.Vertices.Count; vi++)
+                {
+                    var p = boundary.Vertices[vi];
+                    if (vi > 0) sb.Append(",");
+                    sb.Append("{\"x\": ").Append(Num(p.X))
+                      .Append(", \"y\": ").Append(Num(p.Y)).Append("}");
+                }
+                sb.Append("]}");
+            }
+            if (session.Boundaries.Count > 0) sb.Append("\n  ");
+
             sb.Append("],\n  \"regions\": [");
             for (var i = 0; i < session.Regions.Count; i++)
             {
@@ -373,6 +418,98 @@ namespace HNL.VXT.AutoCAD
                   .Append(", \"furringFromFarEdge\": ").Append(r.FurringFromFarEdge ? "true" : "false").Append("}");
             }
             if (session.Regions.Count > 0) sb.Append("\n  ");
+            sb.Append("]\n}\n");
+            return sb.ToString();
+        }
+
+        private static string BuildConstraintsJson(VxtPreviewPlan plan)
+        {
+            var sb = new StringBuilder(32768);
+            sb.Append("{\n");
+            JsonProp(sb, "available", plan != null, true);
+            var diagnostics = plan?.Diagnostics?.Where(x => x != null).ToList()
+                              ?? new List<VxtConstraintDiagnostic>();
+            JsonProp(sb, "summary", VxtConstraintReport.FormatSummary(diagnostics), true);
+            JsonProp(sb, "count", diagnostics.Count, true);
+            JsonProp(sb, "hardCount", diagnostics.Count(x => x.IsHard), true);
+            JsonProp(sb, "warningCount", diagnostics.Count(x => !x.IsHard), true);
+            sb.Append("  \"items\": [");
+            for (var i = 0; i < diagnostics.Count; i++)
+            {
+                var d = diagnostics[i];
+                if (i > 0) sb.Append(",");
+                sb.Append("\n    {")
+                  .Append("\"boundaryIndex\": ").Append(d.BoundaryIndex).Append(", ")
+                  .Append("\"boundaryCode\": \"").Append(JsonEscape(d.BoundaryCode)).Append("\", ")
+                  .Append("\"target\": \"").Append(JsonEscape(d.Target.ToString())).Append("\", ")
+                  .Append("\"kind\": \"").Append(JsonEscape(d.Kind.ToString())).Append("\", ")
+                  .Append("\"severity\": \"").Append(JsonEscape(d.Severity.ToString())).Append("\", ")
+                  .Append("\"isHard\": ").Append(d.IsHard ? "true" : "false").Append(", ")
+                  .Append("\"actual\": ").Append(Num(d.ActualValue)).Append(", ")
+                  .Append("\"limit\": ").Append(Num(d.LimitValue)).Append(", ")
+                  .Append("\"difference\": ").Append(Num(d.Difference)).Append(", ")
+                  .Append("\"displayText\": \"").Append(JsonEscape(d.DisplayText)).Append("\"}");
+            }
+            if (diagnostics.Count > 0) sb.Append("\n  ");
+            sb.Append("]\n}\n");
+            return sb.ToString();
+        }
+
+        private static string BuildFinalPlanJson(VxtPreviewPlan plan)
+        {
+            var sb = new StringBuilder(131072);
+            sb.Append("{\n");
+            JsonProp(sb, "available", plan != null, true);
+            if (plan == null)
+            {
+                sb.Append("  \"lines\": [],\n  \"hangers\": [],\n  \"dimensions\": []\n}\n");
+                return sb.ToString();
+            }
+
+            JsonProp(sb, "lineCount", plan.Lines.Count, true);
+            JsonProp(sb, "mainSegmentCount", plan.Lines.Count(x => x.Kind == PreviewLineKind.Main), true);
+            JsonProp(sb, "furringSegmentCount", plan.Lines.Count(x => x.Kind == PreviewLineKind.Furring), true);
+            JsonProp(sb, "hangerCount", plan.HangerPoints.Count, true);
+            JsonProp(sb, "dimensionCount", plan.Dimensions.Count, true);
+
+            sb.Append("  \"lines\": [");
+            for (var i = 0; i < plan.Lines.Count; i++)
+            {
+                var line = plan.Lines[i];
+                if (i > 0) sb.Append(",");
+                sb.Append("\n    {\"kind\": \"").Append(JsonEscape(line.Kind.ToString()))
+                  .Append("\", \"ax\": ").Append(Num(line.A.X))
+                  .Append(", \"ay\": ").Append(Num(line.A.Y))
+                  .Append(", \"bx\": ").Append(Num(line.B.X))
+                  .Append(", \"by\": ").Append(Num(line.B.Y)).Append("}");
+            }
+            if (plan.Lines.Count > 0) sb.Append("\n  ");
+
+            sb.Append("],\n  \"hangers\": [");
+            for (var i = 0; i < plan.HangerPoints.Count; i++)
+            {
+                var p = plan.HangerPoints[i];
+                if (i > 0) sb.Append(",");
+                sb.Append("\n    {\"x\": ").Append(Num(p.X))
+                  .Append(", \"y\": ").Append(Num(p.Y)).Append("}");
+            }
+            if (plan.HangerPoints.Count > 0) sb.Append("\n  ");
+
+            sb.Append("],\n  \"dimensions\": [");
+            for (var i = 0; i < plan.Dimensions.Count; i++)
+            {
+                var d = plan.Dimensions[i];
+                if (i > 0) sb.Append(",");
+                sb.Append("\n    {\"target\": \"").Append(JsonEscape(d.Target.ToString()))
+                  .Append("\", \"x1\": ").Append(Num(d.ExtensionPoint1.X))
+                  .Append(", \"y1\": ").Append(Num(d.ExtensionPoint1.Y))
+                  .Append(", \"x2\": ").Append(Num(d.ExtensionPoint2.X))
+                  .Append(", \"y2\": ").Append(Num(d.ExtensionPoint2.Y))
+                  .Append(", \"dimX\": ").Append(Num(d.DimensionLinePoint.X))
+                  .Append(", \"dimY\": ").Append(Num(d.DimensionLinePoint.Y))
+                  .Append(", \"rotationRadians\": ").Append(Num(d.RotationRadians)).Append("}");
+            }
+            if (plan.Dimensions.Count > 0) sb.Append("\n  ");
             sb.Append("]\n}\n");
             return sb.ToString();
         }

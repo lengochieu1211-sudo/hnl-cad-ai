@@ -146,6 +146,20 @@ jobs:
             throw "Parity gate failed: Preview is not using multi-boundary planning."
           }
 
+          $diagnosticSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtDiagnosticService.cs" -Raw
+          if (-not $diagnosticSource.Contains('"boundaries": [')) {
+            throw "Diagnostic gate failed: full multi-boundary geometry is not captured."
+          }
+          if (-not $diagnosticSource.Contains('AddText(zip, "constraints.json", constraintsJson)')) {
+            throw "Diagnostic gate failed: constraints.json is not included."
+          }
+          if (-not $diagnosticSource.Contains('AddText(zip, "final-plan.json", finalPlanJson)')) {
+            throw "Diagnostic gate failed: final-plan.json is not included."
+          }
+          if (-not $createSource.Contains('"VxtCreateEngine.Execute", diagnosticPlan')) {
+            throw "Diagnostic gate failed: Create does not pass the failed final plan."
+          }
+
           $logoText = (Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64" -Raw) -replace '\s',''
           try { $logoBytes = [Convert]::FromBase64String($logoText) }
           catch { throw "Branding gate failed: HNL logo Base64 is invalid." }
