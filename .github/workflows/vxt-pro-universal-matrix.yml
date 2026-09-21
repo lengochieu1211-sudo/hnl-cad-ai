@@ -57,11 +57,12 @@ jobs:
           if (-not $create.Contains('VxtMultiBoundaryPlanBuilder.Build')) { throw 'Create does not use multi-boundary plan builder.' }
           $preview = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtTransientPreview.cs" -Raw
           if (-not $preview.Contains('VxtMultiBoundaryPlanBuilder.Build')) { throw 'Preview does not use multi-boundary plan builder.' }
-          $logoText = (Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64" -Raw) -replace '\s',''
-          try { $logoBytes = [Convert]::FromBase64String($logoText) }
-          catch { throw 'HNL logo Base64 is invalid.' }
-          if ($logoBytes.Length -lt 1024) { throw 'Decoded HNL logo is unexpectedly small.' }
-          if ($logoBytes[0] -ne 0x89 -or $logoBytes[1] -ne 0x50 -or $logoBytes[2] -ne 0x4E -or $logoBytes[3] -ne 0x47) { throw 'HNL logo is not PNG.' }
+          $masterLogo = "$env:VXT_ROOT\installer\assets\HNL-VXT-EXE-Logo.png"
+          $logoBytes = [IO.File]::ReadAllBytes($masterLogo)
+          if ($logoBytes.Length -lt 1024) { throw 'Canonical HNL VXT logo is unexpectedly small.' }
+          if ($logoBytes[0] -ne 0x89 -or $logoBytes[1] -ne 0x50 -or $logoBytes[2] -ne 0x4E -or $logoBytes[3] -ne 0x47) { throw 'Canonical HNL VXT logo is not PNG.' }
+          $uiProject = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\HNL.VXT.UI.csproj" -Raw
+          if (-not $uiProject.Contains('..\..\installer\assets\HNL-VXT-EXE-Logo.png')) { throw 'Palette does not use canonical HNL VXT logo master.' }
           if (-not (Test-Path "$env:VXT_ROOT\scripts\verify-installer-icon.ps1")) { throw 'Compiled installer icon verifier missing.' }
           Write-Host 'Functional beta.1 source/branding/multi-polyline gate PASS'
       - name: Run golden core tests

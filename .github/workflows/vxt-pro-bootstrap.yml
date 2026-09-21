@@ -51,7 +51,7 @@ jobs:
             "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs",
             "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtTransientPreview.cs",
             "$env:VXT_ROOT\src\HNL.VXT.UI\Controls\HnlLogo.xaml",
-            "$env:VXT_ROOT\src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64",
+            "$env:VXT_ROOT\installer\assets\HNL-VXT-EXE-Logo.png",
             "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj",
             "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\NumericExpressionEvaluatorTests.cs",
             "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\ProductionLayoutTests.cs",
@@ -169,12 +169,19 @@ jobs:
             throw "Diagnostic gate failed: Create does not pass the failed final plan."
           }
 
-          $logoText = (Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64" -Raw) -replace '\s',''
-          try { $logoBytes = [Convert]::FromBase64String($logoText) }
-          catch { throw "Branding gate failed: HNL logo Base64 is invalid." }
-          if ($logoBytes.Length -lt 1024) { throw "Branding gate failed: decoded HNL logo is unexpectedly small." }
+          $masterLogo = "$env:VXT_ROOT\installer\assets\HNL-VXT-EXE-Logo.png"
+          $logoBytes = [IO.File]::ReadAllBytes($masterLogo)
+          if ($logoBytes.Length -lt 1024) { throw "Branding gate failed: canonical HNL VXT logo is unexpectedly small." }
           if ($logoBytes[0] -ne 0x89 -or $logoBytes[1] -ne 0x50 -or $logoBytes[2] -ne 0x4E -or $logoBytes[3] -ne 0x47) {
-            throw "Branding gate failed: HNL logo is not a PNG."
+            throw "Branding gate failed: canonical HNL VXT logo is not PNG."
+          }
+          $uiProject = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\HNL.VXT.UI.csproj" -Raw
+          if (-not $uiProject.Contains('..\..\installer\assets\HNL-VXT-EXE-Logo.png')) {
+            throw "Branding gate failed: Palette is not using canonical HNL VXT logo master."
+          }
+          $brandingScript = Get-Content "$env:VXT_ROOT\scripts\generate-installer-branding.ps1" -Raw
+          if (-not $brandingScript.Contains("masterLogoPng = Join-Path")) {
+            throw "Branding gate failed: installer branding is not using canonical HNL VXT logo master."
           }
 
           $iss = Get-Content "$env:VXT_ROOT\installer\HNL.VXT.Setup.iss" -Raw
