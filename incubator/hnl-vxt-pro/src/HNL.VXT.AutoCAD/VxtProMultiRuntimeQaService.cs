@@ -23,7 +23,7 @@ namespace HNL.VXT.AutoCAD
         public static string Run()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
-            if (doc == null) return "FAIL Pro Multi QA: Không có bản vẽ AutoCAD đang hoạt động.";
+            if (doc == null) return "Lỗi Pro Multi QA: Không có bản vẽ AutoCAD đang hoạt động.";
 
             try
             {
@@ -33,7 +33,7 @@ namespace HNL.VXT.AutoCAD
                 var mep = CheckDenseMepStress();
                 var legacy = CheckLegacyIsolation();
 
-                var summary = "PASS Pro Multi QA: VT=" + economy +
+                var summary = "Đạt Pro Multi QA: VT=" + economy +
                               " | Căn trục=" + alignment +
                               " | Độc lập=" + independence +
                               " | MEP=" + mep +
@@ -49,7 +49,7 @@ namespace HNL.VXT.AutoCAD
                     new VxtSettings { OptimizationMode = VxtOptimizationMode.ProBalanced },
                     ex,
                     "VxtProMultiRuntimeQaService.Run");
-                var summary = "FAIL Pro Multi QA: " + ex.Message +
+                var summary = "Lỗi Pro Multi QA: " + ex.Message +
                               (string.IsNullOrWhiteSpace(diagnostic) ? string.Empty : " | Diagnostic: " + diagnostic);
                 WriteLog("FAIL", summary, diagnostic);
                 doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);

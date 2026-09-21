@@ -23,7 +23,7 @@ namespace HNL.VXT.AutoCAD
         public static string Run()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
-            if (doc == null) return "FAIL Transient Soak QA: Không có bản vẽ AutoCAD đang hoạt động.";
+            if (doc == null) return "Lỗi Transient Soak QA: Không có bản vẽ AutoCAD đang hoạt động.";
 
             var preview = VxtTransientPreview.Instance;
             var restorePreview = VxtSession.Current.HasBoundary;
@@ -46,7 +46,7 @@ namespace HNL.VXT.AutoCAD
 
                 if (restorePreview) preview.Refresh();
 
-                var summary = "PASS Transient Soak QA: " + Cycles +
+                var summary = "Đạt Transient Soak QA: " + Cycles +
                               " vòng Add/Erase x 4 drawable (Line/Circle/Text/Dim) | active=0 | quarantine=" +
                               preview.RetiredDrawableCount +
                               " | delayed-dispose guard ON | Dim GenerateLayout ON | Preview chạy trong command context.";
@@ -62,7 +62,7 @@ namespace HNL.VXT.AutoCAD
                     try { preview.Refresh(); } catch { }
                 }
 
-                var summary = "FAIL Transient Soak QA: " + ex.Message;
+                var summary = "Lỗi Transient Soak QA: " + ex.Message;
                 WriteLog("FAIL", summary);
                 doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
                 return summary;

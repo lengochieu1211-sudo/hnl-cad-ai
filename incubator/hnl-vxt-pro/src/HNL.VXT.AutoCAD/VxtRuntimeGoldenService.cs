@@ -40,7 +40,7 @@ namespace HNL.VXT.AutoCAD
 
             if (doc == null)
             {
-                var noDoc = "FAIL " + testName + ": Không có bản vẽ AutoCAD đang hoạt động.";
+                var noDoc = "Lỗi " + testName + ": Không có bản vẽ AutoCAD đang hoạt động.";
                 VxtSession.Current.ViewModel?.SetRuntimeGoldenResult(false, noDoc, null);
                 return noDoc;
             }
@@ -147,7 +147,7 @@ namespace HNL.VXT.AutoCAD
                 ValidateRollback(db, settings, tempBlockName, tempMlineStyleName, probeLinetypeExistedBefore);
                 sw.Stop();
                 var engineLabel = isPro ? "Pro Economy" : "Legacy Golden";
-                var summary = "PASS " + testName + ": AutoCAD DB API + " + engineLabel + " 6000x4000 OK | XC " +
+                var summary = "Đạt " + testName + ": AutoCAD DB API + " + engineLabel + " 6000x4000 OK | XC " +
                               ExpectedMain + " • XP " + ExpectedFurring + " • Ty " + ExpectedHangers +
                               " • Dim " + ExpectedDimensions + " | Resource rollback OK | " + sw.ElapsedMilliseconds +
                               " ms | DWG không bị thay đổi.";
@@ -160,7 +160,7 @@ namespace HNL.VXT.AutoCAD
             {
                 sw.Stop();
                 var diagnosticPath = VxtDiagnosticService.CaptureCreateFailure(settings, ex, "VxtRuntimeGoldenService." + stageName);
-                var summary = "FAIL " + testName + ": " + ex.Message +
+                var summary = "Lỗi " + testName + ": " + ex.Message +
                               (string.IsNullOrWhiteSpace(diagnosticPath) ? string.Empty : " | Diagnostic: " + diagnosticPath);
                 WriteGoldenLog("FAIL", stageName, optimizationMode, summary, counts, diagnosticPath);
                 doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
