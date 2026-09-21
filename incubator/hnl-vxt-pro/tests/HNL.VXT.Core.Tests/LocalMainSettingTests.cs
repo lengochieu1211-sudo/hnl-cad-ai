@@ -118,7 +118,7 @@ namespace HNL.VXT.Core.Tests
             };
             var disabled = enabled.Clone();
             disabled.UseLocalMainAdd = false;
-            var boundary = MizukiM01Notch2300();
+            var boundary = MizukiM01Notch2330();
 
             var offPlan = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { boundary }, disabled, new VxtLayoutContext());
@@ -131,12 +131,12 @@ namespace HNL.VXT.Core.Tests
             CollectionAssert.AreEqual(
                 new[] { 300.0, 1150.0, 2000.0 },
                 offYs,
-                "OneSide base grid for the 2300-mm domain must stay deterministic.");
+                "OneSide base grid for the 2330-mm domain must stay deterministic: 300-850-850-330.");
 
             CollectionAssert.AreEqual(
-                new[] { 300.0, 1300.0, 2000.0 },
+                new[] { 400.0, 1200.0, 2000.0 },
                 onYs,
-                "OneSide notch repair must keep the same XC count and chase Max first: 300-1000-700-300.");
+                "Equal-gap same-count repair must win before local movement: 400-800-800-330.");
 
             Assert.AreEqual(offYs.Length, onYs.Length,
                 "A same-count notch repair must not add XC.");
@@ -236,15 +236,15 @@ namespace HNL.VXT.Core.Tests
                 new Point2(0.0, 2350.0)
             });
 
-        private static Boundary2 MizukiM01Notch2300()
+        private static Boundary2 MizukiM01Notch2330()
             => new Boundary2(new[]
             {
                 new Point2(0.0, 0.0),
                 new Point2(3180.0, 0.0),
                 new Point2(3180.0, 1600.0),
                 new Point2(1150.0, 1600.0),
-                new Point2(1150.0, 2300.0),
-                new Point2(0.0, 2300.0)
+                new Point2(1150.0, 2330.0),
+                new Point2(0.0, 2330.0)
             });
 
         private static bool SameMain(PreviewLine a, PreviewLine b)

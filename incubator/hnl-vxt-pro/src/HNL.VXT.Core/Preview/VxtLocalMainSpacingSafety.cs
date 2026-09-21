@@ -1227,6 +1227,9 @@ namespace HNL.VXT.Core.Preview
         private static double FloorMultiple(double value, double step)
             => step <= 0.0 ? value : Math.Floor((value + 1e-9) / step) * step;
 
+        private static double CeilMultiple(double value, double step)
+            => step <= 0.0 ? value : Math.Ceiling((value - 1e-9) / step) * step;
+
         private static double SnapAtOrBelow(double value, double origin, double step)
             => step <= 0.0 ? value : origin + Math.Floor(((value - origin) + 1e-9) / step) * step;
 
