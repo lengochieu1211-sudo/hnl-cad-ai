@@ -189,21 +189,32 @@ namespace HNL.VXT.Core.Layout
             var available = length - startEdge;
             if (available <= 2.0 + Tol) return null;
 
-            // Use the greatest number of complete Max-spacing gaps that still leaves at least
-            // the accepted SOFT far-edge allowance. If the remaining edge would exceed HARD Max,
-            // this pure chase is not feasible and the certified general solver handles the case.
+            // First choose the greatest number of complete Max-spacing gaps that still leaves
+            // the accepted far-edge allowance. OneSide is allowed to shift the whole chain away
+            // from the selected start edge by the minimum configured increment needed to bring
+            // the far edge back under HARD Max. This preserves the chase ordering:
+            // 3442 => 350 | 900 | 900 | 900 | 392, not a balanced/remainder-in-middle layout.
             var usable = Math.Max(0.0, available - Math.Max(0.0, minAcceptedFarEdge));
             var k = Math.Max(0, LispFix((usable + Tol) / maxDiscrete));
-            var farEdge = available - k * maxDiscrete;
+            var farEdgeAtStart = available - k * maxDiscrete;
 
-            if (farEdge <= 2.0 + Tol ||
+            var shift = 0.0;
+            if (farEdgeAtStart > maxEdge + Tol)
+                shift = CeilMultiple(farEdgeAtStart - maxEdge, increment);
+
+            var shiftedStartEdge = startEdge + shift;
+            var farEdge = farEdgeAtStart - shift;
+
+            if (shiftedStartEdge < startEdge - Tol ||
+                shiftedStartEdge > maxEdge + Tol ||
+                farEdge <= 2.0 + Tol ||
                 farEdge < minAcceptedFarEdge - Tol ||
                 farEdge > maxEdge + Tol)
                 return null;
 
             var steps = Enumerable.Repeat(maxDiscrete, k).ToArray();
             var result = new Result(
-                startEdge,
+                shiftedStartEdge,
                 steps,
                 farEdge,
                 isDense: false,

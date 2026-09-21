@@ -57,6 +57,39 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void SmartLayout_OneSide3442_ShiftsStartByOneStep_ToKeepFarEdgeUnderHardMax()
+        {
+            var result = SmartLayout1D.Calculate(
+                3442.0, 900.0, 700.0, 400.0, 300.0, 50.0,
+                MainLayoutMode.OneSide,
+                minEdgeTolerance: 25.0);
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(350.0, result.StartOffset, 1e-8,
+                "OneSide must shift the whole chain by the minimum 50-mm step needed to satisfy HARD Max edge.");
+            CollectionAssert.AreEqual(
+                new[] { 900.0, 900.0, 900.0 },
+                result.Steps.ToArray());
+            Assert.AreEqual(392.0, result.EndOffset, 1e-8);
+            Assert.IsFalse(result.UsedSoftEdge);
+        }
+
+        [TestMethod]
+        public void SmartLayout_OneSide3442_ReverseMirrors350_900x3_392()
+        {
+            var result = SmartLayout1D.Calculate(
+                3442.0, 900.0, 700.0, 400.0, 300.0, 50.0,
+                MainLayoutMode.OneSide,
+                reverse: true,
+                minEdgeTolerance: 25.0);
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(392.0, result.StartOffset, 1e-8);
+            CollectionAssert.AreEqual(new[] { 900.0, 900.0, 900.0 }, result.Steps.ToArray());
+            Assert.AreEqual(350.0, result.EndOffset, 1e-8);
+        }
+
+        [TestMethod]
         public void SmartLayout_OneSide5590_ChasesFiveMaxGaps_AndUsesSoftFarEdge()
         {
             var result = SmartLayout1D.Calculate(
