@@ -158,6 +158,57 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void MizukiM31_OneSide_SoftMinSameCountRepair_WinsBeforeLocalXC()
+        {
+            var enabled = new VxtSettings
+            {
+                OptimizationMode = VxtOptimizationMode.Legacy,
+                MainDirection = MainDirectionMode.Vertical,
+                MainLayout = MainLayoutMode.OneSide,
+                DrawMain = true,
+                DrawFurring = false,
+                DrawHangers = false,
+                AutoDimension = false,
+                UseAvoidance = false,
+                MainSkipLimit = 0.0,
+                UseLocalMainAdd = true,
+                MinLocalMainLength = 500.0,
+                MainMinSpacing = 700.0,
+                MainMaxSpacing = 1000.0,
+                MainMinEdgeOffset = 300.0,
+                MainMaxEdgeOffset = 400.0,
+                MainBalanceStep = 50.0
+            };
+            var disabled = enabled.Clone();
+            disabled.UseLocalMainAdd = false;
+            var boundary = MizukiM31Notch2050x5880();
+
+            var offPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, disabled, new VxtLayoutContext());
+            var onPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, enabled, new VxtLayoutContext());
+
+            var offXs = MainXs(offPlan);
+            var onXs = MainXs(onPlan);
+
+            CollectionAssert.AreEqual(
+                new[] { 350.0, 1050.0, 1750.0 },
+                offXs,
+                "M31 base OneSide grid must stay deterministic before notch repair.");
+            CollectionAssert.AreEqual(
+                new[] { 400.0, 1200.0, 2000.0 },
+                onXs,
+                "M31 has a valid SOFT-Min same-count 800-800 repair; do not add a fourth XC.");
+            Assert.AreEqual(offXs.Length, onXs.Length,
+                "Same-count repair must win before local XC is added on M31.");
+            Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard),
+                "M31 same-count repair must satisfy every HARD Max constraint.");
+            Assert.IsFalse(onPlan.Diagnostics.Any(x =>
+                x.Kind == VxtConstraintKind.ManualMainRequiredWarning),
+                "M31 same-count repair must not require manual XC completion.");
+        }
+
+        [TestMethod]
         public void FieldBlock14_LocalMainOff_DoesNotSplitMainsAtArtificialRegionSeams()
         {
             var settings = FieldBlock14Settings();
@@ -228,6 +279,14 @@ namespace HNL.VXT.Core.Tests
             }
         }
 
+        private static double[] MainXs(VxtPreviewPlan plan)
+            => plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Select(x => Math.Round((x.A.X + x.B.X) * 0.5, 1))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+
         private static double[] MainYs(VxtPreviewPlan plan)
             => plan.Lines
                 .Where(x => x.Kind == PreviewLineKind.Main)
@@ -245,6 +304,22 @@ namespace HNL.VXT.Core.Tests
                 new Point2(1150.0, 1600.0),
                 new Point2(1150.0, 2350.0),
                 new Point2(0.0, 2350.0)
+            });
+
+        private static Boundary2 MizukiM31Notch2050x5880()
+            => new Boundary2(new[]
+            {
+                new Point2(404.355742292, 0.0),
+                new Point2(2050.0, 0.0),
+                new Point2(2050.0, 1780.0),
+                new Point2(2005.0, 1780.0),
+                new Point2(2005.0, 5880.0),
+                new Point2(1755.0, 5880.0),
+                new Point2(1755.0, 2880.0),
+                new Point2(0.0, 2880.0),
+                new Point2(0.0, 1780.0),
+                new Point2(400.0, 1780.0),
+                new Point2(400.0, 0.0)
             });
 
         private static Boundary2 MizukiM01Notch2330()
