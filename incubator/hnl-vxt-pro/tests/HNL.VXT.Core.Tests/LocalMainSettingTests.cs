@@ -240,8 +240,16 @@ namespace HNL.VXT.Core.Tests
             plan.Lines.Add(new PreviewLine(new Point2(0.0, 2100.0), new Point2(4000.0, 2100.0), PreviewLineKind.Main));
             plan.MainSegmentCount = 5;
 
-            VxtLocalMainSpacingSafety.Apply(
-                boundary, plan, settings, 0.0, new VxtLayoutContext());
+            var safetyType = typeof(VxtMultiBoundaryPlanBuilder).Assembly.GetType(
+                "HNL.VXT.Core.Preview.VxtLocalMainSpacingSafety", throwOnError: true);
+            var apply = safetyType.GetMethod(
+                "Apply",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            Assert.IsNotNull(apply, "Internal notch safety entry point must remain available.");
+            apply.Invoke(null, new object[]
+            {
+                boundary, plan, settings, 0.0, new VxtLayoutContext()
+            });
 
             var nearWallPieces = plan.Lines
                 .Where(x => x.Kind == PreviewLineKind.Main)
