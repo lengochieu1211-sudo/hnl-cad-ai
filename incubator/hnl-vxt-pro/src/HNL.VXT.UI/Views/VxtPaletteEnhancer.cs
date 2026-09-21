@@ -60,7 +60,7 @@ namespace HNL.VXT.UI.Views
 
             var border = CreateSectionCard(view);
             var expander = new Expander { IsExpanded = false };
-            expander.Header = CreateHeader(view, "LAYER & KIỂU NÉT", "#64748B");
+            expander.Header = CreateHeader(view, "Layer & kiểu nét", "#64748B");
 
             var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
             panel.Children.Add(CreateResourceGroup(view, state.ViewModel, "Xương chính",
@@ -188,7 +188,7 @@ namespace HNL.VXT.UI.Views
 
             var border = CreateSectionCard(view);
             var expander = new Expander { IsExpanded = false };
-            expander.Header = CreateHeader(view, "GIAO DIỆN", "#0EA5E9");
+            expander.Header = CreateHeader(view, "Giao diện", "#0EA5E9");
 
             var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
             panel.Children.Add(CreatePreferenceRow(view, state, "Chế độ màu", VxtUiPreferences.ThemeModes,
@@ -523,14 +523,14 @@ namespace HNL.VXT.UI.Views
         private static int FindInsertBeforePreview(StackPanel stack)
         {
             for (var i = 0; i < stack.Children.Count; i++)
-                if (ContainsText(stack.Children[i] as DependencyObject, "XEM TRƯỚC TRÊN BẢN VẼ")) return i;
+                if (ContainsText(stack.Children[i] as DependencyObject, "Xem trước trên bản vẽ")) return i;
             return stack.Children.Count;
         }
 
         private static bool ContainsText(DependencyObject root, string value)
         {
             if (root == null) return false;
-            if (root is TextBlock text && text.Text == value) return true;
+            if (root is TextBlock text && string.Equals(text.Text, value, StringComparison.OrdinalIgnoreCase)) return true;
             var count = VisualTreeHelper.GetChildrenCount(root);
             for (var i = 0; i < count; i++)
                 if (ContainsText(VisualTreeHelper.GetChild(root, i), value)) return true;

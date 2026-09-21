@@ -102,6 +102,30 @@ jobs:
             throw "Functional gate failed: UI bridge does not invoke HNLVXTCREATE."
           }
 
+          $paletteXaml = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.xaml" -Raw
+          $paletteView = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.xaml.cs" -Raw
+          $diagnosticVm = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\VxtPaletteViewModel.Diagnostics.cs" -Raw
+          $enhancerSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteEnhancer.cs" -Raw
+          $visibleUppercase = @(
+            'Text="VẼ XƯƠNG TRẦN"',
+            'Text="LIVE"',
+            'Text = "KIỂM TRA BỐ TRÍ"',
+            '"CHƯA KIỂM TRA"',
+            '"ĐANG KIỂM TRA"',
+            '"CẦN KIỂM TRA"',
+            '"ĐANG CHẠY GOLDEN"',
+            '"RUNTIME PASS"',
+            '"RUNTIME FAIL"',
+            'CreateHeader(view, "LAYER & KIỂU NÉT"',
+            'CreateHeader(view, "GIAO DIỆN"'
+          )
+          $visibleSources = $paletteXaml + [Environment]::NewLine + $paletteView + [Environment]::NewLine + $diagnosticVm + [Environment]::NewLine + $enhancerSource
+          foreach ($token in $visibleUppercase) {
+            if ($visibleSources.Contains($token)) {
+              throw "UI capitalization gate failed: visible all-caps label remains: $token"
+            }
+          }
+
           $commandsImpl = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
           if (-not $commandsImpl.Contains('GetSelection(options, filter)')) {
             throw "Parity gate failed: boundary/equipment selection is not multi-select."

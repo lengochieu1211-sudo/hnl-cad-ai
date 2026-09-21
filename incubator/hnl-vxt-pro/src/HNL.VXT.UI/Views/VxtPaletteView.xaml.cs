@@ -126,7 +126,7 @@ namespace HNL.VXT.UI.Views
                 Margin = new Thickness(0, 0, 8, 0)
             });
             var titleTextStack = new StackPanel();
-            var title = new TextBlock { Text = "KIỂM TRA BỐ TRÍ" };
+            var title = new TextBlock { Text = "Kiểm tra bố trí" };
             if (Resources["SectionTitle"] is Style sectionTitle) title.Style = sectionTitle;
             titleTextStack.Children.Add(title);
 

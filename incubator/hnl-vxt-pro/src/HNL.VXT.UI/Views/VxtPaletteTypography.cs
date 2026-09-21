@@ -106,9 +106,9 @@ namespace HNL.VXT.UI.Views
                     {
                         text.FontSize = HintSize * scale;
                     }
-                    else if (string.Equals(text.Text, "VẼ XƯƠNG TRẦN", StringComparison.Ordinal))
+                    else if (string.Equals(text.Text, "Vẽ xương trần", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Product/brand title may remain uppercase; section names below do not.
+                        // Product/brand title uses natural sentence case; technical acronyms remain uppercase.
                         text.FontSize = ProductTitleSize * scale;
                         text.FontWeight = FontWeights.SemiBold;
                     }
@@ -119,7 +119,7 @@ namespace HNL.VXT.UI.Views
                     }
                     else if (!string.IsNullOrWhiteSpace(text.Text) &&
                              !string.Equals(text.Text, "HNL Tool", StringComparison.Ordinal) &&
-                             !string.Equals(text.Text, "LIVE", StringComparison.Ordinal))
+                             !string.Equals(text.Text, "Live", StringComparison.OrdinalIgnoreCase))
                     {
                         // Dynamic panels created in code-behind/runtime polish must not fall back
                         // to smaller ad-hoc font sizes. They follow the same Properties body size.

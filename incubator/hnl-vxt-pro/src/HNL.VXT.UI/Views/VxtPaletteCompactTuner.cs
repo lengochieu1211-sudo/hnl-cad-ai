@@ -120,7 +120,7 @@ namespace HNL.VXT.UI.Views
                     {
                         if (text.Text == "HNL Tool")
                             text.Visibility = Visibility.Collapsed;
-                        else if (text.Text == "VẼ XƯƠNG TRẦN")
+                        else if (string.Equals(text.Text, "Vẽ xương trần", StringComparison.OrdinalIgnoreCase))
                         {
                             text.FontSize = 13.0;
                             text.Margin = new Thickness(0);
@@ -181,7 +181,7 @@ namespace HNL.VXT.UI.Views
             {
                 foreach (var text in Descendants<TextBlock>(stack))
                 {
-                    if (string.Equals(text.Text, "VẼ XƯƠNG TRẦN", StringComparison.Ordinal))
+                    if (string.Equals(text.Text, "Vẽ xương trần", StringComparison.OrdinalIgnoreCase))
                     {
                         titleStack = stack;
                         break;
