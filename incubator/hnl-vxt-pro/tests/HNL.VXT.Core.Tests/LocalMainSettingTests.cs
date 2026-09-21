@@ -209,6 +209,77 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void LongNotch_MainCloserThan100mm_IsBrokenAndHardCoverageMovesInward()
+        {
+            var settings = new VxtSettings
+            {
+                OptimizationMode = VxtOptimizationMode.Legacy,
+                MainDirection = MainDirectionMode.Horizontal,
+                MainLayout = MainLayoutMode.OneSide,
+                DrawMain = true,
+                DrawFurring = false,
+                DrawHangers = false,
+                AutoDimension = false,
+                UseAvoidance = false,
+                MainSkipLimit = 0.0,
+                UseLocalMainAdd = true,
+                MinLocalMainLength = 500.0,
+                MainMinSpacing = 700.0,
+                MainMaxSpacing = 1000.0,
+                MainMinEdgeOffset = 300.0,
+                MainMaxEdgeOffset = 400.0,
+                MainBalanceStep = 50.0
+            };
+            var boundary = LongBottomNotch4000x2400();
+            var plan = new VxtPreviewPlan();
+
+            plan.Lines.Add(new PreviewLine(new Point2(0.0, 300.0), new Point2(1500.0, 300.0), PreviewLineKind.Main));
+            plan.Lines.Add(new PreviewLine(new Point2(3000.0, 300.0), new Point2(4000.0, 300.0), PreviewLineKind.Main));
+            plan.Lines.Add(new PreviewLine(new Point2(0.0, 1000.0), new Point2(4000.0, 1000.0), PreviewLineKind.Main));
+            plan.Lines.Add(new PreviewLine(new Point2(0.0, 1700.0), new Point2(4000.0, 1700.0), PreviewLineKind.Main));
+            plan.Lines.Add(new PreviewLine(new Point2(0.0, 2100.0), new Point2(4000.0, 2100.0), PreviewLineKind.Main));
+            plan.MainSegmentCount = 5;
+
+            VxtLocalMainSpacingSafety.Apply(
+                boundary, plan, settings, 0.0, new VxtLayoutContext());
+
+            var nearWallPieces = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Where(x => Math.Abs(((x.A.Y + x.B.Y) * 0.5) - 1000.0) <= 0.1)
+                .OrderBy(x => Math.Min(x.A.X, x.B.X))
+                .ToArray();
+
+            Assert.AreEqual(2, nearWallPieces.Length,
+                "The XC only 70 mm from the long notch wall must be broken into two outside pieces.");
+            Assert.AreEqual(1500.0, Math.Max(nearWallPieces[0].A.X, nearWallPieces[0].B.X), 0.1);
+            Assert.AreEqual(3000.0, Math.Min(nearWallPieces[1].A.X, nearWallPieces[1].B.X), 0.1);
+            Assert.IsFalse(plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Any(x =>
+                {
+                    var y = (x.A.Y + x.B.Y) * 0.5;
+                    var minX = Math.Min(x.A.X, x.B.X);
+                    var maxX = Math.Max(x.A.X, x.B.X);
+                    return Math.Abs(y - 1000.0) <= 0.1 &&
+                           minX < 2250.0 && maxX > 2250.0;
+                }),
+                "No XC may continue through the long notch band while clearance to the notch wall is below 100 mm.");
+
+            Assert.IsTrue(plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Any(x =>
+                {
+                    var y = (x.A.Y + x.B.Y) * 0.5;
+                    var minX = Math.Min(x.A.X, x.B.X);
+                    var maxX = Math.Max(x.A.X, x.B.X);
+                    return y >= 1230.0 - 0.1 &&
+                           minX <= 1500.0 + 0.1 &&
+                           maxX >= 3000.0 - 0.1;
+                }),
+                "After breaking the unsafe XC piece, HARD Max coverage must be restored by a safe local XC farther from the notch wall.");
+        }
+
+        [TestMethod]
         public void FieldBlock14_LocalMainOff_DoesNotSplitMainsAtArtificialRegionSeams()
         {
             var settings = FieldBlock14Settings();
@@ -294,6 +365,19 @@ namespace HNL.VXT.Core.Tests
                 .Distinct()
                 .OrderBy(x => x)
                 .ToArray();
+
+        private static Boundary2 LongBottomNotch4000x2400()
+            => new Boundary2(new[]
+            {
+                new Point2(0.0, 0.0),
+                new Point2(1500.0, 0.0),
+                new Point2(1500.0, 930.0),
+                new Point2(3000.0, 930.0),
+                new Point2(3000.0, 0.0),
+                new Point2(4000.0, 0.0),
+                new Point2(4000.0, 2400.0),
+                new Point2(0.0, 2400.0)
+            });
 
         private static Boundary2 WholeShiftNotch2350()
             => new Boundary2(new[]
