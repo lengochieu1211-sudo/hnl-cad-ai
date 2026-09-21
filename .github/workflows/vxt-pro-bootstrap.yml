@@ -147,7 +147,7 @@ jobs:
           }
 
           $diagnosticSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtDiagnosticService.cs" -Raw
-          if (-not $diagnosticSource.Contains('"boundaries": [')) {
+          if (-not $diagnosticSource.Contains('\"boundaries\": [')) {
             throw "Diagnostic gate failed: full multi-boundary geometry is not captured."
           }
           if (-not $diagnosticSource.Contains('AddText(zip, "constraints.json", constraintsJson)')) {
