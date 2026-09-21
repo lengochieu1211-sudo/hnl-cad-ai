@@ -25,8 +25,28 @@ foreach ($stageName in $requiredStages) {
 foreach ($manifest in @('PackageContents.2026-net8.xml','PackageContents.2026-net10.xml')) {
   $manifestPath = Join-Path $Root "build\universal\$manifest"
   if (-not (Test-Path $manifestPath)) { throw "Missing universal manifest: $manifestPath" }
-  try { [xml](Get-Content $manifestPath -Raw) | Out-Null }
-  catch { throw "Invalid universal manifest XML: $manifestPath :: $($_.Exception.Message)" }
+
+  try {
+    [xml]$manifestXml = Get-Content $manifestPath -Raw
+  }
+  catch {
+    throw "Invalid universal manifest XML: $manifestPath :: $($_.Exception.Message)"
+  }
+
+  $entries = @($manifestXml.ApplicationPackage.Components.ComponentEntry)
+  if ($entries.Count -eq 0) {
+    throw "Universal manifest has no ComponentEntry: $manifestPath"
+  }
+
+  foreach ($entry in $entries) {
+    if ([string]::Equals([string]$entry.LoadOnAutoCADStartup, 'True', [System.StringComparison]::OrdinalIgnoreCase)) {
+      throw "Startup autoload is forbidden for HNL VXT: $manifestPath :: $($entry.AppName)"
+    }
+
+    if (-not [string]::Equals([string]$entry.LoadOnCommandInvocation, 'True', [System.StringComparison]::OrdinalIgnoreCase)) {
+      throw "Every HNL VXT component must be command-lazy-loaded: $manifestPath :: $($entry.AppName)"
+    }
+  }
 }
 
 if (-not (Test-Path $iss)) { throw "Missing universal Inno Setup script: $iss" }
