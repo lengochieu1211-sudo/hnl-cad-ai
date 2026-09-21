@@ -38,6 +38,7 @@ namespace HNL.VXT.AutoCAD
             var db = doc.Database;
             var counts = new CreateCounts();
             var constraintReport = string.Empty;
+            var manualNotchBoundaryCount = 0;
             VxtPreviewPlan diagnosticPlan = null;
 
             try
@@ -60,6 +61,11 @@ namespace HNL.VXT.AutoCAD
                         ? VxtConstraintReport.FormatSummary(plan.Diagnostics)
                         : string.Empty;
                     session.ViewModel?.SetConstraintDiagnostics(plan.Diagnostics);
+                    manualNotchBoundaryCount = plan.Diagnostics
+                        .Where(x => x != null && x.Kind == VxtConstraintKind.ManualMainRequiredWarning)
+                        .Select(x => x.BoundaryIndex)
+                        .Distinct()
+                        .Count();
 
                     var hardDiagnostics = plan.Diagnostics.Where(x => x != null && x.IsHard).ToList();
                     if (hardDiagnostics.Count > 0)
@@ -182,6 +188,7 @@ namespace HNL.VXT.AutoCAD
                     counts.Furring + " Xương phụ, " + counts.Hangers + " Ty treo, " +
                     counts.Dimensions + " Dim. Dùng UNDO để hoàn tác toàn bộ thao tác tạo." +
                     fallbackWarning +
+                    BuildManualNotchWarning(manualNotchBoundaryCount) +
                     (string.IsNullOrWhiteSpace(constraintReport)
                         ? string.Empty
                         : " | Kiểm tra bố trí: " + constraintReport));
@@ -231,6 +238,14 @@ namespace HNL.VXT.AutoCAD
                 ", XP=" + counts.Furring +
                 ", Ty=" + counts.Hangers +
                 ", Dim=" + counts.Dimensions + ". Đã rollback để tránh tạo bản vẽ khác Preview.");
+        }
+
+        private static string BuildManualNotchWarning(int boundaryCount)
+        {
+            return boundaryCount <= 0
+                ? string.Empty
+                : " Cảnh báo: Có " + boundaryCount +
+                  " mảng cạnh khuyết cần bổ sung XC thủ công. Bấm Mxx trong Kiểm tra bố trí để xác định vị trí.";
         }
 
         private static string BuildFallbackWarning(CreateCounts counts)

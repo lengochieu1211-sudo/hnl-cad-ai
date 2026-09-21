@@ -24,7 +24,8 @@ namespace HNL.VXT.Core.Preview
         MaxSpacingHard = 2,
         MaxEdgeHard = 3,
         SpacingStepHard = 4,
-        MissingCoverageHard = 5
+        MissingCoverageHard = 5,
+        ManualMainRequiredWarning = 6
     }
 
     public sealed class VxtConstraintDiagnostic
@@ -66,7 +67,8 @@ namespace HNL.VXT.Core.Preview
                         return Math.Max(0.0, LimitValue - ActualValue);
                     case VxtConstraintKind.MaxSpacingHard:
                     case VxtConstraintKind.MaxEdgeHard:
-                        return Math.Max(0.0, ActualValue - LimitValue);
+                    case VxtConstraintKind.ManualMainRequiredWarning:
+                        return LimitValue > 0.0 ? Math.Max(0.0, ActualValue - LimitValue) : 0.0;
                     case VxtConstraintKind.SpacingStepHard:
                         if (LimitValue <= 0.0) return 0.0;
                         return Math.Abs(ActualValue - Math.Round(ActualValue / LimitValue) * LimitValue);
@@ -107,6 +109,11 @@ namespace HNL.VXT.Core.Preview
                     case VxtConstraintKind.MissingCoverageHard:
                         return BoundaryCode + " • " + level + " • " + system +
                                " • Thiếu thanh để đảm bảo Max";
+                    case VxtConstraintKind.ManualMainRequiredWarning:
+                        return LimitValue > 0.0
+                            ? BoundaryCode + " • Cảnh báo • XC cạnh khuyết • Cần bổ sung thủ công • Max: " +
+                              Num(ActualValue) + " > " + Num(LimitValue) + " mm"
+                            : BoundaryCode + " • Cảnh báo • XC cạnh khuyết • Cần bổ sung thủ công để đảm bảo Max";
                     default:
                         return BoundaryCode + " • " + level + " • " + system + " • Kiểm tra bố trí";
                 }
@@ -141,10 +148,12 @@ namespace HNL.VXT.Core.Preview
             var boundaries = list.Select(x => x.BoundaryIndex).Distinct().Count();
             var errors = list.Count(x => x.IsHard);
             var warnings = list.Count - errors;
+            var manualMain = list.Count(x => x.Kind == VxtConstraintKind.ManualMainRequiredWarning);
 
             return boundaries + " mảng có vấn đề • " +
                    errors + " lỗi • " +
-                   warnings + " cảnh báo";
+                   warnings + " cảnh báo" +
+                   (manualMain > 0 ? " • " + manualMain + " cần bổ sung XC thủ công" : string.Empty);
         }
     }
 }

@@ -100,14 +100,11 @@ namespace HNL.VXT.Core.Preview
                 var x2 = Math.Min(bounds.MaxX, xs[i + 1]);
                 if (x2 - x1 <= 1.0) continue;
 
-                // "Chiều dài XC tối thiểu" is HARD in the construction contract: a local notch
-                // XC shorter than MinLocalMainLength must NOT be added. Therefore a real notch band
-                // narrower than that limit cannot simultaneously be treated as a Create-blocking
-                // Max-edge/MissingCoverage violation; doing so makes the two hard rules impossible
-                // to satisfy together. The base/global grid is still audited everywhere else.
-                if (IsIntentionallySkippedShortNotchBand(
-                        polygon, bounds, x1, x2, settings))
-                    continue;
+                // A real concave/notch band is allowed to remain unresolved for manual XC
+                // completion. Only Max-coverage failures inside that band are downgraded to the
+                // explicit "Cần bổ sung thủ công" warning. Normal/full-width Max and every lattice
+                // violation stay HARD and continue to block Create.
+                var isNotchBand = IsRealNotchBand(polygon, bounds, x1, x2);
 
                 var samples = new[]
                 {
@@ -131,9 +128,12 @@ namespace HNL.VXT.Core.Preview
 
                         if (ys.Count == 0)
                         {
-                            AddWorst(output, new VxtConstraintDiagnostic(
-                                boundaryIndex, VxtConstraintTarget.Main,
-                                VxtConstraintKind.MissingCoverageHard, VxtConstraintSeverity.Error, 0.0, 0.0));
+                            if (isNotchBand)
+                                AddManualNotchWarning(output, boundaryIndex, 0.0, 0.0);
+                            else
+                                AddWorst(output, new VxtConstraintDiagnostic(
+                                    boundaryIndex, VxtConstraintTarget.Main,
+                                    VxtConstraintKind.MissingCoverageHard, VxtConstraintSeverity.Error, 0.0, 0.0));
                             continue;
                         }
 
@@ -143,14 +143,16 @@ namespace HNL.VXT.Core.Preview
                             settings.MainMaxEdgeOffset,
                             boundaryIndex,
                             VxtConstraintTarget.Main,
-                            output);
+                            output,
+                            isNotchBand);
                         AuditEdge(
                             b - ys[ys.Count - 1],
                             settings.MainMinEdgeOffset,
                             settings.MainMaxEdgeOffset,
                             boundaryIndex,
                             VxtConstraintTarget.Main,
-                            output);
+                            output,
+                            isNotchBand);
 
                         for (var j = 0; j + 1 < ys.Count; j++)
                         {
@@ -162,25 +164,20 @@ namespace HNL.VXT.Core.Preview
                                 settings.MainBalanceStep,
                                 boundaryIndex,
                                 VxtConstraintTarget.Main,
-                                output);
+                                output,
+                                isNotchBand);
                         }
                     }
                 }
             }
         }
 
-        private static bool IsIntentionallySkippedShortNotchBand(
+        private static bool IsRealNotchBand(
             IReadOnlyList<Point2> polygon,
             Box2 bounds,
             double x1,
-            double x2,
-            VxtSettings settings)
+            double x2)
         {
-            if (!settings.UseLocalMainAdd ||
-                settings.MinLocalMainLength <= Tol ||
-                x2 - x1 >= settings.MinLocalMainLength - Tol)
-                return false;
-
             var samples = new[]
             {
                 x1 + 0.25 * (x2 - x1),
@@ -284,13 +281,17 @@ namespace HNL.VXT.Core.Preview
             double max,
             int boundaryIndex,
             VxtConstraintTarget target,
-            IDictionary<string, VxtConstraintDiagnostic> output)
+            IDictionary<string, VxtConstraintDiagnostic> output,
+            bool manualNotchCoverage = false)
         {
             if (actual > max + Tol)
             {
-                AddWorst(output, new VxtConstraintDiagnostic(
-                    boundaryIndex, target, VxtConstraintKind.MaxEdgeHard,
-                    VxtConstraintSeverity.Error, actual, max));
+                if (manualNotchCoverage && target == VxtConstraintTarget.Main)
+                    AddManualNotchWarning(output, boundaryIndex, actual, max);
+                else
+                    AddWorst(output, new VxtConstraintDiagnostic(
+                        boundaryIndex, target, VxtConstraintKind.MaxEdgeHard,
+                        VxtConstraintSeverity.Error, actual, max));
                 return;
             }
 
@@ -309,13 +310,17 @@ namespace HNL.VXT.Core.Preview
             double step,
             int boundaryIndex,
             VxtConstraintTarget target,
-            IDictionary<string, VxtConstraintDiagnostic> output)
+            IDictionary<string, VxtConstraintDiagnostic> output,
+            bool manualNotchCoverage = false)
         {
             if (actual > max + Tol)
             {
-                AddWorst(output, new VxtConstraintDiagnostic(
-                    boundaryIndex, target, VxtConstraintKind.MaxSpacingHard,
-                    VxtConstraintSeverity.Error, actual, max));
+                if (manualNotchCoverage && target == VxtConstraintTarget.Main)
+                    AddManualNotchWarning(output, boundaryIndex, actual, max);
+                else
+                    AddWorst(output, new VxtConstraintDiagnostic(
+                        boundaryIndex, target, VxtConstraintKind.MaxSpacingHard,
+                        VxtConstraintSeverity.Error, actual, max));
             }
             else if (actual < min - Tol)
             {
@@ -334,6 +339,21 @@ namespace HNL.VXT.Core.Preview
                         VxtConstraintSeverity.Error, actual, step));
                 }
             }
+        }
+
+        private static void AddManualNotchWarning(
+            IDictionary<string, VxtConstraintDiagnostic> output,
+            int boundaryIndex,
+            double actual,
+            double limit)
+        {
+            AddWorst(output, new VxtConstraintDiagnostic(
+                boundaryIndex,
+                VxtConstraintTarget.Main,
+                VxtConstraintKind.ManualMainRequiredWarning,
+                VxtConstraintSeverity.Warning,
+                actual,
+                limit));
         }
 
         private static void AddWorst(

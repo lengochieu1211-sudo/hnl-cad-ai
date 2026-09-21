@@ -157,10 +157,74 @@ namespace HNL.VXT.Core.Tests
             VxtPlanConstraintAuditor.Attach(boundary, plan, settings, 0.0, 0);
 
             Assert.IsFalse(plan.Diagnostics.Any(x => x.IsHard),
-                "A notch repair shorter than the configured HARD MinLocalMainLength must be intentionally omitted, not used to block Create.");
+                "A notch repair shorter than the configured HARD MinLocalMainLength must not block Create.");
+            Assert.IsTrue(plan.Diagnostics.Any(x =>
+                x.Kind == VxtConstraintKind.ManualMainRequiredWarning && !x.IsHard),
+                "Unresolved notch coverage must stay visible as a manual-XC warning.");
             Assert.IsTrue(plan.Diagnostics.Any(x =>
                 x.Kind == VxtConstraintKind.MinSpacingSoft && !x.IsHard),
                 "Main-body soft Min spacing diagnostics must still be audited outside the exempt short notch.");
+        }
+
+        [TestMethod]
+        public void Auditor_NotchCoverageWithLocalMainOff_BecomesManualWarning_NotHard()
+        {
+            var settings = new VxtSettings
+            {
+                DrawMain = true,
+                DrawFurring = false,
+                DrawHangers = false,
+                AutoDimension = false,
+                MainDirection = MainDirectionMode.Horizontal,
+                MainSkipLimit = 0.0,
+                UseLocalMainAdd = false,
+                MainMinEdgeOffset = 300.0,
+                MainMaxEdgeOffset = 400.0,
+                MainMinSpacing = 700.0,
+                MainMaxSpacing = 1000.0,
+                MainBalanceStep = 50.0
+            };
+
+            var boundary = ShortLeftNotchBand400();
+            var plan = new VxtPreviewPlan();
+            plan.Lines.Add(new PreviewLine(
+                new Point2(0.0, 300.0), new Point2(3000.0, 300.0), PreviewLineKind.Main));
+            plan.Lines.Add(new PreviewLine(
+                new Point2(400.0, 1100.0), new Point2(3000.0, 1100.0), PreviewLineKind.Main));
+            plan.Lines.Add(new PreviewLine(
+                new Point2(400.0, 1500.0), new Point2(3000.0, 1500.0), PreviewLineKind.Main));
+
+            VxtPlanConstraintAuditor.Attach(boundary, plan, settings, 0.0, 0);
+
+            Assert.IsTrue(plan.Diagnostics.Any(x =>
+                x.Kind == VxtConstraintKind.ManualMainRequiredWarning &&
+                !x.IsHard &&
+                x.BoundaryCode == "M01"));
+            Assert.IsFalse(plan.Diagnostics.Any(x =>
+                x.Target == VxtConstraintTarget.Main &&
+                (x.Kind == VxtConstraintKind.MaxEdgeHard ||
+                 x.Kind == VxtConstraintKind.MaxSpacingHard ||
+                 x.Kind == VxtConstraintKind.MissingCoverageHard)),
+                "A real notch left for manual completion must not block Create.");
+        }
+
+        [TestMethod]
+        public void ManualNotchWarning_DisplayAndSummary_AreExplicit()
+        {
+            var item = new VxtConstraintDiagnostic(
+                0,
+                VxtConstraintTarget.Main,
+                VxtConstraintKind.ManualMainRequiredWarning,
+                VxtConstraintSeverity.Warning,
+                500.0,
+                400.0);
+
+            StringAssert.Contains(item.DisplayText, "XC cạnh khuyết");
+            StringAssert.Contains(item.DisplayText, "Cần bổ sung thủ công");
+            Assert.IsFalse(item.IsHard);
+            StringAssert.Contains(
+                VxtConstraintReport.FormatSummary(new[] { item }),
+                "1 cần bổ sung XC thủ công");
         }
 
         [TestMethod]
