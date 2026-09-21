@@ -46,7 +46,7 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void NotchPipeline_WholeGridShift_IsTriedBeforeLocalXCMove()
+        public void NotchPipeline_OneSideRedistributesAllExistingXC_BeforeLocalAdd()
         {
             var enabled = new VxtSettings
             {
@@ -82,12 +82,14 @@ namespace HNL.VXT.Core.Tests
                 "Fixture must start from the same three-XC OneSide grid.");
 
             CollectionAssert.AreEqual(
-                new[] { 350.0, 1200.0, 2050.0 },
+                new[] { 300.0, 1300.0, 2050.0 },
                 MainYs(onPlan),
-                "A +50 mm whole-grid shift satisfies all preferred Min/Max constraints and must win before any local row move.");
+                "OneSide must redistribute the same three XC with variable legal spacings: 300-1000-750-300; do not force one fixed spacing.");
 
             Assert.AreEqual(MainYs(offPlan).Length, MainYs(onPlan).Length,
-                "Whole-grid notch repair must keep the XC count.");
+                "Whole-grid notch redistribution must keep the XC count.");
+            Assert.AreEqual(1000.0, MainYs(onPlan)[1] - MainYs(onPlan)[0], 0.1);
+            Assert.AreEqual(750.0, MainYs(onPlan)[2] - MainYs(onPlan)[1], 0.1);
             Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard));
         }
 
@@ -133,7 +135,7 @@ namespace HNL.VXT.Core.Tests
             CollectionAssert.AreEqual(
                 new[] { 300.0, 1300.0, 2000.0 },
                 onYs,
-                "OneSide must keep the near edge at 300 and move only the second existing XC on the 50-mm lattice: 300-1000-700-330.");
+                "OneSide must keep the near edge at 300 and redistribute the same-count grid on the 50-mm lattice: 300-1000-700-330.");
 
             Assert.AreEqual(offYs.Length, onYs.Length,
                 "A same-count notch repair must not add XC.");

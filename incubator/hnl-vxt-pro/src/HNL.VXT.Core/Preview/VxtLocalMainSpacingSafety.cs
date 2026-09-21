@@ -13,8 +13,9 @@ namespace HNL.VXT.Core.Preview
     /// Construction contract:
     /// - the normal/global XC grid is solved first;
     /// - keep the normal/global XC member count first;
-    /// - before adding any local XC, try moving one existing XC on the configured lattice when
-    ///   that same-count repair can satisfy every HARD Max edge/spacing condition;
+    /// - before adding any local XC, redistribute the existing XC grid on the configured lattice
+    ///   while keeping the same member count; adjacent spacings may differ as long as every
+    ///   Min/Max and lattice condition is satisfied;
     /// - polygon X-levels are split into local bands first; only REAL notch bands are evaluated;
     /// - a local XC is added only when no same-count one-row repair can satisfy MaxEdge or
     ///   MainMaxSpacing;
@@ -54,10 +55,11 @@ namespace HNL.VXT.Core.Preview
 
             // Cạnh khuyết - thứ tự cố định:
             // 1) giữ nguyên số XC và chia polygon thành các band để kiểm tra;
-            // 2) thử dời toàn bộ lưới theo đúng MainBalanceStep;
-            // 3) OneSide: nếu dời cả lưới chưa được, dời cục bộ XC nền gần cạnh khuyết
-            //    theo đúng lattice để giữ nguyên biên đầu và đuổi khoảng lớn về một phía;
-            // 4) Balanced/hoặc khi local move không có nghiệm: mới thử chia đều lại cùng số XC;
+            // 2) OneSide: phân phối lại TOÀN BỘ lưới cùng số XC trên MainBalanceStep.
+            //    Không ép cùng một spacing: 1000-700, 900-800... đều hợp lệ nếu Min/Max/bội số đạt.
+            //    Ưu tiên khoảng lớn từ phía dồn trước, đồng thời giữ biên trong giới hạn.
+            // 3) nếu chưa có nghiệm tổng thể, mới thử dời cục bộ XC gần cạnh khuyết;
+            // 4) Balanced vẫn ưu tiên cân bằng/chia đều như trước;
             // 5) mỗi nghiệm đều phải kiểm lại toàn bộ HARD Max, preferred Min và bội số;
             // 6) chỉ khi không có nghiệm cùng số XC mới được thêm XC cục bộ.
             var domain = Box2.FromPoints(polygon);
@@ -68,9 +70,8 @@ namespace HNL.VXT.Core.Preview
                 if (source.Count > 0 && !SharedGridHardValid(source, polygon, settings, obstacles))
                 {
                     var repaired = settings.MainLayout == MainLayoutMode.OneSide
-                        ? TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
-                          TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
-                          TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: true)
+                        ? TryRedistributeOneSideSameCountGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
+                          TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: true)
                         : TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
                           TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
                           TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: true);
@@ -80,9 +81,8 @@ namespace HNL.VXT.Core.Preview
                         // Min spacing / Min edge are SOFT. Only after all strict same-count
                         // solutions fail do we allow a SOFT-Min same-count solution.
                         repaired = settings.MainLayout == MainLayoutMode.OneSide
-                            ? TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
-                              TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
-                              TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: false)
+                            ? TryRedistributeOneSideSameCountGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
+                              TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: false)
                             : TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
                               TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
                               TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: false);
@@ -450,6 +450,140 @@ namespace HNL.VXT.Core.Preview
                 if (Math.Abs(units - Math.Round(units)) > 1e-6) return false;
             }
             return true;
+        }
+
+        private static bool TryRedistributeOneSideSameCountGrid(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Point2> polygon,
+            double radians,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles,
+            bool requirePreferredMin)
+        {
+            var source = BuildGrid(plan, radians);
+            if (source.Count < 2) return false;
+
+            var step = settings.MainBalanceStep;
+            if (step <= Tol) return false;
+
+            var domain = Box2.FromPoints(polygon);
+            var minGap = requirePreferredMin
+                ? CeilMultiple(settings.MainMinSpacing, step)
+                : step;
+            var maxGap = FloorMultiple(settings.MainMaxSpacing, step);
+            if (minGap <= 0.0 || maxGap < minGap - Tol) return false;
+
+            var minStartEdge = requirePreferredMin ? settings.MainMinEdgeOffset : 0.0;
+            var maxStartEdge = settings.MainMaxEdgeOffset;
+            var minEndEdge = requirePreferredMin ? settings.MainMinEdgeOffset : 0.0;
+            var maxEndEdge = settings.MainMaxEdgeOffset;
+
+            var maxShiftUnits = Math.Max(
+                1,
+                (int)Math.Ceiling(domain.Height / step) + 2);
+
+            var starts = new List<double>();
+            for (var shiftUnits = -maxShiftUnits; shiftUnits <= maxShiftUnits; shiftUnits++)
+            {
+                var start = source[0] + shiftUnits * step;
+                var edge = start - domain.MinY;
+                if (edge < minStartEdge - Tol || edge > maxStartEdge + Tol) continue;
+                if (start <= domain.MinY + 2.0 || start >= domain.MaxY - 2.0) continue;
+                starts.Add(start);
+            }
+
+            starts = starts
+                .Distinct(new DoubleTolComparer())
+                .OrderBy(y => Math.Abs((y - domain.MinY) - settings.MainMinEdgeOffset))
+                .ThenBy(y => Math.Abs(y - source[0]))
+                .ThenBy(y => y)
+                .ToList();
+
+            foreach (var start in starts)
+            {
+                var candidate = new List<double>(source.Count) { start };
+                if (!TryBuildOneSideSameCountCandidate(
+                        candidate,
+                        source.Count,
+                        polygon,
+                        settings,
+                        obstacles,
+                        minGap,
+                        maxGap,
+                        minEndEdge,
+                        maxEndEdge,
+                        domain))
+                    continue;
+
+                if (source.Zip(candidate, (a, z) => Math.Abs(a - z)).All(d => d <= Tol))
+                    return false;
+
+                RebuildAllMains(plan, polygon, candidate, radians, settings, obstacles);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryBuildOneSideSameCountCandidate(
+            List<double> candidate,
+            int targetCount,
+            IReadOnlyList<Point2> polygon,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles,
+            double minGap,
+            double maxGap,
+            double minEndEdge,
+            double maxEndEdge,
+            Box2 domain)
+        {
+            if (candidate.Count == targetCount)
+            {
+                var endEdge = domain.MaxY - candidate[candidate.Count - 1];
+                if (endEdge < minEndEdge - Tol || endEdge > maxEndEdge + Tol)
+                    return false;
+                return GridStepsStayOnLattice(candidate, settings.MainBalanceStep) &&
+                       CandidateGridValid(
+                           candidate,
+                           polygon,
+                           settings,
+                           obstacles,
+                           minGap >= settings.MainMinSpacing - Tol);
+            }
+
+            var current = candidate[candidate.Count - 1];
+            var gapsAfterNext = targetCount - candidate.Count - 1;
+            var allowedLastMin = domain.MaxY - maxEndEdge;
+            var allowedLastMax = domain.MaxY - minEndEdge;
+
+            // OneSide = dồn từ phía đầu: thử khoảng lớn nhất trước, sau đó giảm đúng bội số.
+            for (var gap = maxGap; gap >= minGap - Tol; gap -= settings.MainBalanceStep)
+            {
+                var next = current + gap;
+                if (next >= domain.MaxY - 2.0) continue;
+
+                var minLast = next + gapsAfterNext * minGap;
+                var maxLast = next + gapsAfterNext * maxGap;
+                if (maxLast < allowedLastMin - Tol || minLast > allowedLastMax + Tol)
+                    continue;
+
+                candidate.Add(next);
+                if (TryBuildOneSideSameCountCandidate(
+                        candidate,
+                        targetCount,
+                        polygon,
+                        settings,
+                        obstacles,
+                        minGap,
+                        maxGap,
+                        minEndEdge,
+                        maxEndEdge,
+                        domain))
+                    return true;
+                candidate.RemoveAt(candidate.Count - 1);
+            }
+
+            return false;
         }
 
         private static bool TryAlignSharedGlobalGrid(
