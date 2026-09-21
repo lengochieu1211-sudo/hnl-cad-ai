@@ -54,6 +54,16 @@ namespace HNL.VXT.Core.Preview
             var polygon = boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)).ToList();
             if (polygon.Count < 3) return;
 
+            var bounds = Box2.FromPoints(polygon);
+
+            // The production builder intentionally omits XC for a whole ceiling region when
+            // "Bỏ XC nếu ngắn hơn" (MainSkipLimit) applies. Auditing that intentional omission as
+            // MissingCoverageHard contradicts the solver and can block Create for a valid setting.
+            if (settings.MainSkipLimit > Tol &&
+                (bounds.Width <= settings.MainSkipLimit + Tol ||
+                 bounds.Height <= settings.MainSkipLimit + Tol))
+                return;
+
             var mains = plan.Lines
                 .Where(x => x.Kind == PreviewLineKind.Main)
                 .Select(x =>
@@ -81,7 +91,6 @@ namespace HNL.VXT.Core.Preview
                 return;
             }
 
-            var bounds = Box2.FromPoints(polygon);
             var xs = UniqueSort(polygon.Select(p => p.X)
                 .Concat(new[] { bounds.MinX, bounds.MaxX }));
 
@@ -90,6 +99,15 @@ namespace HNL.VXT.Core.Preview
                 var x1 = Math.Max(bounds.MinX, xs[i]);
                 var x2 = Math.Min(bounds.MaxX, xs[i + 1]);
                 if (x2 - x1 <= 1.0) continue;
+
+                // "Chiều dài XC tối thiểu" is HARD in the construction contract: a local notch
+                // XC shorter than MinLocalMainLength must NOT be added. Therefore a real notch band
+                // narrower than that limit cannot simultaneously be treated as a Create-blocking
+                // Max-edge/MissingCoverage violation; doing so makes the two hard rules impossible
+                // to satisfy together. The base/global grid is still audited everywhere else.
+                if (IsIntentionallySkippedShortNotchBand(
+                        polygon, bounds, x1, x2, settings))
+                    continue;
 
                 var samples = new[]
                 {
@@ -149,6 +167,48 @@ namespace HNL.VXT.Core.Preview
                     }
                 }
             }
+        }
+
+        private static bool IsIntentionallySkippedShortNotchBand(
+            IReadOnlyList<Point2> polygon,
+            Box2 bounds,
+            double x1,
+            double x2,
+            VxtSettings settings)
+        {
+            if (!settings.UseLocalMainAdd ||
+                settings.MinLocalMainLength <= Tol ||
+                x2 - x1 >= settings.MinLocalMainLength - Tol)
+                return false;
+
+            var samples = new[]
+            {
+                x1 + 0.25 * (x2 - x1),
+                x1 + 0.50 * (x2 - x1),
+                x1 + 0.75 * (x2 - x1)
+            };
+
+            var hasDrawable = false;
+            var realNotch = false;
+            foreach (var x in samples)
+            {
+                var intervals = PolygonScanline.ClipVertical(polygon, x).ToList();
+                if (intervals.Count == 0) continue;
+
+                hasDrawable = true;
+                if (intervals.Count != 1)
+                {
+                    realNotch = true;
+                    continue;
+                }
+
+                var a = Math.Min(intervals[0].A.Y, intervals[0].B.Y);
+                var b = Math.Max(intervals[0].A.Y, intervals[0].B.Y);
+                if (a > bounds.MinY + SampleTol || b < bounds.MaxY - SampleTol)
+                    realNotch = true;
+            }
+
+            return hasDrawable && realNotch;
         }
 
         private static void AuditHangers(

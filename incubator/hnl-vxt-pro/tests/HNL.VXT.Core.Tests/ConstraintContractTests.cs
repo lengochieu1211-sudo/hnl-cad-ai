@@ -97,6 +97,101 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void Auditor_MainSkipLimit_DoesNotReportIntentionalMissingMainAsHard()
+        {
+            var settings = new VxtSettings
+            {
+                DrawMain = true,
+                DrawFurring = false,
+                DrawHangers = false,
+                AutoDimension = false,
+                MainDirection = MainDirectionMode.Horizontal,
+                MainSkipLimit = 500.0,
+                UseLocalMainAdd = true
+            };
+
+            var boundary = Rectangle(0.0, 0.0, 3000.0, 400.0);
+            var plan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, settings, new VxtLayoutContext());
+
+            Assert.IsFalse(plan.Lines.Any(x => x.Kind == PreviewLineKind.Main),
+                "Fixture must exercise intentional whole-boundary XC skip.");
+            Assert.IsFalse(plan.Diagnostics.Any(x =>
+                x.Target == VxtConstraintTarget.Main && x.IsHard),
+                "MainSkipLimit is an intentional construction rule and must not become MissingCoverageHard.");
+        }
+
+        [TestMethod]
+        public void Auditor_ShortNotchBelowMinLocalMainLength_DoesNotCreateImpossibleHardConflict()
+        {
+            var settings = new VxtSettings
+            {
+                DrawMain = true,
+                DrawFurring = false,
+                DrawHangers = false,
+                AutoDimension = false,
+                MainDirection = MainDirectionMode.Horizontal,
+                MainSkipLimit = 0.0,
+                UseLocalMainAdd = true,
+                MinLocalMainLength = 500.0,
+                MainMinEdgeOffset = 300.0,
+                MainMaxEdgeOffset = 400.0,
+                MainMinSpacing = 700.0,
+                MainMaxSpacing = 1000.0,
+                MainBalanceStep = 50.0
+            };
+
+            var boundary = ShortLeftNotchBand400();
+            var plan = new VxtPreviewPlan();
+
+            // Main body is hard-valid. In the 400-mm-wide notch band only Y=300 crosses,
+            // leaving a 500-mm far edge. Repair would require a local XC only 400 mm long,
+            // which MinLocalMainLength=500 explicitly forbids.
+            plan.Lines.Add(new PreviewLine(
+                new Point2(0.0, 300.0), new Point2(3000.0, 300.0), PreviewLineKind.Main));
+            plan.Lines.Add(new PreviewLine(
+                new Point2(400.0, 1100.0), new Point2(3000.0, 1100.0), PreviewLineKind.Main));
+            plan.Lines.Add(new PreviewLine(
+                new Point2(400.0, 1500.0), new Point2(3000.0, 1500.0), PreviewLineKind.Main));
+
+            VxtPlanConstraintAuditor.Attach(boundary, plan, settings, 0.0, 0);
+
+            Assert.IsFalse(plan.Diagnostics.Any(x => x.IsHard),
+                "A notch repair shorter than the configured HARD MinLocalMainLength must be intentionally omitted, not used to block Create.");
+            Assert.IsTrue(plan.Diagnostics.Any(x =>
+                x.Kind == VxtConstraintKind.MinSpacingSoft && !x.IsHard),
+                "Main-body soft Min spacing diagnostics must still be audited outside the exempt short notch.");
+        }
+
+        [TestMethod]
+        public void Auditor_StillReportsRealHardMaxEdge_OutsideSkipExemptions()
+        {
+            var settings = new VxtSettings
+            {
+                DrawMain = true,
+                DrawFurring = false,
+                DrawHangers = false,
+                AutoDimension = false,
+                MainDirection = MainDirectionMode.Horizontal,
+                MainSkipLimit = 0.0,
+                UseLocalMainAdd = true,
+                MinLocalMainLength = 500.0,
+                MainMaxEdgeOffset = 400.0
+            };
+
+            var boundary = Rectangle(0.0, 0.0, 3000.0, 1800.0);
+            var plan = new VxtPreviewPlan();
+            plan.Lines.Add(new PreviewLine(
+                new Point2(0.0, 300.0), new Point2(3000.0, 300.0), PreviewLineKind.Main));
+
+            VxtPlanConstraintAuditor.Attach(boundary, plan, settings, 0.0, 0);
+
+            Assert.IsTrue(plan.Diagnostics.Any(x =>
+                x.IsHard && x.Kind == VxtConstraintKind.MaxEdgeHard),
+                "Normal/full-width HARD Max-edge violations must still block Create.");
+        }
+
+        [TestMethod]
         public void ConstraintReport_IncludesVietnameseActualAndReduction()
         {
             var item = new VxtConstraintDiagnostic(
@@ -154,6 +249,17 @@ namespace HNL.VXT.Core.Tests
                 "2 mảng có vấn đề • 1 lỗi • 2 cảnh báo",
                 VxtConstraintReport.FormatSummary(diagnostics));
         }
+
+        private static Boundary2 ShortLeftNotchBand400()
+            => new Boundary2(new[]
+            {
+                new Point2(0.0, 0.0),
+                new Point2(3000.0, 0.0),
+                new Point2(3000.0, 1800.0),
+                new Point2(400.0, 1800.0),
+                new Point2(400.0, 800.0),
+                new Point2(0.0, 800.0)
+            });
 
         private static Boundary2 Rectangle(
             double minX,
