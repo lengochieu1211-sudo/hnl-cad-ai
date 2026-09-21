@@ -52,18 +52,38 @@ namespace HNL.VXT.Core.Preview
                 ? TransformMainObstacles(context, radians, settings.ClearanceDistance)
                 : new List<Box2>();
 
-            // Economy first: keep the existing XC count. A notch must not create a new XC when
-            // moving one existing row by MainBalanceStep can make the final grid HARD-Max safe.
-            // This is intentionally narrower than a general re-phase: only one existing row may
-            // move, the row count is frozen, spacing stays on the configured lattice, MEP is
-            // revalidated, and every polygon band must remain HARD-Max safe.
-            if (settings.MainLayout == MainLayoutMode.OneSide && !settings.UseAvoidance)
+            // Cạnh khuyết - thứ tự cố định:
+            // 1) giữ nguyên số XC và chia polygon thành các band để kiểm tra;
+            // 2) thử dời toàn bộ lưới theo đúng MainBalanceStep;
+            // 3) thử chia đều lại cùng số XC;
+            // 4) cuối cùng mới dời cục bộ XC nền gần cạnh khuyết theo đúng lattice;
+            // 5) mỗi nghiệm đều phải kiểm lại toàn bộ HARD Max, preferred Min và OneSide;
+            // 6) chỉ khi không có nghiệm cùng số XC mới được thêm XC cục bộ.
+            var domain = Box2.FromPoints(polygon);
+            var hasRealNotch = BuildNotchBands(polygon, domain).Any();
+            if (hasRealNotch && IsOrthogonalPolygon(polygon))
             {
-                TryRepairNotchByMovingOneExistingMain(
-                    plan, polygon, radians, settings, obstacles);
+                var source = BuildGrid(plan, radians);
+                if (source.Count > 0 && !SharedGridHardValid(source, polygon, settings, obstacles))
+                {
+                    var repaired =
+                        TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
+                        TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
+                        TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: true);
+
+                    if (!repaired)
+                    {
+                        // Min spacing / Min edge are SOFT. Only after all strict same-count
+                        // solutions fail do we allow a SOFT-Min same-count solution.
+                        repaired =
+                            TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
+                            TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
+                            TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: false);
+                    }
+                }
             }
 
-            // Only after same-count repair fails may the local-notch pass add short XC geometry.
+            // Only after the entire same-count pipeline fails may the local-notch pass add XC.
             EnsureHardMaxCoverage(plan, polygon, radians, settings, obstacles);
 
             // Finally remove only truly redundant close local bars. A bar protecting MaxEdge or a
@@ -116,7 +136,8 @@ namespace HNL.VXT.Core.Preview
             IReadOnlyList<Point2> polygon,
             double radians,
             VxtSettings settings,
-            IReadOnlyList<Box2> obstacles)
+            IReadOnlyList<Box2> obstacles,
+            bool requirePreferredMin)
         {
             var source = BuildMainRecords(plan, radians)
                 .Select(m => m.Y)
@@ -157,15 +178,21 @@ namespace HNL.VXT.Core.Preview
                         candidate[index] = moved;
 
                         if (!GridStepsStayOnLattice(candidate, step)) continue;
-                        if (!SharedGridHardValid(candidate, polygon, settings, obstacles)) continue;
+                        if (!CandidateGridValid(candidate, polygon, settings, obstacles, requirePreferredMin)) continue;
 
                         var softPenalty = SharedGridSoftPenalty(candidate, polygon, settings);
                         var movement = Math.Abs(delta);
+                        var oneSide = settings.MainLayout == MainLayoutMode.OneSide;
+                        var betterLayout = oneSide
+                            ? (best == null || OneSideLexicographicallyBetter(candidate, best))
+                            : (best == null || GridUnevenness(candidate) < GridUnevenness(best) - Tol);
+
                         if (softPenalty < bestSoftPenalty - Tol ||
+                            (Math.Abs(softPenalty - bestSoftPenalty) <= Tol && betterLayout) ||
                             (Math.Abs(softPenalty - bestSoftPenalty) <= Tol &&
-                             (best == null || OneSideLexicographicallyBetter(candidate, best))) ||
-                            (Math.Abs(softPenalty - bestSoftPenalty) <= Tol &&
-                             best != null && SameOneSideGaps(candidate, best) &&
+                             best != null &&
+                             (!oneSide || SameOneSideGaps(candidate, best)) &&
+                             Math.Abs(GridUnevenness(candidate) - GridUnevenness(best)) <= Tol &&
                              (movement < bestMovement - Tol ||
                               (Math.Abs(movement - bestMovement) <= Tol && index < bestIndex))))
                         {
@@ -181,6 +208,67 @@ namespace HNL.VXT.Core.Preview
             if (best == null) return false;
             RebuildAllMains(plan, polygon, best, radians, settings, obstacles);
             return true;
+        }
+
+        private static List<double> BuildGrid(VxtPreviewPlan plan, double radians)
+            => BuildMainRecords(plan, radians)
+                .Select(m => m.Y)
+                .Distinct(new DoubleTolComparer())
+                .OrderBy(y => y)
+                .ToList();
+
+        private static bool IsOrthogonalPolygon(IReadOnlyList<Point2> polygon)
+        {
+            if (polygon == null || polygon.Count < 4) return false;
+            for (var i = 0; i < polygon.Count; i++)
+            {
+                var a = polygon[i];
+                var b = polygon[(i + 1) % polygon.Count];
+                var dx = Math.Abs(b.X - a.X);
+                var dy = Math.Abs(b.Y - a.Y);
+                if (dx <= Tol || dy <= Tol) continue;
+                return false;
+            }
+            return true;
+        }
+
+        private static bool CandidateGridValid(
+            IReadOnlyList<double> grid,
+            IReadOnlyList<Point2> polygon,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles,
+            bool requirePreferredMin)
+            => requirePreferredMin
+                ? SharedGridValid(grid, polygon, settings, obstacles)
+                : SharedGridHardValid(grid, polygon, settings, obstacles);
+
+        private static double GridUnevenness(IReadOnlyList<double> grid)
+        {
+            if (grid == null || grid.Count < 3) return 0.0;
+            var gaps = new List<double>();
+            for (var i = 0; i + 1 < grid.Count; i++)
+                gaps.Add(grid[i + 1] - grid[i]);
+            return gaps.Max() - gaps.Min();
+        }
+
+        private static double TotalGridMovement(
+            IReadOnlyList<double> source,
+            IReadOnlyList<double> candidate)
+        {
+            if (source == null || candidate == null || source.Count != candidate.Count)
+                return double.MaxValue;
+            var total = 0.0;
+            for (var i = 0; i < source.Count; i++)
+                total += Math.Abs(candidate[i] - source[i]);
+            return total;
+        }
+
+        private static double EdgeImbalance(IReadOnlyList<double> grid, Box2 domain)
+        {
+            if (grid == null || grid.Count == 0) return double.MaxValue;
+            return Math.Abs(
+                (grid[0] - domain.MinY) -
+                (domain.MaxY - grid[grid.Count - 1]));
         }
 
         private static bool SharedGridHardValid(
@@ -362,39 +450,164 @@ namespace HNL.VXT.Core.Preview
             IReadOnlyList<Point2> polygon,
             double radians,
             VxtSettings settings,
-            IReadOnlyList<Box2> obstacles)
+            IReadOnlyList<Box2> obstacles,
+            bool requirePreferredMin)
         {
-            var source = BuildMainRecords(plan, radians)
-                .Select(m => m.Y)
-                .Distinct(new DoubleTolComparer())
-                .OrderBy(y => y)
-                .ToList();
+            var source = BuildGrid(plan, radians);
             if (source.Count == 0) return false;
+            if (CandidateGridValid(source, polygon, settings, obstacles, requirePreferredMin))
+                return false;
 
-            if (SharedGridValid(source, polygon, settings, obstacles)) return false;
+            var step = settings.MainBalanceStep;
+            if (step <= Tol) return false;
+            var domain = Box2.FromPoints(polygon);
+            var maxUnits = Math.Max(
+                1,
+                (int)Math.Ceiling(settings.MainMaxEdgeOffset / step) + 2);
 
-            var maxSearch = Math.Max(
-                settings.MainBalanceStep,
-                settings.MainMaxEdgeOffset - settings.MainMinEdgeOffset);
-            var maxUnits = Math.Max(1, (int)Math.Ceiling(maxSearch));
-            List<double> aligned = null;
+            List<double> best = null;
+            var bestSoft = double.MaxValue;
+            var bestMove = double.MaxValue;
+            var bestEdgeImbalance = double.MaxValue;
+            var oneSide = settings.MainLayout == MainLayoutMode.OneSide;
 
-            for (var amount = 1; amount <= maxUnits && aligned == null; amount++)
+            for (var units = 1; units <= maxUnits; units++)
             {
-                var positive = source.Select(y => y + amount).ToList();
-                if (SharedGridValid(positive, polygon, settings, obstacles))
+                var delta = units * step;
+                foreach (var sign in new[] { 1.0, -1.0 })
                 {
-                    aligned = positive;
-                    break;
-                }
+                    var candidate = source.Select(y => y + sign * delta).ToList();
+                    if (candidate[0] <= domain.MinY + 2.0 ||
+                        candidate[candidate.Count - 1] >= domain.MaxY - 2.0)
+                        continue;
+                    if (!GridStepsStayOnLattice(candidate, step)) continue;
+                    if (!CandidateGridValid(candidate, polygon, settings, obstacles, requirePreferredMin))
+                        continue;
 
-                var negative = source.Select(y => y - amount).ToList();
-                if (SharedGridValid(negative, polygon, settings, obstacles))
-                    aligned = negative;
+                    var soft = SharedGridSoftPenalty(candidate, polygon, settings);
+                    var movement = TotalGridMovement(source, candidate);
+                    var imbalance = EdgeImbalance(candidate, domain);
+                    var oneSideStartPenalty = Math.Abs(
+                        (candidate[0] - domain.MinY) - settings.MainMinEdgeOffset);
+                    var bestOneSideStartPenalty = best == null
+                        ? double.MaxValue
+                        : Math.Abs((best[0] - domain.MinY) - settings.MainMinEdgeOffset);
+
+                    var better = soft < bestSoft - Tol ||
+                        (Math.Abs(soft - bestSoft) <= Tol &&
+                         (oneSide
+                             ? oneSideStartPenalty < bestOneSideStartPenalty - Tol
+                             : imbalance < bestEdgeImbalance - Tol)) ||
+                        (Math.Abs(soft - bestSoft) <= Tol &&
+                         Math.Abs((oneSide ? oneSideStartPenalty : imbalance) -
+                                  (oneSide ? bestOneSideStartPenalty : bestEdgeImbalance)) <= Tol &&
+                         movement < bestMove - Tol);
+
+                    if (!better) continue;
+                    best = candidate;
+                    bestSoft = soft;
+                    bestMove = movement;
+                    bestEdgeImbalance = imbalance;
+                }
             }
 
-            if (aligned == null) return false;
-            RebuildAllMains(plan, polygon, aligned, radians, settings, obstacles);
+            if (best == null) return false;
+            RebuildAllMains(plan, polygon, best, radians, settings, obstacles);
+            return true;
+        }
+
+        private static bool TryRebuildUniformSameCount(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Point2> polygon,
+            double radians,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles,
+            bool requirePreferredMin)
+        {
+            var source = BuildGrid(plan, radians);
+            if (source.Count < 2) return false;
+
+            var step = settings.MainBalanceStep;
+            if (step <= Tol) return false;
+
+            var domain = Box2.FromPoints(polygon);
+            var maxSpacing = FloorMultiple(settings.MainMaxSpacing, step);
+            var minSpacing = requirePreferredMin
+                ? CeilMultiple(settings.MainMinSpacing, step)
+                : step;
+            if (minSpacing > maxSpacing + Tol) return false;
+
+            var maxShiftUnits = Math.Max(
+                1,
+                (int)Math.Ceiling(domain.Height / step) + 1);
+            var oneSide = settings.MainLayout == MainLayoutMode.OneSide;
+
+            List<double> best = null;
+            var bestSoft = double.MaxValue;
+            var bestSpacing = double.MinValue;
+            var bestMovement = double.MaxValue;
+            var bestImbalance = double.MaxValue;
+            var bestStartPenalty = double.MaxValue;
+
+            for (var spacing = maxSpacing; spacing >= minSpacing - Tol; spacing -= step)
+            {
+                for (var shiftUnits = -maxShiftUnits; shiftUnits <= maxShiftUnits; shiftUnits++)
+                {
+                    var start = source[0] + shiftUnits * step;
+                    var candidate = new List<double>(source.Count);
+                    for (var i = 0; i < source.Count; i++)
+                        candidate.Add(start + i * spacing);
+
+                    if (candidate[0] <= domain.MinY + 2.0 ||
+                        candidate[candidate.Count - 1] >= domain.MaxY - 2.0)
+                        continue;
+                    if (!GridStepsStayOnLattice(candidate, step)) continue;
+                    if (!CandidateGridValid(candidate, polygon, settings, obstacles, requirePreferredMin))
+                        continue;
+
+                    var soft = SharedGridSoftPenalty(candidate, polygon, settings);
+                    var movement = TotalGridMovement(source, candidate);
+                    var imbalance = EdgeImbalance(candidate, domain);
+                    var startPenalty = Math.Abs(
+                        (candidate[0] - domain.MinY) - settings.MainMinEdgeOffset);
+
+                    var better = soft < bestSoft - Tol;
+                    if (!better && Math.Abs(soft - bestSoft) <= Tol)
+                    {
+                        if (oneSide)
+                        {
+                            better = spacing > bestSpacing + Tol ||
+                                     (Math.Abs(spacing - bestSpacing) <= Tol &&
+                                      (startPenalty < bestStartPenalty - Tol ||
+                                       (Math.Abs(startPenalty - bestStartPenalty) <= Tol &&
+                                        movement < bestMovement - Tol)));
+                        }
+                        else
+                        {
+                            better = imbalance < bestImbalance - Tol ||
+                                     (Math.Abs(imbalance - bestImbalance) <= Tol &&
+                                      (movement < bestMovement - Tol ||
+                                       (Math.Abs(movement - bestMovement) <= Tol &&
+                                        spacing > bestSpacing + Tol)));
+                        }
+                    }
+
+                    if (!better) continue;
+                    best = candidate;
+                    bestSoft = soft;
+                    bestSpacing = spacing;
+                    bestMovement = movement;
+                    bestImbalance = imbalance;
+                    bestStartPenalty = startPenalty;
+                }
+            }
+
+            if (best == null) return false;
+            if (source.Count == best.Count &&
+                source.Zip(best, (a, z) => Math.Abs(a - z)).All(d => d <= Tol))
+                return false;
+
+            RebuildAllMains(plan, polygon, best, radians, settings, obstacles);
             return true;
         }
 

@@ -49,6 +49,52 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void NotchPipeline_WholeGridShift_IsTriedBeforeLocalXCMove()
+        {
+            var enabled = new VxtSettings
+            {
+                OptimizationMode = VxtOptimizationMode.Legacy,
+                MainDirection = MainDirectionMode.Horizontal,
+                MainLayout = MainLayoutMode.OneSide,
+                DrawMain = true,
+                DrawFurring = false,
+                DrawHangers = false,
+                AutoDimension = false,
+                UseAvoidance = false,
+                MainSkipLimit = 0.0,
+                UseLocalMainAdd = true,
+                MinLocalMainLength = 500.0,
+                MainMinSpacing = 700.0,
+                MainMaxSpacing = 1000.0,
+                MainMinEdgeOffset = 300.0,
+                MainMaxEdgeOffset = 400.0,
+                MainBalanceStep = 50.0
+            };
+            var disabled = enabled.Clone();
+            disabled.UseLocalMainAdd = false;
+            var boundary = WholeShiftNotch2350();
+
+            var offPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, disabled, new VxtLayoutContext());
+            var onPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, enabled, new VxtLayoutContext());
+
+            CollectionAssert.AreEqual(
+                new[] { 300.0, 1150.0, 2000.0 },
+                MainYs(offPlan),
+                "Fixture must start from the same three-XC OneSide grid.");
+
+            CollectionAssert.AreEqual(
+                new[] { 350.0, 1200.0, 2050.0 },
+                MainYs(onPlan),
+                "A +50 mm whole-grid shift satisfies all preferred Min/Max constraints and must win before any local row move.");
+
+            Assert.AreEqual(MainYs(offPlan).Length, MainYs(onPlan).Length,
+                "Whole-grid notch repair must keep the XC count.");
+            Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard));
+        }
+
+        [TestMethod]
         public void MizukiM01_OneSide_MovesSecondExistingMainBeforeAddingLocalXC()
         {
             var enabled = new VxtSettings
@@ -178,6 +224,17 @@ namespace HNL.VXT.Core.Tests
                 .Distinct()
                 .OrderBy(x => x)
                 .ToArray();
+
+        private static Boundary2 WholeShiftNotch2350()
+            => new Boundary2(new[]
+            {
+                new Point2(0.0, 0.0),
+                new Point2(3180.0, 0.0),
+                new Point2(3180.0, 1600.0),
+                new Point2(1150.0, 1600.0),
+                new Point2(1150.0, 2350.0),
+                new Point2(0.0, 2350.0)
+            });
 
         private static Boundary2 MizukiM01Notch2300()
             => new Boundary2(new[]
