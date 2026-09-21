@@ -96,19 +96,10 @@ namespace HNL.VXT.UI.Views
 
         private void AddDiagnosticCenter()
         {
-            var liveTitle = FindTextBlockByText(this, "XEM TRƯỚC TRÊN BẢN VẼ");
-            if (liveTitle == null) return;
-
-            DependencyObject current = liveTitle;
-            Border liveCard = null;
-            while (current != null)
-            {
-                liveCard = current as Border;
-                if (liveCard != null && liveCard.Parent is StackPanel) break;
-                current = (current as FrameworkElement)?.Parent;
-                liveCard = null;
-            }
-
+            // Use a compile-time XAML anchor, not the visible Vietnamese title. The previous
+            // title lookup was case-sensitive, so changing "XEM TRƯỚC..." to "Xem trước..."
+            // silently removed the entire M01/M02 clickable diagnostic panel at runtime.
+            var liveCard = LivePreviewCard;
             var parent = liveCard?.Parent as StackPanel;
             if (parent == null) return;
 

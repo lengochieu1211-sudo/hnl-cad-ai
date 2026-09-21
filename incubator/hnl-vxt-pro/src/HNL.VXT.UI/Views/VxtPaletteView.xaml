@@ -578,7 +578,8 @@
                 </Border>
 
                 <!-- LIVE PREVIEW -->
-                <Border Style="{StaticResource SectionCard}" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}">
+                <!-- Stable named anchor: diagnostic Mxx UI must not depend on localized/title text. -->
+                <Border x:Name="LivePreviewCard" Style="{StaticResource SectionCard}" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}">
                     <StackPanel>
                         <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
