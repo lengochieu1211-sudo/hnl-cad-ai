@@ -87,6 +87,9 @@ jobs:
           if (-not $commandSource.Contains('[CommandMethod("HNLVXTCREATE"')) {
             throw "Functional gate failed: HNLVXTCREATE command is missing."
           }
+          if (-not $commandSource.Contains('[CommandMethod("HNLVXTFOCUSBOUNDARY"')) {
+            throw "Functional gate failed: Mxx focus command is not registered on HnlVxtCommands."
+          }
           $pluginSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\PluginEntry.cs" -Raw
           if (-not $pluginSource.Contains('CommandClass(typeof(HNL.VXT.AutoCAD.HnlVxtCommands))')) {
             throw "Command namespace gate failed: legacy VXT command class is still registered."
