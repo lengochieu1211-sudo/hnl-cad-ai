@@ -29,14 +29,14 @@ namespace HNL.VXT.Core.Tests
                 FurringKeys(onPlan).ToArray(),
                 "Local-notch processing must never change XP positions or the single global chase direction.");
 
-            foreach (var baseline in offPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
-                Assert.IsTrue(onPlan.Lines.Any(x => x.Kind == PreviewLineKind.Main &&
-                    ((x.A.DistanceTo(baseline.A) <= 0.1 && x.B.DistanceTo(baseline.B) <= 0.1) ||
-                     (x.A.DistanceTo(baseline.B) <= 0.1 && x.B.DistanceTo(baseline.A) <= 0.1))),
-                    "Local-notch ON must preserve every base XC exactly.");
-
-            Assert.IsTrue(onPlan.MainSegmentCount >= offPlan.MainSegmentCount);
-            Assert.IsTrue(onPlan.HangerCount >= offPlan.HangerCount);
+            Assert.AreEqual(
+                MainYsAtX(offPlan, 5000.0).Length,
+                MainYsAtX(onPlan, 5000.0).Length,
+                "Same-count notch repair must keep the global XC member count before any local add.");
+            Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard),
+                "Final notch plan must satisfy all HARD Max constraints.");
+            Assert.IsTrue(onPlan.HangerCount > 0,
+                "Ty must be rebuilt from the final XC geometry.");
         }
 
         [TestMethod]

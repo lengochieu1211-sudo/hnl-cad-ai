@@ -93,15 +93,27 @@ namespace HNL.VXT.Core.Tests
             var onPlan = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { notch }, enabled, new VxtLayoutContext());
 
-            Assert.IsTrue(onPlan.MainSegmentCount >= offPlan.MainSegmentCount,
-                "Local-notch ON may only add XC to the economic base grid.");
-            foreach (var baseline in offPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
-                Assert.IsTrue(onPlan.Lines.Any(x => x.Kind == PreviewLineKind.Main &&
-                    ((x.A.DistanceTo(baseline.A) <= 0.1 && x.B.DistanceTo(baseline.B) <= 0.1) ||
-                     (x.A.DistanceTo(baseline.B) <= 0.1 && x.B.DistanceTo(baseline.A) <= 0.1))),
-                    "Economic base XC must remain unchanged when local-notch is enabled.");
-            Assert.IsTrue(onPlan.HangerCount >= offPlan.HangerCount,
-                "Adding a required local XC may add Ty, but must not delete Ty belonging to the base grid.");
+            var offYs = MainYs(offPlan);
+            var onYs = MainYs(onPlan);
+            Assert.AreEqual(offYs.Length, onYs.Length,
+                "Economy contract: repair the notch with the same XC count whenever a valid same-count solution exists.");
+            Assert.IsFalse(offYs.SequenceEqual(onYs),
+                "This fixture must exercise the same-count notch repair rather than preserving an invalid base phase.");
+            Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard),
+                "Economic same-count repair must remove the notch HARD Max violation.");
+
+            foreach (var main in onPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
+            {
+                var y = (main.A.Y + main.B.Y) * 0.5;
+                var minX = Math.Min(main.A.X, main.B.X);
+                var maxX = Math.Max(main.A.X, main.B.X);
+                if (maxX - minX < 1000.0) continue;
+                Assert.IsTrue(onPlan.HangerPoints.Any(p =>
+                    Math.Abs(p.Y - y) <= 0.1 &&
+                    p.X >= minX - 0.1 &&
+                    p.X <= maxX + 0.1),
+                    "Ty must follow the final economic XC grid after notch repair.");
+            }
         }
 
         [TestMethod]
@@ -115,6 +127,14 @@ namespace HNL.VXT.Core.Tests
             Assert.AreEqual(400.0, defaults.FurringSpacing, 1e-10,
                 "XP spacing must remain freely editable for other board widths/systems.");
         }
+
+        private static double[] MainYs(VxtPreviewPlan plan)
+            => plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Select(x => Math.Round((x.A.Y + x.B.Y) * 0.5, 3))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
 
         private static Boundary2 Rectangle(double width, double height)
             => new Boundary2(new[]

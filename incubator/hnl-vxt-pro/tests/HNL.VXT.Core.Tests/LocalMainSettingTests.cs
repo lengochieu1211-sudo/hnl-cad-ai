@@ -35,17 +35,14 @@ namespace HNL.VXT.Core.Tests
             var disabledPlan = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { boundary }, disabled, new VxtLayoutContext());
 
-            foreach (var baseline in disabledPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
-                Assert.IsTrue(enabledPlan.Lines.Any(x => x.Kind == PreviewLineKind.Main && SameMain(x, baseline)),
-                    "Local-main ON must preserve every OFF/base XC.");
-
-            Assert.IsTrue(enabledPlan.Lines.Count(x => x.Kind == PreviewLineKind.Main) >
-                          disabledPlan.Lines.Count(x => x.Kind == PreviewLineKind.Main),
-                "With local-main ON, this unresolved notch must add local XC rather than rebalance the base grid.");
-
-            Assert.IsTrue(HasExpectedLocalNotchMain(enabledPlan),
-                "Local notch XC must be placed toward the notch edge (Y=1800 in this fixture) " +
-                "instead of being pinned near the neighbouring base XC.");
+            var offYs = MainYs(disabledPlan);
+            var onYs = MainYs(enabledPlan);
+            Assert.AreEqual(offYs.Length, onYs.Length,
+                "Local-main ON must keep the XC count when the notch can be repaired by the existing grid.");
+            Assert.IsFalse(offYs.SequenceEqual(onYs),
+                "The invalid base phase must be repaired before any local XC is considered.");
+            Assert.IsFalse(enabledPlan.Diagnostics.Any(x => x.IsHard),
+                "The final same-count notch repair must be HARD-Max safe.");
         }
 
         [TestMethod]
@@ -189,9 +186,10 @@ namespace HNL.VXT.Core.Tests
             var offPlan = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { boundary }, disabled, new VxtLayoutContext());
 
-            foreach (var baseline in offPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
-                Assert.IsTrue(onPlan.Lines.Any(x => x.Kind == PreviewLineKind.Main && SameMain(x, baseline)),
-                    "Block14 local-main ON must preserve the complete OFF/base XC geometry.");
+            Assert.AreEqual(MainYs(offPlan).Length, MainYs(onPlan).Length,
+                "Block14 has a same-count repair; do not add material before exhausting that solution.");
+            Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard),
+                "Block14 same-count repair must satisfy every HARD Max condition.");
 
             var mains = onPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main).ToArray();
             for (var i = 0; i + 1 < mains.Length; i++)

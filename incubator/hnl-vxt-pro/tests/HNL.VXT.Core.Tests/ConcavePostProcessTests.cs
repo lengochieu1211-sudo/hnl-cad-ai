@@ -50,7 +50,7 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void ConcaveBand_LocalFallbackAddsOnlyRequiredShortXcAndGetsTy()
+        public void ConcaveBand_SameCountRepairPrecedesLocalAdd_AndRebuildsTy()
         {
             var enabled = new VxtSettings
             {
@@ -72,26 +72,27 @@ namespace HNL.VXT.Core.Tests
             var onPlan = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { boundary }, enabled, new VxtLayoutContext());
 
-            var added = AddedMainLines(offPlan, onPlan);
-            Assert.IsTrue(added.Length > 0,
-                "A real unresolved notch must add at least one local XC when the option is ON.");
+            var offYs = MainYs(offPlan);
+            var onYs = MainYs(onPlan);
+            Assert.AreEqual(offYs.Length, onYs.Length,
+                "This notch has a same-count repair; Local ON must not add XC.");
+            Assert.IsFalse(offYs.SequenceEqual(onYs),
+                "The fixture must exercise re-spacing/movement before local add.");
+            Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard),
+                "The final same-count XC grid must satisfy every HARD Max constraint.");
 
-            foreach (var baseline in offPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
-                Assert.IsTrue(onPlan.Lines.Any(x => x.Kind == PreviewLineKind.Main && SameLine(x, baseline)),
-                    "Adding a notch XC must not move or delete the normal XC grid.");
-
-            var local = added.OrderBy(x => Math.Abs(x.B.X - x.A.X)).First();
-            var localLength = Math.Abs(local.B.X - local.A.X);
-            var localY = (local.A.Y + local.B.Y) * 0.5;
-            Assert.IsTrue(localLength >= enabled.MinLocalMainLength - 0.1 &&
-                          localLength < 3000.0,
-                "Notch fallback must add a short local XC, not replace the global grid.");
-
-            Assert.IsTrue(onPlan.HangerPoints.Any(p =>
-                Math.Abs(p.Y - localY) < 0.1 &&
-                p.X >= Math.Min(local.A.X, local.B.X) - 0.1 &&
-                p.X <= Math.Max(local.A.X, local.B.X) + 0.1),
-                "Every added local XC must receive Ty using the same strict Ty solver.");
+            foreach (var main in onPlan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
+            {
+                var minX = Math.Min(main.A.X, main.B.X);
+                var maxX = Math.Max(main.A.X, main.B.X);
+                if (maxX - minX < 1000.0) continue;
+                var y = (main.A.Y + main.B.Y) * 0.5;
+                Assert.IsTrue(onPlan.HangerPoints.Any(p =>
+                    Math.Abs(p.Y - y) < 0.1 &&
+                    p.X >= minX - 0.1 &&
+                    p.X <= maxX + 0.1),
+                    "Ty must be rebuilt from every final XC after same-count notch repair.");
+            }
         }
 
         [TestMethod]
@@ -218,6 +219,14 @@ namespace HNL.VXT.Core.Tests
 
             CollectionAssert.AreEqual(new[] { 300.0, 1150.0, 2000.0, 2850.0, 3700.0 }, ys);
         }
+
+        private static double[] MainYs(VxtPreviewPlan plan)
+            => plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Select(x => Math.Round((x.A.Y + x.B.Y) * 0.5, 3))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
 
         private static string PointKey(Point2 p)
             => Math.Round(p.X, 3).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + "," +
