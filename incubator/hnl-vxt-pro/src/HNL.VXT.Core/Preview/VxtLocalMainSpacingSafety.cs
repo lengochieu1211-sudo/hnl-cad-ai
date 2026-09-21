@@ -32,6 +32,7 @@ namespace HNL.VXT.Core.Preview
         private const double Tol = 0.5;
         private const double MinOverlap = 1.0;
         private const double MinDrawLength = 5.0;
+        private const double MinNotchWallMainClearance = 100.0;
 
         public static void Apply(
             Boundary2 boundary,
@@ -83,7 +84,14 @@ namespace HNL.VXT.Core.Preview
                 }
             }
 
-            // Only after the entire same-count pipeline fails may the local-notch pass add XC.
+            // A long notch can leave an otherwise-valid XC running almost parallel to the notch
+            // wall with only a tiny construction gap. Break only that local portion when the
+            // perpendicular clearance is below 100 mm; normal outer edges are not touched.
+            // Ty is rebuilt from the surviving XC pieces before any local-XC hard-max repair.
+            TrimMainsTooCloseToNotchWalls(plan, polygon, radians, settings, obstacles);
+
+            // Only after the entire same-count pipeline and the notch-wall constructability trim
+            // may the local-notch pass add XC.
             EnsureHardMaxCoverage(plan, polygon, radians, settings, obstacles);
 
             // Finally remove only truly redundant close local bars. A bar protecting MaxEdge or a
@@ -900,26 +908,34 @@ namespace HNL.VXT.Core.Preview
             IReadOnlyList<Box2> obstacles)
         {
             var added = false;
+            var domain = Box2.FromPoints(polygon);
+            var notchBands = BuildNotchBands(polygon, domain).ToList();
+
             foreach (var raw in PolygonScanline.ClipHorizontal(polygon, spec.Y))
             {
                 var x1 = Math.Max(Math.Min(raw.A.X, raw.B.X), spec.X1);
                 var x2 = Math.Min(Math.Max(raw.A.X, raw.B.X), spec.X2);
                 if (x2 - x1 <= MinDrawLength) continue;
-                if (x2 - x1 < settings.MinLocalMainLength - Tol) continue;
 
-                var local = new Segment2(new Point2(x1, spec.Y), new Point2(x2, spec.Y));
-                if (settings.UseAvoidance && !SegmentClear(local, obstacles)) continue;
-                if (MainAlreadyCovers(plan, local, radians)) continue;
+                var requested = new Segment2(new Point2(x1, spec.Y), new Point2(x2, spec.Y));
+                foreach (var local in SplitMainAtCloseNotchWalls(
+                    requested, polygon, domain, notchBands, MinNotchWallMainClearance))
+                {
+                    // The minimum local-XC length remains HARD even after constructability trimming.
+                    if (local.B.X - local.A.X < settings.MinLocalMainLength - Tol) continue;
+                    if (settings.UseAvoidance && !SegmentClear(local, obstacles)) continue;
+                    if (MainAlreadyCovers(plan, local, radians)) continue;
 
-                plan.Lines.Add(new PreviewLine(
-                    Transform2.ToWorld(local.A, radians),
-                    Transform2.ToWorld(local.B, radians),
-                    PreviewLineKind.Main));
-                plan.MainSegmentCount++;
-                added = true;
+                    plan.Lines.Add(new PreviewLine(
+                        Transform2.ToWorld(local.A, radians),
+                        Transform2.ToWorld(local.B, radians),
+                        PreviewLineKind.Main));
+                    plan.MainSegmentCount++;
+                    added = true;
 
-                if (settings.DrawHangers)
-                    AddHangers(plan, local, radians, settings, obstacles);
+                    if (settings.DrawHangers)
+                        AddHangers(plan, local, radians, settings, obstacles);
+                }
             }
             return added;
         }
@@ -1073,6 +1089,144 @@ namespace HNL.VXT.Core.Preview
 
         private static bool CrossesX(MainRecord main, double x)
             => x >= main.X1 - Tol && x <= main.X2 + Tol;
+
+        private static bool TrimMainsTooCloseToNotchWalls(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Point2> polygon,
+            double radians,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            var domain = Box2.FromPoints(polygon);
+            var notchBands = BuildNotchBands(polygon, domain).ToList();
+            if (notchBands.Count == 0) return false;
+
+            var source = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .ToList();
+            if (source.Count == 0) return false;
+
+            var replacement = new List<Segment2>();
+            var changed = false;
+
+            foreach (var line in source)
+            {
+                var a = Transform2.ToLocal(line.A, radians);
+                var b = Transform2.ToLocal(line.B, radians);
+                if (Math.Abs(a.Y - b.Y) > Tol)
+                {
+                    replacement.Add(new Segment2(a, b));
+                    continue;
+                }
+
+                var original = new Segment2(
+                    new Point2(Math.Min(a.X, b.X), (a.Y + b.Y) * 0.5),
+                    new Point2(Math.Max(a.X, b.X), (a.Y + b.Y) * 0.5));
+                var pieces = SplitMainAtCloseNotchWalls(
+                    original, polygon, domain, notchBands, MinNotchWallMainClearance);
+
+                if (pieces.Count != 1 ||
+                    Math.Abs(pieces[0].A.X - original.A.X) > Tol ||
+                    Math.Abs(pieces[0].B.X - original.B.X) > Tol)
+                    changed = true;
+
+                replacement.AddRange(pieces);
+            }
+
+            if (!changed) return false;
+
+            plan.Lines.RemoveAll(x => x.Kind == PreviewLineKind.Main || x.Kind == PreviewLineKind.Hanger);
+            plan.HangerPoints.Clear();
+            plan.MainSegmentCount = 0;
+            plan.HangerCount = 0;
+
+            foreach (var local in replacement)
+            {
+                if (local.B.X - local.A.X <= MinDrawLength) continue;
+                plan.Lines.Add(new PreviewLine(
+                    Transform2.ToWorld(local.A, radians),
+                    Transform2.ToWorld(local.B, radians),
+                    PreviewLineKind.Main));
+                plan.MainSegmentCount++;
+
+                if (settings.DrawHangers)
+                    AddHangers(plan, local, radians, settings, obstacles);
+            }
+
+            return true;
+        }
+
+        private static List<Segment2> SplitMainAtCloseNotchWalls(
+            Segment2 main,
+            IReadOnlyList<Point2> polygon,
+            Box2 domain,
+            IReadOnlyList<NotchBand> notchBands,
+            double minClearance)
+        {
+            var x1 = Math.Min(main.A.X, main.B.X);
+            var x2 = Math.Max(main.A.X, main.B.X);
+            var y = (main.A.Y + main.B.Y) * 0.5;
+            if (x2 - x1 <= MinDrawLength || minClearance <= Tol)
+                return new List<Segment2> { new Segment2(new Point2(x1, y), new Point2(x2, y)) };
+
+            var cuts = new List<Tuple<double, double>>();
+            foreach (var band in notchBands ?? Array.Empty<NotchBand>())
+            {
+                var aX = Math.Max(x1, band.X1);
+                var bX = Math.Min(x2, band.X2);
+                if (bX - aX <= Tol) continue;
+
+                var sampleX = (aX + bX) * 0.5;
+                foreach (var interval in PolygonScanline.ClipVertical(polygon, sampleX))
+                {
+                    var aY = Math.Min(interval.A.Y, interval.B.Y);
+                    var bY = Math.Max(interval.A.Y, interval.B.Y);
+                    if (y < aY - Tol || y > bY + Tol) continue;
+
+                    // Only a local notch wall can trigger the break. Normal outer boundaries keep
+                    // the existing MainMinEdge/MainMaxEdge rules and are intentionally untouched.
+                    var closeToBottomNotch =
+                        aY > domain.MinY + Tol &&
+                        y - aY < minClearance - Tol;
+                    var closeToTopNotch =
+                        bY < domain.MaxY - Tol &&
+                        bY - y < minClearance - Tol;
+
+                    if (closeToBottomNotch || closeToTopNotch)
+                        cuts.Add(Tuple.Create(aX, bX));
+                    break;
+                }
+            }
+
+            if (cuts.Count == 0)
+                return new List<Segment2> { new Segment2(new Point2(x1, y), new Point2(x2, y)) };
+
+            var merged = new List<Tuple<double, double>>();
+            foreach (var cut in cuts.OrderBy(x => x.Item1))
+            {
+                if (merged.Count == 0 || cut.Item1 > merged[merged.Count - 1].Item2 + Tol)
+                {
+                    merged.Add(Tuple.Create(cut.Item1, cut.Item2));
+                    continue;
+                }
+
+                var last = merged[merged.Count - 1];
+                merged[merged.Count - 1] = Tuple.Create(last.Item1, Math.Max(last.Item2, cut.Item2));
+            }
+
+            var result = new List<Segment2>();
+            var cursor = x1;
+            foreach (var cut in merged)
+            {
+                if (cut.Item1 - cursor > MinDrawLength)
+                    result.Add(new Segment2(new Point2(cursor, y), new Point2(cut.Item1, y)));
+                cursor = Math.Max(cursor, cut.Item2);
+            }
+
+            if (x2 - cursor > MinDrawLength)
+                result.Add(new Segment2(new Point2(cursor, y), new Point2(x2, y)));
+            return result;
+        }
 
         private static List<MainRecord> BuildMainRecords(VxtPreviewPlan plan, double radians)
         {
