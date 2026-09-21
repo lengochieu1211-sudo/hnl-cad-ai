@@ -57,8 +57,11 @@ namespace HNL.VXT.Core.Preview
             // This is intentionally narrower than a general re-phase: only one existing row may
             // move, the row count is frozen, spacing stays on the configured lattice, MEP is
             // revalidated, and every polygon band must remain HARD-Max safe.
-            TryRepairNotchByMovingOneExistingMain(
-                plan, polygon, radians, settings, obstacles);
+            if (settings.MainLayout == MainLayoutMode.OneSide && !settings.UseAvoidance)
+            {
+                TryRepairNotchByMovingOneExistingMain(
+                    plan, polygon, radians, settings, obstacles);
+            }
 
             // Only after same-count repair fails may the local-notch pass add short XC geometry.
             EnsureHardMaxCoverage(plan, polygon, radians, settings, obstacles);
@@ -135,7 +138,8 @@ namespace HNL.VXT.Core.Preview
             var bestMovement = double.MaxValue;
             var bestIndex = int.MaxValue;
 
-            for (var index = 0; index < source.Count; index++)
+            // Keep the two edge rows fixed. Only an interior XC may move.
+            for (var index = 1; index + 1 < source.Count; index++)
             {
                 for (var units = 1; units <= maxUnits; units++)
                 {
@@ -147,6 +151,8 @@ namespace HNL.VXT.Core.Preview
                         if (index > 0 && moved <= source[index - 1] + Tol) continue;
                         if (index + 1 < source.Count && moved >= source[index + 1] - Tol) continue;
 
+                        if (!SameHorizontalTopology(polygon, source[index], moved)) continue;
+
                         var candidate = source.ToList();
                         candidate[index] = moved;
 
@@ -157,6 +163,9 @@ namespace HNL.VXT.Core.Preview
                         var movement = Math.Abs(delta);
                         if (softPenalty < bestSoftPenalty - Tol ||
                             (Math.Abs(softPenalty - bestSoftPenalty) <= Tol &&
+                             (best == null || OneSideLexicographicallyBetter(candidate, best))) ||
+                            (Math.Abs(softPenalty - bestSoftPenalty) <= Tol &&
+                             best != null && SameOneSideGaps(candidate, best) &&
                              (movement < bestMovement - Tol ||
                               (Math.Abs(movement - bestMovement) <= Tol && index < bestIndex))))
                         {
@@ -277,6 +286,63 @@ namespace HNL.VXT.Core.Preview
             }
 
             return penalty;
+        }
+
+        private static bool SameHorizontalTopology(
+            IReadOnlyList<Point2> polygon,
+            double sourceY,
+            double candidateY)
+        {
+            var source = PolygonScanline.ClipHorizontal(polygon, sourceY)
+                .Select(s => Tuple.Create(Math.Min(s.A.X, s.B.X), Math.Max(s.A.X, s.B.X)))
+                .OrderBy(x => x.Item1)
+                .ThenBy(x => x.Item2)
+                .ToArray();
+            var candidate = PolygonScanline.ClipHorizontal(polygon, candidateY)
+                .Select(s => Tuple.Create(Math.Min(s.A.X, s.B.X), Math.Max(s.A.X, s.B.X)))
+                .OrderBy(x => x.Item1)
+                .ThenBy(x => x.Item2)
+                .ToArray();
+
+            if (source.Length != candidate.Length) return false;
+            for (var i = 0; i < source.Length; i++)
+            {
+                if (Math.Abs(source[i].Item1 - candidate[i].Item1) > Tol ||
+                    Math.Abs(source[i].Item2 - candidate[i].Item2) > Tol)
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool OneSideLexicographicallyBetter(
+            IReadOnlyList<double> candidate,
+            IReadOnlyList<double> currentBest)
+        {
+            if (candidate == null) return false;
+            if (currentBest == null) return true;
+
+            var count = Math.Min(candidate.Count, currentBest.Count);
+            for (var i = 0; i + 1 < count; i++)
+            {
+                var candidateGap = candidate[i + 1] - candidate[i];
+                var bestGap = currentBest[i + 1] - currentBest[i];
+                if (candidateGap > bestGap + Tol) return true;
+                if (candidateGap < bestGap - Tol) return false;
+            }
+            return false;
+        }
+
+        private static bool SameOneSideGaps(
+            IReadOnlyList<double> a,
+            IReadOnlyList<double> b)
+        {
+            if (a == null || b == null || a.Count != b.Count) return false;
+            for (var i = 0; i + 1 < a.Count; i++)
+            {
+                if (Math.Abs((a[i + 1] - a[i]) - (b[i + 1] - b[i])) > Tol)
+                    return false;
+            }
+            return true;
         }
 
         private static bool GridStepsStayOnLattice(IReadOnlyList<double> grid, double step)

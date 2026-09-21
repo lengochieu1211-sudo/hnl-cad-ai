@@ -88,9 +88,9 @@ namespace HNL.VXT.Core.Tests
                 "OneSide base grid for the 2300-mm domain must stay deterministic.");
 
             CollectionAssert.AreEqual(
-                new[] { 300.0, 1200.0, 2000.0 },
+                new[] { 300.0, 1300.0, 2000.0 },
                 onYs,
-                "Notch ON must move the second existing XC +50 mm, giving 300-900-800-300, before adding a new XC.");
+                "OneSide notch repair must keep the same XC count and chase Max first: 300-1000-700-300.");
 
             Assert.AreEqual(offYs.Length, onYs.Length,
                 "A same-count notch repair must not add XC.");
