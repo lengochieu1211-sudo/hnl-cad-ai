@@ -55,9 +55,10 @@ namespace HNL.VXT.Core.Preview
             // Cạnh khuyết - thứ tự cố định:
             // 1) giữ nguyên số XC và chia polygon thành các band để kiểm tra;
             // 2) thử dời toàn bộ lưới theo đúng MainBalanceStep;
-            // 3) thử chia đều lại cùng số XC;
-            // 4) cuối cùng mới dời cục bộ XC nền gần cạnh khuyết theo đúng lattice;
-            // 5) mỗi nghiệm đều phải kiểm lại toàn bộ HARD Max, preferred Min và OneSide;
+            // 3) OneSide: nếu dời cả lưới chưa được, dời cục bộ XC nền gần cạnh khuyết
+            //    theo đúng lattice để giữ nguyên biên đầu và đuổi khoảng lớn về một phía;
+            // 4) Balanced/hoặc khi local move không có nghiệm: mới thử chia đều lại cùng số XC;
+            // 5) mỗi nghiệm đều phải kiểm lại toàn bộ HARD Max, preferred Min và bội số;
             // 6) chỉ khi không có nghiệm cùng số XC mới được thêm XC cục bộ.
             var domain = Box2.FromPoints(polygon);
             var hasRealNotch = BuildNotchBands(polygon, domain).Any();
@@ -66,19 +67,25 @@ namespace HNL.VXT.Core.Preview
                 var source = BuildGrid(plan, radians);
                 if (source.Count > 0 && !SharedGridHardValid(source, polygon, settings, obstacles))
                 {
-                    var repaired =
-                        TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
-                        TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
-                        TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: true);
+                    var repaired = settings.MainLayout == MainLayoutMode.OneSide
+                        ? TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
+                          TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
+                          TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: true)
+                        : TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
+                          TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
+                          TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: true);
 
                     if (!repaired)
                     {
                         // Min spacing / Min edge are SOFT. Only after all strict same-count
                         // solutions fail do we allow a SOFT-Min same-count solution.
-                        repaired =
-                            TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
-                            TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
-                            TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: false);
+                        repaired = settings.MainLayout == MainLayoutMode.OneSide
+                            ? TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
+                              TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
+                              TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: false)
+                            : TryAlignSharedGlobalGrid(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
+                              TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
+                              TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: false);
                     }
                 }
             }

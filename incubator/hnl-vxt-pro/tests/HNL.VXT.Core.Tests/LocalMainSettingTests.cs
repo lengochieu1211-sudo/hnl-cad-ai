@@ -131,12 +131,18 @@ namespace HNL.VXT.Core.Tests
                 "OneSide base grid for the 2330-mm domain must stay deterministic: 300-850-850-330.");
 
             CollectionAssert.AreEqual(
-                new[] { 400.0, 1200.0, 2000.0 },
+                new[] { 300.0, 1300.0, 2000.0 },
                 onYs,
-                "Equal-gap same-count repair must win before local movement: 400-800-800-330.");
+                "OneSide must keep the near edge at 300 and move only the second existing XC on the 50-mm lattice: 300-1000-700-330.");
 
             Assert.AreEqual(offYs.Length, onYs.Length,
                 "A same-count notch repair must not add XC.");
+            Assert.AreEqual(300.0, onYs[0], 0.1,
+                "OneSide notch repair must preserve the preferred near-edge offset when a valid local move exists.");
+            Assert.AreEqual(1000.0, onYs[1] - onYs[0], 0.1,
+                "OneSide must maximize the first spacing before consuming the remainder.");
+            Assert.AreEqual(700.0, onYs[2] - onYs[1], 0.1,
+                "The remaining spacing must stay at the configured Min instead of adding a new XC.");
             Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard),
                 "The moved same-count M01 grid must satisfy all HARD constraints.");
             Assert.IsFalse(onPlan.Diagnostics.Any(x =>
