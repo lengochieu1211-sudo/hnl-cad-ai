@@ -15,6 +15,6 @@
   <ItemGroup>
     <ProjectReference Include="..\HNL.VXT.Core\HNL.VXT.Core.csproj" />
     <!-- One canonical HNL logo for both the AutoCAD palette and installer branding. -->
-    <Resource Include="..\..\..\..\public\hnl-logo.png" Link="Assets\HNL-Logo-Official.png" />
+    <Resource Include="..\..\installer\assets\HNL-VXT-EXE-Logo.png" Link="Assets\HNL-Logo-Official.png" />
   </ItemGroup>
 </Project>

@@ -6,11 +6,10 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
 $out = Join-Path $Root 'artifacts\installer-assets'
-$logoB64 = Join-Path $Root 'src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64'
-# Dedicated Windows EXE/installer artwork. Keep this separate from the in-app HNL logo.
-$exeLogoPng = Join-Path $Root 'installer\assets\HNL-VXT-EXE-Logo.png'
-$repoRoot = Split-Path -Parent (Split-Path -Parent $Root)
-$sharedLogo = Join-Path $repoRoot 'public\hnl-logo.png'
+# Single canonical HNL VXT logo master for Palette + EXE + installer.
+$masterLogoPng = Join-Path $Root 'installer\assets\HNL-VXT-EXE-Logo.png'
+$exeLogoPng = $masterLogoPng
+$sharedLogo = $masterLogoPng
 $officialPng = Join-Path $out 'HNL-Logo-Official.png'
 $iconPath = Join-Path $out 'HNL-VXT.ico'
 $smallPath = Join-Path $out 'HNL-VXT-Small.bmp'
@@ -137,8 +136,7 @@ function Write-HnlMultiSizeIco {
   }
 }
 
-# Prefer the repository's full-resolution shared HNL artwork when available.
-# Fallback remains the embedded Palette asset, so installer builds stay self-contained.
+# Load the canonical HNL VXT master for both Palette reference and installer branding.
 $loaded = $null
 $sourceLabel = $null
 if (Test-Path $sharedLogo) {
@@ -178,13 +176,12 @@ $exeStream = $null
 $exeWidth = 0
 $exeHeight = 0
 try {
-  # In-app / official HNL artwork stays unchanged and is still exported only as the
-  # HNL-Logo-Official reference PNG. It is no longer used as the Windows EXE icon source.
+  # Palette reference and Windows branding now come from the exact same canonical master.
   $source = New-HnlArgbSource -InputImage $loaded
   $refBytes = [byte[]](New-HnlPngFrame -Source $source -Size 256)
   [IO.File]::WriteAllBytes($officialPng, $refBytes)
 
-  # EXE/installer branding is intentionally isolated from the Palette/UI logo.
+  # EXE/installer branding uses the same canonical master as the Palette/UI logo.
   if (-not (Test-Path $exeLogoPng)) { throw "Missing dedicated HNL VXT EXE logo asset: $exeLogoPng" }
   $exeBytes = [IO.File]::ReadAllBytes($exeLogoPng)
   if ($exeBytes.Length -lt 8 -or
@@ -251,8 +248,8 @@ for ($entry = 0; $entry -lt $count; $entry++) {
 }
 
 Write-Host 'HNL branding generated and decode-verified:'
-Write-Host "  UI SOURCE (unchanged): $sourceLabel"
-Write-Host "  UI PNG: $officialPng (256x256 normalized reference)"
-Write-Host ("  EXE SOURCE (dedicated): {0} ({1}x{2})" -f $exeLogoPng, $exeWidth, $exeHeight)
+Write-Host "  MASTER SOURCE: $sourceLabel"
+Write-Host "  UI PNG: $officialPng (256x256 normalized from master)"
+Write-Host ("  EXE SOURCE: {0} ({1}x{2})" -f $exeLogoPng, $exeWidth, $exeHeight)
 Write-Host "  EXE ICO: $iconPath (16/24/32/48/64/128/256 ascending, every frame round-trip decoded)"
 Write-Host "  INSTALLER BMP: $smallPath"
