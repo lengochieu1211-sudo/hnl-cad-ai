@@ -206,7 +206,7 @@ namespace HNL.VXT.Core.Layout
                 startEdge,
                 steps,
                 farEdge,
-                dense: false,
+                isDense: false,
                 usedSoftEdge: usedSoftEdge || farEdge < startEdge - Tol);
             return MaybeReverse(result, reverse);
         }
