@@ -158,7 +158,7 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void MizukiM31_OneSide_SoftMinSameCountRepair_WinsBeforeLocalXC()
+        public void MizukiM31_OneSide_SameCountRepair_WinsBeforeLocalXC()
         {
             var enabled = new VxtSettings
             {
@@ -196,10 +196,9 @@ namespace HNL.VXT.Core.Tests
                 offXs,
                 "M31 base OneSide grid must stay deterministic before notch repair.");
             CollectionAssert.AreEqual(
-                new[] { 400.0, 1200.0, 2000.0 },
+                new[] { 400.0, 1100.0, 1800.0 },
                 onXs,
-                "M31 has a valid SOFT-Min same-count repair; do not add a fourth XC. Actual=" +
-                string.Join(",", onXs.Select(x => x.ToString("0.0"))));
+                "M31 must keep the same three XC and solve an equal 700-700 lattice spacing before any local XC is considered.");
             Assert.AreEqual(offXs.Length, onXs.Length,
                 "Same-count repair must win before local XC is added on M31.");
             Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard),
