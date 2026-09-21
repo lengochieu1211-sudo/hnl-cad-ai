@@ -14,11 +14,16 @@ namespace HNL.VXT.AutoCAD
     public sealed class HnlVxtCommands
     {
         [CommandMethod("HVX", CommandFlags.Modal)]
-        public void ShowPalette() => new VxtCommands().ShowPalette();
+        public void ShowPalette()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            new VxtCommands().ShowPalette();
+        }
 
         [CommandMethod("HNLVXTCREATE", CommandFlags.Modal | CommandFlags.UsePickSet)]
         public void Create()
         {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
             // PickFirst parity: if the user already selected closed ceiling polylines in AutoCAD,
             // consume them as boundaries instead of reporting "Chưa chọn biên trần".
             if (!VxtSession.Current.HasBoundary)
@@ -30,6 +35,7 @@ namespace HNL.VXT.AutoCAD
         [CommandMethod("HNLVXTBOUNDARY", CommandFlags.Modal | CommandFlags.UsePickSet)]
         public void SelectBoundary()
         {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
             // A fresh Lisp ssget starts a fresh per-ceiling ask_each state. Clear the previous
             // boundary-specific XP directions before the new selection is collected.
             VxtSession.Current.BoundaryFurringFromFarEdges.Clear();
@@ -45,89 +51,188 @@ namespace HNL.VXT.AutoCAD
         }
 
         [CommandMethod("HNLVXTAUTOSETUP", CommandFlags.Modal)]
-        public void ConfigureAutoDirection() =>
+        public void ConfigureAutoDirection()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
             VxtLegacyParityCoordinator.ConfigureAutoShadowlineInteractive(refreshPreview: true, fallbackFromCreate: false);
+        }
 
         [CommandMethod("HNLVXTDIRECTION", CommandFlags.Modal)]
-        public void PickDirection() => new VxtCommands().PickDirection();
+        public void PickDirection()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            new VxtCommands().PickDirection();
+        }
 
         [CommandMethod("HNLVXTREGION", CommandFlags.Modal)]
-        public void RectangleDirectionMode() => new VxtCommands().RectangleDirectionMode();
+        public void RectangleDirectionMode()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            new VxtCommands().RectangleDirectionMode();
+        }
 
         [CommandMethod("HNLVXTPICKMAIN", CommandFlags.Modal)]
-        public void PickMainBlock() => VxtSelectionParity.PickBlock(BlockTarget.Main);
+        public void PickMainBlock()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtSelectionParity.PickBlock(BlockTarget.Main);
+        }
 
         [CommandMethod("HNLVXTPICKFURRING", CommandFlags.Modal)]
-        public void PickFurringBlock() => VxtSelectionParity.PickBlock(BlockTarget.Furring);
+        public void PickFurringBlock()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtSelectionParity.PickBlock(BlockTarget.Furring);
+        }
 
         [CommandMethod("HNLVXTPICKHANGER", CommandFlags.Modal)]
-        public void PickHangerBlock() => VxtSelectionParity.PickBlock(BlockTarget.Hanger);
+        public void PickHangerBlock()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtSelectionParity.PickBlock(BlockTarget.Hanger);
+        }
 
         [CommandMethod("HNLVXTMEP", CommandFlags.Modal)]
-        public void PickGeneralEquipment() => VxtSelectionParity.PickEquipment(EquipmentTarget.General);
+        public void PickGeneralEquipment()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtSelectionParity.PickEquipment(EquipmentTarget.General);
+        }
 
         [CommandMethod("HNLVXTMEPMAIN", CommandFlags.Modal)]
-        public void PickMainEquipment() => VxtSelectionParity.PickEquipment(EquipmentTarget.Main);
+        public void PickMainEquipment()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtSelectionParity.PickEquipment(EquipmentTarget.Main);
+        }
 
         [CommandMethod("HNLVXTMEPFURRING", CommandFlags.Modal)]
-        public void PickFurringEquipment() => VxtSelectionParity.PickEquipment(EquipmentTarget.Furring);
+        public void PickFurringEquipment()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtSelectionParity.PickEquipment(EquipmentTarget.Furring);
+        }
 
         [CommandMethod("HNLVXTDIMMAIN", CommandFlags.Modal)]
-        public void PickMainDim() => new VxtCommands().PickMainDim();
+        public void PickMainDim()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            new VxtCommands().PickMainDim();
+        }
 
         [CommandMethod("HNLVXTDIMFURRING", CommandFlags.Modal)]
-        public void PickFurringDim() => new VxtCommands().PickFurringDim();
+        public void PickFurringDim()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            new VxtCommands().PickFurringDim();
+        }
 
         [CommandMethod("HNLVXTDIMHANGER", CommandFlags.Modal)]
-        public void PickHangerDim() => new VxtCommands().PickHangerDim();
+        public void PickHangerDim()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            new VxtCommands().PickHangerDim();
+        }
 
         [CommandMethod("HNLVXTANALYZE", CommandFlags.Modal)]
-        public void Analyze() => new VxtDiagnosticCommands().Analyze();
+        public void Analyze()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            new VxtDiagnosticCommands().Analyze();
+        }
 
         [CommandMethod("HNLVXTDIAG", CommandFlags.Modal)]
-        public void ExportZip() => new VxtDiagnosticCommands().ExportZip();
+        public void ExportZip()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            new VxtDiagnosticCommands().ExportZip();
+        }
 
         // Internal command-context marshaling used by the modeless WPF palette. These commands
         // deliberately own all TransientManager work so the palette never manipulates CAD graphics
         // directly from an application-context DispatcherTimer callback.
         [CommandMethod("HNLVXTPREVIEW", CommandFlags.Modal)]
-        public void RefreshPreview() => VxtTransientPreview.Instance.Refresh();
+        public void RefreshPreview()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtTransientPreview.Instance.Refresh();
+        }
 
         [CommandMethod("HNLVXTCLEARPREVIEW", CommandFlags.Modal)]
-        public void ClearPreview() => VxtTransientPreview.Instance.Clear();
+        public void ClearPreview()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtTransientPreview.Instance.Clear();
+        }
 
         // Mxx diagnostic selection must be exposed on the only registered CommandClass.
         // VxtCommands contains the implementation but is intentionally not registered.
         [CommandMethod("HNLVXTFOCUSBOUNDARY", CommandFlags.Modal)]
-        public void FocusBoundaryDiagnostic() => new VxtCommands().FocusBoundaryDiagnostic();
+        public void FocusBoundaryDiagnostic()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            new VxtCommands().FocusBoundaryDiagnostic();
+        }
 
         [CommandMethod("HNLVXTGOLDEN", CommandFlags.Modal)]
-        public void RuntimeGolden() => VxtRuntimeGoldenService.Run();
+        public void RuntimeGolden()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtRuntimeGoldenService.Run();
+        }
 
         [CommandMethod("HNLVXTPROGOLDEN", CommandFlags.Modal)]
-        public void RuntimeProGolden() => VxtRuntimeGoldenService.RunPro();
+        public void RuntimeProGolden()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtRuntimeGoldenService.RunPro();
+        }
 
         [CommandMethod("HNLVXTPROAUTOQA", CommandFlags.Modal)]
-        public void RuntimeProAutoQa() => VxtProAutoRuntimeQaService.Run();
+        public void RuntimeProAutoQa()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtProAutoRuntimeQaService.Run();
+        }
 
         [CommandMethod("HNLVXTPROMULTIQA", CommandFlags.Modal)]
-        public void RuntimeProMultiQa() => VxtProMultiRuntimeQaService.Run();
+        public void RuntimeProMultiQa()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtProMultiRuntimeQaService.Run();
+        }
 
         [CommandMethod("HNLVXTSOAKQA", CommandFlags.Modal)]
-        public void RuntimeTransientSoakQa() => VxtTransientSoakQaService.Run();
+        public void RuntimeTransientSoakQa()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtTransientSoakQaService.Run();
+        }
 
         // Field QA for the currently selected real ceiling. Unlike the deterministic 5-step
         // suite below, this intentionally validates the active user drawing and Preview state.
         [CommandMethod("HNLVXTPREVIEWQA", CommandFlags.Modal)]
-        public void RuntimePreviewQa() => VxtPreviewRuntimeQaService.Run();
+        public void RuntimePreviewQa()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtPreviewRuntimeQaService.Run();
+        }
 
         // One-command replacement for SCRIPT-based QA. Both names intentionally point to the
         // same runner so field verification needs no external .scr file or file chooser.
         [CommandMethod("HNLVXTQA", CommandFlags.Modal)]
-        public void RuntimeAllQa() => RunAllQaCore();
+        public void RuntimeAllQa()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            RunAllQaCore();
+        }
 
         [CommandMethod("HNLVXTRUNALLQA", CommandFlags.Modal)]
-        public void RuntimeAllQaLong() => RunAllQaCore();
+        public void RuntimeAllQaLong()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            RunAllQaCore();
+        }
 
         private static void RunAllQaCore()
         {
