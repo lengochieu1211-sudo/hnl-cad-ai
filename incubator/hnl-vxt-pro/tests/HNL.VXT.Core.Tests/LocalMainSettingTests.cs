@@ -158,7 +158,7 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void MizukiM31_OneSide_SameCountRepair_WinsBeforeLocalXC()
+        public void MizukiM31_OneSide_BreaksSub100NotchSegmentBeforeRequiredLocalXC()
         {
             var enabled = new VxtSettings
             {
@@ -196,17 +196,38 @@ namespace HNL.VXT.Core.Tests
                 offXs,
                 "M31 base OneSide grid must stay deterministic before notch repair.");
             CollectionAssert.AreEqual(
-                new[] { 400.0, 1100.0, 1800.0 },
+                new[] { 400.0, 700.0, 1100.0, 1800.0 },
                 onXs,
-                "M31 must keep the same three XC and solve an equal 700-700 lattice spacing before any local XC is considered. Actual=" +
-                string.Join(",", onXs.Select(x => x.ToString("0.0"))));
-            Assert.AreEqual(offXs.Length, onXs.Length,
-                "Same-count repair must win before local XC is added on M31.");
+                "M31 first reaches the same-count 400-1100-1800 grid, but the x=400 portion along the long notch is below the 100-mm constructability clearance and must be broken; x=700 is then the required local HARD-Max repair.");
+
+            Assert.IsFalse(onPlan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Any(x =>
+                {
+                    var xw = (x.A.X + x.B.X) * 0.5;
+                    var minY = Math.Min(x.A.Y, x.B.Y);
+                    var maxY = Math.Max(x.A.Y, x.B.Y);
+                    return Math.Abs(xw - 400.0) <= 0.1 &&
+                           minY < 900.0 && maxY > 900.0;
+                }),
+                "The unsafe x=400 XC portion must not continue through the lower notch band.");
+
+            Assert.IsTrue(onPlan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Any(x =>
+                {
+                    var xw = (x.A.X + x.B.X) * 0.5;
+                    var length = x.A.DistanceTo(x.B);
+                    return Math.Abs(xw - 700.0) <= 0.1 &&
+                           length >= enabled.MinLocalMainLength - 0.1;
+                }),
+                "After the sub-100-mm segment is broken, the local x=700 XC is required and must still satisfy the HARD minimum local-XC length.");
+
             Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard),
-                "M31 same-count repair must satisfy every HARD Max constraint.");
+                "M31 final plan after the 100-mm constructability break must satisfy every HARD Max constraint.");
             Assert.IsFalse(onPlan.Diagnostics.Any(x =>
                 x.Kind == VxtConstraintKind.ManualMainRequiredWarning),
-                "M31 same-count repair must not require manual XC completion.");
+                "M31 can be completed automatically after the required local XC repair.");
         }
 
         [TestMethod]
