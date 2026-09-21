@@ -105,7 +105,7 @@ namespace HNL.VXT.UI.Views
                 {
                     text.Visibility = Visibility.Collapsed;
                 }
-                else if (string.Equals(value, "VẼ XƯƠNG TRẦN", StringComparison.Ordinal))
+                else if (string.Equals(value, "Vẽ xương trần", StringComparison.OrdinalIgnoreCase))
                 {
                     text.Visibility = Visibility.Visible;
                     text.FontSize = 13.0;
@@ -154,7 +154,7 @@ namespace HNL.VXT.UI.Views
                     continue;
                 }
 
-                if (ContainsText(element, "LAYER & KIỂU NÉT") || ContainsText(element, "LAYER & Dim"))
+                if (ContainsText(element, "Layer & kiểu nét") || ContainsText(element, "Layer & Dim"))
                     legacyCards.Add(child);
             }
 
@@ -505,7 +505,7 @@ namespace HNL.VXT.UI.Views
             foreach (var node in Walk(root))
             {
                 var text = node as TextBlock;
-                if (text != null && string.Equals(text.Text, value, StringComparison.Ordinal))
+                if (text != null && string.Equals(text.Text, value, StringComparison.OrdinalIgnoreCase))
                     yield return text;
             }
         }

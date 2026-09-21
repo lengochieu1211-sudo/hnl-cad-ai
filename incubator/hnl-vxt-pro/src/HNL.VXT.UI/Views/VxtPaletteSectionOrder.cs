@@ -52,13 +52,13 @@ namespace HNL.VXT.UI.Views
                     continue;
                 }
 
-                if (ContainsText(element, "KÍCH THƯỚC Dim"))
+                if (ContainsText(element, "Kích thước Dim"))
                     dim = child;
-                else if (ContainsText(element, "NÉ THIẾT BỊ MEP") || ContainsText(element, "NÉ THIẾT BỊ"))
+                else if (ContainsText(element, "Né thiết bị MEP") || ContainsText(element, "Né thiết bị"))
                     avoidance = child;
-                else if (ContainsText(element, "PHÂN TÍCH & KIỂM TRA LỖI"))
+                else if (ContainsText(element, "Kiểm tra bố trí") || ContainsText(element, "Phân tích & kiểm tra lỗi"))
                     diagnostics = child;
-                else if (ContainsText(element, "XEM TRƯỚC TRÊN BẢN VẼ"))
+                else if (ContainsText(element, "Xem trước trên bản vẽ"))
                     preview = child;
             }
 
@@ -99,7 +99,7 @@ namespace HNL.VXT.UI.Views
             foreach (var node in Walk(root))
             {
                 var text = node as TextBlock;
-                if (text != null && string.Equals(text.Text, value, StringComparison.Ordinal))
+                if (text != null && string.Equals(text.Text, value, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
             return false;
