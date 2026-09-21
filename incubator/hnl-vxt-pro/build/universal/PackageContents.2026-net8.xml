@@ -7,23 +7,23 @@
   <CompanyDetails Name="HNL Tool" />
   <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.2" SeriesMax="R26.0" />
   <Components Description="HNL Tool - Vẽ Xương Trần | VXT Pro Universal v7.0.0-beta.1">
-    <ComponentEntry AppName="HNL VXT Pro 2023" Version="7.0.0.6" ModuleName="./Contents/Windows/2023/HNL.VXT.AutoCAD.dll" AppDescription="HNL Tool - VXT Pro | AutoCAD 2023" LoadOnAutoCADStartup="True">
+    <ComponentEntry AppName="HNL VXT Pro 2023" Version="7.0.0.6" ModuleName="./Contents/Windows/2023/HNL.VXT.AutoCAD.dll" AppDescription="HNL Tool - VXT Pro | AutoCAD 2023" LoadOnCommandInvocation="True">
       <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.2" SeriesMax="R24.2" />
       <Commands GroupName="HNL.VXT.Commands"><Command Global="VXT" Local="VXT" /><Command Global="VXTCREATE" Local="VXTCREATE" /></Commands>
     </ComponentEntry>
-    <ComponentEntry AppName="HNL VXT Pro 2024" Version="7.0.0.6" ModuleName="./Contents/Windows/2024/HNL.VXT.AutoCAD.dll" AppDescription="HNL Tool - VXT Pro | AutoCAD 2024" LoadOnAutoCADStartup="True">
+    <ComponentEntry AppName="HNL VXT Pro 2024" Version="7.0.0.6" ModuleName="./Contents/Windows/2024/HNL.VXT.AutoCAD.dll" AppDescription="HNL Tool - VXT Pro | AutoCAD 2024" LoadOnCommandInvocation="True">
       <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.3" SeriesMax="R24.3" />
       <Commands GroupName="HNL.VXT.Commands"><Command Global="VXT" Local="VXT" /><Command Global="VXTCREATE" Local="VXTCREATE" /></Commands>
     </ComponentEntry>
-    <ComponentEntry AppName="HNL VXT Pro 2025" Version="7.0.0.6" ModuleName="./Contents/Windows/2025/HNL.VXT.AutoCAD.dll" AppDescription="HNL Tool - VXT Pro | AutoCAD 2025" LoadOnAutoCADStartup="True">
+    <ComponentEntry AppName="HNL VXT Pro 2025" Version="7.0.0.6" ModuleName="./Contents/Windows/2025/HNL.VXT.AutoCAD.dll" AppDescription="HNL Tool - VXT Pro | AutoCAD 2025" LoadOnCommandInvocation="True">
       <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R25.0" SeriesMax="R25.0" />
       <Commands GroupName="HNL.VXT.Commands"><Command Global="VXT" Local="VXT" /><Command Global="VXTCREATE" Local="VXTCREATE" /></Commands>
     </ComponentEntry>
-    <ComponentEntry AppName="HNL VXT Pro 2026" Version="7.0.0.6" ModuleName="./Contents/Windows/2026/HNL.VXT.AutoCAD.dll" AppDescription="HNL Tool - VXT Pro | AutoCAD 2026 NET8" LoadOnAutoCADStartup="True">
+    <ComponentEntry AppName="HNL VXT Pro 2026" Version="7.0.0.6" ModuleName="./Contents/Windows/2026/HNL.VXT.AutoCAD.dll" AppDescription="HNL Tool - VXT Pro | AutoCAD 2026 NET8" LoadOnCommandInvocation="True">
       <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R25.1" SeriesMax="R25.1" />
       <Commands GroupName="HNL.VXT.Commands"><Command Global="VXT" Local="VXT" /><Command Global="VXTCREATE" Local="VXTCREATE" /></Commands>
     </ComponentEntry>
-    <ComponentEntry AppName="HNL VXT Pro 2027" Version="7.0.0.6" ModuleName="./Contents/Windows/2027/HNL.VXT.AutoCAD.dll" AppDescription="HNL Tool - VXT Pro | AutoCAD 2027" LoadOnAutoCADStartup="True">
+    <ComponentEntry AppName="HNL VXT Pro 2027" Version="7.0.0.6" ModuleName="./Contents/Windows/2027/HNL.VXT.AutoCAD.dll" AppDescription="HNL Tool - VXT Pro | AutoCAD 2027" LoadOnCommandInvocation="True">
       <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R26.0" SeriesMax="R26.0" />
       <Commands GroupName="HNL.VXT.Commands"><Command Global="VXT" Local="VXT" /><Command Global="VXTCREATE" Local="VXTCREATE" /></Commands>
     </ComponentEntry>
