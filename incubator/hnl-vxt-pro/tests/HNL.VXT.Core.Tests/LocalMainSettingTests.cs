@@ -196,9 +196,9 @@ namespace HNL.VXT.Core.Tests
                 offXs,
                 "M31 base OneSide grid must stay deterministic before notch repair.");
             CollectionAssert.AreEqual(
-                new[] { 400.0, 700.0, 1100.0, 1800.0 },
+                new[] { 400.0, 700.0, 1100.0, 1800.0, 1900.0 },
                 onXs,
-                "M31 first reaches the same-count 400-1100-1800 grid, but the x=400 portion along the long notch is below the 100-mm constructability clearance and must be broken; x=700 is then the required local HARD-Max repair.");
+                "M31 first reaches the same-count 400-1100-1800 grid. Sub-100-mm portions are then broken; x=700 repairs the lower notch band and x=1900 repairs the 250-mm upper notch band on a safe lattice point.");
 
             Assert.IsFalse(onPlan.Lines
                 .Where(x => x.Kind == PreviewLineKind.Main)
@@ -222,6 +222,17 @@ namespace HNL.VXT.Core.Tests
                            length >= enabled.MinLocalMainLength - 0.1;
                 }),
                 "After the sub-100-mm segment is broken, the local x=700 XC is required and must still satisfy the HARD minimum local-XC length.");
+
+            Assert.IsTrue(onPlan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Any(x =>
+                {
+                    var xw = (x.A.X + x.B.X) * 0.5;
+                    var length = x.A.DistanceTo(x.B);
+                    return Math.Abs(xw - 1900.0) <= 0.1 &&
+                           length >= enabled.MinLocalMainLength - 0.1;
+                }),
+                "The narrow upper notch band must receive a safe lattice XC at least 100 mm from both notch walls instead of reusing the unsafe x=1800 row.");
 
             Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard),
                 "M31 final plan after the 100-mm constructability break must satisfy every HARD Max constraint.");
