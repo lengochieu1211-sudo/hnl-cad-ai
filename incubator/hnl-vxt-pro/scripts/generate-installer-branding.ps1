@@ -137,37 +137,13 @@ function Write-HnlMultiSizeIco {
 }
 
 # Load the canonical HNL VXT master for both Palette reference and installer branding.
-$loaded = $null
-$sourceLabel = $null
-if (Test-Path $sharedLogo) {
-  try {
-    $candidate = [System.Drawing.Image]::FromFile($sharedLogo)
-    if ($candidate.Width -ge 256 -and $candidate.Height -ge 256) {
-      $loaded = $candidate
-      $sourceLabel = "$sharedLogo ($($loaded.Width)x$($loaded.Height))"
-    }
-    else {
-      $candidate.Dispose()
-    }
-  }
-  catch {
-    Write-Warning "Cannot use shared HNL logo; falling back to embedded asset: $($_.Exception.Message)"
-  }
+if (-not (Test-Path $masterLogoPng)) { throw "Missing canonical HNL VXT logo master: $masterLogoPng" }
+$loaded = [System.Drawing.Image]::FromFile($masterLogoPng)
+if ($loaded.Width -lt 64 -or $loaded.Height -lt 64) {
+  $loaded.Dispose()
+  throw "Canonical HNL VXT logo master is too small."
 }
-
-if ($loaded -eq $null) {
-  if (-not (Test-Path $logoB64)) { throw "Missing official HNL logo asset: $logoB64" }
-  $base64 = (Get-Content $logoB64 -Raw) -replace '\s',''
-  $bytes = [Convert]::FromBase64String($base64)
-  if ($bytes.Length -lt 8 -or
-      $bytes[0] -ne 0x89 -or $bytes[1] -ne 0x50 -or $bytes[2] -ne 0x4E -or $bytes[3] -ne 0x47 -or
-      $bytes[4] -ne 0x0D -or $bytes[5] -ne 0x0A -or $bytes[6] -ne 0x1A -or $bytes[7] -ne 0x0A) {
-    throw 'HNL logo asset is not a valid PNG stream.'
-  }
-  [IO.File]::WriteAllBytes($officialPng, $bytes)
-  $loaded = [System.Drawing.Image]::FromFile($officialPng)
-  $sourceLabel = "$logoB64 ($($loaded.Width)x$($loaded.Height))"
-}
+$sourceLabel = "$masterLogoPng ($($loaded.Width)x$($loaded.Height))"
 
 $source = $null
 $exeSource = $null
@@ -182,7 +158,7 @@ try {
   [IO.File]::WriteAllBytes($officialPng, $refBytes)
 
   # EXE/installer branding uses the same canonical master as the Palette/UI logo.
-  if (-not (Test-Path $exeLogoPng)) { throw "Missing dedicated HNL VXT EXE logo asset: $exeLogoPng" }
+  if (-not (Test-Path $exeLogoPng)) { throw "Missing canonical HNL VXT logo master: $exeLogoPng" }
   $exeBytes = [IO.File]::ReadAllBytes($exeLogoPng)
   if ($exeBytes.Length -lt 8 -or
       $exeBytes[0] -ne 0x89 -or $exeBytes[1] -ne 0x50 -or $exeBytes[2] -ne 0x4E -or $exeBytes[3] -ne 0x47 -or
