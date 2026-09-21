@@ -53,12 +53,13 @@ namespace HNL.VXT.Core.Preview
                     var angle = ResolveDirectionDegrees(settings, boundary);
 
                     // "Thêm XC cạnh khuyết" is an explicit opt-in. When OFF, the normal
-                    // layout must pass through untouched: no concave rebalance, no regional
-                    // decomposition, no local XC add, and therefore no secondary Ty redistribution.
+                    // layout passes through untouched and any unresolved notch may be completed
+                    // manually. When ON, same-count XC repair is tried before any local XC is added.
                     if (settings.UseLocalMainAdd)
                     {
-                        // Local-notch ON must preserve the normal XC grid exactly and may only add
-                        // the minimum short XC required by real MaxEdge/MainMaxSpacing violations.
+                        // Local-notch ON keeps the XC count whenever one existing row can be moved
+                        // on the configured lattice to satisfy all HARD Max constraints. Only if
+                        // that same-count repair fails may a short local XC be added.
                         VxtLocalMainSpacingSafety.Apply(
                             boundary, part, settings, angle, boundaryContext);
                         VxtPostProcessDimensionSynchronizer.Synchronize(

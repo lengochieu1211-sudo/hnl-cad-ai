@@ -49,6 +49,59 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void MizukiM01_OneSide_MovesSecondExistingMainBeforeAddingLocalXC()
+        {
+            var enabled = new VxtSettings
+            {
+                OptimizationMode = VxtOptimizationMode.Legacy,
+                MainDirection = MainDirectionMode.Horizontal,
+                MainLayout = MainLayoutMode.OneSide,
+                DrawMain = true,
+                DrawFurring = false,
+                DrawHangers = false,
+                AutoDimension = false,
+                UseAvoidance = false,
+                MainSkipLimit = 0.0,
+                UseLocalMainAdd = true,
+                MinLocalMainLength = 500.0,
+                MainMinSpacing = 700.0,
+                MainMaxSpacing = 1000.0,
+                MainMinEdgeOffset = 300.0,
+                MainMaxEdgeOffset = 400.0,
+                MainBalanceStep = 50.0
+            };
+            var disabled = enabled.Clone();
+            disabled.UseLocalMainAdd = false;
+            var boundary = MizukiM01Notch2300();
+
+            var offPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, disabled, new VxtLayoutContext());
+            var onPlan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, enabled, new VxtLayoutContext());
+
+            var offYs = MainYs(offPlan);
+            var onYs = MainYs(onPlan);
+
+            CollectionAssert.AreEqual(
+                new[] { 300.0, 1150.0, 2000.0 },
+                offYs,
+                "OneSide base grid for the 2300-mm domain must stay deterministic.");
+
+            CollectionAssert.AreEqual(
+                new[] { 300.0, 1200.0, 2000.0 },
+                onYs,
+                "Notch ON must move the second existing XC +50 mm, giving 300-900-800-300, before adding a new XC.");
+
+            Assert.AreEqual(offYs.Length, onYs.Length,
+                "A same-count notch repair must not add XC.");
+            Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard),
+                "The moved same-count M01 grid must satisfy all HARD constraints.");
+            Assert.IsFalse(onPlan.Diagnostics.Any(x =>
+                x.Kind == VxtConstraintKind.ManualMainRequiredWarning),
+                "The repaired M01 notch must not require manual XC completion.");
+        }
+
+        [TestMethod]
         public void FieldBlock14_LocalMainOff_DoesNotSplitMainsAtArtificialRegionSeams()
         {
             var settings = FieldBlock14Settings();
@@ -117,6 +170,25 @@ namespace HNL.VXT.Core.Tests
                     "Sub-MinSpacing rows may occur only as a short local edge repair; two base/global rows must never be re-phased into a close pair.");
             }
         }
+
+        private static double[] MainYs(VxtPreviewPlan plan)
+            => plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Select(x => Math.Round((x.A.Y + x.B.Y) * 0.5, 1))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+
+        private static Boundary2 MizukiM01Notch2300()
+            => new Boundary2(new[]
+            {
+                new Point2(0.0, 0.0),
+                new Point2(3180.0, 0.0),
+                new Point2(3180.0, 1600.0),
+                new Point2(1150.0, 1600.0),
+                new Point2(1150.0, 2300.0),
+                new Point2(0.0, 2300.0)
+            });
 
         private static bool SameMain(PreviewLine a, PreviewLine b)
             => (a.A.DistanceTo(b.A) <= 0.1 && a.B.DistanceTo(b.B) <= 0.1) ||

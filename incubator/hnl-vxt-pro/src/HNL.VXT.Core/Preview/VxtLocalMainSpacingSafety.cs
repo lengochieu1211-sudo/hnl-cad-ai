@@ -12,10 +12,11 @@ namespace HNL.VXT.Core.Preview
     ///
     /// Construction contract:
     /// - the normal/global XC grid is solved first;
-    /// - the normal/global XC grid is immutable in this pass: no translation, re-phase or
-    ///   replacement is allowed;
+    /// - keep the normal/global XC member count first;
+    /// - before adding any local XC, try moving one existing XC on the configured lattice when
+    ///   that same-count repair can satisfy every HARD Max edge/spacing condition;
     /// - polygon X-levels are split into local bands first; only REAL notch bands are evaluated;
-    /// - a local XC is added only when such a notch band would otherwise violate MaxEdge or
+    /// - a local XC is added only when no same-count one-row repair can satisfy MaxEdge or
     ///   MainMaxSpacing;
     /// - a required local edge XC may be closer than MainMinSpacing to a neighbouring global XC;
     /// - a sub-MinSpacing local XC is removed only when it is redundant and the local band remains
@@ -51,11 +52,15 @@ namespace HNL.VXT.Core.Preview
                 ? TransformMainObstacles(context, radians, settings.ClearanceDistance)
                 : new List<Box2>();
 
-            // "Thêm XC cạnh khuyết" is a local-add feature only. The normal/global XC grid
-            // has already been solved by the base layout (and by MEP avoidance when enabled).
-            // Never re-phase or translate that base grid merely because this notch option is ON:
-            // field parity requires Local ON to preserve every Local OFF XC and only add the
-            // minimum short XC needed by a real MaxEdge/MainMaxSpacing violation.
+            // Economy first: keep the existing XC count. A notch must not create a new XC when
+            // moving one existing row by MainBalanceStep can make the final grid HARD-Max safe.
+            // This is intentionally narrower than a general re-phase: only one existing row may
+            // move, the row count is frozen, spacing stays on the configured lattice, MEP is
+            // revalidated, and every polygon band must remain HARD-Max safe.
+            TryRepairNotchByMovingOneExistingMain(
+                plan, polygon, radians, settings, obstacles);
+
+            // Only after same-count repair fails may the local-notch pass add short XC geometry.
             EnsureHardMaxCoverage(plan, polygon, radians, settings, obstacles);
 
             // Finally remove only truly redundant close local bars. A bar protecting MaxEdge or a
@@ -101,6 +106,189 @@ namespace HNL.VXT.Core.Preview
 
             plan.MainSegmentCount = plan.Lines.Count(x => x.Kind == PreviewLineKind.Main);
             plan.HangerCount = plan.HangerPoints.Count;
+        }
+
+        private static bool TryRepairNotchByMovingOneExistingMain(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Point2> polygon,
+            double radians,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            var source = BuildMainRecords(plan, radians)
+                .Select(m => m.Y)
+                .Distinct(new DoubleTolComparer())
+                .OrderBy(y => y)
+                .ToList();
+            if (source.Count < 2) return false;
+
+            // Nothing to repair: the existing member count already satisfies every HARD Max.
+            if (SharedGridHardValid(source, polygon, settings, obstacles)) return false;
+
+            var step = settings.MainBalanceStep;
+            if (step <= Tol) return false;
+
+            var domain = Box2.FromPoints(polygon);
+            var maxUnits = Math.Max(1, (int)Math.Ceiling(domain.Height / step));
+            List<double> best = null;
+            var bestSoftPenalty = double.MaxValue;
+            var bestMovement = double.MaxValue;
+            var bestIndex = int.MaxValue;
+
+            for (var index = 0; index < source.Count; index++)
+            {
+                for (var units = 1; units <= maxUnits; units++)
+                {
+                    var delta = units * step;
+                    foreach (var sign in new[] { 1.0, -1.0 })
+                    {
+                        var moved = source[index] + sign * delta;
+                        if (moved <= domain.MinY + 2.0 || moved >= domain.MaxY - 2.0) continue;
+                        if (index > 0 && moved <= source[index - 1] + Tol) continue;
+                        if (index + 1 < source.Count && moved >= source[index + 1] - Tol) continue;
+
+                        var candidate = source.ToList();
+                        candidate[index] = moved;
+
+                        if (!GridStepsStayOnLattice(candidate, step)) continue;
+                        if (!SharedGridHardValid(candidate, polygon, settings, obstacles)) continue;
+
+                        var softPenalty = SharedGridSoftPenalty(candidate, polygon, settings);
+                        var movement = Math.Abs(delta);
+                        if (softPenalty < bestSoftPenalty - Tol ||
+                            (Math.Abs(softPenalty - bestSoftPenalty) <= Tol &&
+                             (movement < bestMovement - Tol ||
+                              (Math.Abs(movement - bestMovement) <= Tol && index < bestIndex))))
+                        {
+                            best = candidate;
+                            bestSoftPenalty = softPenalty;
+                            bestMovement = movement;
+                            bestIndex = index;
+                        }
+                    }
+                }
+            }
+
+            if (best == null) return false;
+            RebuildAllMains(plan, polygon, best, radians, settings, obstacles);
+            return true;
+        }
+
+        private static bool SharedGridHardValid(
+            IReadOnlyList<double> grid,
+            IReadOnlyList<Point2> polygon,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            if (grid == null || grid.Count == 0) return false;
+            var domain = Box2.FromPoints(polygon);
+            var xs = UniqueSort(
+                polygon.Select(p => p.X).Concat(new[] { domain.MinX, domain.MaxX }),
+                0.5);
+
+            for (var i = 0; i + 1 < xs.Count; i++)
+            {
+                var bandA = Math.Max(domain.MinX, xs[i]);
+                var bandB = Math.Min(domain.MaxX, xs[i + 1]);
+                if (bandB - bandA <= MinDrawLength) continue;
+
+                var samples = new[]
+                {
+                    bandA + 0.25 * (bandB - bandA),
+                    bandA + 0.50 * (bandB - bandA),
+                    bandA + 0.75 * (bandB - bandA)
+                };
+
+                foreach (var x in samples)
+                {
+                    foreach (var interval in PolygonScanline.ClipVertical(polygon, x))
+                    {
+                        var a = Math.Min(interval.A.Y, interval.B.Y);
+                        var b = Math.Max(interval.A.Y, interval.B.Y);
+                        var rows = grid.Where(y => y >= a - Tol && y <= b + Tol)
+                            .OrderBy(y => y)
+                            .ToList();
+                        if (rows.Count == 0) return false;
+                        if (rows[0] - a > settings.MainMaxEdgeOffset + Tol) return false;
+                        if (b - rows[rows.Count - 1] > settings.MainMaxEdgeOffset + Tol) return false;
+
+                        for (var j = 0; j + 1 < rows.Count; j++)
+                            if (rows[j + 1] - rows[j] > settings.MainMaxSpacing + Tol)
+                                return false;
+                    }
+                }
+            }
+
+            if (settings.UseAvoidance && obstacles != null && obstacles.Count > 0)
+            {
+                foreach (var y in grid)
+                {
+                    foreach (var raw in PolygonScanline.ClipHorizontal(polygon, y))
+                    {
+                        var segment = new Segment2(
+                            new Point2(Math.Min(raw.A.X, raw.B.X), y),
+                            new Point2(Math.Max(raw.A.X, raw.B.X), y));
+                        if (segment.B.X - segment.A.X > MinDrawLength &&
+                            !SegmentClear(segment, obstacles))
+                            return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private static double SharedGridSoftPenalty(
+            IReadOnlyList<double> grid,
+            IReadOnlyList<Point2> polygon,
+            VxtSettings settings)
+        {
+            var domain = Box2.FromPoints(polygon);
+            var xs = UniqueSort(
+                polygon.Select(p => p.X).Concat(new[] { domain.MinX, domain.MaxX }),
+                0.5);
+            var penalty = 0.0;
+
+            for (var i = 0; i + 1 < xs.Count; i++)
+            {
+                var bandA = Math.Max(domain.MinX, xs[i]);
+                var bandB = Math.Min(domain.MaxX, xs[i + 1]);
+                if (bandB - bandA <= MinDrawLength) continue;
+                var x = (bandA + bandB) * 0.5;
+
+                foreach (var interval in PolygonScanline.ClipVertical(polygon, x))
+                {
+                    var a = Math.Min(interval.A.Y, interval.B.Y);
+                    var b = Math.Max(interval.A.Y, interval.B.Y);
+                    var rows = grid.Where(y => y >= a - Tol && y <= b + Tol)
+                        .OrderBy(y => y)
+                        .ToList();
+                    if (rows.Count == 0)
+                    {
+                        penalty += 1000000.0;
+                        continue;
+                    }
+
+                    penalty += Math.Max(0.0, settings.MainMinEdgeOffset - (rows[0] - a));
+                    penalty += Math.Max(0.0, settings.MainMinEdgeOffset - (b - rows[rows.Count - 1]));
+                    for (var j = 0; j + 1 < rows.Count; j++)
+                        penalty += Math.Max(0.0, settings.MainMinSpacing - (rows[j + 1] - rows[j]));
+                }
+            }
+
+            return penalty;
+        }
+
+        private static bool GridStepsStayOnLattice(IReadOnlyList<double> grid, double step)
+        {
+            if (grid == null || grid.Count < 2 || step <= Tol) return true;
+            for (var i = 0; i + 1 < grid.Count; i++)
+            {
+                var gap = grid[i + 1] - grid[i];
+                var units = gap / step;
+                if (Math.Abs(units - Math.Round(units)) > 1e-6) return false;
+            }
+            return true;
         }
 
         private static bool TryAlignSharedGlobalGrid(
