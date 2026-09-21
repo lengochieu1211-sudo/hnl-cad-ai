@@ -54,15 +54,18 @@ namespace HNL.VXT.AutoCAD
                         plan = new VxtPreviewPlan();
                     }
 
-                    constraintReport = VxtConstraintReport.Format(plan.Diagnostics);
+                    constraintReport = plan.Diagnostics.Any(x => x != null)
+                        ? VxtConstraintReport.FormatSummary(plan.Diagnostics)
+                        : string.Empty;
                     session.ViewModel?.SetConstraintDiagnostics(plan.Diagnostics);
 
                     var hardDiagnostics = plan.Diagnostics.Where(x => x != null && x.IsHard).ToList();
                     if (hardDiagnostics.Count > 0)
                     {
                         throw new InvalidOperationException(
-                            "Vi phạm HARD, Create bị chặn: " +
-                            VxtConstraintReport.Format(hardDiagnostics));
+                            "Có " + hardDiagnostics.Count +
+                            " lỗi bố trí. Tạo bị chặn để không vi phạm điều kiện Max/bội số. " +
+                            "Mở Kiểm tra bố trí và bấm Mxx để xem đúng Polyline.");
                     }
 
                     ValidateRequiredResources(settings, plan, session, db, tr);
@@ -179,7 +182,7 @@ namespace HNL.VXT.AutoCAD
                     fallbackWarning +
                     (string.IsNullOrWhiteSpace(constraintReport)
                         ? string.Empty
-                        : " | Constraint: " + constraintReport));
+                        : " | Kiểm tra bố trí: " + constraintReport));
 
                 if (session.HasBoundary) VxtTransientPreview.Instance.Refresh();
                 else VxtTransientPreview.Instance.Clear();

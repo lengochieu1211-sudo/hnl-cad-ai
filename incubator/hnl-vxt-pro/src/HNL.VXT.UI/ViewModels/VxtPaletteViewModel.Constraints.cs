@@ -10,9 +10,16 @@ namespace HNL.VXT.UI.ViewModels
     public sealed partial class VxtPaletteViewModel
     {
         private ICommand _focusConstraintDiagnosticCommand;
+        private string _constraintSummary = "✓ Không phát hiện lỗi";
 
         public ObservableCollection<VxtConstraintDiagnostic> ConstraintDiagnostics { get; }
             = new ObservableCollection<VxtConstraintDiagnostic>();
+
+        public string ConstraintSummary
+        {
+            get => _constraintSummary;
+            private set => Set(ref _constraintSummary, value);
+        }
 
         public ICommand FocusConstraintDiagnosticCommand
         {
@@ -43,12 +50,21 @@ namespace HNL.VXT.UI.ViewModels
                 ConstraintDiagnostics.Add(item);
             }
 
-            if (ConstraintDiagnostics.Count == 0) return;
+            if (ConstraintDiagnostics.Count == 0)
+            {
+                ConstraintSummary = "✓ Không phát hiện lỗi";
+                return;
+            }
 
             var hard = ConstraintDiagnostics.Count(x => x.IsHard);
+            var warnings = ConstraintDiagnostics.Count - hard;
+            ConstraintSummary = (hard > 0 ? "⛔ " + hard + " lỗi" : string.Empty) +
+                                (hard > 0 && warnings > 0 ? " • " : string.Empty) +
+                                (warnings > 0 ? "⚠ " + warnings + " cảnh báo" : string.Empty);
+
             PreviewStatus = hard > 0
-                ? "⛔ Có vi phạm HARD. Create sẽ bị chặn; bấm Mxx để xác định Polyline."
-                : "⚠ Có Min mềm đã dùng. Bấm Mxx để xác định Polyline và xem giá trị giảm.";
+                ? "⛔ Có " + hard + " lỗi bố trí. Tạo sẽ bị chặn; mở Kiểm tra bố trí và bấm Mxx để xem đúng Polyline."
+                : "⚠ Có " + warnings + " cảnh báo bố trí. Mở Kiểm tra bố trí và bấm Mxx để xem chi tiết.";
         }
     }
 }

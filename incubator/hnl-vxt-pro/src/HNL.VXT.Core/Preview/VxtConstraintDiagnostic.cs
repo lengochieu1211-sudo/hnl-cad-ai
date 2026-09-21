@@ -81,33 +81,34 @@ namespace HNL.VXT.Core.Preview
             get
             {
                 var system = Target == VxtConstraintTarget.Main ? "XC" : "Ty";
+                var level = IsHard ? "Lỗi" : "Cảnh báo";
                 switch (Kind)
                 {
                     case VxtConstraintKind.MinSpacingSoft:
-                        return BoundaryCode + " • " + system + " Min spacing: " +
-                               Num(ActualValue) + " mm < " + Num(LimitValue) +
-                               " mm, giảm " + Num(Difference) + " mm";
+                        return BoundaryCode + " • " + level + " • " + system + " • Khoảng cách Min: " +
+                               Num(ActualValue) + " < " + Num(LimitValue) +
+                               " mm • giảm " + Num(Difference) + " mm";
                     case VxtConstraintKind.MinEdgeSoft:
-                        return BoundaryCode + " • " + system + " Min biên: " +
-                               Num(ActualValue) + " mm < " + Num(LimitValue) +
-                               " mm, giảm " + Num(Difference) + " mm";
+                        return BoundaryCode + " • " + level + " • " + system + " • Biên Min: " +
+                               Num(ActualValue) + " < " + Num(LimitValue) +
+                               " mm • giảm " + Num(Difference) + " mm";
                     case VxtConstraintKind.MaxSpacingHard:
-                        return BoundaryCode + " • " + system + " Max spacing HARD: " +
-                               Num(ActualValue) + " mm > " + Num(LimitValue) +
-                               " mm, vượt " + Num(Difference) + " mm";
+                        return BoundaryCode + " • " + level + " • " + system + " • Khoảng cách Max: " +
+                               Num(ActualValue) + " > " + Num(LimitValue) +
+                               " mm • vượt " + Num(Difference) + " mm";
                     case VxtConstraintKind.MaxEdgeHard:
-                        return BoundaryCode + " • " + system + " Max biên HARD: " +
-                               Num(ActualValue) + " mm > " + Num(LimitValue) +
-                               " mm, vượt " + Num(Difference) + " mm";
+                        return BoundaryCode + " • " + level + " • " + system + " • Biên Max: " +
+                               Num(ActualValue) + " > " + Num(LimitValue) +
+                               " mm • vượt " + Num(Difference) + " mm";
                     case VxtConstraintKind.SpacingStepHard:
-                        return BoundaryCode + " • " + system + " bội số HARD: " +
-                               Num(ActualValue) + " mm không đúng bước " + Num(LimitValue) +
-                               " mm, lệch " + Num(Difference) + " mm";
+                        return BoundaryCode + " • " + level + " • " + system + " • Bội số: " +
+                               Num(ActualValue) + " mm • bước " + Num(LimitValue) +
+                               " mm • lệch " + Num(Difference) + " mm";
                     case VxtConstraintKind.MissingCoverageHard:
-                        return BoundaryCode + " • " + system +
-                               " HARD: không đủ phần tử để thỏa điều kiện Max";
+                        return BoundaryCode + " • " + level + " • " + system +
+                               " • Thiếu thanh để đảm bảo Max";
                     default:
-                        return BoundaryCode + " • " + system + " constraint";
+                        return BoundaryCode + " • " + level + " • " + system + " • Kiểm tra bố trí";
                 }
             }
         }
@@ -128,6 +129,22 @@ namespace HNL.VXT.Core.Preview
                 .ThenBy(x => x.Kind)
                 .ToList();
             return list.Count == 0 ? string.Empty : string.Join(" | ", list.Select(x => x.DisplayText));
+        }
+
+        public static string FormatSummary(IEnumerable<VxtConstraintDiagnostic> diagnostics)
+        {
+            var list = (diagnostics ?? Enumerable.Empty<VxtConstraintDiagnostic>())
+                .Where(x => x != null)
+                .ToList();
+            if (list.Count == 0) return "Không phát hiện lỗi";
+
+            var boundaries = list.Select(x => x.BoundaryIndex).Distinct().Count();
+            var errors = list.Count(x => x.IsHard);
+            var warnings = list.Count - errors;
+
+            return boundaries + " mảng có vấn đề • " +
+                   errors + " lỗi • " +
+                   warnings + " cảnh báo";
         }
     }
 }

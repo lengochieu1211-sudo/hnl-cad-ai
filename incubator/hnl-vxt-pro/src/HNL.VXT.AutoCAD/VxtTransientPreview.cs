@@ -184,9 +184,14 @@ namespace HNL.VXT.AutoCAD
                     session.ViewModel?.SetPreviewActualStats(metrics);
                     session.ViewModel?.SetConstraintDiagnostics(plan.Diagnostics);
 
-                    var constraintReport = VxtConstraintReport.Format(plan.Diagnostics);
-                    if (!string.IsNullOrWhiteSpace(constraintReport))
-                        doc.Editor.WriteMessage("\nHNL Tool - VXT Pro Constraint: " + constraintReport);
+                    if (plan.Diagnostics.Any(x => x != null))
+                    {
+                        var constraintSummary = VxtConstraintReport.FormatSummary(plan.Diagnostics);
+                        doc.Editor.WriteMessage(
+                            "\nHNL Tool - VXT Pro: Kiểm tra bố trí • " +
+                            constraintSummary +
+                            ". Mở HNL VXT Pro để xem chi tiết và bấm Mxx.");
+                    }
 
                     if (!string.IsNullOrWhiteSpace(previewNotice))
                         session.ViewModel?.SetPreviewError(previewNotice);

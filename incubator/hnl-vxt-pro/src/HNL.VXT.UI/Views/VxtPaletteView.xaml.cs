@@ -111,7 +111,7 @@ namespace HNL.VXT.UI.Views
 
             var panel = new StackPanel();
 
-            var header = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            var header = new Grid { Margin = new Thickness(0) };
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -125,9 +125,22 @@ namespace HNL.VXT.UI.Views
                 Fill = Brush("#F59E0B"),
                 Margin = new Thickness(0, 0, 8, 0)
             });
-            var title = new TextBlock { Text = "PHÂN TÍCH & KIỂM TRA LỖI" };
+            var titleTextStack = new StackPanel();
+            var title = new TextBlock { Text = "KIỂM TRA BỐ TRÍ" };
             if (Resources["SectionTitle"] is Style sectionTitle) title.Style = sectionTitle;
-            titlePanel.Children.Add(title);
+            titleTextStack.Children.Add(title);
+
+            var constraintSummary = new TextBlock
+            {
+                FontSize = 9.5,
+                Foreground = (Brush)Resources["SecondaryText"],
+                Margin = new Thickness(0, 2, 0, 0)
+            };
+            constraintSummary.SetBinding(
+                TextBlock.TextProperty,
+                new Binding(nameof(VxtPaletteViewModel.ConstraintSummary)));
+            titleTextStack.Children.Add(constraintSummary);
+            titlePanel.Children.Add(titleTextStack);
             header.Children.Add(titlePanel);
 
             var stateBadge = new Border
@@ -149,8 +162,6 @@ namespace HNL.VXT.UI.Views
             stateBadge.Child = stateText;
             Grid.SetColumn(stateBadge, 1);
             header.Children.Add(stateBadge);
-            panel.Children.Add(header);
-
             var scope = new TextBlock
             {
                 Text = "Kiểm tra: cấu hình Min/Max • biên trần • Block XC/XP/Ty • DimStyle • tài nguyên DWG • Runtime Golden AutoCAD.",
@@ -180,7 +191,7 @@ namespace HNL.VXT.UI.Views
 
             var constraintLabel = new TextBlock
             {
-                Text = "Cảnh báo theo mảng (bấm Mxx để highlight đúng Polyline):",
+                Text = "Chi tiết theo mảng (bấm Mxx để chọn đúng Polyline):",
                 FontSize = 9.5,
                 Foreground = (Brush)Resources["SecondaryText"],
                 Margin = new Thickness(0, 0, 0, 4)
@@ -264,14 +275,23 @@ namespace HNL.VXT.UI.Views
 
             var commandHint = new TextBlock
             {
-                Text = "Lệnh kỹ thuật: VXTGOLDEN • VXTANALYZE • VXTDIAGZIP",
+                Text = "Lệnh kỹ thuật: HNLVXTGOLDEN • HNLVXTANALYZE • HNLVXTDIAG",
                 FontSize = 9,
                 Foreground = (Brush)Resources["SecondaryText"],
                 Margin = new Thickness(0, 5, 0, 0)
             };
             panel.Children.Add(commandHint);
 
-            card.Child = panel;
+            var expander = new Expander
+            {
+                Header = header,
+                Content = panel,
+                IsExpanded = false,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                ToolTip = "Nhấn để xem/ẩn chi tiết lỗi, cảnh báo và công cụ phân tích"
+            };
+
+            card.Child = expander;
             parent.Children.Insert(parent.Children.IndexOf(liveCard), card);
         }
 

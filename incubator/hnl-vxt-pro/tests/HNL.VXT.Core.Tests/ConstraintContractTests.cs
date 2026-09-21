@@ -97,7 +97,7 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void ConstraintReport_IncludesActualAndReduction()
+        public void ConstraintReport_IncludesVietnameseActualAndReduction()
         {
             var item = new VxtConstraintDiagnostic(
                 1,
@@ -108,8 +108,51 @@ namespace HNL.VXT.Core.Tests
                 700.0);
 
             StringAssert.Contains(item.DisplayText, "M02");
+            StringAssert.Contains(item.DisplayText, "Cảnh báo");
+            StringAssert.Contains(item.DisplayText, "Khoảng cách Min");
             StringAssert.Contains(item.DisplayText, "650");
             StringAssert.Contains(item.DisplayText, "giảm 50");
+            Assert.IsFalse(item.DisplayText.Contains("HARD"));
+            Assert.IsFalse(item.DisplayText.Contains("spacing"));
+        }
+
+        [TestMethod]
+        public void ConstraintReport_HardUsesVietnameseLoiAndMax()
+        {
+            var item = new VxtConstraintDiagnostic(
+                2,
+                VxtConstraintTarget.Main,
+                VxtConstraintKind.MaxEdgeHard,
+                VxtConstraintSeverity.Error,
+                500.0,
+                400.0);
+
+            StringAssert.Contains(item.DisplayText, "M03");
+            StringAssert.Contains(item.DisplayText, "Lỗi");
+            StringAssert.Contains(item.DisplayText, "Biên Max");
+            StringAssert.Contains(item.DisplayText, "vượt 100");
+            Assert.IsFalse(item.DisplayText.Contains("HARD"));
+        }
+
+        [TestMethod]
+        public void ConstraintReport_SummaryCountsDistinctBoundariesErrorsAndWarnings()
+        {
+            var diagnostics = new[]
+            {
+                new VxtConstraintDiagnostic(
+                    0, VxtConstraintTarget.Main, VxtConstraintKind.MaxEdgeHard,
+                    VxtConstraintSeverity.Error, 500.0, 400.0),
+                new VxtConstraintDiagnostic(
+                    0, VxtConstraintTarget.Hanger, VxtConstraintKind.MinSpacingSoft,
+                    VxtConstraintSeverity.Warning, 650.0, 700.0),
+                new VxtConstraintDiagnostic(
+                    2, VxtConstraintTarget.Main, VxtConstraintKind.MinEdgeSoft,
+                    VxtConstraintSeverity.Warning, 290.0, 300.0)
+            };
+
+            Assert.AreEqual(
+                "2 mảng có vấn đề • 1 lỗi • 2 cảnh báo",
+                VxtConstraintReport.FormatSummary(diagnostics));
         }
 
         private static Boundary2 Rectangle(
