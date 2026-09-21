@@ -55,6 +55,7 @@ namespace HNL.VXT.Core.Preview
             if (polygon.Count < 3) return;
 
             var bounds = Box2.FromPoints(polygon);
+            var orthogonalNotchCandidate = IsOrthogonalPolygon(polygon);
 
             // The production builder intentionally omits XC for a whole ceiling region when
             // "Bỏ XC nếu ngắn hơn" (MainSkipLimit) applies. Auditing that intentional omission as
@@ -104,7 +105,9 @@ namespace HNL.VXT.Core.Preview
                 // completion. Only Max-coverage failures inside that band are downgraded to the
                 // explicit "Cần bổ sung thủ công" warning. Normal/full-width Max and every lattice
                 // violation stay HARD and continue to block Create.
-                var isNotchBand = IsRealNotchBand(polygon, bounds, x1, x2);
+                var isNotchBand =
+                    orthogonalNotchCandidate &&
+                    IsRealNotchBand(polygon, bounds, x1, x2);
 
                 var samples = new[]
                 {
@@ -170,6 +173,23 @@ namespace HNL.VXT.Core.Preview
                     }
                 }
             }
+        }
+
+        private static bool IsOrthogonalPolygon(IReadOnlyList<Point2> polygon)
+        {
+            if (polygon == null || polygon.Count < 3) return false;
+
+            for (var i = 0; i < polygon.Count; i++)
+            {
+                var a = polygon[i];
+                var b = polygon[(i + 1) % polygon.Count];
+                var dx = Math.Abs(b.X - a.X);
+                var dy = Math.Abs(b.Y - a.Y);
+                if (dx <= SampleTol || dy <= SampleTol) continue;
+                return false;
+            }
+
+            return true;
         }
 
         private static bool IsRealNotchBand(

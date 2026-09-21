@@ -228,6 +228,40 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void Auditor_SlopedBoundary_IsNotMisclassifiedAsManualNotch()
+        {
+            var settings = new VxtSettings
+            {
+                DrawMain = true,
+                DrawFurring = false,
+                DrawHangers = false,
+                AutoDimension = false,
+                MainDirection = MainDirectionMode.Horizontal,
+                MainSkipLimit = 0.0,
+                UseLocalMainAdd = false,
+                MainMaxEdgeOffset = 400.0
+            };
+
+            var boundary = new Boundary2(new[]
+            {
+                new Point2(0.0, 0.0),
+                new Point2(3000.0, 0.0),
+                new Point2(1500.0, 1800.0)
+            });
+            var plan = new VxtPreviewPlan();
+            plan.Lines.Add(new PreviewLine(
+                new Point2(250.0, 300.0), new Point2(2750.0, 300.0), PreviewLineKind.Main));
+
+            VxtPlanConstraintAuditor.Attach(boundary, plan, settings, 0.0, 0);
+
+            Assert.IsTrue(plan.Diagnostics.Any(x => x.IsHard),
+                "A sloped/convex boundary is not a manual notch and must retain real HARD Max violations.");
+            Assert.IsFalse(plan.Diagnostics.Any(x =>
+                x.Kind == VxtConstraintKind.ManualMainRequiredWarning),
+                "Manual-notch override is reserved for real orthogonal concave notch bands.");
+        }
+
+        [TestMethod]
         public void Auditor_StillReportsRealHardMaxEdge_OutsideSkipExemptions()
         {
             var settings = new VxtSettings
