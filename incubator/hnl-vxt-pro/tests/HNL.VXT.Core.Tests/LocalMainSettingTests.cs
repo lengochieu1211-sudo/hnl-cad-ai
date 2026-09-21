@@ -46,7 +46,7 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void NotchPipeline_OneSideRedistributesAllExistingXC_BeforeLocalAdd()
+        public void NotchPipeline_WholeGridEqualSpacing_IsSolvedBeforeLocalXCMove()
         {
             var enabled = new VxtSettings
             {
@@ -82,14 +82,17 @@ namespace HNL.VXT.Core.Tests
                 "Fixture must start from the same three-XC OneSide grid.");
 
             CollectionAssert.AreEqual(
-                new[] { 300.0, 1300.0, 2050.0 },
+                new[] { 350.0, 1200.0, 2050.0 },
                 MainYs(onPlan),
-                "OneSide must redistribute the same three XC with variable legal spacings: 300-1000-750-300; do not force one fixed spacing.");
+                "Whole-grid repair must keep one common spacing: 350-850-850-300.");
 
             Assert.AreEqual(MainYs(offPlan).Length, MainYs(onPlan).Length,
-                "Whole-grid notch redistribution must keep the XC count.");
-            Assert.AreEqual(1000.0, MainYs(onPlan)[1] - MainYs(onPlan)[0], 0.1);
-            Assert.AreEqual(750.0, MainYs(onPlan)[2] - MainYs(onPlan)[1], 0.1);
+                "Whole-grid equal-spacing repair must keep the XC count.");
+            Assert.AreEqual(
+                MainYs(onPlan)[1] - MainYs(onPlan)[0],
+                MainYs(onPlan)[2] - MainYs(onPlan)[1],
+                0.1,
+                "Every XC spacing in the whole-grid repair must be equal.");
             Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard));
         }
 
@@ -133,18 +136,20 @@ namespace HNL.VXT.Core.Tests
                 "OneSide base grid for the 2330-mm domain must stay deterministic: 300-850-850-330.");
 
             CollectionAssert.AreEqual(
-                new[] { 300.0, 1300.0, 2000.0 },
+                new[] { 400.0, 1200.0, 2000.0 },
                 onYs,
-                "OneSide must keep the near edge at 300 and redistribute the same-count grid on the 50-mm lattice: 300-1000-700-330.");
+                "Whole-grid equal-spacing repair must win first: 400-800-800-330. Only if no equal-spacing solution exists may a local XC move be tried.");
 
             Assert.AreEqual(offYs.Length, onYs.Length,
                 "A same-count notch repair must not add XC.");
-            Assert.AreEqual(300.0, onYs[0], 0.1,
-                "OneSide notch repair must preserve the preferred near-edge offset when a valid local move exists.");
-            Assert.AreEqual(1000.0, onYs[1] - onYs[0], 0.1,
-                "OneSide must maximize the first spacing before consuming the remainder.");
-            Assert.AreEqual(700.0, onYs[2] - onYs[1], 0.1,
-                "The remaining spacing must stay at the configured Min instead of adding a new XC.");
+            Assert.AreEqual(
+                onYs[1] - onYs[0],
+                onYs[2] - onYs[1],
+                0.1,
+                "Whole-grid stage requires equal XC spacing.");
+            Assert.IsTrue(onYs[1] - onYs[0] >= enabled.MainMinSpacing - 0.1 &&
+                          onYs[1] - onYs[0] <= enabled.MainMaxSpacing + 0.1,
+                "The common XC spacing must stay inside configured Min/Max.");
             Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard),
                 "The moved same-count M01 grid must satisfy all HARD constraints.");
             Assert.IsFalse(onPlan.Diagnostics.Any(x =>
