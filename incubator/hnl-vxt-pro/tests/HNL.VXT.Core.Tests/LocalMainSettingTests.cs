@@ -227,7 +227,8 @@ namespace HNL.VXT.Core.Tests
                 "M31 final plan after the 100-mm constructability break must satisfy every HARD Max constraint.");
             Assert.IsFalse(onPlan.Diagnostics.Any(x =>
                 x.Kind == VxtConstraintKind.ManualMainRequiredWarning),
-                "M31 can be completed automatically after the required local XC repair.");
+                "M31 can be completed automatically after the required local XC repair. Diagnostics=" +
+                VxtConstraintReport.Format(onPlan.Diagnostics));
         }
 
         [TestMethod]
