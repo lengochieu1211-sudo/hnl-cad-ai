@@ -57,6 +57,87 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void SmartLayout_OneSide5590_ChasesFiveMaxGaps_AndUsesSoftFarEdge()
+        {
+            var result = SmartLayout1D.Calculate(
+                5590.0, 1000.0, 700.0, 400.0, 300.0, 50.0,
+                MainLayoutMode.OneSide,
+                minEdgeTolerance: 25.0);
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(300.0, result.StartOffset, 1e-8);
+            CollectionAssert.AreEqual(
+                new[] { 1000.0, 1000.0, 1000.0, 1000.0, 1000.0 },
+                result.Steps.ToArray(),
+                "OneSide must chase Max continuously; dimensional remainder must not be inserted into the middle.");
+            Assert.AreEqual(290.0, result.EndOffset, 1e-8);
+            Assert.IsTrue(result.UsedSoftEdge, "290 mm is a 10-mm SOFT Min-edge reduction from 300 mm.");
+        }
+
+        [TestMethod]
+        public void SmartLayout_OneSide5590_ReverseMirrorsTheSameChase()
+        {
+            var result = SmartLayout1D.Calculate(
+                5590.0, 1000.0, 700.0, 400.0, 300.0, 50.0,
+                MainLayoutMode.OneSide,
+                reverse: true,
+                minEdgeTolerance: 25.0);
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(290.0, result.StartOffset, 1e-8);
+            CollectionAssert.AreEqual(
+                new[] { 1000.0, 1000.0, 1000.0, 1000.0, 1000.0 },
+                result.Steps.ToArray());
+            Assert.AreEqual(300.0, result.EndOffset, 1e-8);
+        }
+
+        [TestMethod]
+        public void MainOneSide5590_RuntimePlan_Chases300_ThenFive1000_Then290()
+        {
+            var settings = new VxtSettings
+            {
+                MainLayout = MainLayoutMode.OneSide,
+                DrawFurring = false,
+                DrawHangers = false
+            };
+
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000.0, 5590.0), settings);
+            var ys = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Select(x => Math.Round(x.A.Y, 3))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+
+            CollectionAssert.AreEqual(
+                new[] { 300.0, 1300.0, 2300.0, 3300.0, 4300.0, 5300.0 },
+                ys);
+        }
+
+        [TestMethod]
+        public void OneSideHangers5590_RuntimePlan_UsesTheSameChaseContract()
+        {
+            var settings = new VxtSettings
+            {
+                DrawFurring = false,
+                HangerLayout = HangerLayoutMode.OneSideFollowFurring
+            };
+
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(5590.0, 4000.0), settings);
+            var firstRow = plan.HangerPoints
+                .GroupBy(p => Math.Round(p.Y, 3))
+                .OrderBy(g => g.Key)
+                .First()
+                .Select(p => Math.Round(p.X, 3))
+                .OrderBy(x => x)
+                .ToArray();
+
+            CollectionAssert.AreEqual(
+                new[] { 300.0, 1300.0, 2300.0, 3300.0, 4300.0, 5300.0 },
+                firstRow);
+        }
+
+        [TestMethod]
         public void AutoDirection_FollowsLegacyShadowlineRule()
         {
             var withShadowline = new VxtSettings
