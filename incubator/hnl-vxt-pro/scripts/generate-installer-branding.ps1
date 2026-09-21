@@ -7,6 +7,8 @@ Add-Type -AssemblyName System.Drawing
 
 $out = Join-Path $Root 'artifacts\installer-assets'
 $logoB64 = Join-Path $Root 'src\HNL.VXT.UI\Assets\HNL-Logo-Official.b64'
+# Dedicated Windows EXE/installer artwork. Keep this separate from the in-app HNL logo.
+$exeLogoB64 = Join-Path $Root 'installer\assets\HNL-VXT-EXE-Logo.b64'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $Root)
 $sharedLogo = Join-Path $repoRoot 'public\hnl-logo.png'
 $officialPng = Join-Path $out 'HNL-Logo-Official.png'
@@ -170,14 +172,38 @@ if ($loaded -eq $null) {
 }
 
 $source = $null
+$exeSource = $null
+$exeLoaded = $null
+$exeStream = $null
+$exeWidth = 0
+$exeHeight = 0
 try {
+  # In-app / official HNL artwork stays unchanged and is still exported only as the
+  # HNL-Logo-Official reference PNG. It is no longer used as the Windows EXE icon source.
   $source = New-HnlArgbSource -InputImage $loaded
-
-  # Save a normalized 256px reference PNG alongside the installer assets.
   $refBytes = [byte[]](New-HnlPngFrame -Source $source -Size 256)
   [IO.File]::WriteAllBytes($officialPng, $refBytes)
 
-  Write-HnlMultiSizeIco -Source $source -Path $iconPath
+  # EXE/installer branding is intentionally isolated from the Palette/UI logo.
+  if (-not (Test-Path $exeLogoB64)) { throw "Missing dedicated HNL VXT EXE logo asset: $exeLogoB64" }
+  $exeBase64 = (Get-Content $exeLogoB64 -Raw) -replace '\s',''
+  $exeBytes = [Convert]::FromBase64String($exeBase64)
+  if ($exeBytes.Length -lt 8 -or
+      $exeBytes[0] -ne 0x89 -or $exeBytes[1] -ne 0x50 -or $exeBytes[2] -ne 0x4E -or $exeBytes[3] -ne 0x47 -or
+      $exeBytes[4] -ne 0x0D -or $exeBytes[5] -ne 0x0A -or $exeBytes[6] -ne 0x1A -or $exeBytes[7] -ne 0x0A) {
+    throw 'Dedicated HNL VXT EXE logo asset is not a valid PNG stream.'
+  }
+
+  $exeStream = [System.IO.MemoryStream]::new($exeBytes, $false)
+  $exeLoaded = [System.Drawing.Image]::FromStream($exeStream, $true, $true)
+  if ($exeLoaded.Width -lt 64 -or $exeLoaded.Height -lt 64) {
+    throw "Dedicated HNL VXT EXE logo is too small: $($exeLoaded.Width)x$($exeLoaded.Height)."
+  }
+  $exeWidth = $exeLoaded.Width
+  $exeHeight = $exeLoaded.Height
+  $exeSource = New-HnlArgbSource -InputImage $exeLoaded
+
+  Write-HnlMultiSizeIco -Source $exeSource -Path $iconPath
 
   $small = [System.Drawing.Bitmap]::new(64, 64, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
   $gs = [System.Drawing.Graphics]::FromImage($small)
@@ -187,13 +213,16 @@ try {
     $gs.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $gs.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $gs.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-    Draw-HnlContained -Graphics $gs -Source $source -CanvasWidth 64 -CanvasHeight 64 -Margin 2
+    Draw-HnlContained -Graphics $gs -Source $exeSource -CanvasWidth 64 -CanvasHeight 64 -Margin 2
   }
   finally { $gs.Dispose() }
   $small.Save($smallPath, [System.Drawing.Imaging.ImageFormat]::Bmp)
   $small.Dispose()
 }
 finally {
+  if ($exeSource -ne $null) { $exeSource.Dispose() }
+  if ($exeLoaded -ne $null) { $exeLoaded.Dispose() }
+  if ($exeStream -ne $null) { $exeStream.Dispose() }
   if ($source -ne $null) { $source.Dispose() }
   if ($loaded -ne $null) { $loaded.Dispose() }
 }
@@ -222,8 +251,9 @@ for ($entry = 0; $entry -lt $count; $entry++) {
   Test-HnlImageBytes -Data $frame -ExpectedSize $size
 }
 
-Write-Host 'HNL official branding generated and decode-verified:'
-Write-Host "  SOURCE: $sourceLabel"
-Write-Host "  PNG: $officialPng (256x256 normalized reference)"
-Write-Host "  ICO: $iconPath (16/24/32/48/64/128/256 ascending, every frame round-trip decoded)"
-Write-Host "  BMP: $smallPath"
+Write-Host 'HNL branding generated and decode-verified:'
+Write-Host "  UI SOURCE (unchanged): $sourceLabel"
+Write-Host "  UI PNG: $officialPng (256x256 normalized reference)"
+Write-Host ("  EXE SOURCE (dedicated): {0} ({1}x{2})" -f $exeLogoB64, $exeWidth, $exeHeight)
+Write-Host "  EXE ICO: $iconPath (16/24/32/48/64/128/256 ascending, every frame round-trip decoded)"
+Write-Host "  INSTALLER BMP: $smallPath"
