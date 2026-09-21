@@ -126,6 +126,15 @@ jobs:
             }
           }
 
+          $typographySource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteTypography.cs" -Raw
+          $diagnosticServiceSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtDiagnosticService.cs" -Raw
+          if (-not $typographySource.Contains('{ "KIỂM TRA BỐ TRÍ", "Kiểm tra bố trí" }')) {
+            throw "UI capitalization gate failed: Kiểm tra bố trí runtime fallback is missing."
+          }
+          if ($diagnosticServiceSource.Contains('"PASS sơ bộ')) {
+            throw "UI capitalization gate failed: user-facing PASS sơ bộ remains in diagnostics."
+          }
+
           $commandsImpl = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
           if (-not $commandsImpl.Contains('GetSelection(options, filter)')) {
             throw "Parity gate failed: boundary/equipment selection is not multi-select."

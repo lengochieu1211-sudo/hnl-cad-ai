@@ -211,7 +211,7 @@ namespace HNL.VXT.AutoCAD
 
             var category = Classify(exception, issues, stage);
             var summary = issues.Count == 0
-                ? "PASS sơ bộ - chưa phát hiện lỗi cấu hình/tài nguyên. Vẫn cần Runtime Golden trong Cad thật."
+                ? "Đạt sơ bộ - chưa phát hiện lỗi cấu hình/tài nguyên. Vẫn cần Runtime Golden trong Cad thật."
                 : "Phát hiện " + issues.Count + " vấn đề. Nhóm lỗi: " + category + ".";
             return new AnalysisResult(category, summary, issues);
         }

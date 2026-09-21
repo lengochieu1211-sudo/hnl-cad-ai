@@ -52,10 +52,11 @@ namespace HNL.VXT.UI.ViewModels
                     ? "Không nhận được kết quả phân tích từ AutoCAD."
                     : result.Trim();
 
-                DiagnosticStatus = result;
-                DiagnosticState = result.StartsWith("PASS", StringComparison.OrdinalIgnoreCase)
-                    ? "Đạt"
-                    : "Cần kiểm tra";
+                DiagnosticStatus = NormalizeUserFacingDiagnosticText(result);
+                var passed =
+                    result.StartsWith("PASS", StringComparison.OrdinalIgnoreCase) ||
+                    result.StartsWith("Đạt", StringComparison.OrdinalIgnoreCase);
+                DiagnosticState = passed ? "Đạt" : "Cần kiểm tra";
             }
             catch (Exception ex)
             {
@@ -84,9 +85,25 @@ namespace HNL.VXT.UI.ViewModels
             DiagnosticState = passed ? "Runtime đạt" : "Runtime lỗi";
             DiagnosticStatus = string.IsNullOrWhiteSpace(summary)
                 ? (passed ? "Runtime Golden đạt." : "Runtime Golden lỗi.")
-                : summary;
+                : NormalizeUserFacingDiagnosticText(summary);
             if (!string.IsNullOrWhiteSpace(diagnosticPath))
                 DiagnosticPackagePath = diagnosticPath;
+        }
+
+        private static string NormalizeUserFacingDiagnosticText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return value;
+
+            var text = value.Trim();
+            if (string.Equals(text, "PASS", StringComparison.OrdinalIgnoreCase))
+                return "Đạt";
+            if (text.StartsWith("PASS ", StringComparison.OrdinalIgnoreCase))
+                return "Đạt " + text.Substring(5);
+            if (string.Equals(text, "FAIL", StringComparison.OrdinalIgnoreCase))
+                return "Lỗi";
+            if (text.StartsWith("FAIL ", StringComparison.OrdinalIgnoreCase))
+                return "Lỗi " + text.Substring(5);
+            return text;
         }
 
         private void ExportDiagnosticPackage()

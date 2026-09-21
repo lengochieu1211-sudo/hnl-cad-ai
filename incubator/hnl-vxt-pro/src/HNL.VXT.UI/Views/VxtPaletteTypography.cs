@@ -45,6 +45,7 @@ namespace HNL.VXT.UI.Views
                 { "LAYER & KIỂU NÉT", "Layer & kiểu nét" },
                 { "XEM TRƯỚC TRÊN BẢN VẼ", "Xem trước trên bản vẽ" },
                 { "PHÂN TÍCH & KIỂM TRA LỖI", "Phân tích & kiểm tra lỗi" },
+                { "KIỂM TRA BỐ TRÍ", "Kiểm tra bố trí" },
                 { "GIAO DIỆN", "Giao diện" },
                 { "CHẾ ĐỘ TỐI ƯU", "Chế độ tối ưu" },
                 { "CHẨN ĐOÁN", "Chẩn đoán" }
