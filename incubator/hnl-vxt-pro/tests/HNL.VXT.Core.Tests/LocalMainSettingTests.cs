@@ -198,7 +198,8 @@ namespace HNL.VXT.Core.Tests
             CollectionAssert.AreEqual(
                 new[] { 400.0, 1200.0, 2000.0 },
                 onXs,
-                "M31 has a valid SOFT-Min same-count 800-800 repair; do not add a fourth XC.");
+                "M31 has a valid SOFT-Min same-count repair; do not add a fourth XC. Actual=" +
+                string.Join(",", onXs.Select(x => x.ToString("0.0"))));
             Assert.AreEqual(offXs.Length, onXs.Length,
                 "Same-count repair must win before local XC is added on M31.");
             Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard),
