@@ -198,7 +198,8 @@ namespace HNL.VXT.Core.Tests
             CollectionAssert.AreEqual(
                 new[] { 400.0, 1100.0, 1800.0 },
                 onXs,
-                "M31 must keep the same three XC and solve an equal 700-700 lattice spacing before any local XC is considered.");
+                "M31 must keep the same three XC and solve an equal 700-700 lattice spacing before any local XC is considered. Actual=" +
+                string.Join(",", onXs.Select(x => x.ToString("0.0"))));
             Assert.AreEqual(offXs.Length, onXs.Length,
                 "Same-count repair must win before local XC is added on M31.");
             Assert.IsFalse(onPlan.Diagnostics.Any(x => x.IsHard),
