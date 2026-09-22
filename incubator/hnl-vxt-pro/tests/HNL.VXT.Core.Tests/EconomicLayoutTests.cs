@@ -36,6 +36,128 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void OneSideTy_NoUniformSolution_DrivesRemainderIntoOneTailGap()
+        {
+            const double length = 17090.15;
+
+            var legacyOneSide = SmartLayout1D.Calculate(
+                length,
+                maxSpacing: 1000.0,
+                minSpacing: 700.0,
+                maxEdge: 400.0,
+                minEdge: 300.0,
+                increment: 50.0,
+                mode: MainLayoutMode.OneSide,
+                minEdgeTolerance: 25.0);
+
+            var constructionFriendly = SmartLayout1D.Calculate(
+                length,
+                maxSpacing: 1000.0,
+                minSpacing: 700.0,
+                maxEdge: 400.0,
+                minEdge: 300.0,
+                increment: 50.0,
+                mode: MainLayoutMode.OneSide,
+                minEdgeTolerance: 25.0,
+                preferOneSideTailFallback: true);
+
+            Assert.IsNotNull(legacyOneSide);
+            Assert.IsNotNull(constructionFriendly);
+
+            // The opt-in is Ty-only at the call sites; generic/Main OneSide remains unchanged.
+            Assert.AreEqual(340.15, legacyOneSide.StartOffset, 0.01);
+            Assert.AreEqual(300.0, legacyOneSide.EndOffset, 0.01);
+            Assert.IsTrue(legacyOneSide.Steps.Contains(950.0) && legacyOneSide.Steps.Contains(1000.0));
+
+            Assert.AreEqual(300.0, constructionFriendly.StartOffset, 0.01);
+            Assert.AreEqual(290.15, constructionFriendly.EndOffset, 0.01);
+            Assert.AreEqual(17, constructionFriendly.Steps.Count);
+            Assert.IsTrue(constructionFriendly.Steps.Take(16).All(x => Math.Abs(x - 1000.0) < 0.01),
+                "OneSide Ty must chase Max continuously from the selected start side.");
+            Assert.AreEqual(500.0, constructionFriendly.Steps[16], 0.01,
+                "Only the final Ty gap may absorb the no-uniform-solution remainder.");
+            Assert.IsTrue(constructionFriendly.IsDense,
+                "The 500-mm final gap is a deliberate SOFT-Min fallback.");
+            Assert.IsTrue(constructionFriendly.UsedSoftEdge,
+                "The 290.15-mm far edge is a deliberate SOFT-Min edge fallback within tolerance.");
+
+            var reversed = SmartLayout1D.Calculate(
+                length,
+                maxSpacing: 1000.0,
+                minSpacing: 700.0,
+                maxEdge: 400.0,
+                minEdge: 300.0,
+                increment: 50.0,
+                mode: MainLayoutMode.OneSide,
+                reverse: true,
+                minEdgeTolerance: 25.0,
+                preferOneSideTailFallback: true);
+
+            Assert.IsNotNull(reversed);
+            Assert.AreEqual(290.15, reversed.StartOffset, 0.01);
+            Assert.AreEqual(300.0, reversed.EndOffset, 0.01);
+            Assert.AreEqual(500.0, reversed.Steps[0], 0.01);
+            Assert.IsTrue(reversed.Steps.Skip(1).All(x => Math.Abs(x - 1000.0) < 0.01));
+        }
+
+        [TestMethod]
+        public void HangerOneSide_NoUniformSolution_UsesTailFallbackAndReportsSoftMin()
+        {
+            const double width = 17090.15;
+            var settings = new VxtSettings
+            {
+                DrawMain = true,
+                DrawFurring = false,
+                DrawHangers = true,
+                AutoDimension = false,
+                MainDirection = MainDirectionMode.Horizontal,
+                HangerLayout = HangerLayoutMode.OneSideFollowFurring,
+                HangerMinSpacing = 700.0,
+                HangerMaxSpacing = 1000.0,
+                HangerMinEdgeOffset = 300.0,
+                HangerMaxEdgeOffset = 400.0,
+                HangerBalanceStep = 50.0,
+                HangerEdgeTolerance = 25.0,
+                UseAvoidance = false
+            };
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { Rectangle(width, 4000.0) },
+                settings,
+                new VxtLayoutContext());
+
+            var firstMain = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .OrderBy(x => Math.Min(x.A.Y, x.B.Y))
+                .First();
+            var xs = plan.HangerPoints
+                .Where(p => Math.Abs(p.Y - firstMain.A.Y) < 0.01)
+                .Select(p => p.X)
+                .OrderBy(x => x)
+                .ToArray();
+
+            Assert.AreEqual(18, xs.Length);
+            Assert.AreEqual(300.0, xs[0], 0.01);
+            for (var i = 1; i <= 16; i++)
+                Assert.AreEqual(1000.0, xs[i] - xs[i - 1], 0.01);
+            Assert.AreEqual(500.0, xs[17] - xs[16], 0.01);
+            Assert.AreEqual(290.15, width - xs[17], 0.01);
+
+            Assert.IsTrue(plan.Diagnostics.Any(x =>
+                    x.Target == VxtConstraintTarget.Hanger &&
+                    x.Kind == VxtConstraintKind.MinSpacingSoft &&
+                    !x.IsHard),
+                "Final 500-mm Ty gap must be surfaced as a SOFT Min warning.");
+            Assert.IsTrue(plan.Diagnostics.Any(x =>
+                    x.Target == VxtConstraintTarget.Hanger &&
+                    x.Kind == VxtConstraintKind.MinEdgeSoft &&
+                    !x.IsHard),
+                "Final 290.15-mm Ty edge must be surfaced as a SOFT Min warning.");
+            Assert.IsFalse(plan.Diagnostics.Any(x => x.IsHard),
+                "The construction-friendly fallback must never violate HARD Max or step rules.");
+        }
+
+        [TestMethod]
         public void HangerLayout_WideMain_PrefersNearMaxSpacingForEconomy()
         {
             var settings = new VxtSettings
