@@ -376,7 +376,8 @@ namespace HNL.VXT.Core.Preview
                 settings.HangerBalanceStep,
                 oneSide ? MainLayoutMode.OneSide : MainLayoutMode.BalancedTwoEnds,
                 reverse: oneSide && furringFromFarEdge,
-                minEdgeTolerance: settings.HangerEdgeTolerance);
+                minEdgeTolerance: settings.HangerEdgeTolerance,
+                preferOneSideTailFallback: oneSide);
             if (layout == null) return new List<Point2>();
 
             var ideal = layout.Positions(minX)
