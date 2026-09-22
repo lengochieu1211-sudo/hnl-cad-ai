@@ -1,0 +1,1488 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using HNL.VXT.Core.Geometry;
+using HNL.VXT.Core.Layout;
+using HNL.VXT.Core.Models;
+
+namespace HNL.VXT.Core.Preview
+{
+    /// <summary>
+    /// Final automatic notch pass.
+    ///
+    /// Construction contract:
+    /// - the normal/global XC grid is solved first;
+    /// - keep the normal/global XC member count first;
+    /// - before adding any local XC, keep the same XC count and solve one COMMON spacing for the
+    ///   whole grid on the configured lattice; all adjacent XC spacings must be equal while that
+    ///   common spacing and the grid phase are varied until Min/Max/edge/lattice conditions pass;
+    /// - polygon X-levels are split into local bands first; only REAL notch bands are evaluated;
+    /// - a local XC is added only when no same-count one-row repair can satisfy MaxEdge or
+    ///   MainMaxSpacing;
+    /// - a required local edge XC may be closer than MainMinSpacing to a neighbouring global XC;
+    /// - a sub-MinSpacing local XC is removed only when it is redundant and the local band remains
+    ///   hard-max safe without it.
+    ///
+    /// MainMinSpacing remains a preferred normal-grid rule. MaxEdge/MainMaxSpacing are the hard
+    /// constraints that justify local notch reinforcement. Manual RectangleRegions is user-authored
+    /// and intentionally excluded.
+    /// </summary>
+    internal static class VxtLocalMainSpacingSafety
+    {
+        private const double Tol = 0.5;
+        private const double MinOverlap = 1.0;
+        private const double MinDrawLength = 5.0;
+        private const double MinNotchWallMainClearance = 100.0;
+
+        public static void Apply(
+            Boundary2 boundary,
+            VxtPreviewPlan plan,
+            VxtSettings settings,
+            double angleDegrees,
+            VxtLayoutContext context)
+        {
+            if (boundary == null || plan == null || settings == null) return;
+            if (!settings.UseLocalMainAdd || settings.MainDirection == MainDirectionMode.RectangleRegions) return;
+            if (!settings.DrawMain || settings.MainBalanceStep <= 0.0) return;
+
+            context = context ?? new VxtLayoutContext();
+            var radians = NormalizeDegrees(angleDegrees) * Math.PI / 180.0;
+            var polygon = boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)).ToList();
+            if (polygon.Count < 3) return;
+
+            IReadOnlyList<Box2> obstacles = settings.UseAvoidance
+                ? TransformMainObstacles(context, radians, settings.ClearanceDistance)
+                : new List<Box2>();
+
+            // Cạnh khuyết - thứ tự cố định:
+            // 1) giữ nguyên số XC và chia polygon thành các band để kiểm tra;
+            // 2) dời TOÀN BỘ lưới cùng số XC bằng MỘT spacing chung:
+            //    tất cả khoảng XC phải bằng nhau; thay đổi spacing chung và phase theo MainBalanceStep
+            //    cho tới khi thỏa Min/Max, biên và bội số.
+            // 3) nếu không tồn tại nghiệm spacing đều, mới dời cục bộ XC gần cạnh khuyết;
+            // 4) nếu vẫn không đạt mới thêm XC cục bộ cạnh khuyết;
+            // 5) mọi nghiệm đều phải kiểm lại HARD Max, preferred Min và bội số.
+            var domain = Box2.FromPoints(polygon);
+            var hasRealNotch = BuildNotchBands(polygon, domain).Any();
+            if (hasRealNotch && IsOrthogonalPolygon(polygon))
+            {
+                var source = BuildGrid(plan, radians);
+                if (source.Count > 0 && !SharedGridHardValid(source, polygon, settings, obstacles))
+                {
+                    var repaired =
+                        TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: true) ||
+                        TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: true);
+
+                    if (!repaired)
+                    {
+                        // Min spacing / Min edge are SOFT. Only after all strict same-count
+                        // solutions fail do we allow a SOFT-Min same-count solution.
+                        repaired =
+                            TryRebuildUniformSameCount(plan, polygon, radians, settings, obstacles, requirePreferredMin: false) ||
+                            TryRepairNotchByMovingOneExistingMain(plan, polygon, radians, settings, obstacles, requirePreferredMin: false);
+                    }
+                }
+            }
+
+            // A long notch can leave an otherwise-valid XC running almost parallel to the notch
+            // wall with only a tiny construction gap. Break only that local portion when the
+            // perpendicular clearance is below 100 mm; normal outer edges are not touched.
+            // Ty is rebuilt from the surviving XC pieces before any local-XC hard-max repair.
+            TrimMainsTooCloseToNotchWalls(plan, polygon, radians, settings, obstacles);
+
+            // Only after the entire same-count pipeline and the notch-wall constructability trim
+            // may the local-notch pass add XC.
+            EnsureHardMaxCoverage(plan, polygon, radians, settings, obstacles);
+
+            // Finally remove only truly redundant close local bars. A bar protecting MaxEdge or a
+            // MaxSpacing gap is retained even when its distance to another XC is < MainMinSpacing.
+            if (settings.MainMinSpacing > Tol)
+            {
+                while (true)
+                {
+                    var mains = BuildMainRecords(plan, radians);
+                    MainRecord victim = null;
+
+                    for (var i = 0; i + 1 < mains.Count && victim == null; i++)
+                    {
+                        for (var j = i + 1; j < mains.Count; j++)
+                        {
+                            var a = mains[i];
+                            var b = mains[j];
+                            var dy = Math.Abs(a.Y - b.Y);
+                            if (dy <= Tol || dy >= settings.MainMinSpacing - Tol) continue;
+
+                            var overlap = Math.Min(a.X2, b.X2) - Math.Max(a.X1, b.X1);
+                            if (overlap <= MinOverlap) continue;
+
+                            MainRecord candidate = null;
+                            if (a.Length < b.Length - Tol)
+                                candidate = a;
+                            else if (b.Length < a.Length - Tol)
+                                candidate = b;
+
+                            if (candidate == null) continue;
+                            if (IsRequiredForHardMaxConstraint(candidate, mains, polygon, settings))
+                                continue;
+
+                            victim = candidate;
+                            break;
+                        }
+                    }
+
+                    if (victim == null) break;
+                    RemoveMainAndItsHangers(plan, victim, radians);
+                }
+            }
+
+            plan.MainSegmentCount = plan.Lines.Count(x => x.Kind == PreviewLineKind.Main);
+            plan.HangerCount = plan.HangerPoints.Count;
+        }
+
+        private static bool TryRepairNotchByMovingOneExistingMain(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Point2> polygon,
+            double radians,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles,
+            bool requirePreferredMin)
+        {
+            var source = BuildMainRecords(plan, radians)
+                .Select(m => m.Y)
+                .Distinct(new DoubleTolComparer())
+                .OrderBy(y => y)
+                .ToList();
+            if (source.Count < 2) return false;
+
+            // Nothing to repair: the existing member count already satisfies every HARD Max.
+            if (SharedGridHardValid(source, polygon, settings, obstacles)) return false;
+
+            var step = settings.MainBalanceStep;
+            if (step <= Tol) return false;
+
+            var domain = Box2.FromPoints(polygon);
+            var maxUnits = Math.Max(1, (int)Math.Ceiling(domain.Height / step));
+            List<double> best = null;
+            var bestSoftPenalty = double.MaxValue;
+            var bestMovement = double.MaxValue;
+            var bestIndex = int.MaxValue;
+
+            // Keep the two edge rows fixed. Only an interior XC may move.
+            for (var index = 1; index + 1 < source.Count; index++)
+            {
+                for (var units = 1; units <= maxUnits; units++)
+                {
+                    var delta = units * step;
+                    foreach (var sign in new[] { 1.0, -1.0 })
+                    {
+                        var moved = source[index] + sign * delta;
+                        if (moved <= domain.MinY + 2.0 || moved >= domain.MaxY - 2.0) continue;
+                        if (index > 0 && moved <= source[index - 1] + Tol) continue;
+                        if (index + 1 < source.Count && moved >= source[index + 1] - Tol) continue;
+
+                        if (!SameHorizontalTopology(polygon, source[index], moved)) continue;
+
+                        var candidate = source.ToList();
+                        candidate[index] = moved;
+
+                        if (!GridStepsStayOnLattice(candidate, step)) continue;
+                        if (!CandidateGridValid(candidate, polygon, settings, obstacles, requirePreferredMin)) continue;
+
+                        var softPenalty = SharedGridSoftPenalty(candidate, polygon, settings);
+                        var movement = Math.Abs(delta);
+                        var oneSide = settings.MainLayout == MainLayoutMode.OneSide;
+                        var betterLayout = oneSide
+                            ? (best == null || OneSideLexicographicallyBetter(candidate, best))
+                            : (best == null || GridUnevenness(candidate) < GridUnevenness(best) - Tol);
+
+                        if (softPenalty < bestSoftPenalty - Tol ||
+                            (Math.Abs(softPenalty - bestSoftPenalty) <= Tol && betterLayout) ||
+                            (Math.Abs(softPenalty - bestSoftPenalty) <= Tol &&
+                             best != null &&
+                             (!oneSide || SameOneSideGaps(candidate, best)) &&
+                             Math.Abs(GridUnevenness(candidate) - GridUnevenness(best)) <= Tol &&
+                             (movement < bestMovement - Tol ||
+                              (Math.Abs(movement - bestMovement) <= Tol && index < bestIndex))))
+                        {
+                            best = candidate;
+                            bestSoftPenalty = softPenalty;
+                            bestMovement = movement;
+                            bestIndex = index;
+                        }
+                    }
+                }
+            }
+
+            if (best == null) return false;
+            RebuildAllMains(plan, polygon, best, radians, settings, obstacles);
+            return true;
+        }
+
+        private static List<double> BuildGrid(VxtPreviewPlan plan, double radians)
+            => BuildMainRecords(plan, radians)
+                .Select(m => m.Y)
+                .Distinct(new DoubleTolComparer())
+                .OrderBy(y => y)
+                .ToList();
+
+        private static bool IsOrthogonalPolygon(IReadOnlyList<Point2> polygon)
+        {
+            if (polygon == null || polygon.Count < 4) return false;
+            for (var i = 0; i < polygon.Count; i++)
+            {
+                var a = polygon[i];
+                var b = polygon[(i + 1) % polygon.Count];
+                var dx = Math.Abs(b.X - a.X);
+                var dy = Math.Abs(b.Y - a.Y);
+                if (dx <= Tol || dy <= Tol) continue;
+                return false;
+            }
+            return true;
+        }
+
+        private static bool CandidateGridValid(
+            IReadOnlyList<double> grid,
+            IReadOnlyList<Point2> polygon,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles,
+            bool requirePreferredMin)
+            => requirePreferredMin
+                ? SharedGridValid(grid, polygon, settings, obstacles)
+                : SharedGridHardValid(grid, polygon, settings, obstacles);
+
+        private static double GridUnevenness(IReadOnlyList<double> grid)
+        {
+            if (grid == null || grid.Count < 3) return 0.0;
+            var gaps = new List<double>();
+            for (var i = 0; i + 1 < grid.Count; i++)
+                gaps.Add(grid[i + 1] - grid[i]);
+            return gaps.Max() - gaps.Min();
+        }
+
+        private static double TotalGridMovement(
+            IReadOnlyList<double> source,
+            IReadOnlyList<double> candidate)
+        {
+            if (source == null || candidate == null || source.Count != candidate.Count)
+                return double.MaxValue;
+            var total = 0.0;
+            for (var i = 0; i < source.Count; i++)
+                total += Math.Abs(candidate[i] - source[i]);
+            return total;
+        }
+
+        private static double EdgeImbalance(IReadOnlyList<double> grid, Box2 domain)
+        {
+            if (grid == null || grid.Count == 0) return double.MaxValue;
+            return Math.Abs(
+                (grid[0] - domain.MinY) -
+                (domain.MaxY - grid[grid.Count - 1]));
+        }
+
+        private static bool SharedGridHardValid(
+            IReadOnlyList<double> grid,
+            IReadOnlyList<Point2> polygon,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            if (grid == null || grid.Count == 0) return false;
+            var domain = Box2.FromPoints(polygon);
+            var xs = UniqueSort(
+                polygon.Select(p => p.X).Concat(new[] { domain.MinX, domain.MaxX }),
+                0.5);
+
+            for (var i = 0; i + 1 < xs.Count; i++)
+            {
+                var bandA = Math.Max(domain.MinX, xs[i]);
+                var bandB = Math.Min(domain.MaxX, xs[i + 1]);
+                if (bandB - bandA <= MinDrawLength) continue;
+
+                var samples = new[]
+                {
+                    bandA + 0.25 * (bandB - bandA),
+                    bandA + 0.50 * (bandB - bandA),
+                    bandA + 0.75 * (bandB - bandA)
+                };
+
+                foreach (var x in samples)
+                {
+                    foreach (var interval in PolygonScanline.ClipVertical(polygon, x))
+                    {
+                        var a = Math.Min(interval.A.Y, interval.B.Y);
+                        var b = Math.Max(interval.A.Y, interval.B.Y);
+                        var rows = grid.Where(y => y >= a - Tol && y <= b + Tol)
+                            .OrderBy(y => y)
+                            .ToList();
+                        if (rows.Count == 0) return false;
+                        if (rows[0] - a > settings.MainMaxEdgeOffset + Tol) return false;
+                        if (b - rows[rows.Count - 1] > settings.MainMaxEdgeOffset + Tol) return false;
+
+                        for (var j = 0; j + 1 < rows.Count; j++)
+                            if (rows[j + 1] - rows[j] > settings.MainMaxSpacing + Tol)
+                                return false;
+                    }
+                }
+            }
+
+            if (settings.UseAvoidance && obstacles != null && obstacles.Count > 0)
+            {
+                foreach (var y in grid)
+                {
+                    foreach (var raw in PolygonScanline.ClipHorizontal(polygon, y))
+                    {
+                        var segment = new Segment2(
+                            new Point2(Math.Min(raw.A.X, raw.B.X), y),
+                            new Point2(Math.Max(raw.A.X, raw.B.X), y));
+                        if (segment.B.X - segment.A.X > MinDrawLength &&
+                            !SegmentClear(segment, obstacles))
+                            return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private static double SharedGridSoftPenalty(
+            IReadOnlyList<double> grid,
+            IReadOnlyList<Point2> polygon,
+            VxtSettings settings)
+        {
+            var domain = Box2.FromPoints(polygon);
+            var xs = UniqueSort(
+                polygon.Select(p => p.X).Concat(new[] { domain.MinX, domain.MaxX }),
+                0.5);
+            var penalty = 0.0;
+
+            for (var i = 0; i + 1 < xs.Count; i++)
+            {
+                var bandA = Math.Max(domain.MinX, xs[i]);
+                var bandB = Math.Min(domain.MaxX, xs[i + 1]);
+                if (bandB - bandA <= MinDrawLength) continue;
+                var x = (bandA + bandB) * 0.5;
+
+                foreach (var interval in PolygonScanline.ClipVertical(polygon, x))
+                {
+                    var a = Math.Min(interval.A.Y, interval.B.Y);
+                    var b = Math.Max(interval.A.Y, interval.B.Y);
+                    var rows = grid.Where(y => y >= a - Tol && y <= b + Tol)
+                        .OrderBy(y => y)
+                        .ToList();
+                    if (rows.Count == 0)
+                    {
+                        penalty += 1000000.0;
+                        continue;
+                    }
+
+                    penalty += Math.Max(0.0, settings.MainMinEdgeOffset - (rows[0] - a));
+                    penalty += Math.Max(0.0, settings.MainMinEdgeOffset - (b - rows[rows.Count - 1]));
+                    for (var j = 0; j + 1 < rows.Count; j++)
+                        penalty += Math.Max(0.0, settings.MainMinSpacing - (rows[j + 1] - rows[j]));
+                }
+            }
+
+            return penalty;
+        }
+
+        private static bool SameHorizontalTopology(
+            IReadOnlyList<Point2> polygon,
+            double sourceY,
+            double candidateY)
+        {
+            var source = PolygonScanline.ClipHorizontal(polygon, sourceY)
+                .Select(s => Tuple.Create(Math.Min(s.A.X, s.B.X), Math.Max(s.A.X, s.B.X)))
+                .OrderBy(x => x.Item1)
+                .ThenBy(x => x.Item2)
+                .ToArray();
+            var candidate = PolygonScanline.ClipHorizontal(polygon, candidateY)
+                .Select(s => Tuple.Create(Math.Min(s.A.X, s.B.X), Math.Max(s.A.X, s.B.X)))
+                .OrderBy(x => x.Item1)
+                .ThenBy(x => x.Item2)
+                .ToArray();
+
+            if (source.Length != candidate.Length) return false;
+            for (var i = 0; i < source.Length; i++)
+            {
+                if (Math.Abs(source[i].Item1 - candidate[i].Item1) > Tol ||
+                    Math.Abs(source[i].Item2 - candidate[i].Item2) > Tol)
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool OneSideLexicographicallyBetter(
+            IReadOnlyList<double> candidate,
+            IReadOnlyList<double> currentBest)
+        {
+            if (candidate == null) return false;
+            if (currentBest == null) return true;
+
+            var count = Math.Min(candidate.Count, currentBest.Count);
+            for (var i = 0; i + 1 < count; i++)
+            {
+                var candidateGap = candidate[i + 1] - candidate[i];
+                var bestGap = currentBest[i + 1] - currentBest[i];
+                if (candidateGap > bestGap + Tol) return true;
+                if (candidateGap < bestGap - Tol) return false;
+            }
+            return false;
+        }
+
+        private static bool SameOneSideGaps(
+            IReadOnlyList<double> a,
+            IReadOnlyList<double> b)
+        {
+            if (a == null || b == null || a.Count != b.Count) return false;
+            for (var i = 0; i + 1 < a.Count; i++)
+            {
+                if (Math.Abs((a[i + 1] - a[i]) - (b[i + 1] - b[i])) > Tol)
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool GridStepsStayOnLattice(IReadOnlyList<double> grid, double step)
+        {
+            if (grid == null || grid.Count < 2 || step <= Tol) return true;
+            for (var i = 0; i + 1 < grid.Count; i++)
+            {
+                var gap = grid[i + 1] - grid[i];
+                var units = gap / step;
+                if (Math.Abs(units - Math.Round(units)) > 1e-6) return false;
+            }
+            return true;
+        }
+
+        private static bool TryAlignSharedGlobalGrid(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Point2> polygon,
+            double radians,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles,
+            bool requirePreferredMin)
+        {
+            var source = BuildGrid(plan, radians);
+            if (source.Count == 0) return false;
+            if (CandidateGridValid(source, polygon, settings, obstacles, requirePreferredMin))
+                return false;
+
+            var step = settings.MainBalanceStep;
+            if (step <= Tol) return false;
+            var domain = Box2.FromPoints(polygon);
+            var maxUnits = Math.Max(
+                1,
+                (int)Math.Ceiling(settings.MainMaxEdgeOffset / step) + 2);
+
+            List<double> best = null;
+            var bestSoft = double.MaxValue;
+            var bestMove = double.MaxValue;
+            var bestEdgeImbalance = double.MaxValue;
+            var oneSide = settings.MainLayout == MainLayoutMode.OneSide;
+
+            for (var units = 1; units <= maxUnits; units++)
+            {
+                var delta = units * step;
+                foreach (var sign in new[] { 1.0, -1.0 })
+                {
+                    var candidate = source.Select(y => y + sign * delta).ToList();
+                    if (candidate[0] <= domain.MinY + 2.0 ||
+                        candidate[candidate.Count - 1] >= domain.MaxY - 2.0)
+                        continue;
+                    if (!GridStepsStayOnLattice(candidate, step)) continue;
+                    if (!CandidateGridValid(candidate, polygon, settings, obstacles, requirePreferredMin))
+                        continue;
+
+                    var soft = SharedGridSoftPenalty(candidate, polygon, settings);
+                    var movement = TotalGridMovement(source, candidate);
+                    var imbalance = EdgeImbalance(candidate, domain);
+                    var oneSideStartPenalty = Math.Abs(
+                        (candidate[0] - domain.MinY) - settings.MainMinEdgeOffset);
+                    var bestOneSideStartPenalty = best == null
+                        ? double.MaxValue
+                        : Math.Abs((best[0] - domain.MinY) - settings.MainMinEdgeOffset);
+
+                    var better = soft < bestSoft - Tol ||
+                        (Math.Abs(soft - bestSoft) <= Tol &&
+                         (oneSide
+                             ? oneSideStartPenalty < bestOneSideStartPenalty - Tol
+                             : imbalance < bestEdgeImbalance - Tol)) ||
+                        (Math.Abs(soft - bestSoft) <= Tol &&
+                         Math.Abs((oneSide ? oneSideStartPenalty : imbalance) -
+                                  (oneSide ? bestOneSideStartPenalty : bestEdgeImbalance)) <= Tol &&
+                         movement < bestMove - Tol);
+
+                    if (!better) continue;
+                    best = candidate;
+                    bestSoft = soft;
+                    bestMove = movement;
+                    bestEdgeImbalance = imbalance;
+                }
+            }
+
+            if (best == null) return false;
+            RebuildAllMains(plan, polygon, best, radians, settings, obstacles);
+            return true;
+        }
+
+        private static bool TryRebuildUniformSameCount(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Point2> polygon,
+            double radians,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles,
+            bool requirePreferredMin)
+        {
+            var source = BuildGrid(plan, radians);
+            if (source.Count < 2) return false;
+
+            var step = settings.MainBalanceStep;
+            if (step <= Tol) return false;
+
+            var domain = Box2.FromPoints(polygon);
+            var maxSpacing = FloorMultiple(settings.MainMaxSpacing, step);
+            var minSpacing = requirePreferredMin
+                ? CeilMultiple(settings.MainMinSpacing, step)
+                : step;
+            if (minSpacing > maxSpacing + Tol) return false;
+
+            var maxShiftUnits = Math.Max(
+                1,
+                (int)Math.Ceiling(domain.Height / step) + 1);
+            var oneSide = settings.MainLayout == MainLayoutMode.OneSide;
+
+            List<double> best = null;
+            var bestSoft = double.MaxValue;
+            var bestSpacing = double.MinValue;
+            var bestMovement = double.MaxValue;
+            var bestImbalance = double.MaxValue;
+            var bestStartPenalty = double.MaxValue;
+
+            for (var spacing = maxSpacing; spacing >= minSpacing - Tol; spacing -= step)
+            {
+                for (var shiftUnits = -maxShiftUnits; shiftUnits <= maxShiftUnits; shiftUnits++)
+                {
+                    var start = source[0] + shiftUnits * step;
+                    var candidate = new List<double>(source.Count);
+                    for (var i = 0; i < source.Count; i++)
+                        candidate.Add(start + i * spacing);
+
+                    if (candidate[0] <= domain.MinY + 2.0 ||
+                        candidate[candidate.Count - 1] >= domain.MaxY - 2.0)
+                        continue;
+                    if (!GridStepsStayOnLattice(candidate, step)) continue;
+                    if (!CandidateGridValid(candidate, polygon, settings, obstacles, requirePreferredMin))
+                        continue;
+
+                    var soft = SharedGridSoftPenalty(candidate, polygon, settings);
+                    var movement = TotalGridMovement(source, candidate);
+                    var imbalance = EdgeImbalance(candidate, domain);
+                    var startPenalty = Math.Abs(
+                        (candidate[0] - domain.MinY) - settings.MainMinEdgeOffset);
+
+                    var better = soft < bestSoft - Tol;
+                    if (!better && Math.Abs(soft - bestSoft) <= Tol)
+                    {
+                        if (oneSide)
+                        {
+                            better = spacing > bestSpacing + Tol ||
+                                     (Math.Abs(spacing - bestSpacing) <= Tol &&
+                                      (startPenalty < bestStartPenalty - Tol ||
+                                       (Math.Abs(startPenalty - bestStartPenalty) <= Tol &&
+                                        movement < bestMovement - Tol)));
+                        }
+                        else
+                        {
+                            better = imbalance < bestImbalance - Tol ||
+                                     (Math.Abs(imbalance - bestImbalance) <= Tol &&
+                                      (movement < bestMovement - Tol ||
+                                       (Math.Abs(movement - bestMovement) <= Tol &&
+                                        spacing > bestSpacing + Tol)));
+                        }
+                    }
+
+                    if (!better) continue;
+                    best = candidate;
+                    bestSoft = soft;
+                    bestSpacing = spacing;
+                    bestMovement = movement;
+                    bestImbalance = imbalance;
+                    bestStartPenalty = startPenalty;
+                }
+            }
+
+            if (best == null) return false;
+            if (source.Count == best.Count &&
+                source.Zip(best, (a, z) => Math.Abs(a - z)).All(d => d <= Tol))
+                return false;
+
+            RebuildAllMains(plan, polygon, best, radians, settings, obstacles);
+            return true;
+        }
+
+        private static bool SharedGridValid(
+            IReadOnlyList<double> grid,
+            IReadOnlyList<Point2> polygon,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            if (grid == null || grid.Count == 0) return false;
+            var domain = Box2.FromPoints(polygon);
+            var maxEdge = settings.MainMaxEdgeOffset;
+            var xs = UniqueSort(polygon.Select(p => p.X)
+                .Concat(new[] { domain.MinX, domain.MaxX }), 0.5);
+
+            for (var i = 0; i + 1 < xs.Count; i++)
+            {
+                var bandA = Math.Max(domain.MinX, xs[i]);
+                var bandB = Math.Min(domain.MaxX, xs[i + 1]);
+                if (bandB - bandA <= MinDrawLength) continue;
+
+                var samples = new[]
+                {
+                    bandA + 0.25 * (bandB - bandA),
+                    bandA + 0.50 * (bandB - bandA),
+                    bandA + 0.75 * (bandB - bandA)
+                };
+
+                foreach (var x in samples)
+                {
+                    foreach (var interval in PolygonScanline.ClipVertical(polygon, x))
+                    {
+                        var a = Math.Min(interval.A.Y, interval.B.Y);
+                        var b = Math.Max(interval.A.Y, interval.B.Y);
+                        var rows = grid.Where(y => y >= a - Tol && y <= b + Tol).OrderBy(y => y).ToList();
+                        if (rows.Count == 0) return false;
+
+                        var firstEdge = rows[0] - a;
+                        var lastEdge = b - rows[rows.Count - 1];
+                        if (firstEdge < settings.MainMinEdgeOffset - Tol || firstEdge > maxEdge + Tol) return false;
+                        if (lastEdge < settings.MainMinEdgeOffset - Tol || lastEdge > maxEdge + Tol) return false;
+                        for (var j = 0; j + 1 < rows.Count; j++)
+                        {
+                            var gap = rows[j + 1] - rows[j];
+                            if (gap < settings.MainMinSpacing - Tol || gap > settings.MainMaxSpacing + Tol)
+                                return false;
+                        }
+                    }
+                }
+            }
+
+            if (settings.UseAvoidance && obstacles != null && obstacles.Count > 0)
+            {
+                foreach (var y in grid)
+                {
+                    foreach (var raw in PolygonScanline.ClipHorizontal(polygon, y))
+                    {
+                        var segment = new Segment2(
+                            new Point2(Math.Min(raw.A.X, raw.B.X), y),
+                            new Point2(Math.Max(raw.A.X, raw.B.X), y));
+                        if (segment.B.X - segment.A.X > MinDrawLength && !SegmentClear(segment, obstacles))
+                            return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private static void RebuildAllMains(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Point2> polygon,
+            IReadOnlyList<double> grid,
+            double radians,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            plan.Lines.RemoveAll(x => x.Kind == PreviewLineKind.Main || x.Kind == PreviewLineKind.Hanger);
+            plan.HangerPoints.Clear();
+            plan.MainSegmentCount = 0;
+            plan.HangerCount = 0;
+
+            foreach (var y in grid)
+            {
+                foreach (var raw in PolygonScanline.ClipHorizontal(polygon, y))
+                {
+                    var x1 = Math.Min(raw.A.X, raw.B.X);
+                    var x2 = Math.Max(raw.A.X, raw.B.X);
+                    if (x2 - x1 <= MinDrawLength) continue;
+                    var local = new Segment2(new Point2(x1, y), new Point2(x2, y));
+                    if (settings.UseAvoidance && !SegmentClear(local, obstacles)) continue;
+
+                    plan.Lines.Add(new PreviewLine(
+                        Transform2.ToWorld(local.A, radians),
+                        Transform2.ToWorld(local.B, radians),
+                        PreviewLineKind.Main));
+                    plan.MainSegmentCount++;
+                    if (settings.DrawHangers)
+                        AddHangers(plan, local, radians, settings, obstacles);
+                }
+            }
+        }
+
+        private static void EnsureHardMaxCoverage(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Point2> polygon,
+            double radians,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            var domain = Box2.FromPoints(polygon);
+            var maxEdge = settings.MainMaxEdgeOffset;
+            var step = settings.MainBalanceStep;
+
+            for (var pass = 0; pass < 4; pass++)
+            {
+                var mains = BuildMainRecords(plan, radians);
+                if (mains.Count == 0) return;
+                var latticeOrigin = mains.OrderBy(m => m.Y).First().Y;
+                var specs = new List<LocalSpec>();
+
+                // Explicit notch-region split comes BEFORE deciding whether any local XC is needed.
+                // This reuses the geometric intent of the old regional planner without allowing it
+                // to translate/re-phase/replace the immutable global XC grid.
+                foreach (var notchBand in BuildNotchBands(polygon, domain))
+                {
+                    foreach (var sampleX in notchBand.SampleXs)
+                    {
+                        foreach (var interval in PolygonScanline.ClipVertical(polygon, sampleX))
+                        {
+                            var a = Math.Max(domain.MinY, Math.Min(interval.A.Y, interval.B.Y));
+                            var b = Math.Min(domain.MaxY, Math.Max(interval.A.Y, interval.B.Y));
+                            if (b - a <= 1.0) continue;
+
+                            var rows = mains
+                                .Where(m => CrossesX(m, sampleX) && m.Y >= a - Tol && m.Y <= b + Tol)
+                                .Select(m => m.Y)
+                                .Distinct(new DoubleTolComparer())
+                                .OrderBy(y => y)
+                                .ToList();
+
+                            var safeMin = a > domain.MinY + Tol
+                                ? a + MinNotchWallMainClearance
+                                : a + Tol;
+                            var safeMax = b < domain.MaxY - Tol
+                                ? b - MinNotchWallMainClearance
+                                : b - Tol;
+
+                            if (safeMax <= safeMin + Tol)
+                                continue;
+
+                            foreach (var y in RequiredRows(
+                                rows, a, b, safeMin, safeMax,
+                                latticeOrigin, step, settings, maxEdge))
+                                AddOrMergeSpec(specs, y, notchBand.X1, notchBand.X2);
+                        }
+                    }
+                }
+
+                if (specs.Count == 0) break;
+
+                var addedAny = false;
+                foreach (var spec in MergeSpecs(specs))
+                    if (AddLocalMain(plan, polygon, radians, spec, settings, obstacles))
+                        addedAny = true;
+
+                if (!addedAny) break;
+            }
+        }
+
+        private static IEnumerable<double> RequiredRows(
+            IReadOnlyList<double> current,
+            double a,
+            double b,
+            double safeMin,
+            double safeMax,
+            double latticeOrigin,
+            double step,
+            VxtSettings settings,
+            double maxEdge)
+        {
+            var result = new List<double>();
+            var rows = (current ?? new double[0])
+                .Where(y => y >= safeMin - Tol && y <= safeMax + Tol)
+                .OrderBy(y => y)
+                .ToList();
+
+            if (rows.Count == 0)
+            {
+                var first = EdgePointFromBottom(
+                    a, b, safeMin, safeMax,
+                    latticeOrigin, step, settings, maxEdge);
+                if (first.HasValue)
+                {
+                    AddUnique(result, first.Value);
+                    rows.Add(first.Value);
+                }
+            }
+
+            if (rows.Count > 0 && rows[0] - a > maxEdge + Tol)
+            {
+                var y = EdgePointFromBottom(
+                    a, rows[0], safeMin, safeMax,
+                    latticeOrigin, step, settings, maxEdge);
+                if (y.HasValue) AddUnique(result, y.Value);
+            }
+
+            var combined = rows.Concat(result).OrderBy(y => y).ToList();
+            var maxStep = FloorMultiple(settings.MainMaxSpacing, step);
+            if (maxStep <= Tol) maxStep = settings.MainMaxSpacing;
+
+            var index = 0;
+            while (index + 1 < combined.Count)
+            {
+                var left = combined[index];
+                var right = combined[index + 1];
+                if (right - left > settings.MainMaxSpacing + Tol)
+                {
+                    var y = SnapAtOrBelow(left + settings.MainMaxSpacing, latticeOrigin, step);
+                    if (y <= left + Tol) y = left + maxStep;
+                    if (y > left + Tol && y < right - Tol)
+                    {
+                        AddUnique(result, y);
+                        combined.Add(y);
+                        combined.Sort();
+                        continue;
+                    }
+                }
+                index++;
+            }
+
+            combined = rows.Concat(result).OrderBy(y => y).ToList();
+            if (combined.Count > 0 && b - combined[combined.Count - 1] > maxEdge + Tol)
+            {
+                var y = EdgePointFromTop(
+                    combined[combined.Count - 1], b, safeMin, safeMax,
+                    latticeOrigin, step, settings, maxEdge);
+                if (y.HasValue) AddUnique(result, y.Value);
+            }
+
+            return result
+                .Where(y => y >= safeMin - Tol && y <= safeMax + Tol)
+                .OrderBy(y => y);
+        }
+
+        private static double? EdgePointFromBottom(
+            double a,
+            double b,
+            double safeMin,
+            double safeMax,
+            double origin,
+            double step,
+            VxtSettings settings,
+            double maxEdge)
+        {
+            var hardLow = Math.Max(a + Tol, safeMin);
+            var hardHigh = Math.Min(Math.Min(b - Tol, a + maxEdge), safeMax);
+            if (hardHigh < hardLow - Tol) return null;
+
+            // Prefer the configured Min edge, but never choose a lattice point inside the
+            // sub-100-mm notch-wall exclusion zone.
+            var preferredLow = Math.Max(
+                hardLow,
+                a + Math.Max(0.0, settings.MainMinEdgeOffset));
+            var candidate = SnapAtOrAbove(preferredLow, origin, step);
+            if (candidate >= hardLow - Tol && candidate <= hardHigh + Tol)
+                return candidate;
+
+            var toleratedMin = Math.Max(
+                0.0,
+                settings.MainMinEdgeOffset - Math.Max(0.0, settings.MainEdgeTolerance));
+            candidate = SnapAtOrAbove(
+                Math.Max(hardLow, a + toleratedMin),
+                origin,
+                step);
+            if (candidate >= hardLow - Tol && candidate <= hardHigh + Tol)
+                return candidate;
+
+            candidate = SnapAtOrAbove(hardLow, origin, step);
+            return candidate >= hardLow - Tol && candidate <= hardHigh + Tol
+                ? (double?)candidate
+                : null;
+        }
+
+        private static double? EdgePointFromTop(
+            double a,
+            double b,
+            double safeMin,
+            double safeMax,
+            double origin,
+            double step,
+            VxtSettings settings,
+            double maxEdge)
+        {
+            var hardLow = Math.Max(Math.Max(a + Tol, b - maxEdge), safeMin);
+            var hardHigh = Math.Min(b - Tol, safeMax);
+            if (hardHigh < hardLow - Tol) return null;
+
+            // Symmetric rule for the top notch edge: prefer Min edge while staying outside
+            // the sub-100-mm notch-wall exclusion zone.
+            var preferredHigh = Math.Min(
+                hardHigh,
+                b - Math.Max(0.0, settings.MainMinEdgeOffset));
+            var candidate = SnapAtOrBelow(preferredHigh, origin, step);
+            if (candidate >= hardLow - Tol && candidate <= hardHigh + Tol)
+                return candidate;
+
+            var toleratedMin = Math.Max(
+                0.0,
+                settings.MainMinEdgeOffset - Math.Max(0.0, settings.MainEdgeTolerance));
+            candidate = SnapAtOrBelow(
+                Math.Min(hardHigh, b - toleratedMin),
+                origin,
+                step);
+            if (candidate >= hardLow - Tol && candidate <= hardHigh + Tol)
+                return candidate;
+
+            candidate = SnapAtOrBelow(hardHigh, origin, step);
+            return candidate >= hardLow - Tol && candidate <= hardHigh + Tol
+                ? (double?)candidate
+                : null;
+        }
+
+        private static bool AddLocalMain(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Point2> polygon,
+            double radians,
+            LocalSpec spec,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            var added = false;
+            var domain = Box2.FromPoints(polygon);
+            var notchBands = BuildNotchBands(polygon, domain).ToList();
+
+            foreach (var raw in PolygonScanline.ClipHorizontal(polygon, spec.Y))
+            {
+                var x1 = Math.Max(Math.Min(raw.A.X, raw.B.X), spec.X1);
+                var x2 = Math.Min(Math.Max(raw.A.X, raw.B.X), spec.X2);
+                if (x2 - x1 <= MinDrawLength) continue;
+
+                var requested = new Segment2(new Point2(x1, spec.Y), new Point2(x2, spec.Y));
+                foreach (var local in SplitMainAtCloseNotchWalls(
+                    requested, polygon, domain, notchBands, MinNotchWallMainClearance))
+                {
+                    // The minimum local-XC length remains HARD even after constructability trimming.
+                    if (local.B.X - local.A.X < settings.MinLocalMainLength - Tol) continue;
+                    if (settings.UseAvoidance && !SegmentClear(local, obstacles)) continue;
+                    if (MainAlreadyCovers(plan, local, radians)) continue;
+
+                    plan.Lines.Add(new PreviewLine(
+                        Transform2.ToWorld(local.A, radians),
+                        Transform2.ToWorld(local.B, radians),
+                        PreviewLineKind.Main));
+                    plan.MainSegmentCount++;
+                    added = true;
+
+                    if (settings.DrawHangers)
+                        AddHangers(plan, local, radians, settings, obstacles);
+                }
+            }
+            return added;
+        }
+
+        private static void AddHangers(
+            VxtPreviewPlan plan,
+            Segment2 main,
+            double radians,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            var minX = Math.Min(main.A.X, main.B.X);
+            var maxX = Math.Max(main.A.X, main.B.X);
+            var length = maxX - minX;
+            if (length <= MinDrawLength) return;
+
+            var mode = settings.HangerLayout == HangerLayoutMode.OneSideFollowFurring
+                ? MainLayoutMode.OneSide
+                : MainLayoutMode.BalancedTwoEnds;
+            var layout = SmartLayout1D.Calculate(
+                length,
+                settings.HangerMaxSpacing,
+                settings.HangerMinSpacing,
+                settings.HangerMaxEdgeOffset,
+                settings.HangerMinEdgeOffset,
+                settings.HangerBalanceStep,
+                mode,
+                minEdgeTolerance: settings.HangerEdgeTolerance);
+            if (layout == null) return;
+
+            IReadOnlyList<double> xs = layout.Positions(minX)
+                .Where(x => x > minX + 2.0 && x < maxX - 2.0)
+                .ToList();
+
+            if (settings.UseAvoidance && obstacles != null && obstacles.Count > 0)
+            {
+                var intervals = obstacles
+                    .Where(b => main.A.Y >= b.MinY - Tol && main.A.Y <= b.MaxY + Tol)
+                    .Select(b => Tuple.Create(b.MinX, b.MaxX))
+                    .ToList();
+                if (intervals.Count > 0)
+                {
+                    xs = LegacyGridAvoidance.AdjustGrid(
+                        xs,
+                        intervals,
+                        minX,
+                        maxX,
+                        settings.HangerMinSpacing,
+                        settings.HangerMaxSpacing,
+                        settings.HangerMinEdgeOffset,
+                        settings.HangerMaxEdgeOffset,
+                        settings.HangerBalanceStep);
+                }
+            }
+
+            foreach (var x in xs)
+            {
+                if (x <= minX + 2.0 || x >= maxX - 2.0) continue;
+                var localPoint = new Point2(x, main.A.Y);
+                var world = Transform2.ToWorld(localPoint, radians);
+                if (plan.HangerPoints.Any(p => p.DistanceTo(world) <= 0.01)) continue;
+
+                plan.HangerPoints.Add(world);
+                plan.HangerCount++;
+                const double half = 45.0;
+                var h1 = Transform2.ToWorld(new Point2(x - half, main.A.Y), radians);
+                var h2 = Transform2.ToWorld(new Point2(x + half, main.A.Y), radians);
+                var v1 = Transform2.ToWorld(new Point2(x, main.A.Y - half), radians);
+                var v2 = Transform2.ToWorld(new Point2(x, main.A.Y + half), radians);
+                plan.Lines.Add(new PreviewLine(h1, h2, PreviewLineKind.Hanger));
+                plan.Lines.Add(new PreviewLine(v1, v2, PreviewLineKind.Hanger));
+            }
+        }
+
+        private static bool MainAlreadyCovers(VxtPreviewPlan plan, Segment2 local, double radians)
+        {
+            foreach (var line in plan.Lines.Where(x => x.Kind == PreviewLineKind.Main))
+            {
+                var a = Transform2.ToLocal(line.A, radians);
+                var b = Transform2.ToLocal(line.B, radians);
+                var y = (a.Y + b.Y) * 0.5;
+                if (Math.Abs(y - local.A.Y) > Tol) continue;
+                var x1 = Math.Min(a.X, b.X);
+                var x2 = Math.Max(a.X, b.X);
+                if (x1 <= local.A.X + Tol && x2 >= local.B.X - Tol) return true;
+            }
+            return false;
+        }
+
+        private static bool IsRequiredForHardMaxConstraint(
+            MainRecord candidate,
+            IReadOnlyList<MainRecord> mains,
+            IReadOnlyList<Point2> polygon,
+            VxtSettings settings)
+        {
+            var width = candidate.X2 - candidate.X1;
+            if (width <= MinOverlap) return false;
+
+            var sampleXs = new[]
+            {
+                candidate.X1 + width * 0.20,
+                candidate.X1 + width * 0.50,
+                candidate.X1 + width * 0.80
+            };
+
+            foreach (var x in sampleXs)
+            {
+                foreach (var interval in PolygonScanline.ClipVertical(polygon, x))
+                {
+                    var a = Math.Min(interval.A.Y, interval.B.Y);
+                    var b = Math.Max(interval.A.Y, interval.B.Y);
+                    if (candidate.Y < a - Tol || candidate.Y > b + Tol) continue;
+
+                    var withCandidate = mains
+                        .Where(m => CrossesX(m, x) && m.Y >= a - Tol && m.Y <= b + Tol)
+                        .Select(m => m.Y)
+                        .Distinct(new DoubleTolComparer())
+                        .OrderBy(y => y)
+                        .ToList();
+                    var withoutCandidate = mains
+                        .Where(m => !ReferenceEquals(m, candidate) && CrossesX(m, x) && m.Y >= a - Tol && m.Y <= b + Tol)
+                        .Select(m => m.Y)
+                        .Distinct(new DoubleTolComparer())
+                        .OrderBy(y => y)
+                        .ToList();
+
+                    if (CountHardMaxViolations(withoutCandidate, a, b, settings) >
+                        CountHardMaxViolations(withCandidate, a, b, settings))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        private static int CountHardMaxViolations(
+            IReadOnlyList<double> ys,
+            double edgeA,
+            double edgeB,
+            VxtSettings settings)
+        {
+            if (ys == null || ys.Count == 0) return 1;
+            var violations = 0;
+            var maxEdge = settings.MainMaxEdgeOffset;
+            if (ys[0] - edgeA > maxEdge + Tol) violations++;
+            if (edgeB - ys[ys.Count - 1] > maxEdge + Tol) violations++;
+            for (var i = 0; i + 1 < ys.Count; i++)
+                if (ys[i + 1] - ys[i] > settings.MainMaxSpacing + Tol)
+                    violations++;
+            return violations;
+        }
+
+        private static bool CrossesX(MainRecord main, double x)
+            => x >= main.X1 - Tol && x <= main.X2 + Tol;
+
+        private static bool TrimMainsTooCloseToNotchWalls(
+            VxtPreviewPlan plan,
+            IReadOnlyList<Point2> polygon,
+            double radians,
+            VxtSettings settings,
+            IReadOnlyList<Box2> obstacles)
+        {
+            var domain = Box2.FromPoints(polygon);
+            var notchBands = BuildNotchBands(polygon, domain).ToList();
+            if (notchBands.Count == 0) return false;
+
+            var source = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .ToList();
+            if (source.Count == 0) return false;
+
+            var replacement = new List<Segment2>();
+            var changed = false;
+
+            foreach (var line in source)
+            {
+                var a = Transform2.ToLocal(line.A, radians);
+                var b = Transform2.ToLocal(line.B, radians);
+                if (Math.Abs(a.Y - b.Y) > Tol)
+                {
+                    replacement.Add(new Segment2(a, b));
+                    continue;
+                }
+
+                var original = new Segment2(
+                    new Point2(Math.Min(a.X, b.X), (a.Y + b.Y) * 0.5),
+                    new Point2(Math.Max(a.X, b.X), (a.Y + b.Y) * 0.5));
+                var pieces = SplitMainAtCloseNotchWalls(
+                    original, polygon, domain, notchBands, MinNotchWallMainClearance);
+
+                if (pieces.Count != 1 ||
+                    Math.Abs(pieces[0].A.X - original.A.X) > Tol ||
+                    Math.Abs(pieces[0].B.X - original.B.X) > Tol)
+                    changed = true;
+
+                replacement.AddRange(pieces);
+            }
+
+            if (!changed) return false;
+
+            plan.Lines.RemoveAll(x => x.Kind == PreviewLineKind.Main || x.Kind == PreviewLineKind.Hanger);
+            plan.HangerPoints.Clear();
+            plan.MainSegmentCount = 0;
+            plan.HangerCount = 0;
+
+            foreach (var local in replacement)
+            {
+                if (local.B.X - local.A.X <= MinDrawLength) continue;
+                plan.Lines.Add(new PreviewLine(
+                    Transform2.ToWorld(local.A, radians),
+                    Transform2.ToWorld(local.B, radians),
+                    PreviewLineKind.Main));
+                plan.MainSegmentCount++;
+
+                if (settings.DrawHangers)
+                    AddHangers(plan, local, radians, settings, obstacles);
+            }
+
+            return true;
+        }
+
+        private static List<Segment2> SplitMainAtCloseNotchWalls(
+            Segment2 main,
+            IReadOnlyList<Point2> polygon,
+            Box2 domain,
+            IReadOnlyList<NotchBand> notchBands,
+            double minClearance)
+        {
+            var x1 = Math.Min(main.A.X, main.B.X);
+            var x2 = Math.Max(main.A.X, main.B.X);
+            var y = (main.A.Y + main.B.Y) * 0.5;
+            if (x2 - x1 <= MinDrawLength || minClearance <= Tol)
+                return new List<Segment2> { new Segment2(new Point2(x1, y), new Point2(x2, y)) };
+
+            var cuts = new List<Tuple<double, double>>();
+            foreach (var band in notchBands ?? Array.Empty<NotchBand>())
+            {
+                var aX = Math.Max(x1, band.X1);
+                var bX = Math.Min(x2, band.X2);
+                if (bX - aX <= Tol) continue;
+
+                var sampleX = (aX + bX) * 0.5;
+                foreach (var interval in PolygonScanline.ClipVertical(polygon, sampleX))
+                {
+                    var aY = Math.Min(interval.A.Y, interval.B.Y);
+                    var bY = Math.Max(interval.A.Y, interval.B.Y);
+                    if (y < aY - Tol || y > bY + Tol) continue;
+
+                    // Only a local notch wall can trigger the break. Normal outer boundaries keep
+                    // the existing MainMinEdge/MainMaxEdge rules and are intentionally untouched.
+                    var closeToBottomNotch =
+                        aY > domain.MinY + Tol &&
+                        y - aY < minClearance - Tol;
+                    var closeToTopNotch =
+                        bY < domain.MaxY - Tol &&
+                        bY - y < minClearance - Tol;
+
+                    if (closeToBottomNotch || closeToTopNotch)
+                        cuts.Add(Tuple.Create(aX, bX));
+                    break;
+                }
+            }
+
+            if (cuts.Count == 0)
+                return new List<Segment2> { new Segment2(new Point2(x1, y), new Point2(x2, y)) };
+
+            var merged = new List<Tuple<double, double>>();
+            foreach (var cut in cuts.OrderBy(x => x.Item1))
+            {
+                if (merged.Count == 0 || cut.Item1 > merged[merged.Count - 1].Item2 + Tol)
+                {
+                    merged.Add(Tuple.Create(cut.Item1, cut.Item2));
+                    continue;
+                }
+
+                var last = merged[merged.Count - 1];
+                merged[merged.Count - 1] = Tuple.Create(last.Item1, Math.Max(last.Item2, cut.Item2));
+            }
+
+            var result = new List<Segment2>();
+            var cursor = x1;
+            foreach (var cut in merged)
+            {
+                if (cut.Item1 - cursor > MinDrawLength)
+                    result.Add(new Segment2(new Point2(cursor, y), new Point2(cut.Item1, y)));
+                cursor = Math.Max(cursor, cut.Item2);
+            }
+
+            if (x2 - cursor > MinDrawLength)
+                result.Add(new Segment2(new Point2(cursor, y), new Point2(x2, y)));
+            return result;
+        }
+
+        private static List<MainRecord> BuildMainRecords(VxtPreviewPlan plan, double radians)
+        {
+            var result = new List<MainRecord>();
+            for (var index = 0; index < plan.Lines.Count; index++)
+            {
+                var line = plan.Lines[index];
+                if (line.Kind != PreviewLineKind.Main) continue;
+                var a = Transform2.ToLocal(line.A, radians);
+                var b = Transform2.ToLocal(line.B, radians);
+                if (Math.Abs(a.Y - b.Y) > Tol) continue;
+                result.Add(new MainRecord(index, (a.Y + b.Y) * 0.5, Math.Min(a.X, b.X), Math.Max(a.X, b.X)));
+            }
+            return result;
+        }
+
+        private static void RemoveMainAndItsHangers(VxtPreviewPlan plan, MainRecord victim, double radians)
+        {
+            var removedHangers = plan.HangerPoints
+                .Where(point => PointBelongsToMain(point, victim, radians))
+                .ToList();
+
+            if (victim.LineIndex >= 0 && victim.LineIndex < plan.Lines.Count)
+                plan.Lines.RemoveAt(victim.LineIndex);
+
+            if (removedHangers.Count == 0) return;
+            plan.HangerPoints.RemoveAll(point => removedHangers.Any(removed => removed.DistanceTo(point) <= 0.01));
+            plan.Lines.RemoveAll(line =>
+            {
+                if (line.Kind != PreviewLineKind.Hanger) return false;
+                var midpoint = new Point2((line.A.X + line.B.X) * 0.5, (line.A.Y + line.B.Y) * 0.5);
+                return removedHangers.Any(point => point.DistanceTo(midpoint) <= 0.01);
+            });
+        }
+
+        private static bool PointBelongsToMain(Point2 worldPoint, MainRecord main, double radians)
+        {
+            var local = Transform2.ToLocal(worldPoint, radians);
+            return Math.Abs(local.Y - main.Y) <= Tol && local.X >= main.X1 - Tol && local.X <= main.X2 + Tol;
+        }
+
+        private static IReadOnlyList<Box2> TransformMainObstacles(
+            VxtLayoutContext context,
+            double radians,
+            double clearance)
+        {
+            return (context.GeneralObstacles ?? new List<Box2>())
+                .Concat(context.MainObstacles ?? new List<Box2>())
+                .Select(box => TransformBox(box, radians).Expand(Math.Max(0.0, clearance)))
+                .ToList();
+        }
+
+        private static Box2 TransformBox(Box2 box, double radians)
+        {
+            return Box2.FromPoints(new[]
+            {
+                Transform2.ToLocal(new Point2(box.MinX, box.MinY), radians),
+                Transform2.ToLocal(new Point2(box.MaxX, box.MinY), radians),
+                Transform2.ToLocal(new Point2(box.MaxX, box.MaxY), radians),
+                Transform2.ToLocal(new Point2(box.MinX, box.MaxY), radians)
+            });
+        }
+
+        private static bool SegmentClear(Segment2 segment, IEnumerable<Box2> obstacles)
+        {
+            foreach (var box in obstacles ?? Enumerable.Empty<Box2>())
+                if (box.IntersectsHorizontal(segment.A.Y, segment.A.X, segment.B.X, Tol))
+                    return false;
+            return true;
+        }
+
+        private static IEnumerable<NotchBand> BuildNotchBands(
+            IReadOnlyList<Point2> polygon,
+            Box2 domain)
+        {
+            var xs = UniqueSort(
+                polygon.Select(p => p.X).Concat(new[] { domain.MinX, domain.MaxX }),
+                0.5);
+
+            for (var i = 0; i + 1 < xs.Count; i++)
+            {
+                var x1 = Math.Max(domain.MinX, xs[i]);
+                var x2 = Math.Min(domain.MaxX, xs[i + 1]);
+                if (x2 - x1 <= MinDrawLength) continue;
+
+                var samples = new[]
+                {
+                    x1 + 0.25 * (x2 - x1),
+                    x1 + 0.50 * (x2 - x1),
+                    x1 + 0.75 * (x2 - x1)
+                };
+
+                var hasDrawable = false;
+                var realNotch = false;
+                foreach (var sample in samples)
+                {
+                    var intervals = PolygonScanline.ClipVertical(polygon, sample).ToList();
+                    if (intervals.Count == 0) continue;
+                    hasDrawable = true;
+                    if (intervals.Count != 1)
+                    {
+                        realNotch = true;
+                        continue;
+                    }
+
+                    var a = Math.Min(intervals[0].A.Y, intervals[0].B.Y);
+                    var b = Math.Max(intervals[0].A.Y, intervals[0].B.Y);
+                    if (a > domain.MinY + Tol || b < domain.MaxY - Tol)
+                        realNotch = true;
+                }
+
+                if (hasDrawable && realNotch)
+                    yield return new NotchBand(x1, x2, samples);
+            }
+        }
+
+        private static void AddOrMergeSpec(List<LocalSpec> specs, double y, double x1, double x2)
+        {
+            foreach (var spec in specs)
+            {
+                if (Math.Abs(spec.Y - y) > Tol) continue;
+                if (x1 > spec.X2 + Tol || x2 < spec.X1 - Tol) continue;
+                spec.X1 = Math.Min(spec.X1, x1);
+                spec.X2 = Math.Max(spec.X2, x2);
+                return;
+            }
+            specs.Add(new LocalSpec(y, x1, x2));
+        }
+
+        private static IEnumerable<LocalSpec> MergeSpecs(IEnumerable<LocalSpec> source)
+        {
+            var output = new List<LocalSpec>();
+            foreach (var item in source.OrderBy(s => s.Y).ThenBy(s => s.X1))
+                AddOrMergeSpec(output, item.Y, item.X1, item.X2);
+            return output;
+        }
+
+        private static void AddUnique(List<double> values, double value)
+        {
+            if (!values.Any(x => Math.Abs(x - value) <= Tol)) values.Add(value);
+        }
+
+        private static List<double> UniqueSort(IEnumerable<double> values, double tolerance)
+        {
+            var result = new List<double>();
+            foreach (var value in (values ?? Enumerable.Empty<double>()).OrderBy(v => v))
+                if (result.Count == 0 || Math.Abs(result[result.Count - 1] - value) > tolerance)
+                    result.Add(value);
+            return result;
+        }
+
+        private static double FloorMultiple(double value, double step)
+            => step <= 0.0 ? value : Math.Floor((value + 1e-9) / step) * step;
+
+        private static double CeilMultiple(double value, double step)
+            => step <= 0.0 ? value : Math.Ceiling((value - 1e-9) / step) * step;
+
+        private static double SnapAtOrBelow(double value, double origin, double step)
+            => step <= 0.0 ? value : origin + Math.Floor(((value - origin) + 1e-9) / step) * step;
+
+        private static double SnapAtOrAbove(double value, double origin, double step)
+            => step <= 0.0 ? value : origin + Math.Ceiling(((value - origin) - 1e-9) / step) * step;
+
+        private static double NormalizeDegrees(double value)
+        {
+            value %= 360.0;
+            return value < 0.0 ? value + 360.0 : value;
+        }
+
+        private sealed class MainRecord
+        {
+            public MainRecord(int lineIndex, double y, double x1, double x2)
+            {
+                LineIndex = lineIndex;
+                Y = y;
+                X1 = x1;
+                X2 = x2;
+            }
+            public int LineIndex { get; }
+            public double Y { get; }
+            public double X1 { get; }
+            public double X2 { get; }
+            public double Length => X2 - X1;
+        }
+
+        private sealed class NotchBand
+        {
+            public NotchBand(double x1, double x2, IReadOnlyList<double> sampleXs)
+            {
+                X1 = Math.Min(x1, x2);
+                X2 = Math.Max(x1, x2);
+                SampleXs = sampleXs ?? Array.Empty<double>();
+            }
+
+            public double X1 { get; }
+            public double X2 { get; }
+            public IReadOnlyList<double> SampleXs { get; }
+        }
+
+        private sealed class LocalSpec
+        {
+            public LocalSpec(double y, double x1, double x2)
+            {
+                Y = y;
+                X1 = Math.Min(x1, x2);
+                X2 = Math.Max(x1, x2);
+            }
+            public double Y { get; }
+            public double X1 { get; set; }
+            public double X2 { get; set; }
+        }
+
+        private sealed class DoubleTolComparer : IEqualityComparer<double>
+        {
+            public bool Equals(double x, double y) => Math.Abs(x - y) <= Tol;
+            public int GetHashCode(double obj) => Math.Round(obj / Tol).GetHashCode();
+        }
+    }
+}
