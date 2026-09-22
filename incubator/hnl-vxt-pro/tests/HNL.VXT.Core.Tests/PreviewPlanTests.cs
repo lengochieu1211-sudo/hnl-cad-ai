@@ -43,6 +43,55 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void AutoDimensions_UseConfiguredDistanceSoExtensionLegsAreNeverZero()
+        {
+            var boundary = Rectangle(6000, 4000);
+            var settings = new VxtSettings
+            {
+                AutoDimension = true,
+                DimMain = true,
+                DimFurring = true,
+                DimHanger = true,
+                MainDimPosition = DimensionPosition.Auto,
+                FurringDimPosition = DimensionPosition.Auto,
+                HangerDimPosition = DimensionPosition.Auto,
+                DimensionDistance = 500.0,
+                DimensionSpacing = 350.0
+            };
+
+            var plan = new VxtPreviewPlanBuilder().Build(boundary, settings);
+
+            Assert.IsTrue(plan.Dimensions.Count > 0);
+            foreach (var dim in plan.Dimensions)
+            {
+                var rotation = dim.RotationRadians;
+                var nx = -Math.Sin(rotation);
+                var ny = Math.Cos(rotation);
+                var dx = dim.DimensionLinePoint.X - dim.ExtensionPoint1.X;
+                var dy = dim.DimensionLinePoint.Y - dim.ExtensionPoint1.Y;
+                var normalOffset = Math.Abs(dx * nx + dy * ny);
+
+                Assert.IsTrue(normalOffset >= settings.DimensionDistance - 0.1,
+                    "Auto DIM must keep a non-zero extension leg so the CAD grip stays easy to drag.");
+            }
+        }
+
+        [TestMethod]
+        public void AutoDimension_RejectsZeroDistance()
+        {
+            var settings = new VxtSettings
+            {
+                AutoDimension = true,
+                DimMain = true,
+                DimensionDistance = 0.0
+            };
+
+            string error;
+            Assert.IsFalse(settings.IsValid(out error));
+            StringAssert.Contains(error, "lớn hơn 0");
+        }
+
+        [TestMethod]
         public void LegacyDefaults_MatchV674PrimaryLayoutValues()
         {
             var s = new VxtSettings();
