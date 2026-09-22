@@ -651,8 +651,8 @@ namespace HNL.VXT.Core.Preview
             {
                 side = "C-V";
                 var index = GetAndIncrement(stack, side);
-                baseX = (domain.MinX + domain.MaxX) * 0.5;
-                textX = baseX + index * spacing;
+                baseX = sourceBaseCoordinate ?? (domain.MinX + domain.MaxX) * 0.5;
+                textX = baseX + distance + index * spacing;
             }
             else if (position == DimensionPosition.Left || position == DimensionPosition.Bottom)
             {
@@ -703,8 +703,8 @@ namespace HNL.VXT.Core.Preview
             {
                 side = "C-H";
                 var index = GetAndIncrement(stack, side);
-                baseY = (domain.MinY + domain.MaxY) * 0.5;
-                textY = baseY + index * spacing;
+                baseY = sourceBaseCoordinate ?? (domain.MinY + domain.MaxY) * 0.5;
+                textY = baseY + distance + index * spacing;
             }
             else if (position == DimensionPosition.Top || position == DimensionPosition.Left)
             {
