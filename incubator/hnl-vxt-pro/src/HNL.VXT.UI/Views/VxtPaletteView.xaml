@@ -564,7 +564,7 @@
                                     <Grid Margin="0,0,0,7">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Khoảng cách Dim" Style="{StaticResource FieldLabel}"/>
-                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding DimensionDistance, Mode=TwoWay}" Step="50" Minimum="0"/>
+                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding DimensionDistance, Mode=TwoWay}" Step="50" Minimum="1"/>
                                     </Grid>
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
