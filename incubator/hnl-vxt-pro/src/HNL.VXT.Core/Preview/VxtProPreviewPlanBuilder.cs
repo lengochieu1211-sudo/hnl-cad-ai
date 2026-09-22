@@ -603,7 +603,8 @@ namespace HNL.VXT.Core.Preview
                     settings.HangerBalanceStep,
                     MainLayoutMode.OneSide,
                     reverse: furringFromFarEdge,
-                    minEdgeTolerance: settings.HangerEdgeTolerance);
+                    minEdgeTolerance: settings.HangerEdgeTolerance,
+                    preferOneSideTailFallback: true);
             }
 
             if (layout == null) return new List<Point2>();
