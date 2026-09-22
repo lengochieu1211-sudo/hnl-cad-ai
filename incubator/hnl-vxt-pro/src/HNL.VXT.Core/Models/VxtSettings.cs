@@ -163,9 +163,9 @@ namespace HNL.VXT.Core.Models
 
             if (AutoDimension)
             {
-                if (DimensionDistance < 0)
+                if (DimensionDistance <= 0)
                 {
-                    error = "Khoảng cách Dim không được âm.";
+                    error = "Khoảng cách Dim phải lớn hơn 0 để DIM luôn có chân kéo chỉnh.";
                     return false;
                 }
                 if (DimensionSpacing <= 0)
