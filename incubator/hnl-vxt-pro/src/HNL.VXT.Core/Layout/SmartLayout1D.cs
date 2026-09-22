@@ -82,7 +82,8 @@ namespace HNL.VXT.Core.Layout
             MainLayoutMode mode,
             bool reverse = false,
             bool obstacleGreedy = false,
-            double minEdgeTolerance = 25.0)
+            double minEdgeTolerance = 25.0,
+            bool preferOneSideTailFallback = false)
         {
             if (!BasicInputValid(length, maxSpacing, minSpacing, maxEdge, minEdge, increment))
                 return null;
@@ -149,6 +150,23 @@ namespace HNL.VXT.Core.Layout
                         maxEdge, minEdge, increment, 0.0,
                         reverse, usedSoftEdge: true);
                     if (chase != null) return chase;
+                }
+
+                // Construction-friendly Ty-only opt-in:
+                // If no uniform OneSide lattice exists, keep Max spacing continuously from
+                // the selected start side and absorb the dimensional remainder into ONE final
+                // lattice gap. This avoids alternating 950/1000/... rows in the field.
+                //
+                // HARD Max spacing / Max edge remain absolute. Min spacing and Min edge keep
+                // their existing SOFT contract. If even this one-tail solution cannot satisfy
+                // HARD limits, fall through to the certified legacy balanced/dense fallback.
+                if (preferOneSideTailFallback)
+                {
+                    var tail = CalculateOneSideTailFallback(
+                        length, maxSpacing, minSpacing,
+                        maxEdge, minEdge, increment,
+                        minEdgeTolerance, reverse);
+                    if (tail != null) return tail;
                 }
             }
 
@@ -282,6 +300,73 @@ namespace HNL.VXT.Core.Layout
                     farEdge,
                     isDense: spacing < configuredMinSpacing - Tol,
                     usedSoftEdge: usedSoftEdge || farEdge < startEdge - Tol);
+                return MaybeReverse(result, reverse);
+            }
+
+            return null;
+        }
+
+        private static Result CalculateOneSideTailFallback(
+            double length,
+            double maxSpacing,
+            double minSpacing,
+            double maxEdge,
+            double minEdge,
+            double increment,
+            double minEdgeTolerance,
+            bool reverse)
+        {
+            var maxDiscrete = FloorMultiple(maxSpacing, increment);
+            if (maxDiscrete < increment - Eps) return null;
+            if (minEdge < -Tol || minEdge > maxEdge + Tol) return null;
+
+            // Freeze the same minimum number of internal gaps required by HARD Max.
+            var hardInteriorNeed = Math.Max(0.0, length - 2.0 * maxEdge);
+            var k = hardInteriorNeed <= Tol
+                ? 0
+                : LispFix(hardInteriorNeed / maxDiscrete + 0.999999);
+            if (k <= 0) return null;
+
+            // The selected start side stays anchored at Min edge. All gaps except the last
+            // are Max; only the final gap may absorb the remainder.
+            var startEdge = minEdge;
+            var fixedSpan = (k - 1) * maxDiscrete;
+            var tailTotal = length - startEdge - fixedSpan;
+            if (tailTotal <= increment - Tol) return null;
+
+            // Prefer keeping the far edge inside the configured SOFT tolerance. This is why
+            // e.g. 17090.15 becomes 300 | 1000x16 | 500 | 290.15 instead of a 450-mm tail:
+            // a 10-mm edge shortfall is preferred to another 50-mm spacing shortfall.
+            var toleratedMinEdge = Math.Max(
+                0.0, minEdge - Math.Max(0.0, minEdgeTolerance));
+            var farEdgePasses = toleratedMinEdge > Eps
+                ? new[] { toleratedMinEdge, 0.0 }
+                : new[] { 0.0 };
+
+            foreach (var minAcceptedFarEdge in farEdgePasses)
+            {
+                var maxTailByFarEdge = tailTotal - minAcceptedFarEdge;
+                var tailGap = FloorMultiple(
+                    Math.Min(maxDiscrete, maxTailByFarEdge),
+                    increment);
+                if (tailGap < increment - Tol || tailGap > maxDiscrete + Tol)
+                    continue;
+
+                var farEdge = tailTotal - tailGap;
+                if (farEdge <= 2.0 + Tol ||
+                    farEdge < minAcceptedFarEdge - Tol ||
+                    farEdge > maxEdge + Tol)
+                    continue;
+
+                var steps = Enumerable.Repeat(maxDiscrete, k).ToArray();
+                steps[k - 1] = tailGap;
+
+                var result = new Result(
+                    startEdge,
+                    steps,
+                    farEdge,
+                    isDense: tailGap < minSpacing - Tol,
+                    usedSoftEdge: farEdge < minEdge - Tol);
                 return MaybeReverse(result, reverse);
             }
 
