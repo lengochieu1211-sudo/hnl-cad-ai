@@ -21,6 +21,15 @@ namespace HNL.VXT.UI.ViewModels
             private set => Set(ref _constraintSummary, value);
         }
 
+        public bool HasOverrideableHardConstraints
+            => ConstraintDiagnostics.Any(VxtConstraintOverridePolicy.IsManualOverrideAllowed);
+
+        public int OverrideableHardConstraintCount
+            => ConstraintDiagnostics.Count(VxtConstraintOverridePolicy.IsManualOverrideAllowed);
+
+        public bool CanCreateWithWarning
+            => CanCreate && HasOverrideableHardConstraints;
+
         public ICommand FocusConstraintDiagnosticCommand
         {
             get
@@ -50,6 +59,11 @@ namespace HNL.VXT.UI.ViewModels
                 ConstraintDiagnostics.Add(item);
             }
 
+            OnPropertyChanged(nameof(HasOverrideableHardConstraints));
+            OnPropertyChanged(nameof(OverrideableHardConstraintCount));
+            OnPropertyChanged(nameof(CanCreateWithWarning));
+            (CreateWithWarningCommand as RelayCommand)?.RaiseCanExecuteChanged();
+
             if (ConstraintDiagnostics.Count == 0)
             {
                 ConstraintSummary = "✓ Không phát hiện lỗi";
@@ -63,7 +77,7 @@ namespace HNL.VXT.UI.ViewModels
                                 (warnings > 0 ? "⚠ " + warnings + " cảnh báo" : string.Empty);
 
             PreviewStatus = hard > 0
-                ? "⛔ Có " + hard + " lỗi bố trí. Tạo sẽ bị chặn; mở Kiểm tra bố trí và bấm Mxx để xem đúng Polyline."
+                ? "⛔ Có " + hard + " lỗi bố trí. Tạo chuẩn sẽ bị chặn; có thể dùng Tạo có cảnh báo để xuất đúng Preview và chỉnh thủ công."
                 : "⚠ Có " + warnings + " cảnh báo bố trí. Mở Kiểm tra bố trí và bấm Mxx để xem chi tiết.";
         }
     }
