@@ -1,5 +1,7 @@
+using System.Linq;
 using Autodesk.AutoCAD.Runtime;
 using HNL.VXT.Core.Models;
+using HNL.VXT.Core.Preview;
 
 namespace HNL.VXT.AutoCAD
 {
@@ -38,6 +40,35 @@ namespace HNL.VXT.AutoCAD
             if (!VxtAuthorization.EnsureAuthorized()) return;
             if (!VxtSession.Current.HasBoundary)
                 VxtBoundarySelectionAdapter.TryAdoptImpliedSelection(refreshPreview: true, writeMessage: true);
+
+            var diagnostics = VxtSession.Current.ViewModel?.ConstraintDiagnostics
+                .Where(VxtConstraintOverridePolicy.IsManualOverrideAllowed)
+                .ToList();
+            var count = diagnostics?.Count ?? 0;
+            var boundaryCodes = diagnostics == null
+                ? string.Empty
+                : string.Join(", ", diagnostics
+                    .Select(x => x.BoundaryCode)
+                    .Distinct()
+                    .Take(8));
+
+            var detail = count > 0
+                ? "Có " + count + " lỗi bố trí HARD có thể chỉnh thủ công" +
+                  (string.IsNullOrWhiteSpace(boundaryCodes) ? "." : " tại " + boundaryCodes + ".")
+                : "HNL Tool sẽ kiểm tra lại lỗi bố trí HARD trước khi tạo.";
+
+            var answer = System.Windows.MessageBox.Show(
+                "HNL Tool - VXT Pro\n\n" +
+                detail +
+                "\n\nNếu tiếp tục, HNL Tool chỉ được phép bỏ chặn các lỗi bố trí có thể chỉnh thủ công." +
+                "\nLỗi cấu hình, tài nguyên CAD, parity Preview/Create hoặc runtime vẫn bị chặn và rollback." +
+                "\n\nTiếp tục Tạo có cảnh báo?",
+                "HNL Tool - Tạo có cảnh báo",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning,
+                System.Windows.MessageBoxResult.No);
+
+            if (answer != System.Windows.MessageBoxResult.Yes) return;
 
             VxtLegacyParityCoordinator.ExecuteCreate(allowConstraintOverride: true);
         }
