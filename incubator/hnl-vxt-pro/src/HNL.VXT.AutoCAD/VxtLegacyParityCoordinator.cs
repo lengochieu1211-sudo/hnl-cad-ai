@@ -17,7 +17,7 @@ namespace HNL.VXT.AutoCAD
     /// </summary>
     internal static class VxtLegacyParityCoordinator
     {
-        public static void ExecuteCreate()
+        public static void ExecuteCreate(bool allowConstraintOverride = false)
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             if (doc == null) return;
@@ -105,7 +105,7 @@ namespace HNL.VXT.AutoCAD
                 return;
             }
 
-            VxtCreateEngine.Execute();
+            VxtCreateEngine.Execute(allowConstraintOverride);
         }
 
         internal static bool ConfigureAutoShadowlineInteractive(VxtSettings settings = null, bool refreshPreview = true, bool fallbackFromCreate = false)
