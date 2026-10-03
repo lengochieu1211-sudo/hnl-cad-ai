@@ -51,6 +51,9 @@ namespace HNL.VXT.UI.ViewModels
             ClearPreviewCommand = new RelayCommand(() => _host.ClearPreview());
             ExportDiagnosticsCommand = new RelayCommand(() => _host.ExportDiagnostics(_settings.Clone()));
             CreateCommand = new RelayCommand(() => _host.RequestCreate(), () => CanCreate);
+            CreateWithWarningCommand = new RelayCommand(
+                () => _host.RequestCreateWithWarning(),
+                () => CanCreateWithWarning);
         }
 
         public string VersionLabel => VxtBuildInfo.VersionLabel;
@@ -113,6 +116,7 @@ namespace HNL.VXT.UI.ViewModels
         public ICommand ClearPreviewCommand { get; }
         public ICommand ExportDiagnosticsCommand { get; }
         public ICommand CreateCommand { get; }
+        public ICommand CreateWithWarningCommand { get; }
 
         public bool HasBoundary
         {
@@ -122,7 +126,9 @@ namespace HNL.VXT.UI.ViewModels
                 if (Set(ref _hasBoundary, value))
                 {
                     OnPropertyChanged(nameof(CanCreate));
+                    OnPropertyChanged(nameof(CanCreateWithWarning));
                     (CreateCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                    (CreateWithWarningCommand as RelayCommand)?.RaiseCanExecuteChanged();
                 }
             }
         }
@@ -364,7 +370,9 @@ namespace HNL.VXT.UI.ViewModels
         {
             OnPropertyChanged(propertyName);
             OnPropertyChanged(nameof(CanCreate));
+            OnPropertyChanged(nameof(CanCreateWithWarning));
             (CreateCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (CreateWithWarningCommand as RelayCommand)?.RaiseCanExecuteChanged();
             MarkCustom();
             RequestPreview();
         }
