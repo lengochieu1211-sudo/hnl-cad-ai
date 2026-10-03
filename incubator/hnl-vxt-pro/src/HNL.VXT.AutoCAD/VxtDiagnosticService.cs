@@ -102,13 +102,38 @@ namespace HNL.VXT.AutoCAD
             }
         }
 
-        public static void RecordCreateSuccess(VxtSettings settings, int main, int furring, int hangers, int dimensions)
+        public static void RecordCreateSuccess(
+            VxtSettings settings,
+            int main,
+            int furring,
+            int hangers,
+            int dimensions,
+            bool manualOverride = false,
+            IEnumerable<VxtConstraintDiagnostic> overrideDiagnostics = null)
         {
+            var overridden = (overrideDiagnostics ?? Enumerable.Empty<VxtConstraintDiagnostic>())
+                .Where(x => x != null && x.IsHard &&
+                            VxtConstraintOverridePolicy.IsManualOverrideAllowed(x))
+                .ToList();
+
             var counts = new Dictionary<string, int>
             {
-                { "main", main }, { "furring", furring }, { "hangers", hangers }, { "dimensions", dimensions }
+                { "main", main }, { "furring", furring }, { "hangers", hangers }, { "dimensions", dimensions },
+                { "overrideErrors", manualOverride ? overridden.Count : 0 }
             };
-            RecordGolden("PASS", settings, counts, null, null, "CreateCommitted");
+
+            var note = manualOverride
+                ? "MANUAL OVERRIDE | " + string.Join(" | ", overridden.Select(x => x.DisplayText))
+                : string.Empty;
+
+            RecordGolden(
+                manualOverride ? "MANUAL_OVERRIDE" : "PASS",
+                settings,
+                counts,
+                null,
+                null,
+                manualOverride ? "CreateCommittedManualOverride" : "CreateCommitted",
+                note);
         }
 
         private static string BuildPackage(
@@ -573,7 +598,8 @@ namespace HNL.VXT.AutoCAD
             Dictionary<string, int> counts,
             System.Exception exception,
             string packagePath,
-            string stage)
+            string stage,
+            string note = null)
         {
             try
             {
@@ -596,6 +622,7 @@ namespace HNL.VXT.AutoCAD
                 sb.Append("\"regions\":").Append(session.Regions.Count).Append(",");
                 sb.Append("\"error\":\"").Append(JsonEscape(exception?.Message ?? string.Empty)).Append("\",");
                 sb.Append("\"diagnosticZip\":\"").Append(JsonEscape(packagePath ?? string.Empty)).Append("\",");
+                sb.Append("\"note\":\"").Append(JsonEscape(note ?? string.Empty)).Append("\",");
                 sb.Append("\"counts\":{");
                 if (counts != null)
                 {
