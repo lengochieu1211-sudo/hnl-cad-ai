@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows;
 using System.Windows.Threading;
 using Autodesk.AutoCAD.ApplicationServices.Core;
 using Autodesk.AutoCAD.DatabaseServices;
@@ -255,13 +254,13 @@ namespace HNL.VXT.AutoCAD
                     "\nSau khi tạo cần chỉnh thủ công trước khi phát hành bản vẽ." +
                     "\n\nTiếp tục Tạo có cảnh báo?";
 
-                var answer = MessageBox.Show(
+                var answer = System.Windows.MessageBox.Show(
                     confirmation,
                     "HNL Tool - Tạo có cảnh báo",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning,
-                    MessageBoxResult.No);
-                if (answer != MessageBoxResult.Yes) return;
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning,
+                    System.Windows.MessageBoxResult.No);
+                if (answer != System.Windows.MessageBoxResult.Yes) return;
             }
 
             // Do not synchronously touch TransientManager from the palette callback. Both paths use
