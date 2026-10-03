@@ -13,7 +13,7 @@ namespace HNL.VXT.AutoCAD
 {
     internal static class VxtCreateEngine
     {
-        public static void Execute()
+        public static void Execute(bool allowConstraintOverride = false)
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             if (doc == null) return;
@@ -68,12 +68,30 @@ namespace HNL.VXT.AutoCAD
                         .Count();
 
                     var hardDiagnostics = plan.Diagnostics.Where(x => x != null && x.IsHard).ToList();
-                    if (hardDiagnostics.Count > 0)
+                    var nonOverrideableHard = hardDiagnostics
+                        .Where(x => !VxtConstraintOverridePolicy.IsManualOverrideAllowed(x))
+                        .ToList();
+                    if (nonOverrideableHard.Count > 0)
+                    {
+                        throw new InvalidOperationException(
+                            "Có " + nonOverrideableHard.Count +
+                            " lỗi bố trí không được phép bỏ qua. Tạo bị chặn.");
+                    }
+
+                    if (hardDiagnostics.Count > 0 && !allowConstraintOverride)
                     {
                         throw new InvalidOperationException(
                             "Có " + hardDiagnostics.Count +
-                            " lỗi bố trí. Tạo bị chặn để không vi phạm điều kiện Max/bội số. " +
-                            "Mở Kiểm tra bố trí và bấm Mxx để xem đúng Polyline.");
+                            " lỗi bố trí. Tạo chuẩn bị chặn để không vi phạm điều kiện Max/bội số. " +
+                            "Có thể dùng 'Tạo có cảnh báo' nếu cần xuất đúng Preview để chỉnh thủ công.");
+                    }
+
+                    if (hardDiagnostics.Count > 0 && allowConstraintOverride)
+                    {
+                        doc.Editor.WriteMessage(
+                            "\nHNL Tool - VXT Pro: MANUAL OVERRIDE - đang tạo đúng Preview với " +
+                            hardDiagnostics.Count +
+                            " lỗi bố trí cần chỉnh thủ công sau khi tạo.");
                     }
 
                     ValidateRequiredResources(settings, plan, session, db, tr);
@@ -179,8 +197,17 @@ namespace HNL.VXT.AutoCAD
                     session.Settings = settings.Clone();
                 }
 
+                var committedOverrideDiagnostics = diagnosticPlan == null
+                    ? new List<VxtConstraintDiagnostic>()
+                    : diagnosticPlan.Diagnostics
+                        .Where(x => x != null && x.IsHard &&
+                                    VxtConstraintOverridePolicy.IsManualOverrideAllowed(x))
+                        .ToList();
+
                 VxtDiagnosticService.RecordCreateSuccess(
-                    settings, counts.Main, counts.Furring, counts.Hangers, counts.Dimensions);
+                    settings, counts.Main, counts.Furring, counts.Hangers, counts.Dimensions,
+                    allowConstraintOverride && committedOverrideDiagnostics.Count > 0,
+                    committedOverrideDiagnostics);
 
                 var fallbackWarning = BuildFallbackWarning(counts);
                 doc.Editor.WriteMessage(
@@ -189,6 +216,10 @@ namespace HNL.VXT.AutoCAD
                     counts.Dimensions + " Dim. Dùng UNDO để hoàn tác toàn bộ thao tác tạo." +
                     fallbackWarning +
                     BuildManualNotchWarning(manualNotchBoundaryCount) +
+                    (allowConstraintOverride && committedOverrideDiagnostics.Count > 0
+                        ? " | MANUAL OVERRIDE: đã tạo với " + committedOverrideDiagnostics.Count +
+                          " lỗi bố trí; cần chỉnh thủ công trước khi phát hành bản vẽ."
+                        : string.Empty) +
                     (string.IsNullOrWhiteSpace(constraintReport)
                         ? string.Empty
                         : " | Kiểm tra bố trí: " + constraintReport));
