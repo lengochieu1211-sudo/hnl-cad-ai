@@ -348,6 +348,50 @@ namespace HNL.VXT.Core.Tests
                 VxtConstraintReport.FormatSummary(diagnostics));
         }
 
+        [TestMethod]
+        public void ManualOverridePolicy_AllowsOnlyHardLayoutConstraints()
+        {
+            var allowedKinds = new[]
+            {
+                VxtConstraintKind.MaxSpacingHard,
+                VxtConstraintKind.MaxEdgeHard,
+                VxtConstraintKind.SpacingStepHard,
+                VxtConstraintKind.MissingCoverageHard
+            };
+
+            foreach (var kind in allowedKinds)
+            {
+                var diagnostic = new VxtConstraintDiagnostic(
+                    0,
+                    VxtConstraintTarget.Main,
+                    kind,
+                    VxtConstraintSeverity.Error,
+                    500.0,
+                    400.0);
+                Assert.IsTrue(
+                    VxtConstraintOverridePolicy.IsManualOverrideAllowed(diagnostic),
+                    kind + " must be manually overrideable because it can be corrected after Create.");
+            }
+
+            var softMin = new VxtConstraintDiagnostic(
+                0,
+                VxtConstraintTarget.Main,
+                VxtConstraintKind.MinEdgeSoft,
+                VxtConstraintSeverity.Warning,
+                290.0,
+                300.0);
+            Assert.IsFalse(VxtConstraintOverridePolicy.IsManualOverrideAllowed(softMin));
+
+            var manualNotch = new VxtConstraintDiagnostic(
+                0,
+                VxtConstraintTarget.Main,
+                VxtConstraintKind.ManualMainRequiredWarning,
+                VxtConstraintSeverity.Warning,
+                500.0,
+                400.0);
+            Assert.IsFalse(VxtConstraintOverridePolicy.IsManualOverrideAllowed(manualNotch));
+        }
+
         private static Boundary2 ShortLeftNotchBand400()
             => new Boundary2(new[]
             {
