@@ -234,33 +234,13 @@ namespace HNL.VXT.AutoCAD
                     .Where(VxtConstraintOverridePolicy.IsManualOverrideAllowed)
                     .ToList() ?? new List<VxtConstraintDiagnostic>();
 
-                // If the latest Preview no longer contains an overrideable HARD issue, fall back to
-                // the normal Create path instead of manufacturing an override state.
+                // The warning button is driven by the latest Preview diagnostics. If those errors
+                // have disappeared, use normal Create rather than manufacture an override state.
                 if (overrideable.Count == 0)
                 {
                     Send("HNLVXTCREATE ");
                     return;
                 }
-
-                var boundaryCodes = string.Join(", ", overrideable
-                    .Select(x => x.BoundaryCode)
-                    .Distinct()
-                    .Take(8));
-                var confirmation =
-                    "HNL Tool - VXT Pro\n\n" +
-                    "Có " + overrideable.Count + " lỗi bố trí HARD có thể chỉnh thủ công" +
-                    (string.IsNullOrWhiteSpace(boundaryCodes) ? "." : " tại " + boundaryCodes + ".") +
-                    "\n\nHNL Tool sẽ tạo ĐÚNG geometry đang Preview và KHÔNG tự sửa các lỗi này." +
-                    "\nSau khi tạo cần chỉnh thủ công trước khi phát hành bản vẽ." +
-                    "\n\nTiếp tục Tạo có cảnh báo?";
-
-                var answer = System.Windows.MessageBox.Show(
-                    confirmation,
-                    "HNL Tool - Tạo có cảnh báo",
-                    System.Windows.MessageBoxButton.YesNo,
-                    System.Windows.MessageBoxImage.Warning,
-                    System.Windows.MessageBoxResult.No);
-                if (answer != System.Windows.MessageBoxResult.Yes) return;
             }
 
             // Do not synchronously touch TransientManager from the palette callback. Both paths use
