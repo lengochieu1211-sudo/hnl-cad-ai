@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Windows;
 using System.Windows.Threading;
 using Autodesk.AutoCAD.ApplicationServices.Core;
 using Autodesk.AutoCAD.DatabaseServices;
 using HNL.VXT.Core.Models;
+using HNL.VXT.Core.Preview;
 using HNL.VXT.UI.Hosting;
 
 namespace HNL.VXT.AutoCAD
@@ -200,13 +203,19 @@ namespace HNL.VXT.AutoCAD
         }
 
         public void RequestCreate()
+            => RequestCreateCore(allowConstraintOverride: false);
+
+        public void RequestCreateWithWarning()
+            => RequestCreateCore(allowConstraintOverride: true);
+
+        private void RequestCreateCore(bool allowConstraintOverride)
         {
             var session = VxtSession.Current;
 
             // WYSIWYG gate: a palette edit may have updated session.Settings immediately while the
             // transient redraw is still waiting inside the 180 ms debounce window. Creating at that
-            // moment would use the new settings against an older on-screen Preview (for example DIM
-            // toggled ON but not rendered yet). Never allow Create to overtake a pending Preview.
+            // moment would use the new settings against an older on-screen Preview. Never allow
+            // normal Create or manual-override Create to overtake a pending Preview.
             if (_pendingPreviewSettings != null)
             {
                 _previewTimer.Stop();
@@ -220,9 +229,44 @@ namespace HNL.VXT.AutoCAD
             if (session.ViewModel != null)
                 session.Settings = session.ViewModel.Snapshot();
 
-            // Do not synchronously touch TransientManager from the palette callback. Create consumes
-            // the same latest Snapshot and runs entirely inside the queued AutoCAD command context.
-            Send("HNLVXTCREATE ");
+            if (allowConstraintOverride)
+            {
+                var overrideable = session.ViewModel?.ConstraintDiagnostics
+                    .Where(VxtConstraintOverridePolicy.IsManualOverrideAllowed)
+                    .ToList() ?? new List<VxtConstraintDiagnostic>();
+
+                // If the latest Preview no longer contains an overrideable HARD issue, fall back to
+                // the normal Create path instead of manufacturing an override state.
+                if (overrideable.Count == 0)
+                {
+                    Send("HNLVXTCREATE ");
+                    return;
+                }
+
+                var boundaryCodes = string.Join(", ", overrideable
+                    .Select(x => x.BoundaryCode)
+                    .Distinct()
+                    .Take(8));
+                var confirmation =
+                    "HNL Tool - VXT Pro\n\n" +
+                    "Có " + overrideable.Count + " lỗi bố trí HARD có thể chỉnh thủ công" +
+                    (string.IsNullOrWhiteSpace(boundaryCodes) ? "." : " tại " + boundaryCodes + ".") +
+                    "\n\nHNL Tool sẽ tạo ĐÚNG geometry đang Preview và KHÔNG tự sửa các lỗi này." +
+                    "\nSau khi tạo cần chỉnh thủ công trước khi phát hành bản vẽ." +
+                    "\n\nTiếp tục Tạo có cảnh báo?";
+
+                var answer = MessageBox.Show(
+                    confirmation,
+                    "HNL Tool - Tạo có cảnh báo",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning,
+                    MessageBoxResult.No);
+                if (answer != MessageBoxResult.Yes) return;
+            }
+
+            // Do not synchronously touch TransientManager from the palette callback. Both paths use
+            // the same latest Snapshot and run entirely inside AutoCAD's queued command context.
+            Send(allowConstraintOverride ? "HNLVXTCREATEWARN " : "HNLVXTCREATE ");
         }
 
         private void PreviewTimer_Tick(object sender, EventArgs e)
