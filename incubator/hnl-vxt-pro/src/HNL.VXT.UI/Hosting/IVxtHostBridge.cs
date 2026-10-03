@@ -19,5 +19,6 @@ namespace HNL.VXT.UI.Hosting
         void RequestRuntimeGolden();
         void HighlightBoundary(int boundaryIndex);
         void RequestCreate();
+        void RequestCreateWithWarning();
     }
 }
