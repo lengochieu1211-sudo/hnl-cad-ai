@@ -32,6 +32,16 @@ namespace HNL.VXT.AutoCAD
             VxtLegacyParityCoordinator.ExecuteCreate();
         }
 
+        [CommandMethod("HNLVXTCREATEWARN", CommandFlags.Modal | CommandFlags.UsePickSet)]
+        public void CreateWithWarning()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            if (!VxtSession.Current.HasBoundary)
+                VxtBoundarySelectionAdapter.TryAdoptImpliedSelection(refreshPreview: true, writeMessage: true);
+
+            VxtLegacyParityCoordinator.ExecuteCreate(allowConstraintOverride: true);
+        }
+
         [CommandMethod("HNLVXTBOUNDARY", CommandFlags.Modal | CommandFlags.UsePickSet)]
         public void SelectBoundary()
         {
