@@ -15,7 +15,7 @@
                     LoadOnCommandInvocation="True">
       <Commands GroupName="HNL.VXT.Commands">
         <Command Global="HVX" Local="HVX" />
-        <Command Global="HNLVXTCREATE" Local="HNLVXTCREATE" />
+        <Command Global="HNLVXTCREATE" Local="HNLVXTCREATE" /><Command Global="HNLVXTCREATEWARN" Local="HNLVXTCREATEWARN" />
         <Command Global="HNLVXTBOUNDARY" Local="HNLVXTBOUNDARY" />
         <Command Global="HNLVXTAUTOSETUP" Local="HNLVXTAUTOSETUP" />
         <Command Global="HNLVXTDIRECTION" Local="HNLVXTDIRECTION" />
