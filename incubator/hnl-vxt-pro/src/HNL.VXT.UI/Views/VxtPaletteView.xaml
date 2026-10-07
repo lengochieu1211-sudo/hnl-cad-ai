@@ -118,19 +118,11 @@
         </Style>
 
         <Style x:Key="SectionNumber" TargetType="TextBlock">
-            <Setter Property="Width" Value="18"/>
+            <Setter Property="Width" Value="22"/>
             <Setter Property="FontSize" Value="11"/>
-            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/>
-            <Setter Property="TextAlignment" Value="Center"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-
-        <Style x:Key="SectionIcon" TargetType="{x:Type controls:HnlIcon}">
-            <Setter Property="Width" Value="15"/>
-            <Setter Property="Height" Value="15"/>
-            <Setter Property="StrokeThickness" Value="1.75"/>
-            <Setter Property="Margin" Value="0,0,7,0"/>
+            <Setter Property="TextAlignment" Value="Left"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
@@ -369,7 +361,6 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="1." Style="{StaticResource SectionNumber}"/>
-                            <controls:HnlIcon Kind="Settings" Style="{StaticResource SectionIcon}" Stroke="{DynamicResource AccentStrong}"/>
                             <TextBlock Text="Cấu hình" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
                         </StackPanel>
                         <ComboBox Grid.Column="1" ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}"/>
@@ -381,7 +372,6 @@
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,9">
                             <TextBlock Text="2." Style="{StaticResource SectionNumber}"/>
-                            <controls:HnlIcon Kind="Pick" Style="{StaticResource SectionIcon}" Stroke="{DynamicResource AccentStrong}"/>
                             <TextBlock Text="Phạm vi bố trí" Style="{StaticResource SectionTitle}"/>
                         </StackPanel>
                         <Button Content="Chọn biên trần" Style="{StaticResource PickButton}"
@@ -402,7 +392,6 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="3." Style="{StaticResource SectionNumber}"/>
-                                    <controls:HnlIcon Kind="Main" Style="{StaticResource SectionIcon}" Stroke="#22D3EE"/>
                                     <TextBlock Text="Xương chính" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="Bật Xương chính" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
@@ -483,7 +472,6 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="4." Style="{StaticResource SectionNumber}"/>
-                                    <controls:HnlIcon Kind="Furring" Style="{StaticResource SectionIcon}" Stroke="#FACC15"/>
                                     <TextBlock Text="Xương phụ" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="Bật Xương phụ" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
@@ -528,7 +516,6 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="5." Style="{StaticResource SectionNumber}"/>
-                                    <controls:HnlIcon Kind="Hanger" Style="{StaticResource SectionIcon}" Stroke="#22C55E"/>
                                     <TextBlock Text="Ty treo" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="Bật Ty treo" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
@@ -585,8 +572,7 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="6." Style="{StaticResource SectionNumber}"/>
-                                    <controls:HnlIcon Kind="Mep" Style="{StaticResource SectionIcon}" Stroke="#EF4444"/>
-                                    <TextBlock Text="Né thiết bị MEP" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Text="Né MEP" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <CheckBox Grid.Column="1"
                                           IsChecked="{Binding UseAvoidance}"
@@ -633,8 +619,7 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="7." Style="{StaticResource SectionNumber}"/>
-                                    <controls:HnlIcon Kind="Dimension" Style="{StaticResource SectionIcon}" Stroke="#D946EF"/>
-                                    <TextBlock Text="Kích thước Dim" Style="{StaticResource SectionTitle}"/>
+                                    <TextBlock Text="Kích thước" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <CheckBox Grid.Column="1"
                                           IsChecked="{Binding AutoDimension}"
@@ -692,7 +677,6 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="8." Style="{StaticResource SectionNumber}"/>
-                                <controls:HnlIcon Kind="Preview" Style="{StaticResource SectionIcon}" Stroke="{DynamicResource AccentStrong}"/>
                                 <TextBlock Text="Xem trước" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
                             </StackPanel>
                             <Ellipse Grid.Column="1" Width="8" Height="8" Fill="{DynamicResource Success}" VerticalAlignment="Center"/>

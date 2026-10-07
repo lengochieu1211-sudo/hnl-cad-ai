@@ -52,9 +52,9 @@ namespace HNL.VXT.UI.Views
                     continue;
                 }
 
-                if (ContainsText(element, "Kích thước Dim"))
+                if (ContainsText(element, "Kích thước") || ContainsText(element, "Kích thước Dim"))
                     dim = child;
-                else if (ContainsText(element, "Né thiết bị MEP") || ContainsText(element, "Né thiết bị"))
+                else if (ContainsText(element, "Né MEP") || ContainsText(element, "Né thiết bị MEP") || ContainsText(element, "Né thiết bị"))
                     avoidance = child;
                 else if (ContainsText(element, "Kiểm tra bố trí") || ContainsText(element, "Phân tích & kiểm tra lỗi"))
                     diagnostics = child;

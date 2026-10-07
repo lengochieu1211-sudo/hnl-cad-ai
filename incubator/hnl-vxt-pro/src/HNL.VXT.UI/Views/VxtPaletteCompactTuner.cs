@@ -240,7 +240,7 @@ namespace HNL.VXT.UI.Views
             if (layerExpander != null) layerExpander.IsExpanded = false;
 
             var layerCard = AncestorBorderOwnedByStack(layerTitle);
-            var dimTitle = FindText(view, "Kích thước Dim") ?? FindText(view, "KÍCH THƯỚC Dim");
+            var dimTitle = FindText(view, "Kích thước") ?? FindText(view, "Kích thước Dim") ?? FindText(view, "KÍCH THƯỚC Dim");
             var dimCard = AncestorBorderOwnedByStack(dimTitle);
             var stack = layerCard?.Parent as StackPanel;
             if (stack == null || dimCard == null || !ReferenceEquals(dimCard.Parent, stack)) return;

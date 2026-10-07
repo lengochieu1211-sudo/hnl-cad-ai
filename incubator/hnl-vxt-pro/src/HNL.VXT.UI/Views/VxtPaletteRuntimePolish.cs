@@ -144,7 +144,7 @@ namespace HNL.VXT.UI.Views
                 var element = child as FrameworkElement;
                 if (element == null) continue;
 
-                if (dimCard == null && (ContainsText(element, "Kích thước Dim") || ContainsText(element, "KÍCH THƯỚC Dim")))
+                if (dimCard == null && (ContainsText(element, "Kích thước") || ContainsText(element, "Kích thước Dim") || ContainsText(element, "KÍCH THƯỚC Dim")))
                     dimCard = element;
 
                 var border = element as Border;
