@@ -46,7 +46,7 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
-        public void ConvexCurvedOuterBoundary_RepairsMaxEdgeEvenWhenNotchToggleIsOff()
+        public void ConvexCurvedOuterBoundary_LocalMainOff_PreservesBaseGridAndHardWarning()
         {
             var boundary = DomeBoundary();
             var settings = MainOnlySettings();
@@ -57,7 +57,31 @@ namespace HNL.VXT.Core.Tests
             Assert.IsTrue(raw.Diagnostics.Any(x =>
                     x.Target == VxtConstraintTarget.Main &&
                     x.Kind == VxtConstraintKind.MaxEdgeHard),
-                "The unprotected global grid should expose the curved-edge HARD Max gap in this fixture.");
+                "The base grid should expose the curved-edge HARD Max gap in this fixture.");
+
+            var final = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, settings, new VxtLayoutContext());
+
+            CollectionAssert.AreEqual(
+                MainKeys(raw).ToArray(),
+                MainKeys(final).ToArray(),
+                "Local XC OFF must not add curved-edge XC behind the user's toggle.");
+
+            Assert.IsTrue(final.Diagnostics.Any(x =>
+                    x.Target == VxtConstraintTarget.Main &&
+                    x.Kind == VxtConstraintKind.MaxEdgeHard),
+                "Local XC OFF must preserve the HARD Max warning so Create can block or require manual override.");
+        }
+
+        [TestMethod]
+        public void ConvexCurvedOuterBoundary_LocalMainOn_RepairsMaxEdge()
+        {
+            var boundary = DomeBoundary();
+            var settings = MainOnlySettings();
+            settings.UseLocalMainAdd = true;
+
+            var raw = new VxtPreviewPlanBuilder().Build(boundary, settings, new VxtLayoutContext());
+            VxtPlanConstraintAuditor.Attach(boundary, raw, settings, 0.0, 0);
 
             var repaired = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { boundary }, settings, new VxtLayoutContext());
@@ -67,11 +91,11 @@ namespace HNL.VXT.Core.Tests
             Assert.IsFalse(repaired.Diagnostics.Any(x =>
                     x.Target == VxtConstraintTarget.Main &&
                     x.Kind == VxtConstraintKind.MaxEdgeHard),
-                "Outer curved-edge safety must remove the HARD MaxEdge violation. " +
+                "Local XC ON must remove the curved-edge HARD MaxEdge violation. " +
                 "RawMain=" + raw.MainSegmentCount + " FinalMain=" + repaired.MainSegmentCount +
                 " Diagnostics=" + diagnosticDump);
             Assert.IsTrue(repaired.MainSegmentCount > raw.MainSegmentCount,
-                "Repair must add local XC without shifting/replacing the certified base grid.");
+                "Local XC ON must supplement the certified base grid instead of shifting/replacing it.");
         }
 
         [TestMethod]
