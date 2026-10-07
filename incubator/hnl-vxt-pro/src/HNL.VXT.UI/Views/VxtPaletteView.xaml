@@ -138,6 +138,14 @@
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
 
+        <Style x:Key="LegendIcon" TargetType="{x:Type controls:HnlIcon}">
+            <Setter Property="Width" Value="14"/>
+            <Setter Property="Height" Value="14"/>
+            <Setter Property="StrokeThickness" Value="1.55"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
         <Style TargetType="TextBox">
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="12"/>
@@ -683,10 +691,22 @@
                         </Grid>
 
                         <WrapPanel Margin="0,0,0,8">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#22D3EE" VerticalAlignment="Center"/><TextBlock Text=" Xương chính" FontSize="11"/></StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#FACC15" VerticalAlignment="Center"/><TextBlock Text=" Xương phụ" FontSize="11"/></StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0"><Rectangle Width="20" Height="3" Fill="#22C55E" VerticalAlignment="Center"/><TextBlock Text=" Ty" FontSize="11"/></StackPanel>
-                            <StackPanel Orientation="Horizontal"><Rectangle Width="20" Height="3" Fill="#D946EF" VerticalAlignment="Center"/><TextBlock Text=" Dim" FontSize="11"/></StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
+                                <controls:HnlIcon Kind="Main" Style="{StaticResource LegendIcon}" Stroke="#22D3EE"/>
+                                <TextBlock Text="Xương chính" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
+                                <controls:HnlIcon Kind="Furring" Style="{StaticResource LegendIcon}" Stroke="#FACC15"/>
+                                <TextBlock Text="Xương phụ" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
+                                <controls:HnlIcon Kind="Hanger" Style="{StaticResource LegendIcon}" Stroke="#22C55E"/>
+                                <TextBlock Text="Ty" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <controls:HnlIcon Kind="Dimension" Style="{StaticResource LegendIcon}" Stroke="#D946EF"/>
+                                <TextBlock Text="Dim" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </WrapPanel>
 
                         <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="11"/>
