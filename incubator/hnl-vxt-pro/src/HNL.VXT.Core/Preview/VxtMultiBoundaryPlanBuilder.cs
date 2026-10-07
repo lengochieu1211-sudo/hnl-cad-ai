@@ -74,9 +74,6 @@ namespace HNL.VXT.Core.Preview
                     if (VxtBoundaryHolePostProcessor.Apply(boundary, boundaryContext, part))
                         geometryPostProcessed = true;
 
-                    if (VxtBoundaryHolePostProcessor.Apply(boundary, boundaryContext, part))
-                        geometryPostProcessed = true;
-
                     if (geometryPostProcessed)
                     {
                         VxtPostProcessDimensionSynchronizer.Synchronize(
@@ -104,6 +101,9 @@ namespace HNL.VXT.Core.Preview
 
                     if (VxtOuterMainHardMaxSafety.Apply(
                         boundary, part, settings, angle, boundaryContext))
+                        geometryPostProcessed = true;
+
+                    if (VxtBoundaryHolePostProcessor.Apply(boundary, boundaryContext, part))
                         geometryPostProcessed = true;
 
                     if (geometryPostProcessed)
