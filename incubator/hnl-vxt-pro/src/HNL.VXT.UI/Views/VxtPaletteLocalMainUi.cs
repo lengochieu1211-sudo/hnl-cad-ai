@@ -42,7 +42,7 @@ namespace HNL.VXT.UI.Views
             var toggle = new CheckBox
             {
                 VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Right,
                 ToolTip = "Giống Lisp: ưu tiên dịch Xương chính toàn cục trước; chỉ thêm Xương chính ngắn tại vùng cạnh khuyết khi vẫn chưa đạt điều kiện Max."
             };
             var style = view.TryFindResource("ToggleSwitch") as Style;
@@ -85,7 +85,7 @@ namespace HNL.VXT.UI.Views
         private static Grid CreateBaseRow(VxtPaletteView view, string label)
         {
             var row = new Grid();
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(155) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(142) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             var text = new TextBlock

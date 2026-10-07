@@ -32,6 +32,7 @@ namespace HNL.VXT.UI.ViewModels
         public Brush MainLegendTextBrush => ColorIndexToContrastBrush(_settings.MainColorIndex);
         public Brush FurringLegendTextBrush => ColorIndexToContrastBrush(_settings.FurringColorIndex);
         public Brush HangerLegendTextBrush => ColorIndexToContrastBrush(_settings.HangerColorIndex);
+        public Brush DimensionLegendTextBrush => ColorIndexToContrastBrush(_settings.DimensionColorIndex);
 
         public string DimensionLinetype { get => _settings.DimensionLinetype; set => SetStringSetting(() => _settings.DimensionLinetype, v => _settings.DimensionLinetype = v, value); }
         public string DimensionLineweight { get => _settings.DimensionLineweight; set => SetStringSetting(() => _settings.DimensionLineweight, v => _settings.DimensionLineweight = v, value); }
@@ -167,6 +168,7 @@ namespace HNL.VXT.UI.ViewModels
                 case nameof(MainColorIndex): return nameof(MainLegendTextBrush);
                 case nameof(FurringColorIndex): return nameof(FurringLegendTextBrush);
                 case nameof(HangerColorIndex): return nameof(HangerLegendTextBrush);
+                case nameof(DimensionColorIndex): return nameof(DimensionLegendTextBrush);
                 default: return string.Empty;
             }
         }

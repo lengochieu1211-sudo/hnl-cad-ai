@@ -353,6 +353,7 @@ namespace HNL.VXT.UI.Views
                     textBox.MinHeight = 0;
                     textBox.Padding = new Thickness(5, 0, 5, 0);
                     textBox.VerticalContentAlignment = VerticalAlignment.Center;
+                    textBox.HorizontalAlignment = HorizontalAlignment.Stretch;
                     textBox.BorderThickness = new Thickness(1);
                     continue;
                 }
@@ -364,6 +365,7 @@ namespace HNL.VXT.UI.Views
                     combo.MinHeight = 0;
                     combo.Padding = new Thickness(5, 0, 5, 0);
                     combo.VerticalContentAlignment = VerticalAlignment.Center;
+                    combo.HorizontalAlignment = HorizontalAlignment.Stretch;
                     combo.BorderThickness = new Thickness(1);
                     continue;
                 }
@@ -374,6 +376,7 @@ namespace HNL.VXT.UI.Views
                     numeric.Height = EditorHeight;
                     numeric.MinHeight = EditorHeight;
                     numeric.VerticalAlignment = VerticalAlignment.Center;
+                    numeric.HorizontalAlignment = HorizontalAlignment.Stretch;
                     continue;
                 }
 

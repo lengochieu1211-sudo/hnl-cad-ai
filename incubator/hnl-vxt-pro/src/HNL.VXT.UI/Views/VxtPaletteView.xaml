@@ -501,10 +501,10 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="3." Style="{StaticResource SectionNumber}"/>
-                                    <Border Style="{StaticResource DomainBadge}" Background="{Binding MainLegendBrush}">
+                                    <TextBlock Text="Xương chính" Style="{StaticResource SectionTitle}"/>
+                                    <Border Style="{StaticResource DomainBadge}" Background="{Binding MainLegendBrush}" Margin="7,0,0,0">
                                         <TextBlock Text="XC" Style="{StaticResource DomainBadgeText}" Foreground="{Binding MainLegendTextBrush}"/>
                                     </Border>
-                                    <TextBlock Text="Xương chính" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="Bật Xương chính" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
                                 <CheckBox Grid.Column="2" IsChecked="{Binding DrawMain}" Style="{StaticResource ToggleSwitch}"/>
@@ -560,9 +560,9 @@
                             <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="0,9,0,0">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,7">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Dùng Block động" Style="{StaticResource FieldLabel}"/>
-                                        <CheckBox Grid.Column="1" IsChecked="{Binding UseDynamicMainBlock}"/>
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding UseDynamicMainBlock}" Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"/>
                                     </Grid>
                                     <Grid IsEnabled="{Binding UseDynamicMainBlock}">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
@@ -584,10 +584,10 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="4." Style="{StaticResource SectionNumber}"/>
-                                    <Border Style="{StaticResource DomainBadge}" Background="{Binding FurringLegendBrush}">
+                                    <TextBlock Text="Xương phụ" Style="{StaticResource SectionTitle}"/>
+                                    <Border Style="{StaticResource DomainBadge}" Background="{Binding FurringLegendBrush}" Margin="7,0,0,0">
                                         <TextBlock Text="XP" Style="{StaticResource DomainBadgeText}" Foreground="{Binding FurringLegendTextBrush}"/>
                                     </Border>
-                                    <TextBlock Text="Xương phụ" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="Bật Xương phụ" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
                                 <CheckBox Grid.Column="2" IsChecked="{Binding DrawFurring}" Style="{StaticResource ToggleSwitch}"/>
@@ -607,9 +607,9 @@
                             <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="0,9,0,0">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,7">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Dùng Block động" Style="{StaticResource FieldLabel}"/>
-                                        <CheckBox Grid.Column="1" IsChecked="{Binding UseDynamicFurringBlock}"/>
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding UseDynamicFurringBlock}" Style="{StaticResource ToggleSwitch}" HorizontalAlignment="Right"/>
                                     </Grid>
                                     <Grid IsEnabled="{Binding UseDynamicFurringBlock}">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/></Grid.ColumnDefinitions>
@@ -631,10 +631,10 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="5." Style="{StaticResource SectionNumber}"/>
-                                    <Border Style="{StaticResource DomainBadge}" Background="{Binding HangerLegendBrush}">
+                                    <TextBlock Text="Ty treo" Style="{StaticResource SectionTitle}"/>
+                                    <Border Style="{StaticResource DomainBadge}" Background="{Binding HangerLegendBrush}" Margin="7,0,0,0">
                                         <TextBlock Text="TY" Style="{StaticResource DomainBadgeText}" Foreground="{Binding HangerLegendTextBrush}"/>
                                     </Border>
-                                    <TextBlock Text="Ty treo" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="Bật Ty treo" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
                                 <CheckBox Grid.Column="2" IsChecked="{Binding DrawHangers}" Style="{StaticResource ToggleSwitch}"/>
@@ -738,6 +738,9 @@
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="7." Style="{StaticResource SectionNumber}"/>
                                     <TextBlock Text="Kích thước" Style="{StaticResource SectionTitle}"/>
+                                    <Border Style="{StaticResource DomainBadge}" Background="{Binding DimensionLegendBrush}" Margin="7,0,0,0">
+                                        <TextBlock Text="DIM" Style="{StaticResource DomainBadgeText}" Foreground="{Binding DimensionLegendTextBrush}"/>
+                                    </Border>
                                 </StackPanel>
                                 <CheckBox Grid.Column="1"
                                           IsChecked="{Binding AutoDimension}"
@@ -820,7 +823,9 @@
                                 <TextBlock Text="Ty" FontSize="11" VerticalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
-                                <controls:HnlIcon Kind="Dimension" Style="{StaticResource LegendIcon}" Stroke="{Binding DimensionLegendBrush}"/>
+                                <Border Style="{StaticResource DomainBadge}" Background="{Binding DimensionLegendBrush}" Margin="0,0,4,0">
+                                    <TextBlock Text="DIM" Style="{StaticResource DomainBadgeText}" Foreground="{Binding DimensionLegendTextBrush}"/>
+                                </Border>
                                 <TextBlock Text="Dim" FontSize="11" VerticalAlignment="Center"/>
                             </StackPanel>
                         </WrapPanel>
