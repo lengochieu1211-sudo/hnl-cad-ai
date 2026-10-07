@@ -286,7 +286,7 @@ namespace HNL.VXT.AutoCAD
                     groups.Add(partitioned);
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage(
                     "\nHNL Tool - VXT Pro: Không thể chia mảng theo tuyến gấp khúc: " + ex.Message);
