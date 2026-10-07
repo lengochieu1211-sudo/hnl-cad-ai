@@ -632,9 +632,17 @@
                                 <TextBlock Text="Khoảng cách XP" Style="{StaticResource FieldLabel}"/>
                                 <controls:HnlNumericBox Grid.Column="1" Value="{Binding FurringSpacing, Mode=TwoWay}" Step="10" Minimum="1"/>
                             </Grid>
-                            <CheckBox IsChecked="{Binding AskDirectionEachRegion}"
-                                      Content="Chọn hướng từng vùng"
-                                      Margin="0,0,0,9"/>
+                            <Grid Margin="0,0,0,9">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="142"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Chọn hướng từng vùng" Style="{StaticResource FieldLabel}"/>
+                                <CheckBox Grid.Column="1"
+                                          IsChecked="{Binding AskDirectionEachRegion}"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          HorizontalAlignment="Right"/>
+                            </Grid>
 
                             <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="0,9,0,0">
                                 <StackPanel>
@@ -732,7 +740,17 @@
                         </Expander.Header>
 
                         <StackPanel Margin="0,11,0,0" IsEnabled="{Binding UseAvoidance}">
-                            <CheckBox IsChecked="{Binding ShiftAllForAvoidance}" Content="Ưu tiên dịch cả hàng" Margin="0,0,0,8"/>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="142"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Ưu tiên dịch cả hàng" Style="{StaticResource FieldLabel}"/>
+                                <CheckBox Grid.Column="1"
+                                          IsChecked="{Binding ShiftAllForAvoidance}"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          HorizontalAlignment="Right"/>
+                            </Grid>
                             <Grid Margin="0,0,0,9">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="185"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Khoảng hở MEP" Style="{StaticResource FieldLabel}"/>
