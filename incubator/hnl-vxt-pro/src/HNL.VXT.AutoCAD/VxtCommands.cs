@@ -243,6 +243,14 @@ namespace HNL.VXT.AutoCAD
                 return;
             }
 
+            if (session.Boundaries.Count != 1)
+            {
+                doc.Editor.WriteMessage(
+                    "\nHNL Tool - VXT Pro: Chọn hướng bằng tuyến gấp khúc hiện thiết lập theo từng mảng. " +
+                    "Hãy chọn 1 Polyline biên trần; chế độ Ngang/Dọc/2 điểm/HCN/Tự động vẫn hỗ trợ nhiều Polyline như cũ.");
+                return;
+            }
+
             var groups = new List<List<VxtLayoutRegion>>();
             try
             {
