@@ -55,7 +55,8 @@ namespace HNL.VXT.Core.Preview
                     // "Thêm XC cạnh khuyết" is an explicit opt-in. When OFF, the normal
                     // layout passes through untouched and any unresolved notch may be completed
                     // manually. When ON, same-count XC repair is tried before any local XC is added.
-                    if (settings.UseLocalMainAdd)
+                    if (settings.UseLocalMainAdd &&
+                        settings.MainDirection != MainDirectionMode.PolylinePath)
                     {
                         // Local-notch ON keeps the XC count whenever one existing row can be moved
                         // on the configured lattice to satisfy all HARD Max constraints. Only if
@@ -76,7 +77,8 @@ namespace HNL.VXT.Core.Preview
                 {
                     part = proBuilder.Build(boundary, settings, boundaryContext);
                     var angle = ResolveDirectionDegrees(settings, boundary);
-                    if (settings.UseLocalMainAdd)
+                    if (settings.UseLocalMainAdd &&
+                        settings.MainDirection != MainDirectionMode.PolylinePath)
                     {
                         VxtLocalMainSpacingSafety.Apply(
                             boundary, part, settings, angle, boundaryContext);
@@ -91,8 +93,11 @@ namespace HNL.VXT.Core.Preview
                 var auditAngle = part.Quality != null
                     ? part.Quality.SelectedDirectionDegrees
                     : ResolveDirectionDegrees(settings, boundary);
-                VxtPlanConstraintAuditor.Attach(
-                    boundary, part, settings, auditAngle, count);
+                if (settings.MainDirection != MainDirectionMode.PolylinePath)
+                {
+                    VxtPlanConstraintAuditor.Attach(
+                        boundary, part, settings, auditAngle, count);
+                }
 
                 if (part.Quality != null) qualities.Add(part.Quality);
                 merged.Lines.AddRange(part.Lines);
@@ -114,7 +119,8 @@ namespace HNL.VXT.Core.Preview
                     merged.Quality.BoundaryCount = boundaryList.Count;
                     // A manually selected/fixed direction is inherently shared by all boundaries.
                     if (settings.OptimizationMode != VxtOptimizationMode.Legacy &&
-                        settings.MainDirection != MainDirectionMode.Auto)
+                        settings.MainDirection != MainDirectionMode.Auto &&
+                        settings.MainDirection != MainDirectionMode.PolylinePath)
                     {
                         merged.Quality.DistinctDirectionCount = 1;
                         merged.Quality.AlignmentScore100 = 100;
@@ -129,7 +135,8 @@ namespace HNL.VXT.Core.Preview
         {
             if (settings == null ||
                 !settings.UseLocalMainAdd ||
-                settings.MainDirection == MainDirectionMode.RectangleRegions)
+                settings.MainDirection == MainDirectionMode.RectangleRegions ||
+                settings.MainDirection == MainDirectionMode.PolylinePath)
                 return settings;
 
             var globalOnly = settings.Clone();
@@ -143,6 +150,7 @@ namespace HNL.VXT.Core.Preview
             {
                 case MainDirectionMode.Vertical: return 90.0;
                 case MainDirectionMode.TwoPoints:
+                case MainDirectionMode.PolylinePath:
                 case MainDirectionMode.RectangleRegions:
                     return settings.DirectionDegrees;
                 case MainDirectionMode.Auto:
@@ -159,6 +167,7 @@ namespace HNL.VXT.Core.Preview
         {
             var local = new VxtLayoutContext
             {
+                BoundaryIndex = boundaryIndex,
                 GlobalFurringFromFarEdge = boundaryIndex >= 0 && boundaryIndex < source.BoundaryFurringFromFarEdges.Count
                     ? source.BoundaryFurringFromFarEdges[boundaryIndex]
                     : source.GlobalFurringFromFarEdge
