@@ -52,7 +52,17 @@ namespace HNL.VXT.Core.Layout
         {
         }
 
+        public VxtLayoutRegion(Boundary2 regionBoundary, double mainAngleDegrees, bool furringFromFarEdge = false)
+        {
+            RegionBoundary = regionBoundary ?? throw new System.ArgumentNullException(nameof(regionBoundary));
+            var bounds = regionBoundary.GetBounds();
+            WorldBounds = new Box2(bounds.Min.X, bounds.Min.Y, bounds.Max.X, bounds.Max.Y);
+            MainAngleDegrees = mainAngleDegrees;
+            FurringFromFarEdge = furringFromFarEdge;
+        }
+
         public Box2 WorldBounds { get; }
+        public Boundary2 RegionBoundary { get; }
         public double MainAngleDegrees { get; }
         public bool FurringFromFarEdge { get; set; }
     }
