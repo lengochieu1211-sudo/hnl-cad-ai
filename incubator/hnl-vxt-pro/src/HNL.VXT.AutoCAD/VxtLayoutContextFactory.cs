@@ -29,6 +29,13 @@ namespace HNL.VXT.AutoCAD
                 if (group != null) copy.AddRange(group);
                 context.BoundaryRegionGroups.Add(copy);
             }
+
+            foreach (var group in session.BoundaryHoleGroups)
+            {
+                var copy = new List<Boundary2>();
+                if (group != null) copy.AddRange(group);
+                context.BoundaryHoleGroups.Add(copy);
+            }
             return context;
         }
 

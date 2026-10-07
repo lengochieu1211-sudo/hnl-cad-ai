@@ -56,6 +56,7 @@ namespace HNL.VXT.AutoCAD
             Boundaries.Clear();
             BoundaryIds.Clear();
             BoundaryRegionGroups.Clear();
+            BoundaryHoleGroups.Clear();
             BoundaryFurringFromFarEdges.Clear();
             Regions.Clear();
 
@@ -95,6 +96,7 @@ namespace HNL.VXT.AutoCAD
                 Boundaries.Clear();
                 BoundaryIds.Clear();
                 BoundaryRegionGroups.Clear();
+                BoundaryHoleGroups.Clear();
                 BoundaryFurringFromFarEdges.Clear();
                 if (value != null) Boundaries.Add(value);
             }
@@ -132,6 +134,9 @@ namespace HNL.VXT.AutoCAD
         // Rectangle mode stores Box2 regions; polyline-path mode stores true polygon regions.
         // Group index == Boundaries/BoundaryIds index.
         public List<List<VxtLayoutRegion>> BoundaryRegionGroups { get; } = new List<List<VxtLayoutRegion>>();
+
+        // Pick-point inner loops grouped by outer ceiling boundary index.
+        public List<List<Boundary2>> BoundaryHoleGroups { get; } = new List<List<Boundary2>>();
 
         public bool HasBoundary => Boundaries.Count > 0;
         public bool HasBoundaryRegions => BoundaryRegionGroups.Count > 0;

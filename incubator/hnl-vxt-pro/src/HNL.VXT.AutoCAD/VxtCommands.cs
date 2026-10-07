@@ -178,6 +178,7 @@ namespace HNL.VXT.AutoCAD
                 session.BoundaryIds.AddRange(acceptedIds);
                 session.Regions.Clear();
                 session.BoundaryRegionGroups.Clear();
+                session.BoundaryHoleGroups.Clear();
                 session.GlobalFurringFromFarEdge = false;
                 var skipped = skippedOpen + skippedZ + skippedUnsupported;
                 session.ViewModel?.SetBoundaryStatus(
@@ -217,6 +218,7 @@ namespace HNL.VXT.AutoCAD
 
             var ed = doc.Editor;
             var accepted = new List<Boundary2>();
+            var acceptedHoleGroups = new List<List<Boundary2>>();
 
             while (true)
             {
@@ -237,10 +239,10 @@ namespace HNL.VXT.AutoCAD
                 DBObjectCollection traced = null;
                 try
                 {
-                    // Core currently models one simple outer loop per ceiling region.
-                    // detectIslands=false prevents hole/island loops from being misclassified
-                    // as independent ceilings while still matching Hatch/BPOLY-style point pick.
-                    traced = ed.TraceBoundary(result.Value, false);
+                    // detectIslands=true is required for ring-shaped ceiling regions.
+                    // The picked seed remains in UCS per AutoCAD API contract; sampled loop
+                    // geometry is classified below in WCS before entering the pure Core.
+                    traced = ed.TraceBoundary(result.Value, true);
                 }
                 catch (System.Exception ex)
                 {
@@ -254,7 +256,7 @@ namespace HNL.VXT.AutoCAD
                     continue;
                 }
 
-                Boundary2 boundary = null;
+                var loops = new List<Boundary2>();
                 try
                 {
                     foreach (DBObject item in traced)
@@ -265,10 +267,7 @@ namespace HNL.VXT.AutoCAD
                         BoundarySampleInfo info;
                         Boundary2 sampled;
                         if (BoundarySampler.TryFromPolyline(polyline, out sampled, out info))
-                        {
-                            boundary = sampled;
-                            break;
-                        }
+                            loops.Add(sampled);
                     }
                 }
                 finally
@@ -277,11 +276,42 @@ namespace HNL.VXT.AutoCAD
                         item?.Dispose();
                 }
 
-                if (boundary == null)
+                if (loops.Count == 0)
                 {
                     ed.WriteMessage("\nHNL Tool - VXT Pro: TraceBoundary không trả về Polyline biên hợp lệ.");
                     continue;
                 }
+
+                var seedWorld3d = result.Value.TransformBy(ed.CurrentUserCoordinateSystem);
+                var seedWorld = new Point2(seedWorld3d.X, seedWorld3d.Y);
+
+                // The selected region is bounded by the smallest traced loop containing the seed.
+                // Larger containing loops are ancestors; loops immediately inside the selected outer
+                // loop and not containing the seed are holes of this picked ceiling region.
+                var boundary = loops
+                    .Where(loop => BoundaryContainsPoint(loop, seedWorld))
+                    .OrderBy(loop => Math.Abs(PolygonArea(loop.Vertices)))
+                    .FirstOrDefault();
+
+                if (boundary == null)
+                {
+                    boundary = loops
+                        .OrderByDescending(loop => Math.Abs(PolygonArea(loop.Vertices)))
+                        .First();
+                }
+
+                var nested = loops
+                    .Where(loop => !ReferenceEquals(loop, boundary) &&
+                                   BoundaryInside(loop, boundary) &&
+                                   !BoundaryContainsPoint(loop, seedWorld))
+                    .ToList();
+
+                var holes = nested
+                    .Where(candidate => !nested.Any(parent =>
+                        !ReferenceEquals(parent, candidate) &&
+                        Math.Abs(PolygonArea(parent.Vertices)) > Math.Abs(PolygonArea(candidate.Vertices)) &&
+                        BoundaryInside(candidate, parent)))
+                    .ToList();
 
                 if (ContainsEquivalentBoundary(accepted, boundary))
                 {
@@ -290,9 +320,12 @@ namespace HNL.VXT.AutoCAD
                 }
 
                 accepted.Add(boundary);
+                acceptedHoleGroups.Add(holes);
                 ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận M" +
                     accepted.Count.ToString("00") +
-                    " bằng Chọn điểm. Chọn vùng khác hoặc Enter để xong.");
+                    " bằng Chọn điểm" +
+                    (holes.Count > 0 ? " • " + holes.Count + " lỗ" : string.Empty) +
+                    ". Chọn vùng khác hoặc Enter để xong.");
             }
 
             if (accepted.Count == 0) return;
@@ -303,17 +336,60 @@ namespace HNL.VXT.AutoCAD
             session.BoundaryIds.Clear();
             for (var i = 0; i < accepted.Count; i++)
                 session.BoundaryIds.Add(ObjectId.Null);
+
+            session.BoundaryHoleGroups.Clear();
+            foreach (var holes in acceptedHoleGroups)
+                session.BoundaryHoleGroups.Add(holes ?? new List<Boundary2>());
+
             session.Regions.Clear();
             session.BoundaryRegionGroups.Clear();
             session.BoundaryFurringFromFarEdges.Clear();
             session.GlobalFurringFromFarEdge = false;
 
+            var totalHoles = acceptedHoleGroups.Sum(x => x?.Count ?? 0);
             session.ViewModel?.SetBoundaryStatus(
-                "✓ Chọn điểm " + accepted.Count + " mảng trần", true);
+                "✓ Chọn điểm " + accepted.Count + " mảng trần" +
+                (totalHoles > 0 ? " • " + totalHoles + " lỗ" : string.Empty), true);
 
             ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận " +
-                accepted.Count + " mảng trần bằng Chọn điểm.");
+                accepted.Count + " mảng trần bằng Chọn điểm" +
+                (totalHoles > 0 ? ", có " + totalHoles + " lỗ trong." : "."));
             VxtTransientPreview.Instance.Refresh();
+        }
+
+        private static bool BoundaryInside(Boundary2 candidate, Boundary2 container)
+        {
+            if (candidate == null || container == null || candidate.Vertices.Count == 0) return false;
+            return BoundaryContainsPoint(container, candidate.Vertices[0]);
+        }
+
+        private static bool BoundaryContainsPoint(Boundary2 boundary, Point2 point)
+        {
+            if (boundary == null || boundary.Vertices.Count < 3) return false;
+            const double tol = 0.1;
+            var inside = false;
+            for (var i = 0; i < boundary.Vertices.Count; i++)
+            {
+                var a = boundary.Vertices[i];
+                var b = boundary.Vertices[(i + 1) % boundary.Vertices.Count];
+
+                var dx = b.X - a.X;
+                var dy = b.Y - a.Y;
+                var len2 = dx * dx + dy * dy;
+                if (len2 > 1e-12)
+                {
+                    var t = ((point.X - a.X) * dx + (point.Y - a.Y) * dy) / len2;
+                    t = Math.Max(0.0, Math.Min(1.0, t));
+                    var projected = new Point2(a.X + t * dx, a.Y + t * dy);
+                    if (projected.DistanceTo(point) <= tol) return true;
+                }
+
+                var crosses = (a.Y > point.Y) != (b.Y > point.Y);
+                if (!crosses) continue;
+                var x = a.X + (point.Y - a.Y) * (b.X - a.X) / (b.Y - a.Y);
+                if (x > point.X) inside = !inside;
+            }
+            return inside;
         }
 
         private static bool ContainsEquivalentBoundary(
