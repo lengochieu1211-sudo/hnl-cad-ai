@@ -29,6 +29,9 @@ namespace HNL.VXT.UI.ViewModels
         public Brush FurringLegendBrush => ColorIndexToBrush(_settings.FurringColorIndex);
         public Brush HangerLegendBrush => ColorIndexToBrush(_settings.HangerColorIndex);
         public Brush DimensionLegendBrush => ColorIndexToBrush(_settings.DimensionColorIndex);
+        public Brush MainLegendTextBrush => ColorIndexToContrastBrush(_settings.MainColorIndex);
+        public Brush FurringLegendTextBrush => ColorIndexToContrastBrush(_settings.FurringColorIndex);
+        public Brush HangerLegendTextBrush => ColorIndexToContrastBrush(_settings.HangerColorIndex);
 
         public string DimensionLinetype { get => _settings.DimensionLinetype; set => SetStringSetting(() => _settings.DimensionLinetype, v => _settings.DimensionLinetype = v, value); }
         public string DimensionLineweight { get => _settings.DimensionLineweight; set => SetStringSetting(() => _settings.DimensionLineweight, v => _settings.DimensionLineweight = v, value); }
@@ -103,6 +106,8 @@ namespace HNL.VXT.UI.ViewModels
             OnPropertyChanged(ColorIndexPropertyToFriendly(propertyName));
             var brushProperty = ColorIndexPropertyToLegendBrush(propertyName);
             if (!string.IsNullOrEmpty(brushProperty)) OnPropertyChanged(brushProperty);
+            var contrastProperty = ColorIndexPropertyToLegendTextBrush(propertyName);
+            if (!string.IsNullOrEmpty(contrastProperty)) OnPropertyChanged(contrastProperty);
         }
 
         private void SetQuickColor(Func<short> getter, Action<short> setter, string value, string friendlyPropertyName, string rawPropertyName)
@@ -114,6 +119,8 @@ namespace HNL.VXT.UI.ViewModels
             OnPropertyChanged(rawPropertyName);
             var brushProperty = ColorIndexPropertyToLegendBrush(rawPropertyName);
             if (!string.IsNullOrEmpty(brushProperty)) OnPropertyChanged(brushProperty);
+            var contrastProperty = ColorIndexPropertyToLegendTextBrush(rawPropertyName);
+            if (!string.IsNullOrEmpty(contrastProperty)) OnPropertyChanged(contrastProperty);
             MarkCustom();
             RequestPreview();
         }
@@ -151,6 +158,26 @@ namespace HNL.VXT.UI.ViewModels
                 case nameof(DimensionColorIndex): return nameof(DimensionLegendBrush);
                 default: return string.Empty;
             }
+        }
+
+        private static string ColorIndexPropertyToLegendTextBrush(string propertyName)
+        {
+            switch (propertyName)
+            {
+                case nameof(MainColorIndex): return nameof(MainLegendTextBrush);
+                case nameof(FurringColorIndex): return nameof(FurringLegendTextBrush);
+                case nameof(HangerColorIndex): return nameof(HangerLegendTextBrush);
+                default: return string.Empty;
+            }
+        }
+
+        private Brush ColorIndexToContrastBrush(short value)
+        {
+            var background = ((SolidColorBrush)ColorIndexToBrush(value)).Color;
+            var luminance = (0.2126 * background.R + 0.7152 * background.G + 0.0722 * background.B) / 255.0;
+            var brush = new SolidColorBrush(luminance > 0.60 ? Colors.Black : Colors.White);
+            if (brush.CanFreeze) brush.Freeze();
+            return brush;
         }
 
         private Brush ColorIndexToBrush(short value)

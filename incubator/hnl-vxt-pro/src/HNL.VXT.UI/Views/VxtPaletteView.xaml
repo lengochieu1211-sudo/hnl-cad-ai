@@ -218,6 +218,25 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
+        <!-- Compact text-first domain badges for HNL VXT.
+             Background follows the configured CAD layer color; text auto-contrasts. -->
+        <Style x:Key="DomainBadge" TargetType="Border">
+            <Setter Property="Width" Value="26"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Margin" Value="0,0,7,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+        </Style>
+        <Style x:Key="DomainBadgeText" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+        </Style>
+
         <Style TargetType="TextBox">
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="12"/>
@@ -472,6 +491,9 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="3." Style="{StaticResource SectionNumber}"/>
+                                    <Border Style="{StaticResource DomainBadge}" Background="{Binding MainLegendBrush}">
+                                        <TextBlock Text="XC" Style="{StaticResource DomainBadgeText}" Foreground="{Binding MainLegendTextBrush}"/>
+                                    </Border>
                                     <TextBlock Text="Xương chính" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="Bật Xương chính" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
@@ -552,6 +574,9 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="4." Style="{StaticResource SectionNumber}"/>
+                                    <Border Style="{StaticResource DomainBadge}" Background="{Binding FurringLegendBrush}">
+                                        <TextBlock Text="XP" Style="{StaticResource DomainBadgeText}" Foreground="{Binding FurringLegendTextBrush}"/>
+                                    </Border>
                                     <TextBlock Text="Xương phụ" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="Bật Xương phụ" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
@@ -596,6 +621,9 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="5." Style="{StaticResource SectionNumber}"/>
+                                    <Border Style="{StaticResource DomainBadge}" Background="{Binding HangerLegendBrush}">
+                                        <TextBlock Text="TY" Style="{StaticResource DomainBadgeText}" Foreground="{Binding HangerLegendTextBrush}"/>
+                                    </Border>
                                     <TextBlock Text="Ty treo" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="Bật Ty treo" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
@@ -764,15 +792,21 @@
 
                         <WrapPanel Margin="0,0,0,8">
                             <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
-                                <controls:HnlIcon Kind="Main" Style="{StaticResource LegendIcon}" Stroke="{Binding MainLegendBrush}"/>
+                                <Border Style="{StaticResource DomainBadge}" Background="{Binding MainLegendBrush}" Margin="0,0,4,0">
+                                    <TextBlock Text="XC" Style="{StaticResource DomainBadgeText}" Foreground="{Binding MainLegendTextBrush}"/>
+                                </Border>
                                 <TextBlock Text="Xương chính" FontSize="11" VerticalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
-                                <controls:HnlIcon Kind="Furring" Style="{StaticResource LegendIcon}" Stroke="{Binding FurringLegendBrush}"/>
+                                <Border Style="{StaticResource DomainBadge}" Background="{Binding FurringLegendBrush}" Margin="0,0,4,0">
+                                    <TextBlock Text="XP" Style="{StaticResource DomainBadgeText}" Foreground="{Binding FurringLegendTextBrush}"/>
+                                </Border>
                                 <TextBlock Text="Xương phụ" FontSize="11" VerticalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
-                                <controls:HnlIcon Kind="Hanger" Style="{StaticResource LegendIcon}" Stroke="{Binding HangerLegendBrush}"/>
+                                <Border Style="{StaticResource DomainBadge}" Background="{Binding HangerLegendBrush}" Margin="0,0,4,0">
+                                    <TextBlock Text="TY" Style="{StaticResource DomainBadgeText}" Foreground="{Binding HangerLegendTextBrush}"/>
+                                </Border>
                                 <TextBlock Text="Ty" FontSize="11" VerticalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
