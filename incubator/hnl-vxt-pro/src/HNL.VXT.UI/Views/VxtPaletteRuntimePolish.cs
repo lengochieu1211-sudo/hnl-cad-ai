@@ -19,6 +19,7 @@ namespace HNL.VXT.UI.Views
     {
         private const double CommonLabelWidth = 142.0;
         private const double CommonPickButtonWidth = 68.0;
+        private const double CommonSettingsButtonWidth = 92.0;
         private const string FixedLayerDimTag = "HNL_VXT_FIXED_LAYER_DIM";
 
         private static readonly string[] RedundantSectionLabels =
@@ -464,7 +465,16 @@ namespace HNL.VXT.UI.Views
                 columns[1].Width = new GridLength(1, GridUnitType.Star);
                 var third = columns[2].Width;
                 if (third.IsAbsolute && third.Value >= 55.0 && third.Value <= 110.0)
-                    columns[2].Width = new GridLength(CommonPickButtonWidth);
+                {
+                    var action = grid.Children
+                        .OfType<Button>()
+                        .FirstOrDefault(button => Grid.GetColumn(button) == 2);
+                    var isSettings = action != null &&
+                        (string.Equals(action.Tag as string, "Settings", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(action.Content as string, "Thiết lập", StringComparison.Ordinal));
+                    columns[2].Width = new GridLength(
+                        isSettings ? CommonSettingsButtonWidth : CommonPickButtonWidth);
+                }
             }
         }
 

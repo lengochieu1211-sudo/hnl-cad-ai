@@ -20,6 +20,7 @@ namespace HNL.VXT.UI.Views
     {
         private const double LabelWidth = 136.0;
         private const double PickButtonWidth = 64.0;
+        private const double SettingsButtonWidth = 92.0;
         private const double PairLabelWidth = LabelWidth;
         private const double PairTokenWidth = 34.0;
         private static bool _blockLayerSyncHooked;
@@ -473,7 +474,16 @@ namespace HNL.VXT.UI.Views
                 grid.ColumnDefinitions[1].Width = new GridLength(1, GridUnitType.Star);
                 var third = grid.ColumnDefinitions[2].Width;
                 if (third.IsAbsolute && third.Value >= 60.0 && third.Value <= 105.0)
-                    grid.ColumnDefinitions[2].Width = new GridLength(PickButtonWidth);
+                {
+                    var action = grid.Children
+                        .OfType<Button>()
+                        .FirstOrDefault(button => Grid.GetColumn(button) == 2);
+                    var isSettings = action != null &&
+                        (string.Equals(action.Tag as string, "Settings", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(action.Content as string, "Thiết lập", StringComparison.Ordinal));
+                    grid.ColumnDefinitions[2].Width = new GridLength(
+                        isSettings ? SettingsButtonWidth : PickButtonWidth);
+                }
             }
         }
 
