@@ -360,6 +360,37 @@
         <Style x:Key="IconCompactButton" TargetType="Button" BasedOn="{StaticResource CompactButton}">
             <Setter Property="Template" Value="{StaticResource HnlIconButtonTemplate}"/>
         </Style>
+        <ControlTemplate x:Key="BoundaryTextButtonTemplate" TargetType="{x:Type Button}">
+            <Border x:Name="ButtonBorder"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="4"
+                    SnapsToDevicePixels="True">
+                <ContentPresenter HorizontalAlignment="Left"
+                                  VerticalAlignment="Center"
+                                  Margin="{TemplateBinding Padding}"
+                                  RecognizesAccessKey="True"/>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource HoverBackground}"/>
+                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource AccentStrong}"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.78"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.45"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <Style x:Key="BoundaryPickButton" TargetType="Button" BasedOn="{StaticResource CompactButton}">
+            <Setter Property="Template" Value="{StaticResource BoundaryTextButtonTemplate}"/>
+            <Setter Property="Padding" Value="10,2"/>
+        </Style>
+
         <Style x:Key="PickButton" TargetType="Button" BasedOn="{StaticResource IconCompactButton}">
             <Setter Property="Tag" Value="Pick"/>
         </Style>
@@ -479,10 +510,10 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Button Content="Chọn Polyline" Style="{StaticResource PickButton}"
+                            <Button Content="Chọn Polyline" Style="{StaticResource BoundaryPickButton}"
                                     Command="{Binding SelectBoundaryCommand}"
                                     HorizontalAlignment="Stretch" Margin="0,0,4,0"/>
-                            <Button Grid.Column="1" Content="Pick Point" Style="{StaticResource PickButton}"
+                            <Button Grid.Column="1" Content="Pick Point" Style="{StaticResource BoundaryPickButton}"
                                     Command="{Binding PickBoundaryPointCommand}"
                                     HorizontalAlignment="Stretch" Margin="4,0,0,0"
                                     ToolTip="Pick nhiều điểm trong các vùng trần; Enter để kết thúc"/>
