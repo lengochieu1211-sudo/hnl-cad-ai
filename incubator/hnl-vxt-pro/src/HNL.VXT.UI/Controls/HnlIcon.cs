@@ -10,7 +10,7 @@ namespace HNL.VXT.UI.Controls
     /// <summary>
     /// HNL Tool vector icon primitive for compact AutoCAD palette controls.
     /// Presentation only: no settings, solver, CAD database or command state.
-    /// Icons use original 24x24 stroke geometry and scale cleanly at high DPI.
+    /// All glyphs share one 24x24 rounded-stroke language and scale cleanly at high DPI.
     /// </summary>
     public sealed class HnlIcon : Viewbox
     {
@@ -33,30 +33,33 @@ namespace HNL.VXT.UI.Controls
                 nameof(StrokeThickness),
                 typeof(double),
                 typeof(HnlIcon),
-                new PropertyMetadata(1.65, OnAppearanceChanged));
+                new PropertyMetadata(1.70, OnAppearanceChanged));
 
         private static readonly Dictionary<string, Geometry> Icons =
             new Dictionary<string, Geometry>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Pick"] = G("M12 2 L12 8 M12 16 L12 22 M2 12 L8 12 M16 12 L22 12 M9 9 L15 9 L15 15 L9 15 Z"),
-                ["Settings"] = G("M4 6 L20 6 M9 3 L9 9 M4 12 L20 12 M15 9 L15 15 M4 18 L20 18 M11 15 L11 21"),
-                ["Refresh"] = G("M20 7 L20 3 L16 7 M20 7 C18 4.5 15 3 12 3 C7 3 3 7 3 12 C3 17 7 21 12 21 C16 21 19 18.5 20 15 M4 17 L4 21 L8 17"),
-                ["Hide"] = G("M3 12 C5.5 7.5 8.5 6 12 6 C15.5 6 18.5 7.5 21 12 C18.5 16.5 15.5 18 12 18 C8.5 18 5.5 16.5 3 12 Z M4 4 L20 20"),
-                ["Reset"] = G("M7 6 L3 10 L7 14 M4 10 L12 10 C17 10 20 12.8 20 16.5 C20 20 17 22 12 22 L8 22"),
-                ["Create"] = G("M4 4 L20 4 L20 20 L4 20 Z M8 12 L11 15 L17 9"),
+                // CAD selection / common actions.
+                ["Pick"] = G("M12 3 L12 8 M12 16 L12 21 M3 12 L8 12 M16 12 L21 12 M9.5 9.5 L14.5 9.5 L14.5 14.5 L9.5 14.5 Z"),
+                ["Settings"] = G("M4 6 L7 6 M11 6 L20 6 M7 4 L11 4 L11 8 L7 8 Z M4 12 L13 12 M17 12 L20 12 M13 10 L17 10 L17 14 L13 14 Z M4 18 L9 18 M13 18 L20 18 M9 16 L13 16 L13 20 L9 20 Z"),
+                ["Refresh"] = G("M19.5 8.5 C18 5.5 15.3 3.8 12 3.8 C7.6 3.8 4.2 7.1 4.2 11.3 M4.2 11.3 L4.2 7.3 M4.2 11.3 L8.2 11.3 M4.8 15.5 C6.3 18.5 9 20.2 12 20.2 C16.4 20.2 19.8 16.9 19.8 12.7 M19.8 12.7 L19.8 16.7 M19.8 12.7 L15.8 12.7"),
+                ["Hide"] = G("M3 12 C5.3 8.5 8.4 6.5 12 6.5 C15.6 6.5 18.7 8.5 21 12 C18.7 15.5 15.6 17.5 12 17.5 C8.4 17.5 5.3 15.5 3 12 M10 10 C11.1 8.9 12.9 8.9 14 10 C15.1 11.1 15.1 12.9 14 14 C12.9 15.1 11.1 15.1 10 14 C8.9 12.9 8.9 11.1 10 10 M4 4 L20 20"),
+                ["Reset"] = G("M7 5 L3.5 8.5 L7 12 M4 8.5 L12 8.5 C16.8 8.5 20 11.2 20 15 C20 18.5 17.2 21 13 21 L8 21"),
+                ["Create"] = G("M4 5 L20 5 L20 19 L4 19 Z M12 5 L12 19 M4 12 L20 12 M8 15 L10.5 17.5 L17 10"),
                 ["Warning"] = G("M12 3 L22 21 L2 21 Z M12 9 L12 14 M12 18 L12.01 18"),
                 ["Add"] = G("M12 4 L12 20 M4 12 L20 12"),
                 ["Remove"] = G("M4 12 L20 12"),
                 ["Up"] = G("M5 15 L12 8 L19 15"),
                 ["Down"] = G("M5 9 L12 16 L19 9"),
-                ["Folder"] = G("M3 7 L9 7 L11 9 L21 9 L21 20 L3 20 Z"),
-                ["Save"] = G("M4 3 L18 3 L21 6 L21 21 L3 21 L3 3 Z M7 3 L7 9 L17 9 L17 3 M7 15 L17 15 L17 21 L7 21 Z"),
-                ["Main"] = G("M4 7 L20 7 M4 17 L20 17"),
-                ["Furring"] = G("M4 6 L20 6 M4 12 L20 12 M4 18 L20 18"),
-                ["Hanger"] = G("M12 3 L12 14 M8 14 L16 14 M9 18 C9 16.3 10.3 15 12 15 C13.7 15 15 16.3 15 18 C15 19.7 13.7 21 12 21 C10.3 21 9 19.7 9 18 Z"),
-                ["Mep"] = G("M4 5 L20 5 L20 19 L4 19 Z M8 12 L16 12 M12 8 L12 16"),
+                ["Folder"] = G("M3 7 L9 7 L11 9 L21 9 L21 19 L3 19 Z"),
+                ["Save"] = G("M4 4 L18 4 L20 6 L20 20 L4 20 Z M7 4 L7 9 L16 9 L16 4 M8 14 L16 14 L16 20 L8 20 Z"),
+
+                // HNL VXT domain glyphs: distinct silhouettes at 14–16 DIP.
+                ["Main"] = G("M4 7 L20 7 M4 17 L20 17 M12 7 L12 17"),
+                ["Furring"] = G("M5 4 L5 20 M12 4 L12 20 M19 4 L19 20 M3 9 L21 9 M3 15 L21 15"),
+                ["Hanger"] = G("M6 5 L18 5 M12 5 L12 16 M8 16 L16 16 M10 16 L10 20 M14 16 L14 20 M10 20 L14 20"),
+                ["Mep"] = G("M9 8 C10.7 6.3 13.3 6.3 15 8 C16.7 9.7 16.7 12.3 15 14 C13.3 15.7 10.7 15.7 9 14 C7.3 12.3 7.3 9.7 9 8 M3 8 L3 16 M3 12 L7 12 M21 8 L21 16 M17 12 L21 12"),
                 ["Dimension"] = G("M4 7 L4 17 M20 7 L20 17 M4 12 L20 12 M7 9 L4 12 L7 15 M17 9 L20 12 L17 15"),
-                ["Preview"] = G("M3 5 L21 5 L21 19 L3 19 Z M7 12 C8.5 9.5 10 9 12 9 C14 9 15.5 9.5 17 12 C15.5 14.5 14 15 12 15 C10 15 8.5 14.5 7 12 Z")
+                ["Preview"] = G("M3 8 L3 4 L7 4 M17 4 L21 4 L21 8 M3 16 L3 20 L7 20 M17 20 L21 20 L21 16 M6 12 C7.6 9.5 9.6 8.5 12 8.5 C14.4 8.5 16.4 9.5 18 12 C16.4 14.5 14.4 15.5 12 15.5 C9.6 15.5 7.6 14.5 6 12 M10 12 C10 10.9 10.9 10 12 10 C13.1 10 14 10.9 14 12 C14 13.1 13.1 14 12 14 C10.9 14 10 13.1 10 12")
             };
 
         private readonly Path _path;
