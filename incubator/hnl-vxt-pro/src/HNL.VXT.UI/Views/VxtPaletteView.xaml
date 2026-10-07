@@ -117,6 +117,22 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
+        <Style x:Key="SectionNumber" TargetType="TextBlock">
+            <Setter Property="Width" Value="20"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="SectionIcon" TargetType="{x:Type controls:HnlIcon}">
+            <Setter Property="Width" Value="14"/>
+            <Setter Property="Height" Value="14"/>
+            <Setter Property="StrokeThickness" Value="1.7"/>
+            <Setter Property="Margin" Value="0,0,7,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -358,7 +374,11 @@
                 <!-- PHẠM VI -->
                 <Border Style="{StaticResource SectionCard}">
                     <StackPanel>
-                        <TextBlock Text="Phạm vi bố trí" Style="{StaticResource SectionTitle}" Margin="0,0,0,9"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,9">
+                            <TextBlock Text="1." Style="{StaticResource SectionNumber}"/>
+                            <controls:HnlIcon Kind="Pick" Style="{StaticResource SectionIcon}" Stroke="{DynamicResource AccentStrong}"/>
+                            <TextBlock Text="Phạm vi bố trí" Style="{StaticResource SectionTitle}"/>
+                        </StackPanel>
                         <Button Content="Chọn biên trần" Style="{StaticResource PickButton}"
                                 Command="{Binding SelectBoundaryCommand}"
                                 HorizontalAlignment="Stretch" Margin="0,0,0,7"/>
@@ -376,7 +396,8 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Rectangle Width="4" Height="18" Fill="#22D3EE" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
+                                    <TextBlock Text="2." Style="{StaticResource SectionNumber}"/>
+                                    <controls:HnlIcon Kind="Main" Style="{StaticResource SectionIcon}" Stroke="#22D3EE"/>
                                     <TextBlock Text="Xương chính" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="Bật Xương chính" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
@@ -456,7 +477,8 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Rectangle Width="4" Height="18" Fill="#FACC15" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
+                                    <TextBlock Text="3." Style="{StaticResource SectionNumber}"/>
+                                    <controls:HnlIcon Kind="Furring" Style="{StaticResource SectionIcon}" Stroke="#FACC15"/>
                                     <TextBlock Text="Xương phụ" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="Bật Xương phụ" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
@@ -500,7 +522,8 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Rectangle Width="4" Height="18" Fill="#22C55E" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
+                                    <TextBlock Text="4." Style="{StaticResource SectionNumber}"/>
+                                    <controls:HnlIcon Kind="Hanger" Style="{StaticResource SectionIcon}" Stroke="#22C55E"/>
                                     <TextBlock Text="Ty treo" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="Bật Ty treo" Style="{StaticResource FieldLabel}" Margin="8,0,7,0"/>
@@ -556,7 +579,8 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Rectangle Width="4" Height="18" Fill="#EF4444" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
+                                    <TextBlock Text="5." Style="{StaticResource SectionNumber}"/>
+                                    <controls:HnlIcon Kind="Mep" Style="{StaticResource SectionIcon}" Stroke="#EF4444"/>
                                     <TextBlock Text="Né thiết bị MEP" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <CheckBox Grid.Column="1"
@@ -603,7 +627,8 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Rectangle Width="4" Height="18" Fill="#D946EF" RadiusX="2" RadiusY="2" Margin="0,0,8,0"/>
+                                    <TextBlock Text="6." Style="{StaticResource SectionNumber}"/>
+                                    <controls:HnlIcon Kind="Dimension" Style="{StaticResource SectionIcon}" Stroke="#D946EF"/>
                                     <TextBlock Text="Kích thước Dim" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
                                 <CheckBox Grid.Column="1"
@@ -660,7 +685,11 @@
                     <StackPanel>
                         <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Xem trước" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="7." Style="{StaticResource SectionNumber}"/>
+                                <controls:HnlIcon Kind="Preview" Style="{StaticResource SectionIcon}" Stroke="{DynamicResource AccentStrong}"/>
+                                <TextBlock Text="Xem trước" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
+                            </StackPanel>
                             <Ellipse Grid.Column="1" Width="8" Height="8" Fill="{DynamicResource Success}" VerticalAlignment="Center"/>
                         </Grid>
 

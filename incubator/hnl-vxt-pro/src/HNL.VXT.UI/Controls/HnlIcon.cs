@@ -55,7 +55,8 @@ namespace HNL.VXT.UI.Controls
                 ["Furring"] = G("M4 6 L20 6 M4 12 L20 12 M4 18 L20 18"),
                 ["Hanger"] = G("M12 3 L12 14 M8 14 L16 14 M9 18 C9 16.3 10.3 15 12 15 C13.7 15 15 16.3 15 18 C15 19.7 13.7 21 12 21 C10.3 21 9 19.7 9 18 Z"),
                 ["Mep"] = G("M4 5 L20 5 L20 19 L4 19 Z M8 12 L16 12 M12 8 L12 16"),
-                ["Dimension"] = G("M4 7 L4 17 M20 7 L20 17 M4 12 L20 12 M7 9 L4 12 L7 15 M17 9 L20 12 L17 15")
+                ["Dimension"] = G("M4 7 L4 17 M20 7 L20 17 M4 12 L20 12 M7 9 L4 12 L7 15 M17 9 L20 12 L17 15"),
+                ["Preview"] = G("M3 5 L21 5 L21 19 L3 19 Z M7 12 C8.5 9.5 10 9 12 9 C14 9 15.5 9.5 17 12 C15.5 14.5 14 15 12 15 C10 15 8.5 14.5 7 12 Z")
             };
 
         private readonly Path _path;
