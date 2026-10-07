@@ -27,6 +27,9 @@ namespace HNL.VXT.Core.Layout
         /// </summary>
         public bool GlobalFurringFromFarEdge { get; set; }
 
+        // Runtime-only identity used by region-aware auditors. It never affects geometry.
+        public int BoundaryIndex { get; set; }
+
         /// <summary>
         /// Exact multi-polyline ask_each parity. When present, item N is the XP start side
         /// selected for ceiling boundary N. This overrides GlobalFurringFromFarEdge only for
