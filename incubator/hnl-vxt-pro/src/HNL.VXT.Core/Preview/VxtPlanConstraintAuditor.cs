@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HNL.VXT.Core.Geometry;
+using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
 
 namespace HNL.VXT.Core.Preview
@@ -21,14 +22,15 @@ namespace HNL.VXT.Core.Preview
             VxtPreviewPlan plan,
             VxtSettings settings,
             double angleDegrees,
-            int boundaryIndex)
+            int boundaryIndex,
+            VxtLayoutContext context = null)
         {
             if (boundary == null || plan == null || settings == null) return;
 
             var collected = new Dictionary<string, VxtConstraintDiagnostic>(StringComparer.Ordinal);
 
             if (settings.DrawMain && settings.MainDirection != MainDirectionMode.RectangleRegions)
-                AuditMain(boundary, plan, settings, angleDegrees, boundaryIndex, collected);
+                AuditMain(boundary, plan, settings, angleDegrees, boundaryIndex, collected, context);
 
             if (settings.DrawHangers)
                 AuditHangers(plan, settings, boundaryIndex, collected);
@@ -48,14 +50,25 @@ namespace HNL.VXT.Core.Preview
             VxtSettings settings,
             double angleDegrees,
             int boundaryIndex,
-            IDictionary<string, VxtConstraintDiagnostic> output)
+            IDictionary<string, VxtConstraintDiagnostic> output,
+            VxtLayoutContext context)
         {
             var radians = Normalize180(angleDegrees) * Math.PI / 180.0;
             var polygon = boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)).ToList();
             if (polygon.Count < 3) return;
 
+            var polygons = new List<IReadOnlyList<Point2>> { polygon };
+            if (context != null)
+            {
+                foreach (var hole in context.BoundaryHoles)
+                {
+                    if (hole == null || hole.Vertices.Count < 3) continue;
+                    polygons.Add(hole.Vertices.Select(p => Transform2.ToLocal(p, radians)).ToList());
+                }
+            }
+
             var bounds = Box2.FromPoints(polygon);
-            var orthogonalNotchCandidate = IsOrthogonalPolygon(polygon);
+            var orthogonalNotchCandidate = polygons.Count == 1 && IsOrthogonalPolygon(polygon);
 
             // The production builder intentionally omits XC for a whole ceiling region when
             // "Bỏ XC nếu ngắn hơn" (MainSkipLimit) applies. Auditing that intentional omission as
@@ -92,7 +105,7 @@ namespace HNL.VXT.Core.Preview
                 return;
             }
 
-            var xs = UniqueSort(polygon.Select(p => p.X)
+            var xs = UniqueSort(polygons.SelectMany(loop => loop.Select(p => p.X))
                 .Concat(new[] { bounds.MinX, bounds.MaxX }));
 
             for (var i = 0; i + 1 < xs.Count; i++)
@@ -118,7 +131,7 @@ namespace HNL.VXT.Core.Preview
 
                 foreach (var x in samples)
                 {
-                    foreach (var interval in PolygonScanline.ClipVertical(polygon, x))
+                    foreach (var interval in PolygonScanline.ClipVertical(polygons, x))
                     {
                         var a = Math.Min(interval.A.Y, interval.B.Y);
                         var b = Math.Max(interval.A.Y, interval.B.Y);

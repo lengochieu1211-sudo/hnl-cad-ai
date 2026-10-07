@@ -21,6 +21,15 @@ namespace HNL.VXT.Core.Layout
         // This prevents rectangles drawn for ceiling area 1 from leaking into area 2.
         public List<List<VxtLayoutRegion>> BoundaryRegionGroups { get; } = new List<List<VxtLayoutRegion>>();
 
+        // Point-picked ceiling regions may contain inner loops (holes/islands).
+        // Group index matches the selected outer boundary index.
+        public List<List<Boundary2>> BoundaryHoleGroups { get; } = new List<List<Boundary2>>();
+
+        // Current-boundary hole loops copied by multi-boundary adapters before a single-boundary build.
+        public List<Boundary2> BoundaryHoles { get; } = new List<Boundary2>();
+
+        public bool HasBoundaryHoles => BoundaryHoles.Count > 0;
+
         /// <summary>
         /// V6.7.4 ask_each does not rotate XP. It chooses which edge the fixed XP grid starts from.
         /// false = Left/Bottom (near local min), true = Right/Top (near local max).

@@ -10,40 +10,51 @@ namespace HNL.VXT.Core.Preview
         private const double Eps = 1e-8;
 
         public static IReadOnlyList<Segment2> ClipVertical(IReadOnlyList<Point2> polygon, double x)
+            => ClipVertical(new[] { polygon }, x);
+
+        public static IReadOnlyList<Segment2> ClipVertical(
+            IEnumerable<IReadOnlyList<Point2>> polygons,
+            double x)
         {
             var hits = new List<double>();
-            for (var i = 0; i < polygon.Count; i++)
+            foreach (var polygon in polygons ?? Enumerable.Empty<IReadOnlyList<Point2>>())
             {
-                var a = polygon[i];
-                var b = polygon[(i + 1) % polygon.Count];
-
-                // Half-open crossing rule avoids duplicate intersections at vertices.
-                var crosses = (a.X <= x && b.X > x) || (b.X <= x && a.X > x);
-                if (!crosses) continue;
-
-                var t = (x - a.X) / (b.X - a.X);
-                hits.Add(a.Y + t * (b.Y - a.Y));
+                if (polygon == null || polygon.Count < 3) continue;
+                for (var i = 0; i < polygon.Count; i++)
+                {
+                    var a = polygon[i];
+                    var b = polygon[(i + 1) % polygon.Count];
+                    var crosses = (a.X <= x && b.X > x) || (b.X <= x && a.X > x);
+                    if (!crosses) continue;
+                    var t = (x - a.X) / (b.X - a.X);
+                    hits.Add(a.Y + t * (b.Y - a.Y));
+                }
             }
-
             hits.Sort();
             return PairHits(hits, y => new Point2(x, y));
         }
 
         public static IReadOnlyList<Segment2> ClipHorizontal(IReadOnlyList<Point2> polygon, double y)
+            => ClipHorizontal(new[] { polygon }, y);
+
+        public static IReadOnlyList<Segment2> ClipHorizontal(
+            IEnumerable<IReadOnlyList<Point2>> polygons,
+            double y)
         {
             var hits = new List<double>();
-            for (var i = 0; i < polygon.Count; i++)
+            foreach (var polygon in polygons ?? Enumerable.Empty<IReadOnlyList<Point2>>())
             {
-                var a = polygon[i];
-                var b = polygon[(i + 1) % polygon.Count];
-
-                var crosses = (a.Y <= y && b.Y > y) || (b.Y <= y && a.Y > y);
-                if (!crosses) continue;
-
-                var t = (y - a.Y) / (b.Y - a.Y);
-                hits.Add(a.X + t * (b.X - a.X));
+                if (polygon == null || polygon.Count < 3) continue;
+                for (var i = 0; i < polygon.Count; i++)
+                {
+                    var a = polygon[i];
+                    var b = polygon[(i + 1) % polygon.Count];
+                    var crosses = (a.Y <= y && b.Y > y) || (b.Y <= y && a.Y > y);
+                    if (!crosses) continue;
+                    var t = (y - a.Y) / (b.Y - a.Y);
+                    hits.Add(a.X + t * (b.X - a.X));
+                }
             }
-
             hits.Sort();
             return PairHits(hits, x => new Point2(x, y));
         }
@@ -65,7 +76,6 @@ namespace HNL.VXT.Core.Preview
                 if (a.DistanceTo(b) > Eps)
                     segments.Add(new Segment2(a, b));
             }
-
             return segments;
         }
     }

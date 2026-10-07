@@ -71,6 +71,12 @@ namespace HNL.VXT.Core.Preview
                         boundary, part, settings, angle, boundaryContext))
                         geometryPostProcessed = true;
 
+                    if (VxtBoundaryHolePostProcessor.Apply(boundary, boundaryContext, part))
+                        geometryPostProcessed = true;
+
+                    if (VxtBoundaryHolePostProcessor.Apply(boundary, boundaryContext, part))
+                        geometryPostProcessed = true;
+
                     if (geometryPostProcessed)
                     {
                         VxtPostProcessDimensionSynchronizer.Synchronize(
@@ -119,7 +125,7 @@ namespace HNL.VXT.Core.Preview
                 if (settings.MainDirection != MainDirectionMode.PolylinePath)
                 {
                     VxtPlanConstraintAuditor.Attach(
-                        boundary, part, settings, auditAngle, count);
+                        boundary, part, settings, auditAngle, count, boundaryContext);
                 }
 
                 if (part.Quality != null) qualities.Add(part.Quality);
@@ -198,6 +204,17 @@ namespace HNL.VXT.Core.Preview
             local.GeneralObstacles.AddRange(source.GeneralObstacles);
             local.MainObstacles.AddRange(source.MainObstacles);
             local.FurringObstacles.AddRange(source.FurringObstacles);
+
+            if (source.BoundaryHoleGroups.Count > 0 &&
+                boundaryIndex >= 0 && boundaryIndex < source.BoundaryHoleGroups.Count)
+            {
+                var holes = source.BoundaryHoleGroups[boundaryIndex];
+                if (holes != null) local.BoundaryHoles.AddRange(holes.Where(x => x != null));
+            }
+            else if (source.BoundaryHoles.Count > 0)
+            {
+                local.BoundaryHoles.AddRange(source.BoundaryHoles.Where(x => x != null));
+            }
 
             // Manual HCN mode stores XP direction directly on every region. Normal modes use
             // the per-boundary GlobalFurringFromFarEdge resolved above.

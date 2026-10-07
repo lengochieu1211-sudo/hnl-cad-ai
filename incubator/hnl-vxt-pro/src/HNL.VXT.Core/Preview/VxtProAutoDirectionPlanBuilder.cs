@@ -75,6 +75,8 @@ namespace HNL.VXT.Core.Preview
                     }
                     if (VxtOuterMainHardMaxSafety.Apply(boundary, plan, candidateSettings, angle, context))
                         geometryPostProcessed = true;
+                    if (VxtBoundaryHolePostProcessor.Apply(boundary, context, plan))
+                        geometryPostProcessed = true;
                     if (geometryPostProcessed)
                         VxtPostProcessDimensionSynchronizer.Synchronize(boundary, candidateSettings, context, plan, angle);
 
@@ -110,6 +112,8 @@ namespace HNL.VXT.Core.Preview
                     geometryPostProcessed = true;
                 }
                 if (VxtOuterMainHardMaxSafety.Apply(boundary, fallback, fallbackSettings, legacyAngle, context))
+                    geometryPostProcessed = true;
+                if (VxtBoundaryHolePostProcessor.Apply(boundary, context, fallback))
                     geometryPostProcessed = true;
                 if (geometryPostProcessed)
                     VxtPostProcessDimensionSynchronizer.Synchronize(boundary, fallbackSettings, context, fallback, legacyAngle);

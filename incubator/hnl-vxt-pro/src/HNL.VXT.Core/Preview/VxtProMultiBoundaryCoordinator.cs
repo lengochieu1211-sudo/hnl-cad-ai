@@ -72,7 +72,7 @@ namespace HNL.VXT.Core.Preview
                     ? part.Quality.SelectedDirectionDegrees
                     : ResolveLegacyAutoAngle(boundaries[i], settings.AutoShadowline);
                 VxtPlanConstraintAuditor.Attach(
-                    boundaries[i], part, settings, auditAngle, i);
+                    boundaries[i], part, settings, auditAngle, i, context);
                 parts.Add(part);
                 if (part.Quality != null)
                     directions.Add(Normalize180(part.Quality.SelectedDirectionDegrees));
@@ -128,13 +128,15 @@ namespace HNL.VXT.Core.Preview
                         if (VxtOuterMainHardMaxSafety.Apply(
                             boundaries[i], part, candidateSettings, angle, context))
                             geometryPostProcessed = true;
+                        if (VxtBoundaryHolePostProcessor.Apply(boundaries[i], context, part))
+                            geometryPostProcessed = true;
                         if (geometryPostProcessed)
                             VxtPostProcessDimensionSynchronizer.Synchronize(
                                 boundaries[i], candidateSettings, context, part, angle);
 
                         part.Quality = VxtProPlanQualityEvaluator.Evaluate(part, candidateSettings, context, angle, 1);
                         VxtPlanConstraintAuditor.Attach(
-                            boundaries[i], part, candidateSettings, angle, i);
+                            boundaries[i], part, candidateSettings, angle, i, context);
                         if (part.Diagnostics.Any(x => x.IsHard))
                         {
                             failed = true;
@@ -366,6 +368,17 @@ namespace HNL.VXT.Core.Preview
             local.GeneralObstacles.AddRange(source.GeneralObstacles);
             local.MainObstacles.AddRange(source.MainObstacles);
             local.FurringObstacles.AddRange(source.FurringObstacles);
+
+            if (source.BoundaryHoleGroups.Count > 0 &&
+                boundaryIndex >= 0 && boundaryIndex < source.BoundaryHoleGroups.Count)
+            {
+                var holes = source.BoundaryHoleGroups[boundaryIndex];
+                if (holes != null) local.BoundaryHoles.AddRange(holes.Where(x => x != null));
+            }
+            else if (source.BoundaryHoles.Count > 0)
+            {
+                local.BoundaryHoles.AddRange(source.BoundaryHoles.Where(x => x != null));
+            }
 
             if (source.BoundaryRegionGroups.Count > 0)
             {
