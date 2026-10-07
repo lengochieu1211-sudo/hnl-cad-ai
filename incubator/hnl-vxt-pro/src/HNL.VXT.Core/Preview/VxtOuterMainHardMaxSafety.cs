@@ -468,8 +468,11 @@ namespace HNL.VXT.Core.Preview
             double radians,
             double clearance)
         {
-            return (context.GeneralObstacles ?? new List<Box2>())
-                .Concat(context.MainObstacles ?? new List<Box2>())
+            return VxtHoleObstacleFilter.KeepDrawable(
+                    (context.GeneralObstacles ?? new List<Box2>())
+                        .Concat(context.MainObstacles ?? new List<Box2>()),
+                    context.BoundaryHoles,
+                    clearance)
                 .Select(box => TransformBox(box, radians).Expand(Math.Max(0.0, clearance)))
                 .ToList();
         }
