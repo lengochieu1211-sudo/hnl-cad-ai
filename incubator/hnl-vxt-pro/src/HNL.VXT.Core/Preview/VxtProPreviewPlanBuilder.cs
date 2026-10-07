@@ -170,11 +170,19 @@ namespace HNL.VXT.Core.Preview
             // geometrically invisible to the entire layout pipeline.
             var mainObstacles = settings.UseAvoidance
                 ? TransformObstacles(
-                    context.GeneralObstacles.Concat(context.MainObstacles), radians, settings.ClearanceDistance, domain)
+                    VxtHoleObstacleFilter.KeepDrawable(
+                        context.GeneralObstacles.Concat(context.MainObstacles),
+                        context.BoundaryHoles,
+                        settings.ClearanceDistance),
+                    radians, settings.ClearanceDistance, domain)
                 : new List<Box2>();
             var furringObstacles = settings.UseAvoidance
                 ? TransformObstacles(
-                    context.GeneralObstacles.Concat(context.FurringObstacles), radians, settings.ClearanceDistance, domain)
+                    VxtHoleObstacleFilter.KeepDrawable(
+                        context.GeneralObstacles.Concat(context.FurringObstacles),
+                        context.BoundaryHoles,
+                        settings.ClearanceDistance),
+                    radians, settings.ClearanceDistance, domain)
                 : new List<Box2>();
 
             var mainSegmentsLocal = new List<Segment2>();
