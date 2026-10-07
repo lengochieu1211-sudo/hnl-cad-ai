@@ -408,16 +408,16 @@
         </Style>
         <Style x:Key="PrimaryCreateButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
             <Setter Property="Padding" Value="8,2"/>
-        </Style>
-
-        <Style x:Key="WarningCreateButton" TargetType="Button" BasedOn="{StaticResource CompactButton}">
-            <Setter Property="Visibility" Value="Collapsed"/>
-            <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="Margin" Value="0,4,0,0"/>
-            <Setter Property="ToolTip" Value="Chỉ dùng khi cần xuất đúng Preview để chỉnh thủ công các lỗi bố trí HARD. Lỗi hệ thống/FATAL vẫn bị chặn."/>
+            <Setter Property="Content" Value="Tạo khung xương trần"/>
+            <Setter Property="Command" Value="{Binding CreateCommand}"/>
+            <Setter Property="IsEnabled" Value="{Binding CanCreate}"/>
+            <Setter Property="ToolTip" Value="Tạo khung xương trần theo đúng kết quả Preview hiện tại."/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding HasOverrideableHardConstraints}" Value="True">
-                    <Setter Property="Visibility" Value="Visible"/>
+                    <Setter Property="Content" Value="Tạo có cảnh báo"/>
+                    <Setter Property="Command" Value="{Binding CreateWithWarningCommand}"/>
+                    <Setter Property="IsEnabled" Value="{Binding CanCreateWithWarning}"/>
+                    <Setter Property="ToolTip" Value="Có lỗi bố trí HARD được phép chỉnh thủ công. Nút này sẽ tạo đúng Preview hiện tại kèm cảnh báo."/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -921,14 +921,7 @@
         <Border Grid.Row="2" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="6,4">
             <StackPanel>
                 <Button Style="{StaticResource PrimaryCreateButton}"
-                        Content="Tạo khung xương trần"
-                        Command="{Binding CreateCommand}"
-                        IsEnabled="{Binding CanCreate}"
                         HorizontalAlignment="Stretch"/>
-                <Button Style="{StaticResource WarningCreateButton}"
-                        Content="Tạo có cảnh báo"
-                        Command="{Binding CreateWithWarningCommand}"
-                        IsEnabled="{Binding CanCreateWithWarning}"/>
             </StackPanel>
         </Border>
     </Grid>
