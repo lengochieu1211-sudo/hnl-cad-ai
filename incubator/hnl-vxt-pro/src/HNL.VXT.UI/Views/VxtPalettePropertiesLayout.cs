@@ -82,7 +82,8 @@ namespace HNL.VXT.UI.Views
                     case "NÉ THIẾT BỊ MEP": text.Text = "Né thiết bị MEP"; break;
                     case "NÉ THIẾT BỊ": text.Text = "Né thiết bị"; break;
                     case "KÍCH THƯỚC Dim": text.Text = "Kích thước Dim"; break;
-                    case "XEM TRƯỚC TRÊN BẢN VẼ": text.Text = "Xem trước trên bản vẽ"; break;
+                    case "XEM TRƯỚC TRÊN BẢN VẼ": text.Text = "Xem trước"; break;
+                    case "XEM TRƯỚC": text.Text = "Xem trước"; break;
                     case "LAYER & KIỂU NÉT": text.Text = "Layer & kiểu nét"; break;
                     case "LAYER & Dim": text.Text = "Layer & Dim"; break;
                     case "LAYER & HIỂN THỊ": text.Text = "Layer & hiển thị"; break;

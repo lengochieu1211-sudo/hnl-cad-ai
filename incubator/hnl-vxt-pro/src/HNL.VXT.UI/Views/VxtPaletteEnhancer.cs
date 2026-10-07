@@ -523,7 +523,15 @@ namespace HNL.VXT.UI.Views
         private static int FindInsertBeforePreview(StackPanel stack)
         {
             for (var i = 0; i < stack.Children.Count; i++)
-                if (ContainsText(stack.Children[i] as DependencyObject, "Xem trước trên bản vẽ")) return i;
+            {
+                var element = stack.Children[i] as FrameworkElement;
+                if (element != null && string.Equals(element.Name, "LivePreviewCard", StringComparison.Ordinal))
+                    return i;
+
+                var node = stack.Children[i] as DependencyObject;
+                if (ContainsText(node, "Xem trước") || ContainsText(node, "Xem trước trên bản vẽ"))
+                    return i;
+            }
             return stack.Children.Count;
         }
 

@@ -58,7 +58,9 @@ namespace HNL.VXT.UI.Views
                     avoidance = child;
                 else if (ContainsText(element, "Kiểm tra bố trí") || ContainsText(element, "Phân tích & kiểm tra lỗi"))
                     diagnostics = child;
-                else if (ContainsText(element, "Xem trước trên bản vẽ"))
+                else if (string.Equals(element.Name, "LivePreviewCard", StringComparison.Ordinal) ||
+                         ContainsText(element, "Xem trước") ||
+                         ContainsText(element, "Xem trước trên bản vẽ"))
                     preview = child;
             }
 
