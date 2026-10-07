@@ -32,6 +32,7 @@ namespace HNL.VXT.UI.ViewModels
                 () => _host.PickDirection(_settings.MainDirection),
                 () => _settings.MainDirection == MainDirectionMode.Auto ||
                       _settings.MainDirection == MainDirectionMode.TwoPoints ||
+                      _settings.MainDirection == MainDirectionMode.PolylinePath ||
                       _settings.MainDirection == MainDirectionMode.RectangleRegions);
 
             PickMainBlockCommand = new RelayCommand(() => _host.PickBlock(BlockTarget.Main));
@@ -65,7 +66,7 @@ namespace HNL.VXT.UI.ViewModels
         {
             "Theo phương ngang",
             "Theo phương dọc",
-            "Chọn hướng bằng 2 điểm",
+            "Chọn hướng",
             "Chia vùng bằng hình chữ nhật",
             "Tự động chọn hướng"
         };
@@ -258,9 +259,11 @@ namespace HNL.VXT.UI.ViewModels
                 : "Chọn Polyline kín để bắt đầu xem trước.";
         }
 
-        public void SetDirection(double degrees)
+        public void SetDirection(double degrees, MainDirectionMode mode = MainDirectionMode.TwoPoints)
         {
-            _settings.MainDirection = MainDirectionMode.TwoPoints;
+            _settings.MainDirection = mode == MainDirectionMode.PolylinePath
+                ? MainDirectionMode.PolylinePath
+                : MainDirectionMode.TwoPoints;
             _settings.DirectionDegrees = Normalize(degrees);
             MarkCustom();
             OnPropertyChanged(nameof(SelectedMainDirection));
@@ -449,7 +452,9 @@ namespace HNL.VXT.UI.ViewModels
             switch (mode)
             {
                 case MainDirectionMode.Vertical: return "Theo phương dọc";
-                case MainDirectionMode.TwoPoints: return "Chọn hướng bằng 2 điểm";
+                case MainDirectionMode.TwoPoints:
+                case MainDirectionMode.PolylinePath:
+                    return "Chọn hướng";
                 case MainDirectionMode.RectangleRegions: return "Chia vùng bằng hình chữ nhật";
                 case MainDirectionMode.Auto: return "Tự động chọn hướng";
                 default: return "Theo phương ngang";
@@ -461,6 +466,7 @@ namespace HNL.VXT.UI.ViewModels
             switch (value)
             {
                 case "Theo phương dọc": return MainDirectionMode.Vertical;
+                case "Chọn hướng": return MainDirectionMode.TwoPoints;
                 case "Chọn hướng bằng 2 điểm": return MainDirectionMode.TwoPoints;
                 case "Chia vùng bằng hình chữ nhật": return MainDirectionMode.RectangleRegions;
                 case "Tự động chọn hướng": return MainDirectionMode.Auto;
