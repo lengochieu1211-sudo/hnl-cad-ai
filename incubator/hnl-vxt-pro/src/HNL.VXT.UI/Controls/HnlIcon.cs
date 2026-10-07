@@ -44,8 +44,12 @@ namespace HNL.VXT.UI.Controls
                 ["Refresh"] = G("M19 8 L19 4 L15 8 M19 8 C17.4 5.4 14.8 4 12 4 C7.6 4 4 7.6 4 12 M5 16 L5 20 L9 16 M5 16 C6.6 18.6 9.2 20 12 20 C16.4 20 20 16.4 20 12"),
                 ["Hide"] = G("M3 12 C5.3 8.5 8.4 6.5 12 6.5 C15.6 6.5 18.7 8.5 21 12 C18.7 15.5 15.6 17.5 12 17.5 C8.4 17.5 5.3 15.5 3 12 M10 10 C11.1 8.9 12.9 8.9 14 10 C15.1 11.1 15.1 12.9 14 14 C12.9 15.1 11.1 15.1 10 14 C8.9 12.9 8.9 11.1 10 10 M4 4 L20 20"),
                 ["Reset"] = G("M7 7 L3 7 L3 3 M4 7 C5.6 4.7 8.3 3.5 11.3 3.5 C16.2 3.5 20 7.3 20 12 C20 16.8 16.2 20.5 11.3 20.5 C7.4 20.5 4.2 18.1 3.2 14.7"),
-                ["Create"] = G("M4 5 L17 5 L17 18 L4 18 Z M10.5 5 L10.5 18 M4 11.5 L17 11.5 M18 15 L18 21 M15 18 L21 18"),
-                ["Warning"] = G("M12 3 L22 21 L2 21 Z M12 9 L12 14 M12 18 L12.01 18"),
+                // Ceiling-frame actions: one visual family for normal Create and warning override.
+                // 24x24 outline shows the ceiling boundary, XC/XP grid and two hanger drops.
+                ["CeilingFrame"] = G("M4 7 L20 7 L20 20 L4 20 Z M9 7 L9 20 M15 7 L15 20 M4 11 L20 11 M4 15 L20 15 M9 3 L9 7 M15 3 L15 7"),
+                ["CeilingFrameWarning"] = G("M3 6 L16.5 6 L16.5 17 L3 17 Z M8 6 L8 17 M3 11.5 L16.5 11.5 M8 3 L8 6 M18.5 13 L23 21 L14 21 Z M18.5 16 L18.5 18.2 M18.5 19.8 L18.51 19.8"),
+                ["Create"] = G("M4 7 L20 7 L20 20 L4 20 Z M9 7 L9 20 M15 7 L15 20 M4 11 L20 11 M4 15 L20 15 M9 3 L9 7 M15 3 L15 7"),
+                ["Warning"] = G("M3 6 L16.5 6 L16.5 17 L3 17 Z M8 6 L8 17 M3 11.5 L16.5 11.5 M8 3 L8 6 M18.5 13 L23 21 L14 21 Z M18.5 16 L18.5 18.2 M18.5 19.8 L18.51 19.8"),
                 ["Add"] = G("M12 4 L12 20 M4 12 L20 12"),
                 ["Remove"] = G("M4 12 L20 12"),
                 ["Up"] = G("M5 15 L12 8 L19 15"),

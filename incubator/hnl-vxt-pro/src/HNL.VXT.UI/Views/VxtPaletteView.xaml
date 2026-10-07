@@ -376,12 +376,13 @@
             <Setter Property="Tag" Value="Reset"/>
         </Style>
         <Style x:Key="PrimaryCreateButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-            <Setter Property="Tag" Value="Create"/>
+            <Setter Property="Tag" Value="CeilingFrame"/>
             <Setter Property="Template" Value="{StaticResource HnlIconButtonTemplate}"/>
+            <Setter Property="Padding" Value="8,2"/>
         </Style>
 
         <Style x:Key="WarningCreateButton" TargetType="Button" BasedOn="{StaticResource IconCompactButton}">
-            <Setter Property="Tag" Value="Warning"/>
+            <Setter Property="Tag" Value="CeilingFrameWarning"/>
             <Setter Property="Visibility" Value="Collapsed"/>
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
             <Setter Property="Margin" Value="0,4,0,0"/>
