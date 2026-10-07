@@ -228,8 +228,10 @@ namespace HNL.VXT.AutoCAD
                 }
             }
 
-            if (session.Regions.Count > 0 && settings != null && settings.MainDirection != MainDirectionMode.RectangleRegions)
-                issues.Add("Có vùng chữ nhật runtime nhưng chế độ hướng hiện tại không phải RectangleRegions.");
+            if (session.Regions.Count > 0 && settings != null &&
+                settings.MainDirection != MainDirectionMode.RectangleRegions &&
+                settings.MainDirection != MainDirectionMode.PolylinePath)
+                issues.Add("Có vùng hướng runtime nhưng chế độ hiện tại không dùng vùng.");
 
             if (exception != null)
                 issues.Add("Exception: " + exception.GetType().Name + " - " + exception.Message);
