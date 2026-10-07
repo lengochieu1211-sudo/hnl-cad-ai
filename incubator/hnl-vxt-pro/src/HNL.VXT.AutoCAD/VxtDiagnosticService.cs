@@ -442,7 +442,19 @@ namespace HNL.VXT.AutoCAD
                   .Append(", \"maxX\": ").Append(Num(r.WorldBounds.MaxX))
                   .Append(", \"maxY\": ").Append(Num(r.WorldBounds.MaxY))
                   .Append(", \"mainAngleDegrees\": ").Append(Num(r.MainAngleDegrees))
-                  .Append(", \"furringFromFarEdge\": ").Append(r.FurringFromFarEdge ? "true" : "false").Append("}");
+                  .Append(", \"furringFromFarEdge\": ").Append(r.FurringFromFarEdge ? "true" : "false")
+                  .Append(", \"polygon\": [");
+                if (r.RegionBoundary != null)
+                {
+                    for (var vi = 0; vi < r.RegionBoundary.Vertices.Count; vi++)
+                    {
+                        var point = r.RegionBoundary.Vertices[vi];
+                        if (vi > 0) sb.Append(",");
+                        sb.Append("{\"x\": ").Append(Num(point.X))
+                          .Append(", \"y\": ").Append(Num(point.Y)).Append("}");
+                    }
+                }
+                sb.Append("]}");
             }
             if (session.Regions.Count > 0) sb.Append("\n  ");
             sb.Append("]\n}\n");
