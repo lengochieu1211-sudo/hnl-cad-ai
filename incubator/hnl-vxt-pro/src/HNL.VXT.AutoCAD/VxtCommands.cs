@@ -699,31 +699,11 @@ namespace HNL.VXT.AutoCAD
             var second = ed.GetPoint(secondOptions);
             if (second.Status != PromptStatus.OK) return null;
 
-            var points = new List<Point2>
+            return new List<Point2>
             {
                 new Point2(first.Value.X, first.Value.Y),
                 new Point2(second.Value.X, second.Value.Y)
             };
-
-            while (true)
-            {
-                var nextOptions = new PromptPointOptions(
-                    "\nHNL Tool - VXT Pro: Chọn điểm tiếp theo hoặc Enter để kết thúc hướng: ")
-                {
-                    AllowNone = true,
-                    BasePoint = new Autodesk.AutoCAD.Geometry.Point3d(
-                        points[points.Count - 1].X,
-                        points[points.Count - 1].Y,
-                        0.0),
-                    UseBasePoint = true
-                };
-                var next = ed.GetPoint(nextOptions);
-                if (next.Status == PromptStatus.None) break;
-                if (next.Status != PromptStatus.OK) return null;
-                points.Add(new Point2(next.Value.X, next.Value.Y));
-            }
-
-            return points;
         }
 
         private static List<Point2> ReadDirectionEntity(Document doc)
