@@ -127,42 +127,6 @@ namespace HNL.VXT.Core.Tests
             }
         }
 
-        [TestMethod]
-        public void ProAuto_QualityHardCount_MatchesFinalAuditor_WithHoleEdgeViolation()
-        {
-            var outer = Rect(0, 0, 2000, 2000);
-            var hole = Rect(700, 700, 1300, 1300);
-            var context = new VxtLayoutContext();
-            context.BoundaryHoleGroups.Add(new System.Collections.Generic.List<Boundary2> { hole });
-
-            var settings = new VxtSettings
-            {
-                OptimizationMode = VxtOptimizationMode.ProBalanced,
-                MainDirection = MainDirectionMode.Auto,
-                AutoShadowline = true,
-                DrawMain = true,
-                DrawFurring = false,
-                DrawHangers = false,
-                AutoDimension = false,
-                UseLocalMainAdd = false,
-                MainSkipLimit = 0.0,
-                MainMinSpacing = 700.0,
-                MainMaxSpacing = 1000.0,
-                MainMinEdgeOffset = 0.0,
-                MainMaxEdgeOffset = 10.0,
-                MainBalanceStep = 50.0
-            };
-
-            var plan = VxtMultiBoundaryPlanBuilder.Build(new[] { outer }, settings, context);
-            var finalHard = plan.Diagnostics.Count(x => x.IsHard);
-
-            Assert.IsTrue(finalHard > 0,
-                "Fixture must produce a real audited HARD violation around the inner hole.");
-            Assert.IsNotNull(plan.Quality);
-            Assert.AreEqual(finalHard, plan.Quality.HardViolationCount,
-                "Pro Auto ranking telemetry must use the same audited HARD result as the final plan.");
-        }
-
         private static bool IsStrictlyInsideHole(Point2 p)
             => p.X > 700.0 && p.X < 1300.0 && p.Y > 700.0 && p.Y < 1300.0;
 

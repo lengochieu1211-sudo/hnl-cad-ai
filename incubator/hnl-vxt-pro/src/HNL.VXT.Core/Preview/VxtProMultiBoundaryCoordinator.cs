@@ -361,7 +361,6 @@ namespace HNL.VXT.Core.Preview
         {
             var local = new VxtLayoutContext
             {
-                BoundaryIndex = boundaryIndex,
                 GlobalFurringFromFarEdge = boundaryIndex >= 0 && boundaryIndex < source.BoundaryFurringFromFarEdges.Count
                     ? source.BoundaryFurringFromFarEdges[boundaryIndex]
                     : source.GlobalFurringFromFarEdge
