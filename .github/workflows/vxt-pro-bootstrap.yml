@@ -90,6 +90,9 @@ jobs:
           if (-not $commandSource.Contains('[CommandMethod("HNLVXTFOCUSBOUNDARY"')) {
             throw "Functional gate failed: Mxx focus command is not registered on HnlVxtCommands."
           }
+          if (-not $commandSource.Contains('[CommandMethod("HNLVXTPICKBOUNDARYPOINT"')) {
+            throw "Functional gate failed: Pick Point command is not registered on HnlVxtCommands."
+          }
           $pluginSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\PluginEntry.cs" -Raw
           if (-not $pluginSource.Contains('CommandClass(typeof(HNL.VXT.AutoCAD.HnlVxtCommands))')) {
             throw "Command namespace gate failed: legacy VXT command class is still registered."
@@ -100,6 +103,12 @@ jobs:
           $bridgeSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtHostBridge.cs" -Raw
           if (-not $bridgeSource.Contains('Send("HNLVXTCREATE ")')) {
             throw "Functional gate failed: UI bridge does not invoke HNLVXTCREATE."
+          }
+          if (-not $bridgeSource.Contains('Send("HNLVXTPICKBOUNDARYPOINT ')) {
+            throw "Functional gate failed: UI bridge does not invoke registered HNLVXTPICKBOUNDARYPOINT."
+          }
+          if ($bridgeSource.Contains('Send("VXTPICKBOUNDARYPOINT ')) {
+            throw "Functional gate failed: UI bridge still invokes unregistered legacy VXTPICKBOUNDARYPOINT."
           }
 
           $paletteXaml = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.xaml" -Raw

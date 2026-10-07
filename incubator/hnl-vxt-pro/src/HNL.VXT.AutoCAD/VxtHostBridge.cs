@@ -85,13 +85,13 @@ namespace HNL.VXT.AutoCAD
             {
                 case MainDirectionMode.TwoPoints:
                 case MainDirectionMode.PolylinePath:
-                    Send("VXTPICKBOUNDARYPOINT HNLVXTDIRECTION ");
+                    Send("HNLVXTPICKBOUNDARYPOINT HNLVXTDIRECTION ");
                     break;
                 case MainDirectionMode.RectangleRegions:
-                    Send("VXTPICKBOUNDARYPOINT HNLVXTREGION ");
+                    Send("HNLVXTPICKBOUNDARYPOINT HNLVXTREGION ");
                     break;
                 default:
-                    Send("VXTPICKBOUNDARYPOINT ");
+                    Send("HNLVXTPICKBOUNDARYPOINT ");
                     break;
             }
         }

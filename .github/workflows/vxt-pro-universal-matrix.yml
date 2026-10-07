@@ -48,6 +48,10 @@ jobs:
           $registeredCommands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
           if (-not $registeredCommands.Contains('[CommandMethod("HNLVXTCREATE"')) { throw 'HNLVXTCREATE command missing.' }
           if (-not $registeredCommands.Contains('[CommandMethod("HNLVXTFOCUSBOUNDARY"')) { throw 'Mxx focus command is not registered on HnlVxtCommands.' }
+          if (-not $registeredCommands.Contains('[CommandMethod("HNLVXTPICKBOUNDARYPOINT"')) { throw 'Pick Point command is not registered on HnlVxtCommands.' }
+          $bridge = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtHostBridge.cs" -Raw
+          if (-not $bridge.Contains('Send("HNLVXTPICKBOUNDARYPOINT ')) { throw 'UI bridge does not invoke registered HNLVXTPICKBOUNDARYPOINT.' }
+          if ($bridge.Contains('Send("VXTPICKBOUNDARYPOINT ')) { throw 'UI bridge still invokes unregistered legacy VXTPICKBOUNDARYPOINT.' }
           $commands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
           if (-not $commands.Contains('GetSelection(options, filter)')) { throw 'Multi-selection boundary/equipment parity gate missing.' }
           $session = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtSession.cs" -Raw

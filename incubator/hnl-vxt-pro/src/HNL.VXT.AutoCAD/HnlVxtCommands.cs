@@ -91,6 +91,13 @@ namespace HNL.VXT.AutoCAD
             new VxtCommands().SelectBoundary();
         }
 
+        [CommandMethod("HNLVXTPICKBOUNDARYPOINT", CommandFlags.Modal)]
+        public void PickBoundaryPoint()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            new VxtCommands().PickBoundaryPoint();
+        }
+
         [CommandMethod("HNLVXTAUTOSETUP", CommandFlags.Modal)]
         public void ConfigureAutoDirection()
         {
