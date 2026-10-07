@@ -130,6 +130,43 @@ namespace HNL.VXT.Core.Tests
         private static bool IsStrictlyInsideHole(Point2 p)
             => p.X > 700.0 && p.X < 1300.0 && p.Y > 700.0 && p.Y < 1300.0;
 
+        [TestMethod]
+        public void Auditor_HoleEdgesParticipateInHardMaxChecks()
+        {
+            var outer = Rect(0, 0, 1000, 1000);
+            var hole = Rect(400, 400, 600, 600);
+            var context = new VxtLayoutContext();
+            context.BoundaryHoles.Add(hole);
+
+            var plan = new VxtPreviewPlan();
+            foreach (var y in new[] { 100.0, 200.0, 800.0, 900.0 })
+                plan.Lines.Add(new PreviewLine(
+                    new Point2(0, y), new Point2(1000, y), PreviewLineKind.Main));
+            plan.MainSegmentCount = 4;
+
+            var settings = new VxtSettings
+            {
+                DrawMain = true,
+                DrawFurring = false,
+                DrawHangers = false,
+                UseLocalMainAdd = false,
+                MainDirection = MainDirectionMode.Horizontal,
+                MainMinSpacing = 50.0,
+                MainMaxSpacing = 500.0,
+                MainMinEdgeOffset = 50.0,
+                MainMaxEdgeOffset = 150.0,
+                MainBalanceStep = 50.0,
+                MainSkipLimit = 0.0
+            };
+
+            VxtPlanConstraintAuditor.Attach(outer, plan, settings, 0.0, 0, context);
+
+            Assert.IsTrue(plan.Diagnostics.Any(x =>
+                    x.Target == VxtConstraintTarget.Main &&
+                    x.Kind == VxtConstraintKind.MaxEdgeHard),
+                "The inner-hole edge must participate in the HARD Max-edge audit.");
+        }
+
         private static Boundary2 Rect(double minX, double minY, double maxX, double maxY)
             => new Boundary2(new[]
             {
