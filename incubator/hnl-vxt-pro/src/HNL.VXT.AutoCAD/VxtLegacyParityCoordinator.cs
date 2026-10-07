@@ -48,12 +48,15 @@ namespace HNL.VXT.AutoCAD
 
             if (session.HasBoundary && settings.AskDirectionEachRegion &&
                 settings.MainDirection != MainDirectionMode.RectangleRegions &&
+                settings.MainDirection != MainDirectionMode.PolylinePath &&
                 (settings.DrawFurring || (settings.AutoDimension && settings.DimFurring)))
             {
                 if (!PromptFurringStartSides(doc, session, settings)) return;
                 VxtTransientPreview.Instance.Refresh();
             }
-            else if (!settings.AskDirectionEachRegion || settings.MainDirection == MainDirectionMode.RectangleRegions)
+            else if (!settings.AskDirectionEachRegion ||
+                     settings.MainDirection == MainDirectionMode.RectangleRegions ||
+                     settings.MainDirection == MainDirectionMode.PolylinePath)
             {
                 session.BoundaryFurringFromFarEdges.Clear();
             }
@@ -249,6 +252,7 @@ namespace HNL.VXT.AutoCAD
         {
             if (settings.MainDirection == MainDirectionMode.Vertical) return 90.0;
             if (settings.MainDirection == MainDirectionMode.TwoPoints ||
+                settings.MainDirection == MainDirectionMode.PolylinePath ||
                 settings.MainDirection == MainDirectionMode.RectangleRegions)
                 return settings.DirectionDegrees;
             if (settings.MainDirection == MainDirectionMode.Auto && boundary != null)
