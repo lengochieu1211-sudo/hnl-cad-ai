@@ -50,9 +50,29 @@ namespace HNL.VXT.Core.Preview
                 return false;
 
             // A concave hole boundary can enter the box even when all four corners happen to
-            // test inside. A boundary vertex inside the envelope proves the box is not wholly void.
+            // test inside. Keep the obstacle whenever the hole boundary enters/touches the clearance
+            // envelope; only a strictly contained envelope may be ignored.
             if (boundary.Vertices.Any(v => box.Contains(v, Tol)))
                 return false;
+
+            var boxEdges = new[]
+            {
+                Tuple.Create(corners[0], corners[1]),
+                Tuple.Create(corners[1], corners[2]),
+                Tuple.Create(corners[2], corners[3]),
+                Tuple.Create(corners[3], corners[0])
+            };
+
+            for (var i = 0; i < boundary.Vertices.Count; i++)
+            {
+                var a = boundary.Vertices[i];
+                var b = boundary.Vertices[(i + 1) % boundary.Vertices.Count];
+                foreach (var edge in boxEdges)
+                {
+                    if (SegmentsIntersect(a, b, edge.Item1, edge.Item2))
+                        return false;
+                }
+            }
 
             return true;
         }
@@ -79,6 +99,33 @@ namespace HNL.VXT.Core.Preview
 
             return inside;
         }
+
+        private static bool SegmentsIntersect(Point2 a, Point2 b, Point2 c, Point2 d)
+        {
+            var o1 = Cross(a, b, c);
+            var o2 = Cross(a, b, d);
+            var o3 = Cross(c, d, a);
+            var o4 = Cross(c, d, b);
+
+            if (((o1 > Tol && o2 < -Tol) || (o1 < -Tol && o2 > Tol)) &&
+                ((o3 > Tol && o4 < -Tol) || (o3 < -Tol && o4 > Tol)))
+                return true;
+
+            if (Math.Abs(o1) <= Tol && OnSegment(a, b, c)) return true;
+            if (Math.Abs(o2) <= Tol && OnSegment(a, b, d)) return true;
+            if (Math.Abs(o3) <= Tol && OnSegment(c, d, a)) return true;
+            if (Math.Abs(o4) <= Tol && OnSegment(c, d, b)) return true;
+            return false;
+        }
+
+        private static bool OnSegment(Point2 a, Point2 b, Point2 p)
+            => p.X >= Math.Min(a.X, b.X) - Tol &&
+               p.X <= Math.Max(a.X, b.X) + Tol &&
+               p.Y >= Math.Min(a.Y, b.Y) - Tol &&
+               p.Y <= Math.Max(a.Y, b.Y) + Tol;
+
+        private static double Cross(Point2 a, Point2 b, Point2 c)
+            => (b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X);
 
         private static double DistanceToSegment(Point2 p, Point2 a, Point2 b)
         {
