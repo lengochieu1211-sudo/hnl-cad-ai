@@ -8,12 +8,13 @@ using HNL.VXT.Core.Models;
 namespace HNL.VXT.Core.Preview
 {
     /// <summary>
-    /// Always-on HARD Max protection for normal convex non-orthogonal outer boundaries.
+    /// Optional HARD Max supplement for normal convex non-orthogonal outer boundaries.
     ///
-    /// This is intentionally separate from "Thêm XC cạnh khuyết":
+    /// This pass is gated by "Thêm XC cạnh khuyết" / UseLocalMainAdd:
+    /// - OFF preserves the certified base XC geometry exactly;
+    /// - ON may supplement missing outer-edge / adjacent-spacing HARD coverage;
     /// - orthogonal/notch geometry remains owned by VxtLocalMainSpacingSafety;
     /// - concave non-orthogonal geometry is not auto-repaired here;
-    /// - only missing outer-edge / adjacent-spacing HARD coverage is supplemented;
     /// - the certified global XC grid is never shifted or replaced.
     /// </summary>
     internal static class VxtOuterMainHardMaxSafety
@@ -29,7 +30,7 @@ namespace HNL.VXT.Core.Preview
             VxtLayoutContext context)
         {
             if (boundary == null || plan == null || settings == null) return false;
-            if (!settings.DrawMain || settings.MainBalanceStep <= Tol) return false;
+            if (!settings.DrawMain || !settings.UseLocalMainAdd || settings.MainBalanceStep <= Tol) return false;
             if (settings.MainDirection == MainDirectionMode.RectangleRegions ||
                 settings.MainDirection == MainDirectionMode.PolylinePath)
                 return false;
