@@ -29,6 +29,11 @@ namespace HNL.VXT.Core.Preview
 
             context = context ?? new VxtLayoutContext();
 
+            if (settings.MainDirection == MainDirectionMode.PolylinePath &&
+                !context.HasManualRegions)
+                throw new InvalidOperationException(
+                    "Chế độ Chọn hướng đang dùng tuyến gấp khúc nhưng chưa có vùng tuyến. Hãy Thiết lập hướng lại.");
+
             if ((settings.MainDirection == MainDirectionMode.RectangleRegions ||
                  settings.MainDirection == MainDirectionMode.PolylinePath) &&
                 context.HasManualRegions)
