@@ -239,13 +239,11 @@ namespace HNL.VXT.UI.Views
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            var marker = new Border
+            var number = new TextBlock
             {
-                Width = 4,
-                Height = 18,
-                CornerRadius = new CornerRadius(2),
-                Background = view.TryFindResource("AccentStrong") as Brush ?? Brushes.DeepSkyBlue,
-                Margin = new Thickness(0, 0, 8, 0)
+                Text = "8.",
+                Style = view.TryFindResource("SectionNumber") as Style,
+                VerticalAlignment = VerticalAlignment.Center
             };
             var title = new TextBlock
             {
@@ -254,7 +252,7 @@ namespace HNL.VXT.UI.Views
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(title, 1);
-            grid.Children.Add(marker);
+            grid.Children.Add(number);
             grid.Children.Add(title);
             return grid;
         }

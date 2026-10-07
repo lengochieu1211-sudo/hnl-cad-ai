@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Windows.Media;
 
 namespace HNL.VXT.UI.ViewModels
 {
@@ -22,6 +23,13 @@ namespace HNL.VXT.UI.ViewModels
         public string HangerLineweight { get => _settings.HangerLineweight; set => SetStringSetting(() => _settings.HangerLineweight, v => _settings.HangerLineweight = v, value); }
 
         public double DimensionColorIndex { get => _settings.DimensionColorIndex; set => SetColorIndex(() => _settings.DimensionColorIndex, v => _settings.DimensionColorIndex = v, value); }
+
+        // Preview legend follows the configured CAD layer color instead of fixed UI colors.
+        public Brush MainLegendBrush => ColorIndexToBrush(_settings.MainColorIndex);
+        public Brush FurringLegendBrush => ColorIndexToBrush(_settings.FurringColorIndex);
+        public Brush HangerLegendBrush => ColorIndexToBrush(_settings.HangerColorIndex);
+        public Brush DimensionLegendBrush => ColorIndexToBrush(_settings.DimensionColorIndex);
+
         public string DimensionLinetype { get => _settings.DimensionLinetype; set => SetStringSetting(() => _settings.DimensionLinetype, v => _settings.DimensionLinetype = v, value); }
         public string DimensionLineweight { get => _settings.DimensionLineweight; set => SetStringSetting(() => _settings.DimensionLineweight, v => _settings.DimensionLineweight = v, value); }
 
@@ -93,6 +101,8 @@ namespace HNL.VXT.UI.ViewModels
             setter(rounded);
             Changed(propertyName);
             OnPropertyChanged(ColorIndexPropertyToFriendly(propertyName));
+            var brushProperty = ColorIndexPropertyToLegendBrush(propertyName);
+            if (!string.IsNullOrEmpty(brushProperty)) OnPropertyChanged(brushProperty);
         }
 
         private void SetQuickColor(Func<short> getter, Action<short> setter, string value, string friendlyPropertyName, string rawPropertyName)
@@ -102,6 +112,8 @@ namespace HNL.VXT.UI.ViewModels
             setter(color);
             OnPropertyChanged(friendlyPropertyName);
             OnPropertyChanged(rawPropertyName);
+            var brushProperty = ColorIndexPropertyToLegendBrush(rawPropertyName);
+            if (!string.IsNullOrEmpty(brushProperty)) OnPropertyChanged(brushProperty);
             MarkCustom();
             RequestPreview();
         }
@@ -127,6 +139,39 @@ namespace HNL.VXT.UI.ViewModels
                 case nameof(DimensionColorIndex): return nameof(SelectedDimensionColor);
                 default: return string.Empty;
             }
+        }
+
+        private static string ColorIndexPropertyToLegendBrush(string propertyName)
+        {
+            switch (propertyName)
+            {
+                case nameof(MainColorIndex): return nameof(MainLegendBrush);
+                case nameof(FurringColorIndex): return nameof(FurringLegendBrush);
+                case nameof(HangerColorIndex): return nameof(HangerLegendBrush);
+                case nameof(DimensionColorIndex): return nameof(DimensionLegendBrush);
+                default: return string.Empty;
+            }
+        }
+
+        private Brush ColorIndexToBrush(short value)
+        {
+            Color color;
+            switch (value)
+            {
+                case 1: color = Color.FromRgb(255, 0, 0); break;
+                case 2: color = Color.FromRgb(255, 255, 0); break;
+                case 3: color = Color.FromRgb(0, 255, 0); break;
+                case 4: color = Color.FromRgb(0, 255, 255); break;
+                case 5: color = Color.FromRgb(0, 102, 255); break;
+                case 6: color = Color.FromRgb(255, 0, 255); break;
+                case 7: color = _host.IsDarkTheme ? Colors.White : Colors.Black; break;
+                case 8: color = Color.FromRgb(128, 128, 128); break;
+                case 9: color = Color.FromRgb(192, 192, 192); break;
+                default: color = Color.FromRgb(148, 163, 184); break;
+            }
+            var brush = new SolidColorBrush(color);
+            if (brush.CanFreeze) brush.Freeze();
+            return brush;
         }
 
         private static string ColorIndexToText(short value)

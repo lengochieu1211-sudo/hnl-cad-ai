@@ -21,6 +21,78 @@
         <Style TargetType="Expander">
             <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Expander}">
+                        <Grid SnapsToDevicePixels="True">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="24"/>
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter Grid.Column="0"
+                                                  ContentSource="Header"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  RecognizesAccessKey="True"/>
+                                <ToggleButton Grid.Column="1"
+                                              Width="22"
+                                              Height="24"
+                                              Focusable="False"
+                                              Background="Transparent"
+                                              BorderThickness="0"
+                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                            <Grid Background="Transparent">
+                                                <Path x:Name="MainChevron"
+                                                      Width="6" Height="10"
+                                                      Stretch="Fill"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"
+                                                      Stroke="{DynamicResource SecondaryText}"
+                                                      StrokeThickness="1.5"
+                                                      StrokeStartLineCap="Round"
+                                                      StrokeEndLineCap="Round"
+                                                      StrokeLineJoin="Round"
+                                                      Data="M 0 0 L 5 5 L 0 10"/>
+                                            </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsChecked" Value="True">
+                                                    <Setter TargetName="MainChevron" Property="Data" Value="M 0 0 L 5 5 L 10 0"/>
+                                                    <Setter TargetName="MainChevron" Property="Width" Value="10"/>
+                                                    <Setter TargetName="MainChevron" Property="Height" Value="6"/>
+                                                    <Setter TargetName="MainChevron" Property="Stroke" Value="{DynamicResource AccentStrong}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="MainChevron" Property="Stroke" Value="{DynamicResource AccentStrong}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+                            </Grid>
+                            <ContentPresenter x:Name="MainExpandSite"
+                                              Grid.Row="1"
+                                              HorizontalAlignment="Stretch"
+                                              ContentSource="Content"
+                                              Visibility="Collapsed"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="MainExpandSite" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.55"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- Secondary/nested expander: visually subordinate to the main section expanders.
@@ -241,9 +313,9 @@
                     </Grid.ColumnDefinitions>
                     <controls:HnlIcon Grid.Column="0"
                                       Kind="{TemplateBinding Tag}"
-                                      Width="13.5" Height="13.5"
+                                      Width="14" Height="14"
                                       Stroke="{TemplateBinding Foreground}"
-                                      StrokeThickness="1.7"
+                                      StrokeThickness="1.85"
                                       VerticalAlignment="Center"/>
                     <ContentPresenter Grid.Column="1"
                                       HorizontalAlignment="Center"
@@ -412,7 +484,7 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/><ColumnDefinition Width="92"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Hướng" Style="{StaticResource FieldLabel}"/>
                                 <ComboBox Grid.Column="1" ItemsSource="{Binding MainDirectionOptions}" SelectedItem="{Binding SelectedMainDirection}"/>
-                                <Button Grid.Column="2" Content="Thiết lập" Style="{StaticResource SettingsButton}" Command="{Binding PickDirectionCommand}" Margin="8,0,0,0"
+                                <Button Grid.Column="2" Content="Thiết lập" Tag="Settings" Style="{StaticResource CompactButton}" Command="{Binding PickDirectionCommand}" Margin="8,0,0,0"
                                         ToolTip="Tự động: chọn Shadowline • Chọn hướng: 2 điểm hoặc tuyến gấp khúc • HCN: thiết lập trực tiếp trên Cad"/>
                             </Grid>
 
@@ -684,7 +756,7 @@
                         <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="8." Style="{StaticResource SectionNumber}"/>
+                                <TextBlock Text="9." Style="{StaticResource SectionNumber}"/>
                                 <TextBlock Text="Xem trước" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
                             </StackPanel>
                             <Ellipse Grid.Column="1" Width="8" Height="8" Fill="{DynamicResource Success}" VerticalAlignment="Center"/>
@@ -692,19 +764,19 @@
 
                         <WrapPanel Margin="0,0,0,8">
                             <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
-                                <controls:HnlIcon Kind="Main" Style="{StaticResource LegendIcon}" Stroke="#22D3EE"/>
+                                <controls:HnlIcon Kind="Main" Style="{StaticResource LegendIcon}" Stroke="{Binding MainLegendBrush}"/>
                                 <TextBlock Text="Xương chính" FontSize="11" VerticalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
-                                <controls:HnlIcon Kind="Furring" Style="{StaticResource LegendIcon}" Stroke="#FACC15"/>
+                                <controls:HnlIcon Kind="Furring" Style="{StaticResource LegendIcon}" Stroke="{Binding FurringLegendBrush}"/>
                                 <TextBlock Text="Xương phụ" FontSize="11" VerticalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
-                                <controls:HnlIcon Kind="Hanger" Style="{StaticResource LegendIcon}" Stroke="#22C55E"/>
+                                <controls:HnlIcon Kind="Hanger" Style="{StaticResource LegendIcon}" Stroke="{Binding HangerLegendBrush}"/>
                                 <TextBlock Text="Ty" FontSize="11" VerticalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
-                                <controls:HnlIcon Kind="Dimension" Style="{StaticResource LegendIcon}" Stroke="#D946EF"/>
+                                <controls:HnlIcon Kind="Dimension" Style="{StaticResource LegendIcon}" Stroke="{Binding DimensionLegendBrush}"/>
                                 <TextBlock Text="Dim" FontSize="11" VerticalAlignment="Center"/>
                             </StackPanel>
                         </WrapPanel>
