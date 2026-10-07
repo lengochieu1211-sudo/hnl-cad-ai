@@ -29,7 +29,9 @@ namespace HNL.VXT.Core.Preview
 
             context = context ?? new VxtLayoutContext();
 
-            if (settings.MainDirection == MainDirectionMode.RectangleRegions && context.HasManualRegions)
+            if ((settings.MainDirection == MainDirectionMode.RectangleRegions ||
+                 settings.MainDirection == MainDirectionMode.PolylinePath) &&
+                context.HasManualRegions)
                 return BuildRegions(boundary, settings, context);
 
             if (settings.MainDirection == MainDirectionMode.Auto)
@@ -61,18 +63,42 @@ namespace HNL.VXT.Core.Preview
             var result = new VxtPreviewPlan();
             var seenLines = new HashSet<string>(StringComparer.Ordinal);
             var seenHangers = new HashSet<string>(StringComparer.Ordinal);
+            var polygonRegions = context.Regions.Any(x => x.RegionBoundary != null);
+
+            // Polyline-path regions are true polygon partitions. Draw only the original ceiling
+            // boundary as a guide; internal bisectors are solver boundaries, not CAD output.
+            if (polygonRegions)
+                AddBoundary(result, boundary);
 
             for (var i = 0; i < context.Regions.Count; i++)
             {
                 var region = context.Regions[i];
+                var effectiveBoundary = region.RegionBoundary ?? boundary;
+                var regionBounds = region.RegionBoundary == null
+                    ? (Box2?)region.WorldBounds
+                    : null;
+
                 var partial = BuildAtAngle(
-                    boundary,
+                    effectiveBoundary,
                     settings,
                     context,
                     region.MainAngleDegrees,
-                    region.WorldBounds,
+                    regionBounds,
                     region.FurringFromFarEdge,
-                    includeGuides: i == 0);
+                    includeGuides: !polygonRegions && i == 0);
+
+                if (polygonRegions)
+                {
+                    // Audit each direction zone in its own coordinate system. This avoids the old
+                    // single-angle auditor misclassifying a multi-bend final plan.
+                    VxtPlanConstraintAuditor.Attach(
+                        effectiveBoundary,
+                        partial,
+                        settings,
+                        region.MainAngleDegrees,
+                        context.BoundaryIndex);
+                }
+
                 Merge(result, partial, seenLines, seenHangers);
             }
 
@@ -487,6 +513,7 @@ namespace HNL.VXT.Core.Preview
             {
                 case MainDirectionMode.Vertical: return 90.0;
                 case MainDirectionMode.TwoPoints: return NormalizeDegrees(settings.DirectionDegrees);
+                case MainDirectionMode.PolylinePath: return NormalizeDegrees(settings.DirectionDegrees);
                 case MainDirectionMode.RectangleRegions: return NormalizeDegrees(settings.DirectionDegrees);
                 default: return 0.0;
             }
@@ -760,6 +787,7 @@ namespace HNL.VXT.Core.Preview
             }
             foreach (var dimension in source.Dimensions) target.Dimensions.Add(dimension);
             foreach (var text in source.Texts) target.Texts.Add(text);
+            foreach (var diagnostic in source.Diagnostics) target.Diagnostics.Add(diagnostic);
         }
 
         private static string LineKey(PreviewLine line)
