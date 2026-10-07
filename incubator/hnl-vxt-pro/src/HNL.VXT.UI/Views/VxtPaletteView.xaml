@@ -411,7 +411,7 @@
                                 <TextBlock Text="Hướng" Style="{StaticResource FieldLabel}"/>
                                 <ComboBox Grid.Column="1" ItemsSource="{Binding MainDirectionOptions}" SelectedItem="{Binding SelectedMainDirection}"/>
                                 <Button Grid.Column="2" Content="Thiết lập" Style="{StaticResource SettingsButton}" Command="{Binding PickDirectionCommand}" Margin="8,0,0,0"
-                                        ToolTip="Tự động: chọn Shadowline • 2 điểm/HCN: thiết lập trực tiếp trên Cad"/>
+                                        ToolTip="Tự động: chọn Shadowline • Chọn hướng: 2 điểm hoặc tuyến gấp khúc • HCN: thiết lập trực tiếp trên Cad"/>
                             </Grid>
 
                             <Grid Margin="0,0,0,7">
