@@ -33,7 +33,14 @@ namespace HNL.VXT.AutoCAD
             }
 
             var id = session.BoundaryIds[index];
-            if (id.IsNull || !id.IsValid || id.IsErased)
+            if (id.IsNull)
+            {
+                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: M" +
+                    (index + 1).ToString("00") +
+                    " được tạo bằng Pick Point nên không có Polyline nguồn để highlight.");
+                return;
+            }
+            if (!id.IsValid || id.IsErased)
             {
                 doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Polyline của M" +
                     (index + 1).ToString("00") + " không còn hợp lệ trong DWG.");
@@ -200,6 +207,153 @@ namespace HNL.VXT.AutoCAD
                 VxtTransientPreview.Instance.Clear();
             else
                 VxtTransientPreview.Instance.Refresh();
+        }
+
+        [CommandMethod("VXTPICKBOUNDARYPOINT", CommandFlags.Modal)]
+        public void PickBoundaryPoint()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+
+            var ed = doc.Editor;
+            var accepted = new List<Boundary2>();
+
+            while (true)
+            {
+                var options = new PromptPointOptions(
+                    "\nHNL Tool - VXT Pro: Pick Point trong vùng trần [Enter để xong]: ")
+                {
+                    AllowNone = true
+                };
+                var result = ed.GetPoint(options);
+                if (result.Status == PromptStatus.None || result.Status == PromptStatus.Cancel)
+                    break;
+                if (result.Status != PromptStatus.OK)
+                {
+                    ed.WriteMessage("\nHNL Tool - VXT Pro: Dừng Pick Point.");
+                    break;
+                }
+
+                DBObjectCollection traced = null;
+                try
+                {
+                    // Core currently models one simple outer loop per ceiling region.
+                    // detectIslands=false prevents hole/island loops from being misclassified
+                    // as independent ceilings while still matching Hatch/BPOLY-style point pick.
+                    traced = ed.TraceBoundary(result.Value, false);
+                }
+                catch (System.Exception ex)
+                {
+                    ed.WriteMessage("\nHNL Tool - VXT Pro: Không tạo được biên tại điểm này: " + ex.Message);
+                    continue;
+                }
+
+                if (traced == null || traced.Count == 0)
+                {
+                    ed.WriteMessage("\nHNL Tool - VXT Pro: Điểm này không nằm trong vùng kín hợp lệ.");
+                    continue;
+                }
+
+                Boundary2 boundary = null;
+                try
+                {
+                    foreach (DBObject item in traced)
+                    {
+                        var polyline = item as Polyline;
+                        if (polyline == null) continue;
+
+                        BoundarySampleInfo info;
+                        Boundary2 sampled;
+                        if (BoundarySampler.TryFromPolyline(polyline, out sampled, out info))
+                        {
+                            boundary = sampled;
+                            break;
+                        }
+                    }
+                }
+                finally
+                {
+                    foreach (DBObject item in traced)
+                        item?.Dispose();
+                }
+
+                if (boundary == null)
+                {
+                    ed.WriteMessage("\nHNL Tool - VXT Pro: TraceBoundary không trả về Polyline biên hợp lệ.");
+                    continue;
+                }
+
+                if (ContainsEquivalentBoundary(accepted, boundary))
+                {
+                    ed.WriteMessage("\nHNL Tool - VXT Pro: Vùng này đã được Pick Point trước đó; bỏ qua trùng.");
+                    continue;
+                }
+
+                accepted.Add(boundary);
+                ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận M" +
+                    accepted.Count.ToString("00") +
+                    " bằng Pick Point. Chọn vùng khác hoặc Enter để xong.");
+            }
+
+            if (accepted.Count == 0) return;
+
+            var session = VxtSession.Current;
+            session.Boundaries.Clear();
+            session.Boundaries.AddRange(accepted);
+            session.BoundaryIds.Clear();
+            for (var i = 0; i < accepted.Count; i++)
+                session.BoundaryIds.Add(ObjectId.Null);
+            session.Regions.Clear();
+            session.BoundaryRegionGroups.Clear();
+            session.BoundaryFurringFromFarEdges.Clear();
+            session.GlobalFurringFromFarEdge = false;
+
+            session.ViewModel?.SetBoundaryStatus(
+                "✓ Pick Point " + accepted.Count + " mảng trần", true);
+
+            ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận " +
+                accepted.Count + " mảng trần bằng Pick Point.");
+            VxtTransientPreview.Instance.Refresh();
+        }
+
+        private static bool ContainsEquivalentBoundary(
+            IEnumerable<Boundary2> existing,
+            Boundary2 candidate)
+        {
+            if (candidate == null) return false;
+            var candidateBounds = candidate.GetBounds();
+            var candidateArea = Math.Abs(PolygonArea(candidate.Vertices));
+
+            foreach (var current in existing)
+            {
+                if (current == null) continue;
+                var bounds = current.GetBounds();
+                if (Math.Abs(bounds.Min.X - candidateBounds.Min.X) > 1e-4 ||
+                    Math.Abs(bounds.Min.Y - candidateBounds.Min.Y) > 1e-4 ||
+                    Math.Abs(bounds.Max.X - candidateBounds.Max.X) > 1e-4 ||
+                    Math.Abs(bounds.Max.Y - candidateBounds.Max.Y) > 1e-4)
+                    continue;
+
+                var area = Math.Abs(PolygonArea(current.Vertices));
+                var tolerance = Math.Max(1e-3, Math.Max(area, candidateArea) * 1e-8);
+                if (Math.Abs(area - candidateArea) <= tolerance)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static double PolygonArea(IReadOnlyList<Point2> vertices)
+        {
+            if (vertices == null || vertices.Count < 3) return 0.0;
+            var twiceArea = 0.0;
+            for (var i = 0; i < vertices.Count; i++)
+            {
+                var a = vertices[i];
+                var b = vertices[(i + 1) % vertices.Count];
+                twiceArea += a.X * b.Y - b.X * a.Y;
+            }
+            return twiceArea * 0.5;
         }
 
         [CommandMethod("VXTPICKDIRECTION", CommandFlags.Modal)]

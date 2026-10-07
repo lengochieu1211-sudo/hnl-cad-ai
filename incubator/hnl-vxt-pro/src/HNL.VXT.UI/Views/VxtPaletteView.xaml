@@ -473,9 +473,19 @@
                             <TextBlock Text="2." Style="{StaticResource SectionNumber}"/>
                             <TextBlock Text="Phạm vi bố trí" Style="{StaticResource SectionTitle}"/>
                         </StackPanel>
-                        <Button Content="Chọn biên trần" Style="{StaticResource PickButton}"
-                                Command="{Binding SelectBoundaryCommand}"
-                                HorizontalAlignment="Stretch" Margin="0,0,0,7"/>
+                        <Grid Margin="0,0,0,7">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Content="Chọn Polyline" Style="{StaticResource PickButton}"
+                                    Command="{Binding SelectBoundaryCommand}"
+                                    HorizontalAlignment="Stretch" Margin="0,0,4,0"/>
+                            <Button Grid.Column="1" Content="Pick Point" Style="{StaticResource PickButton}"
+                                    Command="{Binding PickBoundaryPointCommand}"
+                                    HorizontalAlignment="Stretch" Margin="4,0,0,0"
+                                    ToolTip="Pick nhiều điểm trong các vùng trần; Enter để kết thúc"/>
+                        </Grid>
                         <Border Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}"
                                 BorderThickness="1" CornerRadius="6" Padding="8,6">
                             <TextBlock Text="{Binding BoundaryStatus}" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" FontSize="12"/>

@@ -78,6 +78,24 @@ namespace HNL.VXT.AutoCAD
             }
         }
 
+        public void PickBoundaryPoint()
+        {
+            CancelPendingPreview();
+            switch (VxtSession.Current.Settings.MainDirection)
+            {
+                case MainDirectionMode.TwoPoints:
+                case MainDirectionMode.PolylinePath:
+                    Send("VXTPICKBOUNDARYPOINT HNLVXTDIRECTION ");
+                    break;
+                case MainDirectionMode.RectangleRegions:
+                    Send("VXTPICKBOUNDARYPOINT HNLVXTREGION ");
+                    break;
+                default:
+                    Send("VXTPICKBOUNDARYPOINT ");
+                    break;
+            }
+        }
+
         public void PickDirection(MainDirectionMode mode)
         {
             CancelPendingPreview();

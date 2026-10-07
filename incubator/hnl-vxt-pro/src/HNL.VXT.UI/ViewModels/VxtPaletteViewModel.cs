@@ -14,7 +14,7 @@ namespace HNL.VXT.UI.ViewModels
         private readonly IVxtHostBridge _host;
         private VxtSettings _settings = new VxtSettings();
         private string _boundaryStatus = "Chưa chọn biên trần";
-        private string _previewStatus = "Chọn Polyline kín để bắt đầu xem trước.";
+        private string _previewStatus = "Chọn Polyline hoặc Pick Point để bắt đầu xem trước.";
         private string _summary = "XC --  •  XP --  •  TY --  •  Dim --";
         private string _selectedPreset = "Trần chìm tiêu chuẩn";
         private string _generalEquipmentStatus = "Chưa chọn";
@@ -28,6 +28,7 @@ namespace HNL.VXT.UI.ViewModels
             _host = host ?? throw new ArgumentNullException(nameof(host));
 
             SelectBoundaryCommand = new RelayCommand(() => _host.SelectBoundary());
+            PickBoundaryPointCommand = new RelayCommand(() => _host.PickBoundaryPoint());
             PickDirectionCommand = new RelayCommand(
                 () => _host.PickDirection(_settings.MainDirection),
                 () => _settings.MainDirection == MainDirectionMode.Auto ||
@@ -102,6 +103,7 @@ namespace HNL.VXT.UI.ViewModels
         }
 
         public ICommand SelectBoundaryCommand { get; }
+        public ICommand PickBoundaryPointCommand { get; }
         public ICommand PickDirectionCommand { get; }
         public ICommand PickMainBlockCommand { get; }
         public ICommand PickFurringBlockCommand { get; }
@@ -256,7 +258,7 @@ namespace HNL.VXT.UI.ViewModels
             HasBoundary = hasBoundary;
             PreviewStatus = hasBoundary
                 ? "Xem trước đang bật • thay đổi thông số để cập nhật."
-                : "Chọn Polyline kín để bắt đầu xem trước.";
+                : "Chọn Polyline hoặc Pick Point để bắt đầu xem trước.";
         }
 
         public void SetDirection(double degrees, MainDirectionMode mode = MainDirectionMode.TwoPoints)

@@ -8,6 +8,7 @@ namespace HNL.VXT.UI.Hosting
         string[] GetLinetypeNames();
         string[] GetDimStyleNames();
         void SelectBoundary();
+        void PickBoundaryPoint();
         void PickDirection(MainDirectionMode mode);
         void PickBlock(BlockTarget target);
         void PickEquipment(EquipmentTarget target);
