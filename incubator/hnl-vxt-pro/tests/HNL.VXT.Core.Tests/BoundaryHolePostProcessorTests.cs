@@ -87,6 +87,49 @@ namespace HNL.VXT.Core.Tests
                 "Hole void must not be audited as drawable ceiling.");
         }
 
+        [TestMethod]
+        public void MultiBoundaryBuilder_AppliesHoleClipping_ForLegacyAndProFixed()
+        {
+            var outer = Rect(0, 0, 2000, 2000);
+            var hole = Rect(700, 700, 1300, 1300);
+
+            foreach (var mode in new[] { VxtOptimizationMode.Legacy, VxtOptimizationMode.ProBalanced })
+            {
+                var context = new VxtLayoutContext();
+                context.BoundaryHoleGroups.Add(new System.Collections.Generic.List<Boundary2> { hole });
+
+                var settings = new VxtSettings
+                {
+                    OptimizationMode = mode,
+                    MainDirection = MainDirectionMode.Horizontal,
+                    DrawMain = true,
+                    DrawFurring = true,
+                    DrawHangers = true,
+                    AutoDimension = false,
+                    UseLocalMainAdd = false,
+                    MainSkipLimit = 0.0
+                };
+
+                var plan = VxtMultiBoundaryPlanBuilder.Build(new[] { outer }, settings, context);
+
+                Assert.IsTrue(plan.Lines.Any(x => x.Kind == PreviewLineKind.Main));
+                Assert.IsTrue(plan.Lines.Any(x => x.Kind == PreviewLineKind.Furring));
+                Assert.IsFalse(plan.HangerPoints.Any(IsStrictlyInsideHole),
+                    mode + " left a Ty point inside the picked hole.");
+
+                foreach (var line in plan.Lines.Where(x =>
+                    x.Kind == PreviewLineKind.Main || x.Kind == PreviewLineKind.Furring))
+                {
+                    var mid = new Point2((line.A.X + line.B.X) * 0.5, (line.A.Y + line.B.Y) * 0.5);
+                    Assert.IsFalse(IsStrictlyInsideHole(mid),
+                        mode + " left structural geometry inside the picked hole.");
+                }
+            }
+        }
+
+        private static bool IsStrictlyInsideHole(Point2 p)
+            => p.X > 700.0 && p.X < 1300.0 && p.Y > 700.0 && p.Y < 1300.0;
+
         private static Boundary2 Rect(double minX, double minY, double maxX, double maxY)
             => new Boundary2(new[]
             {

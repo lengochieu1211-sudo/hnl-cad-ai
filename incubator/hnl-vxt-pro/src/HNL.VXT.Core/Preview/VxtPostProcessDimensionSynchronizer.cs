@@ -42,18 +42,32 @@ namespace HNL.VXT.Core.Preview
 
             var rebuilt = new List<PreviewDimension>();
 
-            if (settings.MainDirection == MainDirectionMode.RectangleRegions &&
+            if ((settings.MainDirection == MainDirectionMode.RectangleRegions ||
+                 settings.MainDirection == MainDirectionMode.PolylinePath) &&
                 context != null && context.HasManualRegions)
             {
                 foreach (var region in context.Regions)
                 {
                     var radians = NormalizeDegrees(region.MainAngleDegrees) * Math.PI / 180.0;
-                    var localBoundary = boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)).ToList();
-                    if (localBoundary.Count < 3) continue;
-                    var polygonBounds = Box2.FromPoints(localBoundary);
-                    var regionLocal = TransformBox(region.WorldBounds, radians);
                     Box2 domain;
-                    if (!TryIntersect(polygonBounds, regionLocal, out domain)) continue;
+
+                    if (region.RegionBoundary != null)
+                    {
+                        var localRegion = region.RegionBoundary.Vertices
+                            .Select(p => Transform2.ToLocal(p, radians))
+                            .ToList();
+                        if (localRegion.Count < 3) continue;
+                        domain = Box2.FromPoints(localRegion);
+                    }
+                    else
+                    {
+                        var localBoundary = boundary.Vertices.Select(p => Transform2.ToLocal(p, radians)).ToList();
+                        if (localBoundary.Count < 3) continue;
+                        var polygonBounds = Box2.FromPoints(localBoundary);
+                        var regionLocal = TransformBox(region.WorldBounds, radians);
+                        if (!TryIntersect(polygonBounds, regionLocal, out domain)) continue;
+                    }
+
                     if (domain.Width <= Tol || domain.Height <= Tol) continue;
                     AddScopeDimensions(plan, settings, radians, domain, rebuilt);
                 }
