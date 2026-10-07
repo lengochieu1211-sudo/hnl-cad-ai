@@ -94,26 +94,37 @@ namespace HNL.VXT.Core.Preview
 
                 if (polygonRegions)
                 {
-                    // Audit each direction zone in its own coordinate system. This avoids the old
-                    // single-angle auditor misclassifying a multi-bend final plan.
+                    // Cut inner voids before auditing. HARD edge/spacing checks must see the exact
+                    // XC/XP/Ty geometry that Preview/Create will consume.
+                    VxtBoundaryHolePostProcessor.Apply(effectiveBoundary, context, partial);
+
                     VxtPlanConstraintAuditor.Attach(
                         effectiveBoundary,
                         partial,
                         settings,
                         region.MainAngleDegrees,
-                        context.BoundaryIndex);
+                        context.BoundaryIndex,
+                        context);
                 }
 
                 Merge(result, partial, seenLines, seenHangers);
             }
 
-            var dims = result.Dimensions
-                .GroupBy(DimensionKey, StringComparer.Ordinal)
-                .Select(g => g.First())
-                .ToList();
-            result.Dimensions.Clear();
-            result.Dimensions.AddRange(dims);
-            result.DimensionSegmentCount = result.Dimensions.Count;
+            if (context.HasBoundaryHoles)
+            {
+                VxtPostProcessDimensionSynchronizer.Synchronize(
+                    boundary, settings, context, result, 0.0);
+            }
+            else
+            {
+                var dims = result.Dimensions
+                    .GroupBy(DimensionKey, StringComparer.Ordinal)
+                    .Select(g => g.First())
+                    .ToList();
+                result.Dimensions.Clear();
+                result.Dimensions.AddRange(dims);
+                result.DimensionSegmentCount = result.Dimensions.Count;
+            }
             return result;
         }
 
