@@ -128,7 +128,8 @@ namespace HNL.VXT.AutoCAD
         // Backward-compatible flattened manual regions.
         public List<VxtLayoutRegion> Regions { get; } = new List<VxtLayoutRegion>();
 
-        // Manual rectangle regions owned by each selected ceiling Polyline.
+        // Runtime direction regions owned by each selected ceiling Polyline.
+        // Rectangle mode stores Box2 regions; polyline-path mode stores true polygon regions.
         // Group index == Boundaries/BoundaryIds index.
         public List<List<VxtLayoutRegion>> BoundaryRegionGroups { get; } = new List<List<VxtLayoutRegion>>();
 
