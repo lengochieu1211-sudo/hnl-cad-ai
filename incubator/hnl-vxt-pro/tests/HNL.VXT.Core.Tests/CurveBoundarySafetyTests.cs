@@ -62,10 +62,14 @@ namespace HNL.VXT.Core.Tests
             var repaired = VxtMultiBoundaryPlanBuilder.Build(
                 new[] { boundary }, settings, new VxtLayoutContext());
 
+            var diagnosticDump = string.Join(" | ", repaired.Diagnostics.Select(x =>
+                x.Kind + ":" + x.ActualValue.ToString("0.###") + "/" + x.LimitValue.ToString("0.###")));
             Assert.IsFalse(repaired.Diagnostics.Any(x =>
                     x.Target == VxtConstraintTarget.Main &&
                     x.Kind == VxtConstraintKind.MaxEdgeHard),
-                "Outer curved-edge safety must remove the HARD MaxEdge violation.");
+                "Outer curved-edge safety must remove the HARD MaxEdge violation. " +
+                "RawMain=" + raw.MainSegmentCount + " FinalMain=" + repaired.MainSegmentCount +
+                " Diagnostics=" + diagnosticDump);
             Assert.IsTrue(repaired.MainSegmentCount > raw.MainSegmentCount,
                 "Repair must add local XC without shifting/replacing the certified base grid.");
         }
