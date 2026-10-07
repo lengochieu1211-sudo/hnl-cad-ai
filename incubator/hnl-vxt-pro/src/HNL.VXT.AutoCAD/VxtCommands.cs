@@ -207,22 +207,102 @@ namespace HNL.VXT.AutoCAD
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
             if (doc == null) return;
-            var angle = PromptAngleByTwoPoints(doc.Editor, "hướng Xương chính");
-            if (!angle.HasValue)
+
+            var pathPoints = PromptMainDirectionPath(doc);
+            if (pathPoints == null || pathPoints.Count < 2)
             {
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Chưa xác định hướng 2 điểm; giữ hướng trước đó.");
+                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Chưa xác định hướng; giữ thiết lập trước đó.");
                 return;
             }
 
             var session = VxtSession.Current;
-            session.Settings.MainDirection = MainDirectionMode.TwoPoints;
-            session.Settings.DirectionDegrees = NormalizeAngle(angle.Value);
+            var firstAngle = NormalizeAngle(
+                Math.Atan2(
+                    pathPoints[1].Y - pathPoints[0].Y,
+                    pathPoints[1].X - pathPoints[0].X) * 180.0 / Math.PI);
+
+            if (pathPoints.Count == 2)
+            {
+                // Exact backward-compatible TwoPoints path. No region partition is introduced.
+                session.Settings.MainDirection = MainDirectionMode.TwoPoints;
+                session.Settings.DirectionDegrees = firstAngle;
+                session.Regions.Clear();
+                session.BoundaryRegionGroups.Clear();
+                session.ViewModel?.SetDirection(firstAngle, MainDirectionMode.TwoPoints);
+                VxtTransientPreview.Instance.Refresh();
+                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Chọn hướng = 1 đoạn, góc " +
+                    firstAngle.ToString("0.###") + "°.");
+                return;
+            }
+
+            if (!session.HasBoundary)
+            {
+                doc.Editor.WriteMessage(
+                    "\nHNL Tool - VXT Pro: Tuyến gấp khúc cần có biên trần trước. " +
+                    "Hãy chọn Polyline biên trần rồi Thiết lập hướng lại.");
+                return;
+            }
+
+            var groups = new List<List<VxtLayoutRegion>>();
+            try
+            {
+                for (var boundaryIndex = 0; boundaryIndex < session.Boundaries.Count; boundaryIndex++)
+                {
+                    var partitioned = VxtPolylineDirectionPartitioner.Partition(
+                        session.Boundaries[boundaryIndex],
+                        pathPoints,
+                        session.GlobalFurringFromFarEdge).ToList();
+
+                    if (partitioned.Count != pathPoints.Count - 1)
+                        throw new InvalidOperationException(
+                            "Số vùng hướng không khớp số đoạn của tuyến.");
+
+                    if (session.Settings.AskDirectionEachRegion &&
+                        (session.Settings.DrawFurring ||
+                         (session.Settings.AutoDimension && session.Settings.DimFurring)))
+                    {
+                        for (var regionIndex = 0; regionIndex < partitioned.Count; regionIndex++)
+                        {
+                            bool fromFar;
+                            if (!PromptFurringStartSide(
+                                doc.Editor,
+                                partitioned[regionIndex].MainAngleDegrees,
+                                "vùng tuyến " + (regionIndex + 1) +
+                                " / M" + (boundaryIndex + 1).ToString("00"),
+                                out fromFar))
+                                return;
+                            partitioned[regionIndex].FurringFromFarEdge = fromFar;
+                        }
+                    }
+
+                    groups.Add(partitioned);
+                }
+            }
+            catch (Exception ex)
+            {
+                doc.Editor.WriteMessage(
+                    "\nHNL Tool - VXT Pro: Không thể chia mảng theo tuyến gấp khúc: " + ex.Message);
+                return;
+            }
+
+            // Commit only after every selected ceiling boundary partitions successfully.
+            session.Settings.MainDirection = MainDirectionMode.PolylinePath;
+            session.Settings.DirectionDegrees = firstAngle;
             session.Regions.Clear();
             session.BoundaryRegionGroups.Clear();
-            session.ViewModel?.SetDirection(angle.Value);
+            foreach (var group in groups)
+            {
+                session.BoundaryRegionGroups.Add(group);
+                session.Regions.AddRange(group);
+            }
+            session.BoundaryFurringFromFarEdges.Clear();
+
+            session.ViewModel?.SetDirection(firstAngle, MainDirectionMode.PolylinePath);
             VxtTransientPreview.Instance.Refresh();
-            doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Hướng Xương chính 2 điểm = " +
-                NormalizeAngle(angle.Value).ToString("0.###") + "°.");
+            doc.Editor.WriteMessage(
+                "\nHNL Tool - VXT Pro: Đã nhận tuyến gấp khúc " +
+                (pathPoints.Count - 1) + " đoạn; tự chia " +
+                session.Regions.Count + " vùng hướng XC.");
         }
 
         [CommandMethod("VXTRECTDIRECTION", CommandFlags.Modal)]
@@ -418,7 +498,9 @@ namespace HNL.VXT.AutoCAD
         private static double ResolveCurrentMainAngle(VxtSettings settings)
         {
             if (settings.MainDirection == MainDirectionMode.Vertical) return 90.0;
-            if (settings.MainDirection == MainDirectionMode.TwoPoints || settings.MainDirection == MainDirectionMode.RectangleRegions)
+            if (settings.MainDirection == MainDirectionMode.TwoPoints ||
+                settings.MainDirection == MainDirectionMode.PolylinePath ||
+                settings.MainDirection == MainDirectionMode.RectangleRegions)
                 return settings.DirectionDegrees;
             return 0.0;
         }
@@ -433,6 +515,133 @@ namespace HNL.VXT.AutoCAD
         {
             angle %= 180.0;
             return angle < 0.0 ? angle + 180.0 : angle;
+        }
+
+        private static List<Point2> PromptMainDirectionPath(Document doc)
+        {
+            var ed = doc.Editor;
+            var input = new PromptKeywordOptions(
+                "\nHNL Tool - VXT Pro: Chọn cách xác định hướng [Diem/Duong] <Diem>: ")
+            {
+                AllowNone = true
+            };
+            input.Keywords.Add("Diem");
+            input.Keywords.Add("Duong");
+            input.Keywords.Default = "Diem";
+
+            var inputResult = ed.GetKeywords(input);
+            if (inputResult.Status == PromptStatus.Cancel) return null;
+            if (inputResult.Status != PromptStatus.OK && inputResult.Status != PromptStatus.None)
+                return null;
+
+            var mode = inputResult.Status == PromptStatus.None
+                ? "Diem"
+                : inputResult.StringResult;
+            return string.Equals(mode, "Duong", StringComparison.OrdinalIgnoreCase)
+                ? ReadDirectionEntity(doc)
+                : ReadDirectionPoints(ed);
+        }
+
+        private static List<Point2> ReadDirectionPoints(Editor ed)
+        {
+            var first = ed.GetPoint(
+                "\nHNL Tool - VXT Pro: Chọn điểm 1 của hướng Xương chính: ");
+            if (first.Status != PromptStatus.OK) return null;
+
+            var secondOptions = new PromptPointOptions(
+                "\nHNL Tool - VXT Pro: Chọn điểm 2: ")
+            {
+                BasePoint = first.Value,
+                UseBasePoint = true
+            };
+            var second = ed.GetPoint(secondOptions);
+            if (second.Status != PromptStatus.OK) return null;
+
+            var points = new List<Point2>
+            {
+                new Point2(first.Value.X, first.Value.Y),
+                new Point2(second.Value.X, second.Value.Y)
+            };
+
+            while (true)
+            {
+                var nextOptions = new PromptPointOptions(
+                    "\nHNL Tool - VXT Pro: Chọn điểm tiếp theo hoặc Enter để kết thúc tuyến: ")
+                {
+                    AllowNone = true,
+                    BasePoint = new Autodesk.AutoCAD.Geometry.Point3d(
+                        points[points.Count - 1].X,
+                        points[points.Count - 1].Y,
+                        0.0),
+                    UseBasePoint = true
+                };
+                var next = ed.GetPoint(nextOptions);
+                if (next.Status == PromptStatus.None) break;
+                if (next.Status != PromptStatus.OK) return null;
+                points.Add(new Point2(next.Value.X, next.Value.Y));
+            }
+
+            return points;
+        }
+
+        private static List<Point2> ReadDirectionEntity(Document doc)
+        {
+            var ed = doc.Editor;
+            var options = new PromptEntityOptions(
+                "\nHNL Tool - VXT Pro: Chọn Line hoặc Polyline mở làm tuyến hướng: ");
+            options.SetRejectMessage(
+                "\nHNL Tool - VXT Pro: Chỉ nhận Line hoặc Polyline 2D mở.");
+            options.AddAllowedClass(typeof(Line), true);
+            options.AddAllowedClass(typeof(Polyline), true);
+
+            var selected = ed.GetEntity(options);
+            if (selected.Status != PromptStatus.OK) return null;
+
+            using (var tr = doc.TransactionManager.StartOpenCloseTransaction())
+            {
+                var entity = tr.GetObject(selected.ObjectId, OpenMode.ForRead, false) as Entity;
+                if (entity is Line line)
+                {
+                    return new List<Point2>
+                    {
+                        new Point2(line.StartPoint.X, line.StartPoint.Y),
+                        new Point2(line.EndPoint.X, line.EndPoint.Y)
+                    };
+                }
+
+                var polyline = entity as Polyline;
+                if (polyline == null || polyline.NumberOfVertices < 2)
+                {
+                    ed.WriteMessage("\nHNL Tool - VXT Pro: Đường hướng không hợp lệ.");
+                    return null;
+                }
+
+                if (polyline.Closed)
+                {
+                    ed.WriteMessage(
+                        "\nHNL Tool - VXT Pro: Tuyến hướng phải là Polyline mở; không dùng Polyline kín.");
+                    return null;
+                }
+
+                for (var i = 0; i + 1 < polyline.NumberOfVertices; i++)
+                {
+                    if (Math.Abs(polyline.GetBulgeAt(i)) > 1e-9)
+                    {
+                        ed.WriteMessage(
+                            "\nHNL Tool - VXT Pro: Tuyến hướng hiện chỉ nhận các đoạn thẳng; " +
+                            "Polyline có cung/bulge chưa được dùng làm tuyến hướng.");
+                        return null;
+                    }
+                }
+
+                var points = new List<Point2>(polyline.NumberOfVertices);
+                for (var i = 0; i < polyline.NumberOfVertices; i++)
+                {
+                    var point = polyline.GetPoint3dAt(i);
+                    points.Add(new Point2(point.X, point.Y));
+                }
+                return points;
+            }
         }
 
         private static double? PromptAngleByTwoPoints(Editor ed, string label)
