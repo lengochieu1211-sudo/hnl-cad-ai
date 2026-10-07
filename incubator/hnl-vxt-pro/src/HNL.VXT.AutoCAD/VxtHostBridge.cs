@@ -63,37 +63,13 @@ namespace HNL.VXT.AutoCAD
         public void SelectBoundary()
         {
             CancelPendingPreview();
-            switch (VxtSession.Current.Settings.MainDirection)
-            {
-                case MainDirectionMode.TwoPoints:
-                case MainDirectionMode.PolylinePath:
-                    Send("HNLVXTBOUNDARY HNLVXTDIRECTION ");
-                    break;
-                case MainDirectionMode.RectangleRegions:
-                    Send("HNLVXTBOUNDARY HNLVXTREGION ");
-                    break;
-                default:
-                    Send("HNLVXTBOUNDARY ");
-                    break;
-            }
+            Send("HNLVXTBOUNDARY ");
         }
 
         public void PickBoundaryPoint()
         {
             CancelPendingPreview();
-            switch (VxtSession.Current.Settings.MainDirection)
-            {
-                case MainDirectionMode.TwoPoints:
-                case MainDirectionMode.PolylinePath:
-                    Send("HNLVXTPICKBOUNDARYPOINT HNLVXTDIRECTION ");
-                    break;
-                case MainDirectionMode.RectangleRegions:
-                    Send("HNLVXTPICKBOUNDARYPOINT HNLVXTREGION ");
-                    break;
-                default:
-                    Send("HNLVXTPICKBOUNDARYPOINT ");
-                    break;
-            }
+            Send("HNLVXTPICKBOUNDARYPOINT ");
         }
 
         public void PickDirection(MainDirectionMode mode)
@@ -165,7 +141,7 @@ namespace HNL.VXT.AutoCAD
                     else
                     {
                         Send("HNLVXTCLEARPREVIEW ");
-                        Write("\nHNL Tool - VXT Pro: Đã chọn 'Chọn hướng'. Hãy chọn Polyline biên trần; HNL Tool sẽ cho chọn 2 điểm hoặc tuyến gấp khúc ngay sau đó.");
+                        Write("\nHNL Tool - VXT Pro: Đã chọn 'Chọn hướng'. Hãy dùng Chọn Polyline hoặc Chọn điểm; sau khi nhận vùng trần HNL Tool sẽ cho chọn 2 điểm hoặc tuyến gấp khúc.");
                     }
                     return;
                 }
@@ -176,7 +152,7 @@ namespace HNL.VXT.AutoCAD
                     else
                     {
                         Send("HNLVXTCLEARPREVIEW ");
-                        Write("\nHNL Tool - VXT Pro: Đã chọn chế độ HCN. Hãy chọn Polyline biên trần; HNL Tool sẽ vào chia vùng ngay sau đó.");
+                        Write("\nHNL Tool - VXT Pro: Đã chọn chế độ HCN. Hãy dùng Chọn Polyline hoặc Chọn điểm; sau khi nhận vùng trần HNL Tool sẽ vào chia vùng.");
                     }
                     return;
                 }

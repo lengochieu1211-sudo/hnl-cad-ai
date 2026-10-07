@@ -179,6 +179,7 @@ namespace HNL.VXT.AutoCAD
                 session.Regions.Clear();
                 session.BoundaryRegionGroups.Clear();
                 session.BoundaryHoleGroups.Clear();
+                session.BoundaryFurringFromFarEdges.Clear();
                 session.GlobalFurringFromFarEdge = false;
                 var skipped = skippedOpen + skippedZ + skippedUnsupported;
                 session.ViewModel?.SetBoundaryStatus(
@@ -204,10 +205,14 @@ namespace HNL.VXT.AutoCAD
             }
 
             var mode = VxtSession.Current.Settings.MainDirection;
-            if (mode == MainDirectionMode.TwoPoints || mode == MainDirectionMode.RectangleRegions)
+            if (mode == MainDirectionMode.TwoPoints ||
+                mode == MainDirectionMode.PolylinePath ||
+                mode == MainDirectionMode.RectangleRegions)
                 VxtTransientPreview.Instance.Clear();
             else
                 VxtTransientPreview.Instance.Refresh();
+
+            QueueBoundaryFollowUp(doc);
         }
 
         [CommandMethod("VXTPICKBOUNDARYPOINT", CommandFlags.Modal)]
@@ -228,12 +233,17 @@ namespace HNL.VXT.AutoCAD
                     AllowNone = true
                 };
                 var result = ed.GetPoint(options);
-                if (result.Status == PromptStatus.None || result.Status == PromptStatus.Cancel)
+                if (result.Status == PromptStatus.None)
                     break;
+                if (result.Status == PromptStatus.Cancel)
+                {
+                    ed.WriteMessage("\nHNL Tool - VXT Pro: Đã hủy Chọn điểm; giữ nguyên vùng trần trước đó.");
+                    return;
+                }
                 if (result.Status != PromptStatus.OK)
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Dừng Chọn điểm.");
-                    break;
+                    ed.WriteMessage("\nHNL Tool - VXT Pro: Đã hủy Chọn điểm; giữ nguyên vùng trần trước đó.");
+                    return;
                 }
 
                 DBObjectCollection traced = null;
@@ -354,7 +364,32 @@ namespace HNL.VXT.AutoCAD
             ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận " +
                 accepted.Count + " mảng trần bằng Chọn điểm" +
                 (totalHoles > 0 ? ", có " + totalHoles + " lỗ trong." : "."));
-            VxtTransientPreview.Instance.Refresh();
+
+            var mode = session.Settings.MainDirection;
+            if (mode == MainDirectionMode.TwoPoints ||
+                mode == MainDirectionMode.PolylinePath ||
+                mode == MainDirectionMode.RectangleRegions)
+                VxtTransientPreview.Instance.Clear();
+            else
+                VxtTransientPreview.Instance.Refresh();
+
+            QueueBoundaryFollowUp(doc);
+        }
+
+        internal static void QueueBoundaryFollowUp(Document doc)
+        {
+            if (doc == null) return;
+
+            switch (VxtSession.Current.Settings.MainDirection)
+            {
+                case MainDirectionMode.TwoPoints:
+                case MainDirectionMode.PolylinePath:
+                    doc.SendStringToExecute("HNLVXTDIRECTION ", true, false, false);
+                    break;
+                case MainDirectionMode.RectangleRegions:
+                    doc.SendStringToExecute("HNLVXTREGION ", true, false, false);
+                    break;
+            }
         }
 
         private static bool BoundaryInside(Boundary2 candidate, Boundary2 container)

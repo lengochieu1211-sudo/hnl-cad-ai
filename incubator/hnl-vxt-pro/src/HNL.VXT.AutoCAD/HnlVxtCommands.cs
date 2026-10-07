@@ -77,16 +77,16 @@ namespace HNL.VXT.AutoCAD
         public void SelectBoundary()
         {
             if (!VxtAuthorization.EnsureAuthorized()) return;
-            // A fresh Lisp ssget starts a fresh per-ceiling ask_each state. Clear the previous
-            // boundary-specific XP directions before the new selection is collected.
-            VxtSession.Current.BoundaryFurringFromFarEdges.Clear();
-            VxtSession.Current.GlobalFurringFromFarEdge = false;
 
             // AutoCAD PickFirst/preselection is authoritative when it contains at least one valid
-            // closed Polyline. Only fall back to an interactive GetSelection when there is no
-            // reusable ceiling boundary in the current implied selection.
+            // closed Polyline. State is reset only after a new boundary is actually accepted so
+            // Esc/Cancel can preserve the previous VXT session exactly.
             if (VxtBoundarySelectionAdapter.TryAdoptImpliedSelection(refreshPreview: true, writeMessage: true))
+            {
+                var doc = Autodesk.AutoCAD.ApplicationServices.Core.Application.DocumentManager.MdiActiveDocument;
+                VxtCommands.QueueBoundaryFollowUp(doc);
                 return;
+            }
 
             new VxtCommands().SelectBoundary();
         }

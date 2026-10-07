@@ -110,6 +110,16 @@ jobs:
           if ($bridgeSource.Contains('Send("VXTPICKBOUNDARYPOINT ')) {
             throw "Functional gate failed: UI bridge still invokes unregistered legacy VXTPICKBOUNDARYPOINT."
           }
+          if ($bridgeSource.Contains('HNLVXTBOUNDARY HNLVXTDIRECTION') -or
+              $bridgeSource.Contains('HNLVXTBOUNDARY HNLVXTREGION') -or
+              $bridgeSource.Contains('HNLVXTPICKBOUNDARYPOINT HNLVXTDIRECTION') -or
+              $bridgeSource.Contains('HNLVXTPICKBOUNDARYPOINT HNLVXTREGION')) {
+            throw "Functional gate failed: boundary UI still pre-chains follow-up commands and can leak state after Cancel."
+          }
+          $boundaryAdapterSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtBoundarySelectionAdapter.cs" -Raw
+          if (-not $boundaryAdapterSource.Contains('BoundaryHoleGroups.Clear()')) {
+            throw "Functional gate failed: PickFirst boundary adoption does not clear stale hole groups."
+          }
 
           $paletteXaml = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.xaml" -Raw
           $paletteView = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.xaml.cs" -Raw

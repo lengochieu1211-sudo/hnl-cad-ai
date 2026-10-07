@@ -101,6 +101,7 @@ namespace HNL.VXT.AutoCAD
                 session.BoundaryIds.AddRange(acceptedIds);
                 session.Regions.Clear();
                 session.BoundaryRegionGroups.Clear();
+                session.BoundaryHoleGroups.Clear();
                 session.BoundaryFurringFromFarEdges.Clear();
                 session.GlobalFurringFromFarEdge = false;
 
