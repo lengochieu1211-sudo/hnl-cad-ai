@@ -702,12 +702,31 @@ namespace HNL.VXT.AutoCAD
             var ucsToWcs = ed.CurrentUserCoordinateSystem;
             var firstWorld = first.Value.TransformBy(ucsToWcs);
             var secondWorld = second.Value.TransformBy(ucsToWcs);
-
-            return new List<Point2>
+            var points = new List<Point2>
             {
                 new Point2(firstWorld.X, firstWorld.Y),
                 new Point2(secondWorld.X, secondWorld.Y)
             };
+
+            var lastUcsPoint = second.Value;
+            while (true)
+            {
+                var nextOptions = new PromptPointOptions(
+                    "\nHNL Tool - VXT Pro: Chọn điểm tiếp theo hoặc Enter để kết thúc hướng: ")
+                {
+                    AllowNone = true,
+                    BasePoint = lastUcsPoint,
+                    UseBasePoint = true
+                };
+                var next = ed.GetPoint(nextOptions);
+                if (next.Status == PromptStatus.None) break;
+                if (next.Status != PromptStatus.OK) return null;
+                var nextWorld = next.Value.TransformBy(ucsToWcs);
+                points.Add(new Point2(nextWorld.X, nextWorld.Y));
+                lastUcsPoint = next.Value;
+            }
+
+            return points;
         }
 
         private static List<Point2> ReadDirectionEntity(Document doc)
