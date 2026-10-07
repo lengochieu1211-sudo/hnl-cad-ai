@@ -85,9 +85,12 @@ namespace HNL.VXT.Core.Preview
                         VxtPostProcessDimensionSynchronizer.Synchronize(
                             boundary, settings, boundaryContext, part, angle);
                     }
-                    part.Quality = VxtProPlanQualityEvaluator.Evaluate(
-                        part, settings, boundaryContext, angle, 1);
-                    VxtProPlanQualityEvaluator.AttachCompactPreviewLabel(boundary, part);
+                    if (settings.MainDirection != MainDirectionMode.PolylinePath)
+                    {
+                        part.Quality = VxtProPlanQualityEvaluator.Evaluate(
+                            part, settings, boundaryContext, angle, 1);
+                        VxtProPlanQualityEvaluator.AttachCompactPreviewLabel(boundary, part);
+                    }
                 }
 
                 var auditAngle = part.Quality != null
