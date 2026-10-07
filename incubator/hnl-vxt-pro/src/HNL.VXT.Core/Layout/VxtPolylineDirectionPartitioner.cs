@@ -32,7 +32,10 @@ namespace HNL.VXT.Core.Layout
 
             var isClosed = IsClosedPath(points);
             if (isClosed)
+            {
                 points[points.Count - 1] = points[0];
+                ValidateClosedPathConvex(points);
+            }
 
             ValidatePath(points, isClosed);
             ValidateInternalBendsInsideBoundary(boundary, points, isClosed);
@@ -106,6 +109,35 @@ namespace HNL.VXT.Core.Layout
             => points != null &&
                points.Count > 3 &&
                points[0].DistanceTo(points[points.Count - 1]) <= MinSegmentLength;
+
+        private static void ValidateClosedPathConvex(IReadOnlyList<Point2> points)
+        {
+            var vertexCount = points.Count - 1;
+            double sign = 0.0;
+
+            for (var i = 0; i < vertexCount; i++)
+            {
+                var a = points[(i - 1 + vertexCount) % vertexCount];
+                var b = points[i];
+                var c = points[(i + 1) % vertexCount];
+                var cross = Cross(a, b, c);
+                if (Math.Abs(cross) <= Eps) continue;
+
+                var current = Math.Sign(cross);
+                if (Math.Abs(sign) <= Eps)
+                {
+                    sign = current;
+                    continue;
+                }
+
+                if (sign * current < 0.0)
+                    throw new InvalidOperationException(
+                        "Tuyến kín lõm chưa thể chia vùng hướng an toàn; hãy dùng tuyến kín lồi hoặc tuyến mở.");
+            }
+
+            if (Math.Abs(sign) <= Eps)
+                throw new InvalidOperationException("Tuyến kín không tạo được diện tích hợp lệ.");
+        }
 
         private static void ValidatePath(IReadOnlyList<Point2> points, bool isClosed)
         {
