@@ -82,6 +82,7 @@ namespace HNL.VXT.Core.Preview
 
                     var quality = VxtProPlanQualityEvaluator.Evaluate(
                         plan, candidateSettings, context, angle, angles.Count);
+                    ApplyAuditedHardCount(boundary, plan, candidateSettings, context, angle, quality);
                     plan.Quality = quality;
                     candidates.Add(new Candidate
                     {
@@ -120,6 +121,8 @@ namespace HNL.VXT.Core.Preview
 
                 fallback.Quality = VxtProPlanQualityEvaluator.Evaluate(
                     fallback, fallbackSettings, context, legacyAngle, 1);
+                ApplyAuditedHardCount(
+                    boundary, fallback, fallbackSettings, context, legacyAngle, fallback.Quality);
                 VxtProPlanQualityEvaluator.AttachCompactPreviewLabel(boundary, fallback);
                 return fallback;
             }
@@ -143,6 +146,35 @@ namespace HNL.VXT.Core.Preview
             best.Plan.Quality = best.Quality;
             VxtProPlanQualityEvaluator.AttachCompactPreviewLabel(boundary, best.Plan);
             return best.Plan;
+        }
+
+        private static void ApplyAuditedHardCount(
+            Boundary2 boundary,
+            VxtPreviewPlan plan,
+            VxtSettings settings,
+            VxtLayoutContext context,
+            double angleDegrees,
+            VxtPlanQuality quality)
+        {
+            if (boundary == null || plan == null || settings == null || quality == null) return;
+
+            var start = plan.Diagnostics.Count;
+            VxtPlanConstraintAuditor.Attach(
+                boundary,
+                plan,
+                settings,
+                angleDegrees,
+                context?.BoundaryIndex ?? 0,
+                context);
+
+            var auditedHard = plan.Diagnostics
+                .Skip(start)
+                .Count(x => x.IsHard);
+
+            if (plan.Diagnostics.Count > start)
+                plan.Diagnostics.RemoveRange(start, plan.Diagnostics.Count - start);
+
+            quality.HardViolationCount = Math.Max(quality.HardViolationCount, auditedHard);
         }
 
         public static IReadOnlyList<double> BuildCandidateAngles(Boundary2 boundary, double legacyAngle)
