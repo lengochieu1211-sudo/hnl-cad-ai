@@ -183,6 +183,25 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void ClosedConcavePath_IsRejectedInsteadOfProducingOverlappingRegions()
+        {
+            var boundary = Rectangle(6000.0, 6000.0);
+            var path = new[]
+            {
+                new Point2(1000.0, 1000.0),
+                new Point2(5000.0, 1000.0),
+                new Point2(5000.0, 5000.0),
+                new Point2(3000.0, 3000.0),
+                new Point2(1000.0, 5000.0),
+                new Point2(1000.0, 1000.0)
+            };
+
+            var ex = Assert.ThrowsException<InvalidOperationException>(
+                () => VxtPolylineDirectionPartitioner.Partition(boundary, path));
+            StringAssert.Contains(ex.Message, "Tuyến kín lõm");
+        }
+
+        [TestMethod]
         public void PathWithImmediateReverse_IsRejected()
         {
             var boundary = Rectangle(6000.0, 4000.0);
