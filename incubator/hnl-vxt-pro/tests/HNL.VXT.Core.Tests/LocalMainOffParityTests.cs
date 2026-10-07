@@ -39,6 +39,25 @@ namespace HNL.VXT.Core.Tests
             AssertStructuralParity(normal, throughMulti);
         }
 
+        [TestMethod]
+        public void Legacy_LocalMainOff_ConvexSlopedBoundaryMatchesNormalBuilderExactly()
+        {
+            var settings = Settings(VxtOptimizationMode.Legacy);
+            settings.MainMinEdgeOffset = 100.0;
+            settings.MainMaxEdgeOffset = 100.0;
+            settings.MainMaxSpacing = 1000.0;
+            settings.MainBalanceStep = 50.0;
+
+            var boundary = RoundedLikeConvexBoundary();
+            var context = new VxtLayoutContext();
+
+            var normal = new VxtPreviewPlanBuilder().Build(boundary, settings, context);
+            var throughMulti = VxtMultiBoundaryPlanBuilder.Build(
+                new[] { boundary }, settings, context);
+
+            AssertStructuralParity(normal, throughMulti);
+        }
+
         private static VxtSettings Settings(VxtOptimizationMode mode)
             => new VxtSettings
             {
@@ -64,6 +83,19 @@ namespace HNL.VXT.Core.Tests
                 new Point2(6000.0, 0.0),
                 new Point2(6000.0, 4000.0),
                 new Point2(0.0, 4000.0)
+            });
+
+        private static Boundary2 RoundedLikeConvexBoundary()
+            => new Boundary2(new[]
+            {
+                new Point2(200.0, 0.0),
+                new Point2(3000.0, 0.0),
+                new Point2(3200.0, 200.0),
+                new Point2(3200.0, 1210.0),
+                new Point2(3000.0, 1410.0),
+                new Point2(200.0, 1410.0),
+                new Point2(0.0, 1210.0),
+                new Point2(0.0, 200.0)
             });
 
         private static void AssertStructuralParity(VxtPreviewPlan expected, VxtPreviewPlan actual)
