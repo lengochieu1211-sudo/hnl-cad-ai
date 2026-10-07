@@ -66,6 +66,7 @@ namespace HNL.VXT.AutoCAD
             switch (VxtSession.Current.Settings.MainDirection)
             {
                 case MainDirectionMode.TwoPoints:
+                case MainDirectionMode.PolylinePath:
                     Send("HNLVXTBOUNDARY HNLVXTDIRECTION ");
                     break;
                 case MainDirectionMode.RectangleRegions:
@@ -84,7 +85,10 @@ namespace HNL.VXT.AutoCAD
             switch (mode)
             {
                 case MainDirectionMode.Auto: Send("HNLVXTAUTOSETUP "); break;
-                case MainDirectionMode.TwoPoints: Send("HNLVXTDIRECTION "); break;
+                case MainDirectionMode.TwoPoints:
+                case MainDirectionMode.PolylinePath:
+                    Send("HNLVXTDIRECTION ");
+                    break;
                 case MainDirectionMode.RectangleRegions: Send("HNLVXTREGION "); break;
                 default: Write("\nHNL Tool - VXT Pro: Hướng hiện tại không cần thiết lập thêm."); break;
             }
@@ -135,14 +139,15 @@ namespace HNL.VXT.AutoCAD
             if (settings.MainDirection != previousMode)
             {
                 CancelPendingPreview();
-                if (settings.MainDirection == MainDirectionMode.TwoPoints)
+                if (settings.MainDirection == MainDirectionMode.TwoPoints ||
+                    settings.MainDirection == MainDirectionMode.PolylinePath)
                 {
                     if (session.HasBoundary)
                         Send("HNLVXTCLEARPREVIEW HNLVXTDIRECTION ");
                     else
                     {
                         Send("HNLVXTCLEARPREVIEW ");
-                        Write("\nHNL Tool - VXT Pro: Đã chọn hướng 2 điểm. Hãy chọn Polyline biên trần; HNL Tool sẽ yêu cầu 2 điểm ngay sau đó.");
+                        Write("\nHNL Tool - VXT Pro: Đã chọn 'Chọn hướng'. Hãy chọn Polyline biên trần; HNL Tool sẽ cho chọn 2 điểm hoặc tuyến gấp khúc ngay sau đó.");
                     }
                     return;
                 }
