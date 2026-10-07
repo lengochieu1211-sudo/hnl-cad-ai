@@ -141,7 +141,9 @@ namespace HNL.VXT.AutoCAD
             if (refreshPreview)
             {
                 var mode = VxtSession.Current.Settings.MainDirection;
-                if (mode == MainDirectionMode.TwoPoints || mode == MainDirectionMode.RectangleRegions)
+                if (mode == MainDirectionMode.TwoPoints ||
+                    mode == MainDirectionMode.PolylinePath ||
+                    mode == MainDirectionMode.RectangleRegions)
                     VxtTransientPreview.Instance.Clear();
                 else
                     VxtTransientPreview.Instance.Refresh();
