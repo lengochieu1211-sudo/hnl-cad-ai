@@ -699,10 +699,14 @@ namespace HNL.VXT.AutoCAD
             var second = ed.GetPoint(secondOptions);
             if (second.Status != PromptStatus.OK) return null;
 
+            var ucsToWcs = ed.CurrentUserCoordinateSystem;
+            var firstWorld = first.Value.TransformBy(ucsToWcs);
+            var secondWorld = second.Value.TransformBy(ucsToWcs);
+
             return new List<Point2>
             {
-                new Point2(first.Value.X, first.Value.Y),
-                new Point2(second.Value.X, second.Value.Y)
+                new Point2(firstWorld.X, firstWorld.Y),
+                new Point2(secondWorld.X, secondWorld.Y)
             };
         }
 
