@@ -67,11 +67,17 @@ namespace HNL.VXT.Core.Preview
                     candidateSettings.DirectionDegrees = angle;
 
                     var plan = new VxtProPreviewPlanBuilder().Build(boundary, candidateSettings, context);
+                    var geometryPostProcessed = false;
                     if (candidateSettings.UseLocalMainAdd)
                     {
                         VxtLocalMainSpacingSafety.Apply(boundary, plan, candidateSettings, angle, context);
-                        VxtPostProcessDimensionSynchronizer.Synchronize(boundary, candidateSettings, context, plan, angle);
+                        geometryPostProcessed = true;
                     }
+                    if (VxtOuterMainHardMaxSafety.Apply(boundary, plan, candidateSettings, angle, context))
+                        geometryPostProcessed = true;
+                    if (geometryPostProcessed)
+                        VxtPostProcessDimensionSynchronizer.Synchronize(boundary, candidateSettings, context, plan, angle);
+
                     var quality = VxtProPlanQualityEvaluator.Evaluate(
                         plan, candidateSettings, context, angle, angles.Count);
                     plan.Quality = quality;
@@ -97,11 +103,17 @@ namespace HNL.VXT.Core.Preview
                 fallbackSettings.MainDirection = MainDirectionMode.TwoPoints;
                 fallbackSettings.DirectionDegrees = legacyAngle;
                 var fallback = new VxtProPreviewPlanBuilder().Build(boundary, fallbackSettings, context);
+                var geometryPostProcessed = false;
                 if (fallbackSettings.UseLocalMainAdd)
                 {
                     VxtLocalMainSpacingSafety.Apply(boundary, fallback, fallbackSettings, legacyAngle, context);
-                    VxtPostProcessDimensionSynchronizer.Synchronize(boundary, fallbackSettings, context, fallback, legacyAngle);
+                    geometryPostProcessed = true;
                 }
+                if (VxtOuterMainHardMaxSafety.Apply(boundary, fallback, fallbackSettings, legacyAngle, context))
+                    geometryPostProcessed = true;
+                if (geometryPostProcessed)
+                    VxtPostProcessDimensionSynchronizer.Synchronize(boundary, fallbackSettings, context, fallback, legacyAngle);
+
                 fallback.Quality = VxtProPlanQualityEvaluator.Evaluate(
                     fallback, fallbackSettings, context, legacyAngle, 1);
                 VxtProPlanQualityEvaluator.AttachCompactPreviewLabel(boundary, fallback);
