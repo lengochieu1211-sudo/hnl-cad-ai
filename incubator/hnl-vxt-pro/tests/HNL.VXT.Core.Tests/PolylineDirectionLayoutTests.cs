@@ -183,6 +183,37 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void ClosedDiamondPath_EveryInteriorSampleBelongsToExactlyOneRegion()
+        {
+            var boundary = Rectangle(6000.0, 6000.0);
+            var path = new[]
+            {
+                new Point2(3000.0, 800.0),
+                new Point2(5200.0, 3000.0),
+                new Point2(3000.0, 5200.0),
+                new Point2(800.0, 3000.0),
+                new Point2(3000.0, 800.0)
+            };
+
+            var regions = VxtPolylineDirectionPartitioner.Partition(boundary, path).ToList();
+            Assert.AreEqual(4, regions.Count);
+
+            for (var x = 350.0; x < 6000.0; x += 530.0)
+            {
+                for (var y = 410.0; y < 6000.0; y += 470.0)
+                {
+                    var point = new Point2(x, y);
+                    if (regions.Any(r => DistanceToBoundary(r.RegionBoundary, point) <= 0.5))
+                        continue;
+
+                    var owners = regions.Count(r => StrictlyInside(r.RegionBoundary, point));
+                    Assert.AreEqual(1, owners,
+                        "Closed convex guide produced a gap/overlap at " + x + "," + y + ".");
+                }
+            }
+        }
+
+        [TestMethod]
         public void ClosedConcavePath_IsRejectedInsteadOfProducingOverlappingRegions()
         {
             var boundary = Rectangle(6000.0, 6000.0);
@@ -214,6 +245,43 @@ namespace HNL.VXT.Core.Tests
 
             Assert.ThrowsException<InvalidOperationException>(
                 () => VxtPolylineDirectionPartitioner.Partition(boundary, path));
+        }
+
+        private static bool StrictlyInside(Boundary2 boundary, Point2 point)
+        {
+            var inside = false;
+            var vertices = boundary.Vertices;
+            for (var i = 0; i < vertices.Count; i++)
+            {
+                var a = vertices[i];
+                var b = vertices[(i + 1) % vertices.Count];
+                var crosses = (a.Y > point.Y) != (b.Y > point.Y);
+                if (!crosses) continue;
+                var hitX = a.X + (point.Y - a.Y) * (b.X - a.X) / (b.Y - a.Y);
+                if (hitX > point.X) inside = !inside;
+            }
+            return inside;
+        }
+
+        private static double DistanceToBoundary(Boundary2 boundary, Point2 point)
+        {
+            var best = double.MaxValue;
+            var vertices = boundary.Vertices;
+            for (var i = 0; i < vertices.Count; i++)
+            {
+                var a = vertices[i];
+                var b = vertices[(i + 1) % vertices.Count];
+                var dx = b.X - a.X;
+                var dy = b.Y - a.Y;
+                var length2 = dx * dx + dy * dy;
+                var t = length2 <= 1e-12
+                    ? 0.0
+                    : ((point.X - a.X) * dx + (point.Y - a.Y) * dy) / length2;
+                t = Math.Max(0.0, Math.Min(1.0, t));
+                var q = new Point2(a.X + t * dx, a.Y + t * dy);
+                best = Math.Min(best, q.DistanceTo(point));
+            }
+            return best;
         }
 
         private static bool IsHorizontal(PreviewLine line)
