@@ -37,7 +37,7 @@ namespace HNL.VXT.AutoCAD
             {
                 doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: M" +
                     (index + 1).ToString("00") +
-                    " được tạo bằng Pick Point nên không có Polyline nguồn để highlight.");
+                    " được tạo bằng Chọn điểm nên không có Polyline nguồn để highlight.");
                 return;
             }
             if (!id.IsValid || id.IsErased)
@@ -221,7 +221,7 @@ namespace HNL.VXT.AutoCAD
             while (true)
             {
                 var options = new PromptPointOptions(
-                    "\nHNL Tool - VXT Pro: Pick Point trong vùng trần [Enter để xong]: ")
+                    "\nHNL Tool - VXT Pro: Chọn điểm trong vùng trần [Enter để xong]: ")
                 {
                     AllowNone = true
                 };
@@ -230,7 +230,7 @@ namespace HNL.VXT.AutoCAD
                     break;
                 if (result.Status != PromptStatus.OK)
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Dừng Pick Point.");
+                    ed.WriteMessage("\nHNL Tool - VXT Pro: Dừng Chọn điểm.");
                     break;
                 }
 
@@ -285,14 +285,14 @@ namespace HNL.VXT.AutoCAD
 
                 if (ContainsEquivalentBoundary(accepted, boundary))
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Vùng này đã được Pick Point trước đó; bỏ qua trùng.");
+                    ed.WriteMessage("\nHNL Tool - VXT Pro: Vùng này đã được Chọn điểm trước đó; bỏ qua trùng.");
                     continue;
                 }
 
                 accepted.Add(boundary);
                 ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận M" +
                     accepted.Count.ToString("00") +
-                    " bằng Pick Point. Chọn vùng khác hoặc Enter để xong.");
+                    " bằng Chọn điểm. Chọn vùng khác hoặc Enter để xong.");
             }
 
             if (accepted.Count == 0) return;
@@ -309,10 +309,10 @@ namespace HNL.VXT.AutoCAD
             session.GlobalFurringFromFarEdge = false;
 
             session.ViewModel?.SetBoundaryStatus(
-                "✓ Pick Point " + accepted.Count + " mảng trần", true);
+                "✓ Chọn điểm " + accepted.Count + " mảng trần", true);
 
             ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận " +
-                accepted.Count + " mảng trần bằng Pick Point.");
+                accepted.Count + " mảng trần bằng Chọn điểm.");
             VxtTransientPreview.Instance.Refresh();
         }
 

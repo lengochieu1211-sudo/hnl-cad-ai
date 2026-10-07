@@ -513,10 +513,10 @@
                             <Button Content="Chọn Polyline" Style="{StaticResource BoundaryPickButton}"
                                     Command="{Binding SelectBoundaryCommand}"
                                     HorizontalAlignment="Stretch" Margin="0,0,4,0"/>
-                            <Button Grid.Column="1" Content="Pick Point" Style="{StaticResource BoundaryPickButton}"
+                            <Button Grid.Column="1" Content="Chọn điểm" Style="{StaticResource BoundaryPickButton}"
                                     Command="{Binding PickBoundaryPointCommand}"
                                     HorizontalAlignment="Stretch" Margin="4,0,0,0"
-                                    ToolTip="Pick nhiều điểm trong các vùng trần; Enter để kết thúc"/>
+                                    ToolTip="Chọn điểm trong một hoặc nhiều vùng trần kín; Enter để kết thúc"/>
                         </Grid>
                         <Border Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}"
                                 BorderThickness="1" CornerRadius="6" Padding="8,6">

@@ -14,7 +14,7 @@ namespace HNL.VXT.UI.ViewModels
         private readonly IVxtHostBridge _host;
         private VxtSettings _settings = new VxtSettings();
         private string _boundaryStatus = "Chưa chọn biên trần";
-        private string _previewStatus = "Chọn Polyline hoặc Pick Point để bắt đầu xem trước.";
+        private string _previewStatus = "Chọn Polyline hoặc Chọn điểm để bắt đầu xem trước.";
         private string _summary = "XC --  •  XP --  •  TY --  •  Dim --";
         private string _selectedPreset = "Trần chìm tiêu chuẩn";
         private string _generalEquipmentStatus = "Chưa chọn";
@@ -258,7 +258,7 @@ namespace HNL.VXT.UI.ViewModels
             HasBoundary = hasBoundary;
             PreviewStatus = hasBoundary
                 ? "Xem trước đang bật • thay đổi thông số để cập nhật."
-                : "Chọn Polyline hoặc Pick Point để bắt đầu xem trước.";
+                : "Chọn Polyline hoặc Chọn điểm để bắt đầu xem trước.";
         }
 
         public void SetDirection(double degrees, MainDirectionMode mode = MainDirectionMode.TwoPoints)
