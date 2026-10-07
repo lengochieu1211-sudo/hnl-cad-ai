@@ -55,6 +55,7 @@ namespace HNL.VXT.Core.Preview
                     // "Thêm XC cạnh khuyết" is an explicit opt-in. When OFF, the normal
                     // layout passes through untouched and any unresolved notch may be completed
                     // manually. When ON, same-count XC repair is tried before any local XC is added.
+                    var geometryPostProcessed = false;
                     if (settings.UseLocalMainAdd &&
                         settings.MainDirection != MainDirectionMode.PolylinePath)
                     {
@@ -63,6 +64,15 @@ namespace HNL.VXT.Core.Preview
                         // that same-count repair fails may a short local XC be added.
                         VxtLocalMainSpacingSafety.Apply(
                             boundary, part, settings, angle, boundaryContext);
+                        geometryPostProcessed = true;
+                    }
+
+                    if (VxtOuterMainHardMaxSafety.Apply(
+                        boundary, part, settings, angle, boundaryContext))
+                        geometryPostProcessed = true;
+
+                    if (geometryPostProcessed)
+                    {
                         VxtPostProcessDimensionSynchronizer.Synchronize(
                             boundary, settings, boundaryContext, part, angle);
                     }
@@ -77,11 +87,21 @@ namespace HNL.VXT.Core.Preview
                 {
                     part = proBuilder.Build(boundary, settings, boundaryContext);
                     var angle = ResolveDirectionDegrees(settings, boundary);
+                    var geometryPostProcessed = false;
                     if (settings.UseLocalMainAdd &&
                         settings.MainDirection != MainDirectionMode.PolylinePath)
                     {
                         VxtLocalMainSpacingSafety.Apply(
                             boundary, part, settings, angle, boundaryContext);
+                        geometryPostProcessed = true;
+                    }
+
+                    if (VxtOuterMainHardMaxSafety.Apply(
+                        boundary, part, settings, angle, boundaryContext))
+                        geometryPostProcessed = true;
+
+                    if (geometryPostProcessed)
+                    {
                         VxtPostProcessDimensionSynchronizer.Synchronize(
                             boundary, settings, boundaryContext, part, angle);
                     }
