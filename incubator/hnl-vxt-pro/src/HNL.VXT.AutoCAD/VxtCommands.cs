@@ -572,8 +572,11 @@ namespace HNL.VXT.AutoCAD
 
             session.ViewModel?.SetDirection(firstAngle, MainDirectionMode.PolylinePath);
             VxtTransientPreview.Instance.Refresh();
+            var closedPath = pathPoints.Count > 3 &&
+                pathPoints[0].DistanceTo(pathPoints[pathPoints.Count - 1]) <= 1.0;
             doc.Editor.WriteMessage(
-                "\nHNL Tool - VXT Pro: Đã nhận tuyến gấp khúc " +
+                "\nHNL Tool - VXT Pro: Đã nhận tuyến " +
+                (closedPath ? "kín " : "gấp khúc ") +
                 (pathPoints.Count - 1) + " đoạn; tự chia " +
                 session.Regions.Count + " vùng hướng XC.");
         }
@@ -823,7 +826,7 @@ namespace HNL.VXT.AutoCAD
             while (true)
             {
                 var nextOptions = new PromptPointOptions(
-                    "\nHNL Tool - VXT Pro: Chọn điểm tiếp theo hoặc Enter để kết thúc hướng: ")
+                    "\nHNL Tool - VXT Pro: Chọn điểm tiếp theo, có thể khép về điểm đầu, hoặc Enter để kết thúc hướng: ")
                 {
                     AllowNone = true,
                     BasePoint = lastUcsPoint,

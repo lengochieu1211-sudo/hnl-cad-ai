@@ -7,7 +7,7 @@ namespace HNL.VXT.Core.Layout
 {
     /// <summary>
     /// Splits one ceiling boundary into non-overlapping direction regions from an open
-    /// multi-segment guide path. Adjacent regions meet on the angle bisector at each bend.
+    /// or closed multi-segment guide path. Adjacent regions meet on the angle bisector at each bend.
     /// A single path segment intentionally produces no region split and is handled by the
     /// certified TwoPoints path instead.
     /// </summary>
@@ -30,8 +30,12 @@ namespace HNL.VXT.Core.Layout
             if (points.Count < 3)
                 throw new ArgumentException("Tuyến gấp khúc cần ít nhất 2 đoạn hợp lệ.", nameof(pathPoints));
 
-            ValidatePath(points);
-            ValidateInternalBendsInsideBoundary(boundary, points);
+            var isClosed = IsClosedPath(points);
+            if (isClosed)
+                points[points.Count - 1] = points[0];
+
+            ValidatePath(points, isClosed);
+            ValidateInternalBendsInsideBoundary(boundary, points, isClosed);
 
             var directions = new List<Vector2>(points.Count - 1);
             for (var i = 0; i + 1 < points.Count; i++)
@@ -42,13 +46,33 @@ namespace HNL.VXT.Core.Layout
             {
                 var polygon = boundary.Vertices.ToList();
 
-                if (segmentIndex > 0)
+                if (isClosed)
+                {
+                    var previousIndex = (segmentIndex - 1 + directions.Count) % directions.Count;
+                    var startNormal = BisectorNormal(directions[previousIndex], directions[segmentIndex]);
+                    polygon = ClipHalfPlane(
+                        polygon,
+                        points[segmentIndex],
+                        startNormal,
+                        keepPositive: true);
+                }
+                else if (segmentIndex > 0)
                 {
                     var normal = BisectorNormal(directions[segmentIndex - 1], directions[segmentIndex]);
                     polygon = ClipHalfPlane(polygon, points[segmentIndex], normal, keepPositive: true);
                 }
 
-                if (segmentIndex + 1 < directions.Count)
+                if (isClosed)
+                {
+                    var nextIndex = (segmentIndex + 1) % directions.Count;
+                    var endNormal = BisectorNormal(directions[segmentIndex], directions[nextIndex]);
+                    polygon = ClipHalfPlane(
+                        polygon,
+                        points[segmentIndex + 1],
+                        endNormal,
+                        keepPositive: false);
+                }
+                else if (segmentIndex + 1 < directions.Count)
                 {
                     var normal = BisectorNormal(directions[segmentIndex], directions[segmentIndex + 1]);
                     polygon = ClipHalfPlane(polygon, points[segmentIndex + 1], normal, keepPositive: false);
@@ -78,28 +102,38 @@ namespace HNL.VXT.Core.Layout
             return result;
         }
 
-        private static void ValidatePath(IReadOnlyList<Point2> points)
-        {
-            if (points.Count > 3 &&
-                points[0].DistanceTo(points[points.Count - 1]) <= MinSegmentLength)
-                throw new InvalidOperationException(
-                    "Tuyến hướng phải là tuyến mở; điểm cuối không được khép về điểm đầu.");
+        private static bool IsClosedPath(IReadOnlyList<Point2> points)
+            => points != null &&
+               points.Count > 3 &&
+               points[0].DistanceTo(points[points.Count - 1]) <= MinSegmentLength;
 
+        private static void ValidatePath(IReadOnlyList<Point2> points, bool isClosed)
+        {
             for (var i = 0; i + 1 < points.Count; i++)
             {
                 if (points[i].DistanceTo(points[i + 1]) <= MinSegmentLength)
                     throw new InvalidOperationException("Tuyến hướng có đoạn quá ngắn.");
             }
 
-            for (var i = 0; i + 2 < points.Count; i++)
+            if (isClosed)
             {
-                var a = Unit(points[i], points[i + 1]);
-                var b = Unit(points[i + 1], points[i + 2]);
-                var sumX = a.X + b.X;
-                var sumY = a.Y + b.Y;
-                if (Math.Sqrt(sumX * sumX + sumY * sumY) < 1e-5)
-                    throw new InvalidOperationException(
-                        "Tuyến hướng có đoạn quay ngược 180 độ tại điểm " + (i + 2) + ".");
+                var segmentCount = points.Count - 1;
+                for (var vertexIndex = 0; vertexIndex < segmentCount; vertexIndex++)
+                {
+                    var previousIndex = (vertexIndex - 1 + segmentCount) % segmentCount;
+                    var previous = Unit(points[previousIndex], points[previousIndex + 1]);
+                    var next = Unit(points[vertexIndex], points[vertexIndex + 1]);
+                    ValidateBend(previous, next, vertexIndex + 1);
+                }
+            }
+            else
+            {
+                for (var i = 0; i + 2 < points.Count; i++)
+                {
+                    var previous = Unit(points[i], points[i + 1]);
+                    var next = Unit(points[i + 1], points[i + 2]);
+                    ValidateBend(previous, next, i + 2);
+                }
             }
 
             for (var i = 0; i + 1 < points.Count; i++)
@@ -107,16 +141,30 @@ namespace HNL.VXT.Core.Layout
                 for (var j = i + 2; j + 1 < points.Count; j++)
                 {
                     if (SegmentsProperlyIntersect(points[i], points[i + 1], points[j], points[j + 1]))
-                        throw new InvalidOperationException("Tuyến hướng tự cắt; hãy vẽ một tuyến mở không giao nhau.");
+                        throw new InvalidOperationException(
+                            "Tuyến hướng tự cắt; hãy vẽ tuyến không giao nhau.");
                 }
             }
         }
 
+        private static void ValidateBend(Vector2 previous, Vector2 next, int pointNumber)
+        {
+            var sumX = previous.X + next.X;
+            var sumY = previous.Y + next.Y;
+            if (Math.Sqrt(sumX * sumX + sumY * sumY) < 1e-5)
+                throw new InvalidOperationException(
+                    "Tuyến hướng có đoạn quay ngược 180 độ tại điểm " + pointNumber + ".");
+        }
+
         private static void ValidateInternalBendsInsideBoundary(
             Boundary2 boundary,
-            IReadOnlyList<Point2> points)
+            IReadOnlyList<Point2> points,
+            bool isClosed)
         {
-            for (var i = 1; i + 1 < points.Count; i++)
+            var start = isClosed ? 0 : 1;
+            var endExclusive = points.Count - 1;
+
+            for (var i = start; i < endExclusive; i++)
             {
                 if (!ContainsOrTouches(boundary.Vertices, points[i]))
                     throw new InvalidOperationException(

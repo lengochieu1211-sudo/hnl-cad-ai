@@ -75,6 +75,114 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void ClosedSquarePath_PartitionsBoundaryCyclicallyWithoutAreaLoss()
+        {
+            var boundary = Rectangle(6000.0, 6000.0);
+            var path = new[]
+            {
+                new Point2(1500.0, 1500.0),
+                new Point2(4500.0, 1500.0),
+                new Point2(4500.0, 4500.0),
+                new Point2(1500.0, 4500.0),
+                new Point2(1500.0, 1500.0)
+            };
+
+            var regions = VxtPolylineDirectionPartitioner.Partition(boundary, path);
+
+            Assert.AreEqual(4, regions.Count);
+            Assert.AreEqual(0.0, regions[0].MainAngleDegrees, 0.001);
+            Assert.AreEqual(90.0, regions[1].MainAngleDegrees, 0.001);
+            Assert.AreEqual(0.0, regions[2].MainAngleDegrees, 0.001);
+            Assert.AreEqual(90.0, regions[3].MainAngleDegrees, 0.001);
+
+            var totalArea = regions.Sum(x => Math.Abs(Area(x.RegionBoundary)));
+            Assert.AreEqual(6000.0 * 6000.0, totalArea, 0.1,
+                "Closed guide regions must cover the ceiling exactly once.");
+        }
+
+        [TestMethod]
+        public void ClosedSquarePath_WithInnerHole_DoesNotFrameTheVoid()
+        {
+            var boundary = Rectangle(6000.0, 6000.0);
+            var hole = new Boundary2(new[]
+            {
+                new Point2(2500.0, 2500.0),
+                new Point2(3500.0, 2500.0),
+                new Point2(3500.0, 3500.0),
+                new Point2(2500.0, 3500.0)
+            });
+            var path = new[]
+            {
+                new Point2(1500.0, 1500.0),
+                new Point2(4500.0, 1500.0),
+                new Point2(4500.0, 4500.0),
+                new Point2(1500.0, 4500.0),
+                new Point2(1500.0, 1500.0)
+            };
+            var regions = VxtPolylineDirectionPartitioner.Partition(boundary, path).ToList();
+
+            var settings = new VxtSettings
+            {
+                OptimizationMode = VxtOptimizationMode.Legacy,
+                MainDirection = MainDirectionMode.PolylinePath,
+                DrawMain = true,
+                DrawFurring = true,
+                DrawHangers = true,
+                AutoDimension = true,
+                DimMain = true,
+                DimFurring = true,
+                DimHanger = true,
+                UseAvoidance = false,
+                UseLocalMainAdd = false
+            };
+            var context = new VxtLayoutContext();
+            context.BoundaryRegionGroups.Add(regions);
+            context.BoundaryHoleGroups.Add(new List<Boundary2> { hole });
+
+            var plan = VxtMultiBoundaryPlanBuilder.Build(new[] { boundary }, settings, context);
+
+            Assert.IsTrue(plan.MainSegmentCount > 0);
+            Assert.IsTrue(plan.FurringSegmentCount > 0);
+            Assert.IsTrue(plan.HangerCount > 0);
+            Assert.IsFalse(plan.HangerPoints.Any(IsInsideCenterHole),
+                "Ty must not be created inside the annular void.");
+
+            foreach (var line in plan.Lines.Where(x =>
+                x.Kind == PreviewLineKind.Main || x.Kind == PreviewLineKind.Furring))
+            {
+                Assert.IsFalse(CrossesCenterHole(line),
+                    "XC/XP must be split at the annular inner boundary.");
+            }
+        }
+
+        private static bool IsInsideCenterHole(Point2 point)
+            => point.X > 2500.0 && point.X < 3500.0 &&
+               point.Y > 2500.0 && point.Y < 3500.0;
+
+        private static bool CrossesCenterHole(PreviewLine line)
+        {
+            var horizontal = Math.Abs(line.A.Y - line.B.Y) < 0.01;
+            if (horizontal &&
+                line.A.Y > 2500.0 && line.A.Y < 3500.0)
+            {
+                var minX = Math.Min(line.A.X, line.B.X);
+                var maxX = Math.Max(line.A.X, line.B.X);
+                if (minX < 3500.0 && maxX > 2500.0) return true;
+            }
+
+            var vertical = Math.Abs(line.A.X - line.B.X) < 0.01;
+            if (vertical &&
+                line.A.X > 2500.0 && line.A.X < 3500.0)
+            {
+                var minY = Math.Min(line.A.Y, line.B.Y);
+                var maxY = Math.Max(line.A.Y, line.B.Y);
+                if (minY < 3500.0 && maxY > 2500.0) return true;
+            }
+
+            return false;
+        }
+
+        [TestMethod]
         public void PathWithImmediateReverse_IsRejected()
         {
             var boundary = Rectangle(6000.0, 4000.0);
