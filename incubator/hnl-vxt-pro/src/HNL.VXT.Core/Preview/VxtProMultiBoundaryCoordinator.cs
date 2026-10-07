@@ -119,11 +119,19 @@ namespace HNL.VXT.Core.Preview
                         candidateSettings.DirectionDegrees = angle;
                         var context = BuildBoundaryContext(sourceContext, i);
                         var part = new VxtProPreviewPlanBuilder().Build(boundaries[i], candidateSettings, context);
+                        var geometryPostProcessed = false;
                         if (candidateSettings.UseLocalMainAdd)
                         {
                             VxtLocalMainSpacingSafety.Apply(boundaries[i], part, candidateSettings, angle, context);
-                            VxtPostProcessDimensionSynchronizer.Synchronize(boundaries[i], candidateSettings, context, part, angle);
+                            geometryPostProcessed = true;
                         }
+                        if (VxtOuterMainHardMaxSafety.Apply(
+                            boundaries[i], part, candidateSettings, angle, context))
+                            geometryPostProcessed = true;
+                        if (geometryPostProcessed)
+                            VxtPostProcessDimensionSynchronizer.Synchronize(
+                                boundaries[i], candidateSettings, context, part, angle);
+
                         part.Quality = VxtProPlanQualityEvaluator.Evaluate(part, candidateSettings, context, angle, 1);
                         VxtPlanConstraintAuditor.Attach(
                             boundaries[i], part, candidateSettings, angle, i);
