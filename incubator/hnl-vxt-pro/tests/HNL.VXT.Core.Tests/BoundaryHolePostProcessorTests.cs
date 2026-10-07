@@ -167,6 +167,70 @@ namespace HNL.VXT.Core.Tests
                 "The inner-hole edge must participate in the HARD Max-edge audit.");
         }
 
+        [TestMethod]
+        public void MepFullyInsideHole_DoesNotChangeLayout_WhenAvoidanceTurnsOn()
+        {
+            var outer = Rect(0, 0, 2000, 2000);
+            var hole = Rect(700, 700, 1300, 1300);
+
+            foreach (var mode in new[] { VxtOptimizationMode.Legacy, VxtOptimizationMode.ProBalanced })
+            {
+                var offContext = new VxtLayoutContext();
+                offContext.BoundaryHoleGroups.Add(
+                    new System.Collections.Generic.List<Boundary2> { hole });
+                offContext.GeneralObstacles.Add(new Box2(850, 850, 1150, 1150));
+
+                var onContext = new VxtLayoutContext();
+                onContext.BoundaryHoleGroups.Add(
+                    new System.Collections.Generic.List<Boundary2> { hole });
+                onContext.GeneralObstacles.Add(new Box2(850, 850, 1150, 1150));
+
+                var offSettings = new VxtSettings
+                {
+                    OptimizationMode = mode,
+                    MainDirection = MainDirectionMode.Horizontal,
+                    DrawMain = true,
+                    DrawFurring = true,
+                    DrawHangers = true,
+                    AutoDimension = false,
+                    UseLocalMainAdd = false,
+                    UseAvoidance = false,
+                    ClearanceDistance = 50.0,
+                    MainSkipLimit = 0.0
+                };
+                var onSettings = offSettings.Clone();
+                onSettings.UseAvoidance = true;
+
+                var off = VxtMultiBoundaryPlanBuilder.Build(
+                    new[] { outer }, offSettings, offContext);
+                var on = VxtMultiBoundaryPlanBuilder.Build(
+                    new[] { outer }, onSettings, onContext);
+
+                CollectionAssert.AreEqual(
+                    StructuralKeys(off).ToArray(),
+                    StructuralKeys(on).ToArray(),
+                    mode + " changed XC/XP because of MEP fully inside a non-drawable hole.");
+
+                CollectionAssert.AreEqual(
+                    HangerKeys(off).ToArray(),
+                    HangerKeys(on).ToArray(),
+                    mode + " changed Ty because of MEP fully inside a non-drawable hole.");
+            }
+        }
+
+        private static System.Collections.Generic.IEnumerable<string> StructuralKeys(VxtPreviewPlan plan)
+            => plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main || x.Kind == PreviewLineKind.Furring)
+                .Select(x => ((int)x.Kind) + ":" +
+                    System.Math.Round(x.A.X, 3) + "," + System.Math.Round(x.A.Y, 3) + ":" +
+                    System.Math.Round(x.B.X, 3) + "," + System.Math.Round(x.B.Y, 3))
+                .OrderBy(x => x, System.StringComparer.Ordinal);
+
+        private static System.Collections.Generic.IEnumerable<string> HangerKeys(VxtPreviewPlan plan)
+            => plan.HangerPoints
+                .Select(p => System.Math.Round(p.X, 3) + "," + System.Math.Round(p.Y, 3))
+                .OrderBy(x => x, System.StringComparer.Ordinal);
+
         private static Boundary2 Rect(double minX, double minY, double maxX, double maxY)
             => new Boundary2(new[]
             {
