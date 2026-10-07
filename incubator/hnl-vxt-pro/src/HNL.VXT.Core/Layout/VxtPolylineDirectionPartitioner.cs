@@ -31,6 +31,7 @@ namespace HNL.VXT.Core.Layout
                 throw new ArgumentException("Tuyến gấp khúc cần ít nhất 2 đoạn hợp lệ.", nameof(pathPoints));
 
             ValidatePath(points);
+            ValidateInternalBendsInsideBoundary(boundary, points);
 
             var directions = new List<Vector2>(points.Count - 1);
             for (var i = 0; i + 1 < points.Count; i++)
@@ -79,6 +80,11 @@ namespace HNL.VXT.Core.Layout
 
         private static void ValidatePath(IReadOnlyList<Point2> points)
         {
+            if (points.Count > 3 &&
+                points[0].DistanceTo(points[points.Count - 1]) <= MinSegmentLength)
+                throw new InvalidOperationException(
+                    "Tuyến hướng phải là tuyến mở; điểm cuối không được khép về điểm đầu.");
+
             for (var i = 0; i + 1 < points.Count; i++)
             {
                 if (points[i].DistanceTo(points[i + 1]) <= MinSegmentLength)
@@ -100,17 +106,54 @@ namespace HNL.VXT.Core.Layout
             {
                 for (var j = i + 2; j + 1 < points.Count; j++)
                 {
-                    if (i == 0 && j + 1 == points.Count - 1)
-                    {
-                        // Open paths may have first/last segments touching only if the shared
-                        // endpoint rule below applies; otherwise a closed/self-crossing guide
-                        // is intentionally rejected.
-                    }
-
                     if (SegmentsProperlyIntersect(points[i], points[i + 1], points[j], points[j + 1]))
                         throw new InvalidOperationException("Tuyến hướng tự cắt; hãy vẽ một tuyến mở không giao nhau.");
                 }
             }
+        }
+
+        private static void ValidateInternalBendsInsideBoundary(
+            Boundary2 boundary,
+            IReadOnlyList<Point2> points)
+        {
+            for (var i = 1; i + 1 < points.Count; i++)
+            {
+                if (!ContainsOrTouches(boundary.Vertices, points[i]))
+                    throw new InvalidOperationException(
+                        "Điểm gấp " + (i + 1) + " của tuyến hướng nằm ngoài biên trần.");
+            }
+        }
+
+        private static bool ContainsOrTouches(IReadOnlyList<Point2> polygon, Point2 point)
+        {
+            var inside = false;
+            for (var i = 0; i < polygon.Count; i++)
+            {
+                var a = polygon[i];
+                var b = polygon[(i + 1) % polygon.Count];
+
+                if (DistancePointToSegment(point, a, b) <= 0.01)
+                    return true;
+
+                var crosses = (a.Y > point.Y) != (b.Y > point.Y);
+                if (!crosses) continue;
+                var x = a.X + (point.Y - a.Y) * (b.X - a.X) / (b.Y - a.Y);
+                if (x >= point.X - Eps)
+                    inside = !inside;
+            }
+            return inside;
+        }
+
+        private static double DistancePointToSegment(Point2 p, Point2 a, Point2 b)
+        {
+            var dx = b.X - a.X;
+            var dy = b.Y - a.Y;
+            var length2 = dx * dx + dy * dy;
+            if (length2 <= Eps) return p.DistanceTo(a);
+            var t = ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / length2;
+            t = Math.Max(0.0, Math.Min(1.0, t));
+            var q = new Point2(a.X + t * dx, a.Y + t * dy);
+            return p.DistanceTo(q);
         }
 
         private static Vector2 BisectorNormal(Vector2 previous, Vector2 next)
