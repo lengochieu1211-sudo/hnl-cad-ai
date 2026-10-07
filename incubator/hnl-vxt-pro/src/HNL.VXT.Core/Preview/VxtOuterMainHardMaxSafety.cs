@@ -269,37 +269,42 @@ namespace HNL.VXT.Core.Preview
             VxtSettings settings,
             IReadOnlyList<Box2> obstacles)
         {
-            var domain = Box2.FromPoints(polygon);
-            var x1 = spec.X1;
-            var x2 = spec.X2;
             var minLength = Math.Max(MinDrawLength, settings.MinLocalMainLength);
-
-            if (x2 - x1 < minLength - Tol)
-            {
-                var center = (x1 + x2) * 0.5;
-                x1 = center - minLength * 0.5;
-                x2 = center + minLength * 0.5;
-
-                if (x1 < domain.MinX)
-                {
-                    x2 += domain.MinX - x1;
-                    x1 = domain.MinX;
-                }
-                if (x2 > domain.MaxX)
-                {
-                    x1 -= x2 - domain.MaxX;
-                    x2 = domain.MaxX;
-                }
-
-                x1 = Math.Max(domain.MinX, x1);
-                x2 = Math.Min(domain.MaxX, x2);
-            }
-
             var added = false;
+
             foreach (var raw in PolygonScanline.ClipHorizontal(polygon, spec.Y))
             {
-                var a = Math.Max(Math.Min(raw.A.X, raw.B.X), x1);
-                var b = Math.Min(Math.Max(raw.A.X, raw.B.X), x2);
+                var rawA = Math.Min(raw.A.X, raw.B.X);
+                var rawB = Math.Max(raw.A.X, raw.B.X);
+                var a = Math.Max(rawA, spec.X1);
+                var b = Math.Min(rawB, spec.X2);
+                if (b - a <= Tol) continue;
+
+                // The required curved-edge band often lies at one end of the horizontal chord.
+                // Expanding symmetrically would push half of MinLocalMainLength outside the ceiling
+                // and incorrectly reject a constructible local XC. Expand inside the real chord:
+                // preserve the required overlap first, then shift any missing length inward.
+                if (b - a < minLength - Tol)
+                {
+                    var center = (a + b) * 0.5;
+                    var expandedA = center - minLength * 0.5;
+                    var expandedB = center + minLength * 0.5;
+
+                    if (expandedA < rawA)
+                    {
+                        expandedB += rawA - expandedA;
+                        expandedA = rawA;
+                    }
+                    if (expandedB > rawB)
+                    {
+                        expandedA -= expandedB - rawB;
+                        expandedB = rawB;
+                    }
+
+                    a = Math.Max(rawA, expandedA);
+                    b = Math.Min(rawB, expandedB);
+                }
+
                 if (b - a < minLength - Tol) continue;
 
                 var local = new Segment2(new Point2(a, spec.Y), new Point2(b, spec.Y));
