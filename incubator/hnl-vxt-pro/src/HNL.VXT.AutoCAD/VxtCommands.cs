@@ -835,8 +835,22 @@ namespace HNL.VXT.AutoCAD
                 var next = ed.GetPoint(nextOptions);
                 if (next.Status == PromptStatus.None) break;
                 if (next.Status != PromptStatus.OK) return null;
+
                 var nextWorld = next.Value.TransformBy(ucsToWcs);
-                points.Add(new Point2(nextWorld.X, nextWorld.Y));
+                var nextPoint = new Point2(nextWorld.X, nextWorld.Y);
+
+                // Once at least two guide segments exist, picking back onto point 1 closes the
+                // guide immediately. Snap to the exact first WCS point so the Core sees a stable
+                // cyclic path without requiring an extra Enter.
+                if (points.Count >= 3 && nextPoint.DistanceTo(points[0]) <= 1.0)
+                {
+                    points.Add(points[0]);
+                    ed.WriteMessage(
+                        "\nHNL Tool - VXT Pro: Đã khép tuyến hướng về điểm đầu.");
+                    break;
+                }
+
+                points.Add(nextPoint);
                 lastUcsPoint = next.Value;
             }
 
