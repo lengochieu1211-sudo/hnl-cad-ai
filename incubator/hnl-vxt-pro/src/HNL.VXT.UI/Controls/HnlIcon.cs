@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
 
@@ -11,7 +12,7 @@ namespace HNL.VXT.UI.Controls
     /// Presentation only: no settings, solver, CAD database or command state.
     /// Icons use original 24x24 stroke geometry and scale cleanly at high DPI.
     /// </summary>
-    public sealed class HnlIcon : Path
+    public sealed class HnlIcon : Viewbox
     {
         public static readonly DependencyProperty KindProperty =
             DependencyProperty.Register(
@@ -19,6 +20,20 @@ namespace HNL.VXT.UI.Controls
                 typeof(string),
                 typeof(HnlIcon),
                 new PropertyMetadata("Pick", OnKindChanged));
+
+        public static readonly DependencyProperty StrokeProperty =
+            DependencyProperty.Register(
+                nameof(Stroke),
+                typeof(Brush),
+                typeof(HnlIcon),
+                new PropertyMetadata(Brushes.White, OnAppearanceChanged));
+
+        public static readonly DependencyProperty StrokeThicknessProperty =
+            DependencyProperty.Register(
+                nameof(StrokeThickness),
+                typeof(double),
+                typeof(HnlIcon),
+                new PropertyMetadata(1.65, OnAppearanceChanged));
 
         private static readonly Dictionary<string, Geometry> Icons =
             new Dictionary<string, Geometry>(StringComparer.OrdinalIgnoreCase)
@@ -43,17 +58,25 @@ namespace HNL.VXT.UI.Controls
                 ["Dimension"] = G("M4 7 L4 17 M20 7 L20 17 M4 12 L20 12 M7 9 L4 12 L7 15 M17 9 L20 12 L17 15")
             };
 
+        private readonly Path _path;
+
         public HnlIcon()
         {
             Stretch = Stretch.Uniform;
-            Fill = Brushes.Transparent;
-            StrokeThickness = 1.65;
-            StrokeLineJoin = PenLineJoin.Round;
-            StrokeStartLineCap = PenLineCap.Round;
-            StrokeEndLineCap = PenLineCap.Round;
-            SnapsToDevicePixels = true;
             IsHitTestVisible = false;
+
+            _path = new Path
+            {
+                Fill = Brushes.Transparent,
+                StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                SnapsToDevicePixels = true
+            };
+
+            Child = _path;
             UpdateGeometry();
+            UpdateAppearance();
         }
 
         public string Kind
@@ -62,9 +85,26 @@ namespace HNL.VXT.UI.Controls
             set => SetValue(KindProperty, value);
         }
 
+        public Brush Stroke
+        {
+            get => (Brush)GetValue(StrokeProperty);
+            set => SetValue(StrokeProperty, value);
+        }
+
+        public double StrokeThickness
+        {
+            get => (double)GetValue(StrokeThicknessProperty);
+            set => SetValue(StrokeThicknessProperty, value);
+        }
+
         private static void OnKindChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             ((HnlIcon)d).UpdateGeometry();
+        }
+
+        private static void OnAppearanceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            ((HnlIcon)d).UpdateAppearance();
         }
 
         private void UpdateGeometry()
@@ -72,7 +112,13 @@ namespace HNL.VXT.UI.Controls
             Geometry geometry;
             if (string.IsNullOrWhiteSpace(Kind) || !Icons.TryGetValue(Kind, out geometry))
                 geometry = Icons["Pick"];
-            Data = geometry;
+            _path.Data = geometry;
+        }
+
+        private void UpdateAppearance()
+        {
+            _path.Stroke = Stroke;
+            _path.StrokeThickness = StrokeThickness;
         }
 
         private static Geometry G(string data)
