@@ -6,7 +6,8 @@ namespace HNL.VXT.Core.Models
         Vertical = 1,
         TwoPoints = 2,
         RectangleRegions = 3,
-        Auto = 4
+        Auto = 4,
+        PolylinePath = 5
     }
 
     public enum MainLayoutMode
