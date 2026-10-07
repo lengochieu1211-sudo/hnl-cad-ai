@@ -105,9 +105,9 @@
             <Setter Property="Background" Value="{DynamicResource CardBackground}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="9"/>
-            <Setter Property="Padding" Value="12"/>
-            <Setter Property="Margin" Value="0,0,0,9"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Margin" Value="0,0,0,7"/>
         </Style>
 
         <Style x:Key="SectionTitle" TargetType="TextBlock">
@@ -118,17 +118,18 @@
         </Style>
 
         <Style x:Key="SectionNumber" TargetType="TextBlock">
-            <Setter Property="Width" Value="20"/>
+            <Setter Property="Width" Value="18"/>
             <Setter Property="FontSize" Value="11"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/>
+            <Setter Property="TextAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
         <Style x:Key="SectionIcon" TargetType="{x:Type controls:HnlIcon}">
-            <Setter Property="Width" Value="14"/>
-            <Setter Property="Height" Value="14"/>
-            <Setter Property="StrokeThickness" Value="1.7"/>
+            <Setter Property="Width" Value="15"/>
+            <Setter Property="Height" Value="15"/>
+            <Setter Property="StrokeThickness" Value="1.75"/>
             <Setter Property="Margin" Value="0,0,7,0"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
@@ -185,7 +186,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="2"
+                                CornerRadius="4"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"
@@ -219,8 +220,8 @@
         </Style>
 
         <Style x:Key="CompactButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Height" Value="28"/>
-            <Setter Property="Padding" Value="8,2"/>
+            <Setter Property="Height" Value="27"/>
+            <Setter Property="Padding" Value="7,2"/>
             <Setter Property="FontSize" Value="12"/>
         </Style>
 
@@ -240,14 +241,14 @@
                     </Grid.ColumnDefinitions>
                     <controls:HnlIcon Grid.Column="0"
                                       Kind="{TemplateBinding Tag}"
-                                      Width="14" Height="14"
+                                      Width="13.5" Height="13.5"
                                       Stroke="{TemplateBinding Foreground}"
-                                      StrokeThickness="1.65"
+                                      StrokeThickness="1.7"
                                       VerticalAlignment="Center"/>
                     <ContentPresenter Grid.Column="1"
                                       HorizontalAlignment="Center"
                                       VerticalAlignment="Center"
-                                      Margin="6,0,0,0"
+                                      Margin="5,0,0,0"
                                       RecognizesAccessKey="True"/>
                 </Grid>
             </Border>
@@ -357,16 +358,20 @@
             </Grid>
         </Border>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="10">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8">
             <StackPanel>
                 <!-- PRESET -->
                 <Border Style="{StaticResource SectionCard}" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="72"/>
+                            <ColumnDefinition Width="118"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="Cấu hình" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="1." Style="{StaticResource SectionNumber}"/>
+                            <controls:HnlIcon Kind="Settings" Style="{StaticResource SectionIcon}" Stroke="{DynamicResource AccentStrong}"/>
+                            <TextBlock Text="Cấu hình" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
+                        </StackPanel>
                         <ComboBox Grid.Column="1" ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}"/>
                     </Grid>
                 </Border>
@@ -375,7 +380,7 @@
                 <Border Style="{StaticResource SectionCard}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,9">
-                            <TextBlock Text="1." Style="{StaticResource SectionNumber}"/>
+                            <TextBlock Text="2." Style="{StaticResource SectionNumber}"/>
                             <controls:HnlIcon Kind="Pick" Style="{StaticResource SectionIcon}" Stroke="{DynamicResource AccentStrong}"/>
                             <TextBlock Text="Phạm vi bố trí" Style="{StaticResource SectionTitle}"/>
                         </StackPanel>
@@ -396,7 +401,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="2." Style="{StaticResource SectionNumber}"/>
+                                    <TextBlock Text="3." Style="{StaticResource SectionNumber}"/>
                                     <controls:HnlIcon Kind="Main" Style="{StaticResource SectionIcon}" Stroke="#22D3EE"/>
                                     <TextBlock Text="Xương chính" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
@@ -477,7 +482,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="3." Style="{StaticResource SectionNumber}"/>
+                                    <TextBlock Text="4." Style="{StaticResource SectionNumber}"/>
                                     <controls:HnlIcon Kind="Furring" Style="{StaticResource SectionIcon}" Stroke="#FACC15"/>
                                     <TextBlock Text="Xương phụ" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
@@ -522,7 +527,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="4." Style="{StaticResource SectionNumber}"/>
+                                    <TextBlock Text="5." Style="{StaticResource SectionNumber}"/>
                                     <controls:HnlIcon Kind="Hanger" Style="{StaticResource SectionIcon}" Stroke="#22C55E"/>
                                     <TextBlock Text="Ty treo" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
@@ -579,7 +584,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="5." Style="{StaticResource SectionNumber}"/>
+                                    <TextBlock Text="6." Style="{StaticResource SectionNumber}"/>
                                     <controls:HnlIcon Kind="Mep" Style="{StaticResource SectionIcon}" Stroke="#EF4444"/>
                                     <TextBlock Text="Né thiết bị MEP" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
@@ -627,7 +632,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="6." Style="{StaticResource SectionNumber}"/>
+                                    <TextBlock Text="7." Style="{StaticResource SectionNumber}"/>
                                     <controls:HnlIcon Kind="Dimension" Style="{StaticResource SectionIcon}" Stroke="#D946EF"/>
                                     <TextBlock Text="Kích thước Dim" Style="{StaticResource SectionTitle}"/>
                                 </StackPanel>
@@ -686,7 +691,7 @@
                         <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="7." Style="{StaticResource SectionNumber}"/>
+                                <TextBlock Text="8." Style="{StaticResource SectionNumber}"/>
                                 <controls:HnlIcon Kind="Preview" Style="{StaticResource SectionIcon}" Stroke="{DynamicResource AccentStrong}"/>
                                 <TextBlock Text="Xem trước" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
                             </StackPanel>
