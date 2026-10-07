@@ -155,6 +155,12 @@ namespace HNL.VXT.Core.Preview
             double maxSpacing)
         {
             var additions = new List<double>();
+            // Use a stable edge-guard lattice rather than the fine balance lattice. For example,
+            // MaxEdge=400 and Step=50 yields guard rows every 400 mm (all still valid 50-mm
+            // lattice points). This prevents a smooth curve from creating a new XC every 50 mm.
+            var edgeStep = FloorMultiple(maxEdge, step);
+            if (edgeStep <= Tol) edgeStep = step;
+
             var rows = (existing ?? Array.Empty<double>())
                 .Where(y => y > a + Tol && y < b - Tol)
                 .OrderBy(y => y)
@@ -162,7 +168,7 @@ namespace HNL.VXT.Core.Preview
 
             if (rows.Count == 0)
             {
-                var first = FindBottomEdgeRow(a, b, origin, step, minEdge, maxEdge);
+                var first = FindBottomEdgeRow(a, b, origin, edgeStep, minEdge, maxEdge);
                 if (!first.HasValue) return additions;
                 rows.Add(first.Value);
                 AddUnique(additions, first.Value);
@@ -170,7 +176,7 @@ namespace HNL.VXT.Core.Preview
 
             while (rows.Count > 0 && rows[0] - a > maxEdge + Tol)
             {
-                var y = FindBottomEdgeRow(a, rows[0], origin, step, minEdge, maxEdge);
+                var y = FindBottomEdgeRow(a, rows[0], origin, edgeStep, minEdge, maxEdge);
                 if (!y.HasValue || y.Value >= rows[0] - Tol) break;
                 rows.Add(y.Value);
                 rows.Sort();
@@ -205,7 +211,7 @@ namespace HNL.VXT.Core.Preview
             while (rows.Count > 0 && b - rows[rows.Count - 1] > maxEdge + Tol)
             {
                 var last = rows[rows.Count - 1];
-                var y = FindTopEdgeRow(last, b, origin, step, minEdge, maxEdge);
+                var y = FindTopEdgeRow(last, b, origin, edgeStep, minEdge, maxEdge);
                 if (!y.HasValue || y.Value <= last + Tol) break;
                 rows.Add(y.Value);
                 rows.Sort();
