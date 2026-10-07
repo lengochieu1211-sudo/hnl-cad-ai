@@ -45,7 +45,7 @@ namespace HNL.VXT.UI.Views
                 HorizontalAlignment = HorizontalAlignment.Right,
                 ToolTip = "Giống Lisp: ưu tiên dịch Xương chính toàn cục trước; chỉ thêm Xương chính ngắn tại vùng cạnh khuyết khi vẫn chưa đạt điều kiện Max."
             };
-            var style = view.TryFindResource("ToggleSwitch") as Style;
+            var style = view.TryFindResource("SecondaryToggleSwitch") as Style;
             if (style != null) toggle.Style = style;
             toggle.SetBinding(CheckBox.IsCheckedProperty, new Binding(nameof(VxtPaletteViewModel.UseLocalMainAdd))
             {
