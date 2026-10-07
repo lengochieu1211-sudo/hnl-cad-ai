@@ -86,15 +86,14 @@ namespace HNL.VXT.AutoCAD
 
             for (var i = 0; i < segmentCount; i++)
             {
+                var next = (i + 1) % vertexCount;
+                var a = polyline.GetPoint2dAt(i);
+                var b = polyline.GetPoint2dAt(next);
+                var start = new Point2(a.X, a.Y);
+                var end = new Point2(b.X, b.Y);
                 var bulge = polyline.GetBulgeAt(i);
-                var samples = Math.Abs(bulge) > 1e-9 ? 12 : 1;
 
-                for (var j = 0; j < samples; j++)
-                {
-                    var parameter = i + (double)j / samples;
-                    var p = polyline.GetPointAtParameter(parameter);
-                    points.Add(new Point2(p.X, p.Y));
-                }
+                points.AddRange(VxtBulgeSampler.SampleSegment(start, end, bulge));
             }
 
             // For an accepted almost-closed open Polyline, keep the actual last vertex and let
@@ -131,11 +130,13 @@ namespace HNL.VXT.AutoCAD
             }
 
             var positions = new List<Autodesk.AutoCAD.Geometry.Point3d>();
+            var bulges = new List<double>();
             foreach (ObjectId vertexId in polyline)
             {
                 var vertex = tr.GetObject(vertexId, OpenMode.ForRead, false) as Vertex2d;
                 if (vertex == null) continue;
                 positions.Add(vertex.Position);
+                bulges.Add(vertex.Bulge);
             }
 
             if (positions.Count < 3)
@@ -174,9 +175,28 @@ namespace HNL.VXT.AutoCAD
                 info.AutoClosed = true;
             }
 
-            var points = new List<Point2>(positions.Count);
-            foreach (var p in positions)
+            var points = new List<Point2>();
+            var segmentCount = polyline.Closed ? positions.Count : positions.Count - 1;
+            for (var i = 0; i < segmentCount; i++)
+            {
+                var next = (i + 1) % positions.Count;
+                var start = new Point2(positions[i].X, positions[i].Y);
+                var end = new Point2(positions[next].X, positions[next].Y);
+                var bulge = i < bulges.Count ? bulges[i] : 0.0;
+                points.AddRange(VxtBulgeSampler.SampleSegment(start, end, bulge));
+            }
+
+            if (!polyline.Closed)
+            {
+                var p = positions[positions.Count - 1];
                 points.Add(new Point2(p.X, p.Y));
+            }
+
+            if (points.Count < 3)
+            {
+                info.RejectionReason = "Unsupported";
+                return false;
+            }
 
             boundary = new Boundary2(points);
             return true;
