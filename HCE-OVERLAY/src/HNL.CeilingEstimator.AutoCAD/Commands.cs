@@ -77,7 +77,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                             " double=" + doubleText +
                             " origin=" + Fmt(hatch.Origin.X) + "," + Fmt(hatch.Origin.Y) +
                             " angleRad=" + Fmt(hatch.PatternAngle) +
-                            " area=" + Fmt(hatch.Area) +
+                            " area=" + SafeAreaText(hatch) +
                             " normalZ=" + Fmt(hatch.Normal.Z) +
                             " loops=" + hatch.NumberOfLoops +
                             " definitions=" + hatch.NumberOfPatternDefinitions);
@@ -194,6 +194,15 @@ namespace HNL.CeilingEstimator.AutoCAD
             return value.ToString("0.########", CultureInfo.InvariantCulture);
         }
 
+        private static string SafeAreaText(Hatch hatch)
+        {
+            try { return Fmt(hatch.Area); }
+            catch (Autodesk.AutoCAD.Runtime.Exception ex)
+            {
+                return "n/a (" + ex.ErrorStatus + ")";
+            }
+        }
+
         private static void RunCeilingEstimator()
         {
             var document = Application.DocumentManager.MdiActiveDocument;
@@ -201,7 +210,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var editor = document.Editor;
             var profile = HceLegacyProfiles.For(document.Database).Clone();
             var options = profile.ToOptions();
-            editor.WriteMessage("\nHNL Tool - Ceiling Estimator Pro RC5.3 (DEMTC UI mapping; Runtime Candidate).");
+            editor.WriteMessage("\nHNL Tool - Ceiling Estimator Pro RC5.3.3 (Hatch Area safe fallback; Runtime Candidate).");
             editor.WriteMessage("\nHNL Tool - " + profile.Summary());
 
             Point2? chosenGridOrigin = null;
@@ -259,6 +268,10 @@ namespace HNL.CeilingEstimator.AutoCAD
                                 else if (profile.GridMode == "2" && chosenGridOrigin.HasValue)
                                     input.Frame = new GridFrame(chosenGridOrigin.Value, chosenGridAngle);
                                 inputs.Add(input);
+                                if (input.AreaFromBoundary)
+                                    editor.WriteMessage("\nHNL Tool - Hatch handle=" + input.Handle +
+                                        " native Area=NotApplicable; certified simple-loop boundary area=" +
+                                        Fmt(input.Area) + " mm2 (strict topology gate).");
                             }
                             else
                             {
@@ -300,18 +313,29 @@ namespace HNL.CeilingEstimator.AutoCAD
                             "mm spacing; verify before proceeding.");
                 }
                 var acceptKey = profile.Family == 610 ? "Use610" : "Use600";
-                var acknowledge = new PromptKeywordOptions(
-                    "\nHNL Tool - Verify drawing units and family " + profile.Family +
-                    " [Use600/Use610/Cancel] <Cancel>: ") { AllowNone = true };
-                acknowledge.Keywords.Add("Use600");
-                acknowledge.Keywords.Add("Use610");
-                acknowledge.Keywords.Add("Cancel");
-                var consent = editor.GetKeywords(acknowledge);
-                if (consent.Status != PromptStatus.OK ||
-                    !string.Equals(consent.StringResult, acceptKey, StringComparison.OrdinalIgnoreCase))
+                // Do not ask Use600/Use610 again after the user has configured
+                // the module in the Palette and USER Hatch pitch was verified.
+                // If even one Hatch was rejected, output diagnostics only; never
+                // request meaningless confirmation before blocking the Table.
+                var needsConfirmation = rejected == 0 &&
+                    (document.Database.Insunits != UnitsValue.Millimeters ||
+                     inputs.Exists(input => !input.UserGridVerified));
+                if (needsConfirmation)
                 {
-                    editor.WriteMessage("\nHNL Tool - Unverified grid rejected by operator. No drawing changes.");
-                    return;
+                    var acknowledge = new PromptKeywordOptions(
+                        "\nHNL Tool - Grid pitch or DWG unit is not verified. [Proceed/Cancel] <Cancel>: ")
+                    {
+                        AllowNone = true
+                    };
+                    acknowledge.Keywords.Add("Proceed");
+                    acknowledge.Keywords.Add("Cancel");
+                    var consent = editor.GetKeywords(acknowledge);
+                    if (consent.Status != PromptStatus.OK ||
+                        !string.Equals(consent.StringResult, "Proceed", StringComparison.OrdinalIgnoreCase))
+                    {
+                        editor.WriteMessage("\nHNL Tool - Unverified grid cancelled. No drawing changes.");
+                        return;
+                    }
                 }
 
                 var report = CalculateOnce(inputs, editor, ref rejected, false, options);
@@ -520,15 +544,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                 return false;
             }
 
-            stage = "Hatch.Area";
-            var area = hatch.Area;
-            if (!(area > 0) || double.IsNaN(area) || double.IsInfinity(area))
-            {
-                reason = "invalid Hatch.Area";
-                return false;
-            }
-            // Detect a broken single-ring extractor before passing it into Core.
-            // Translate to the first point to reduce cancellation at large DWG coordinates.
+            // Compute a numerically stable signed area from the certified
+            // linear one-loop boundary before accessing the native Hatch.Area.
+            // Some valid non-associative USER Hatches throw eNotApplicable at Area.
             var refX = segments[0].X1;
             var refY = segments[0].Y1;
             var twiceArea = 0.0;
@@ -538,9 +556,43 @@ namespace HNL.CeilingEstimator.AutoCAD
                     - (segment.X2 - refX) * (segment.Y1 - refY);
             }
             var boundaryArea = Math.Abs(twiceArea) * 0.5;
+            if (!(boundaryArea > 0) || double.IsNaN(boundaryArea) ||
+                double.IsInfinity(boundaryArea))
+            {
+                reason = "invalid closed-loop polygon area";
+                return false;
+            }
+
+            stage = "Hatch.Area";
+            var area = boundaryArea;
+            var usedBoundaryArea = false;
+            try
+            {
+                area = hatch.Area;
+            }
+            catch (Autodesk.AutoCAD.Runtime.Exception ex)
+            {
+                if (ex.ErrorStatus.ToString() != "NotApplicable") throw;
+                // The topology gate is deliberately narrower than the general
+                // Core: never infer Area for holes, arcs, intersecting loops or
+                // unchecked giant paths. Do not silently under-count material.
+                if (segments.Count > 512 || HasNonAdjacentIntersections(segments))
+                {
+                    reason = "native Hatch.Area=NotApplicable, boundary topology not " +
+                        "certified for mathematical area fallback";
+                    return false;
+                }
+                usedBoundaryArea = true;
+                area = boundaryArea;
+            }
+
+            if (!(area > 0) || double.IsNaN(area) || double.IsInfinity(area))
+            {
+                reason = "invalid Hatch.Area";
+                return false;
+            }
             var areaTolerance = Math.Max(0.01, area * 0.00001);
-            if (double.IsNaN(boundaryArea) || double.IsInfinity(boundaryArea) ||
-                Math.Abs(boundaryArea - area) > areaTolerance)
+            if (Math.Abs(boundaryArea - area) > areaTolerance)
             {
                 reason = "boundary/Hatch.Area mismatch: boundary=" + Fmt(boundaryArea) +
                     " hatch=" + Fmt(area) + " tolerance=" + Fmt(areaTolerance);
@@ -563,6 +615,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 new Point2(hatch.Origin.X, hatch.Origin.Y), hatch.PatternAngle);
             input.Segments = segments;
             input.Area = area;
+            input.AreaFromBoundary = usedBoundaryArea;
             input.PatternScale = patternScale;
             input.PatternName = hatch.PatternName;
             input.UserGridVerified = userGridVerified;
@@ -578,6 +631,39 @@ namespace HNL.CeilingEstimator.AutoCAD
                 reason = ex.GetType().Name + " at " + stage + ": " + ex.Message;
                 return false;
             }
+        }
+
+        // Fail closed on complex/self-crossing boundaries when native
+        // Hatch.Area is unavailable. Adjacent edges share a vertex by design.
+        private static bool HasNonAdjacentIntersections(List<Segment2> segments)
+        {
+            const double eps = 1e-8;
+            for (var i = 0; i < segments.Count; i++)
+            {
+                var a = segments[i];
+                for (var j = i + 2; j < segments.Count; j++)
+                {
+                    if (i == 0 && j == segments.Count - 1) continue;
+                    var b = segments[j];
+                    if (Math.Max(a.X1, a.X2) < Math.Min(b.X1, b.X2) - eps ||
+                        Math.Max(b.X1, b.X2) < Math.Min(a.X1, a.X2) - eps ||
+                        Math.Max(a.Y1, a.Y2) < Math.Min(b.Y1, b.Y2) - eps ||
+                        Math.Max(b.Y1, b.Y2) < Math.Min(a.Y1, a.Y2) - eps)
+                        continue;
+                    var c1 = (a.X2 - a.X1) * (b.Y1 - a.Y1) -
+                             (a.Y2 - a.Y1) * (b.X1 - a.X1);
+                    var c2 = (a.X2 - a.X1) * (b.Y2 - a.Y1) -
+                             (a.Y2 - a.Y1) * (b.X2 - a.X1);
+                    var c3 = (b.X2 - b.X1) * (a.Y1 - b.Y1) -
+                             (b.Y2 - b.Y1) * (a.X1 - b.X1);
+                    var c4 = (b.X2 - b.X1) * (a.Y2 - b.Y1) -
+                             (b.Y2 - b.Y1) * (a.X2 - b.X1);
+                    if ((c1 <= eps && c2 >= -eps || c2 <= eps && c1 >= -eps) &&
+                        (c3 <= eps && c4 >= -eps || c4 <= eps && c3 >= -eps))
+                        return true;
+                }
+            }
+            return false;
         }
 
         private static bool AddLine(
@@ -777,6 +863,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             public GridFrame Frame = new GridFrame(new Point2(0, 0), 0);
             public List<Segment2> Segments = new List<Segment2>();
             public double Area;
+            public bool AreaFromBoundary;
             public double PatternScale;
             public string PatternName = string.Empty;
             public bool UserGridVerified;
