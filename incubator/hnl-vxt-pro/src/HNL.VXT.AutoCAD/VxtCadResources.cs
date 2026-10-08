@@ -84,6 +84,20 @@ namespace HNL.VXT.AutoCAD
             return id;
         }
 
+        // Lay-in must never restyle a layer already used by unrelated DWG entities.
+        // The legacy EnsureLayer behavior is retained for concealed-ceiling workflows.
+        public static ObjectId EnsureLayInLayer(
+            Database db, Transaction tr, string name, short colorIndex,
+            string linetype, string lineweightText)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new InvalidOperationException("Lay-in layer name cannot be empty.");
+            var layers = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+            if (layers.Has(name))
+                return layers[name];
+            return EnsureLayer(db, tr, name, colorIndex, linetype, lineweightText);
+        }
+
         public static void ApplyByLayer(Entity entity, ObjectId layerId)
         {
             entity.LayerId = layerId;
