@@ -12,12 +12,12 @@ namespace HNL.VXT.UI.Infrastructure
     public static class VxtBuildInfo
     {
         public const string Version = "v7.0.0-beta.1";
-        private const string MetadataKey = "HnlVxtBuildUtc";
+        private const string MetadataKey = "HNLBuildDateTime";
         private static readonly string _buildText = ResolveBuildText();
 
         public static string BuildText => _buildText;
-        public static string VersionLabel => "Ceiling Framing Pro " + Version + " • Build " + BuildText;
-        public static string PaletteTitle => "HNL " + VersionLabel;
+        public static string VersionLabel => Version + " • Cập nhật " + BuildText;
+        public static string PaletteTitle => "HNL Ceiling Framing Pro • " + VersionLabel;
 
         private static string ResolveBuildText()
         {
@@ -30,16 +30,14 @@ namespace HNL.VXT.UI.Infrastructure
                     string.IsNullOrWhiteSpace(metadata.Value))
                     continue;
 
-                DateTimeOffset utc;
-                if (DateTimeOffset.TryParseExact(
-                    metadata.Value,
-                    "yyyy-MM-dd'T'HH:mm:ss'Z'",
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                    out utc))
-                {
-                    return utc.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-                }
+                // Directory.Build.props stamps dd/MM/yyyy HH:mm in HNL local time (UTC+7).
+                // Avoid treating that value as UTC or accidentally showing the workstation
+                // clock: the title must identify the installed binary build exactly.
+                DateTime localBuild;
+                if (DateTime.TryParseExact(
+                    metadata.Value, "dd/MM/yyyy HH:mm",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out localBuild))
+                    return localBuild.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
 
                 return metadata.Value;
             }
