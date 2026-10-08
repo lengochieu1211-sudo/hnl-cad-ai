@@ -248,6 +248,59 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void ManualStart_GroupedDimensionsMatchExactMeasuredSpan()
+        {
+            var plan = LayInCeilingPlanner.Build(
+                Rect(0, 0, 6000, 4800), null,
+                new LayInCeilingSettings
+                {
+                    GridSystem = LayInGridSystem.Module600x600,
+                    MainDirection = LayInMainDirectionMode.Horizontal,
+                    StartMode = LayInStartMode.ManualStart,
+                    ManualStartPoint = new Point2(300, 150),
+                    DimensionMode = LayInDimensionMode.Grouped,
+                    GroupedDimensionCount = 12
+                });
+
+            Assert.AreEqual(2, plan.DimensionRuns.Count);
+            var x = plan.DimensionRuns.First(d => Math.Abs(d.A.Y - d.B.Y) < 0.001);
+            var y = plan.DimensionRuns.First(d => Math.Abs(d.A.X - d.B.X) < 0.001);
+            Assert.AreEqual(9, x.ModuleCount);
+            Assert.AreEqual("9 × 600 = 5400", x.Label);
+            Assert.AreEqual(7, y.ModuleCount);
+            Assert.AreEqual("7 × 600 = 4200", y.Label);
+            foreach (var run in plan.DimensionRuns)
+                Assert.AreEqual(run.Module * run.ModuleCount, run.A.DistanceTo(run.B), 0.001,
+                    "Grouped DIM label must match real geometric span after clipping.");
+        }
+
+        [TestMethod]
+        public void NarrowBoundary_SkipsFullModuleDimsInsteadOfDrawingFalseLabel()
+        {
+            foreach (var system in new[]
+            {
+                LayInGridSystem.Module600x600,
+                LayInGridSystem.Module610x610,
+                LayInGridSystem.Module600x1200,
+                LayInGridSystem.Module610x1220
+            })
+            {
+                var plan = LayInCeilingPlanner.Build(
+                    Rect(0, 0, 100, 100), null,
+                    new LayInCeilingSettings
+                    {
+                        GridSystem = system,
+                        MainDirection = LayInMainDirectionMode.Horizontal,
+                        StartMode = LayInStartMode.ManualStart,
+                        ManualStartPoint = new Point2(50, 50),
+                        DimensionMode = LayInDimensionMode.Grouped,
+                        GroupedDimensionCount = 12
+                    });
+                Assert.AreEqual(0, plan.DimensionRuns.Count, system.ToString());
+            }
+        }
+
+        [TestMethod]
         public void AutoOptimize_ReturnsOnePrincipalAxis()
         {
             var plan = LayInCeilingPlanner.Build(
