@@ -183,10 +183,14 @@ namespace HNL.VXT.AutoCAD
                     var db = doc.Database;
                     var ms = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
                     var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    var hatchLayer = VxtCadResources.EnsureLayer(db, tr, settings.HatchLayer, 7, "Continuous", "25");
-                    var hangerLayer = VxtCadResources.EnsureLayer(db, tr, settings.HangerLayer, 2, "Continuous", "25");
-                    var dimLayer = VxtCadResources.EnsureLayer(db, tr, settings.DimensionLayer, 4, "Continuous", "25");
-                    var markerLayer = VxtCadResources.EnsureLayer(db, tr, "HNL-CF-START", 3, "Continuous", "25");
+                    var hatchLayer = VxtCadResources.EnsureLayInLayer(db, tr, settings.HatchLayer, 7, "Continuous", "25");
+                    var hangerLayer = settings.DrawHangers
+                        ? VxtCadResources.EnsureLayInLayer(db, tr, settings.HangerLayer, 2, "Continuous", "25")
+                        : ObjectId.Null;
+                    var dimLayer = settings.DimensionMode != LayInDimensionMode.Off
+                        ? VxtCadResources.EnsureLayInLayer(db, tr, settings.DimensionLayer, 4, "Continuous", "25")
+                        : ObjectId.Null;
+                    var markerLayer = VxtCadResources.EnsureLayInLayer(db, tr, "HNL-CF-START", 3, "Continuous", "25");
                     var hangerBlock = ResolveBlock(bt, settings.HangerBlockName);
                     var startBlock = ResolveBlock(bt, settings.StartMarkerBlockName);
 
