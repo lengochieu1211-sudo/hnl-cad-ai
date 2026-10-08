@@ -7,7 +7,6 @@ using HNL.CeilingEstimator.Core.Models;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using Autodesk.AutoCAD.Runtime;
 using Autodesk.AutoCAD.Windows;
 using CadApplication = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -40,6 +39,9 @@ namespace HNL.CeilingEstimator.AutoCAD
     internal static class HcePaletteService
     {
         private static readonly Guid PaletteId = new Guid("3214F7D5-9F11-4DB9-8369-6D40F07C2A8E");
+        // CI stamps this once, at build time in Vietnam local time (UTC+07).
+        // Never use DateTime.Now here: opening the palette is not a software update.
+        internal const string PaletteCaption = "HNL HCE Pro | HCE_UPDATED_AT_VN";
         private static PaletteSet? _palette;
         private static HcePaletteView? _view;
 
@@ -49,7 +51,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             {
                 // Lazy UI initialization: no WPF work on AutoCAD startup.
                 var view = new HcePaletteView();
-                var palette = new PaletteSet("HNL Tool - Ceiling Estimator Pro", PaletteId)
+                var palette = new PaletteSet(PaletteCaption, PaletteId)
                 {
                     Style = PaletteSetStyles.ShowAutoHideButton |
                             PaletteSetStyles.ShowCloseButton |
@@ -125,74 +127,19 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         private UIElement BuildLayout()
         {
-            var root = new Grid { Background = _background };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var top = new WpfBorder
-            {
-                Background = Brush("#142948"), Padding = new Thickness(14, 12, 14, 12),
-                BorderThickness = new Thickness(0, 0, 0, 1), BorderBrush = Brush("#2761A7")
-            };
-            var topGrid = new Grid();
-            topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var logo = new System.Windows.Controls.Image
-            {
-                Width = 43, Height = 43, Stretch = Stretch.Uniform,
-                Margin = new Thickness(0, 0, 12, 0)
-            };
-            try
-            {
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.UriSource = new Uri(
-                    "pack://application:,,,/HNL.CeilingEstimator.AutoCAD;component/Assets/HNL-Logo-Official.png",
-                    UriKind.Absolute);
-                bitmap.EndInit();
-                bitmap.Freeze();
-                logo.Source = bitmap;
-            }
-            catch
-            {
-                // Logo load errors must never disable estimator commands.
-            }
-
-            topGrid.Children.Add(logo);
-            var titleStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            titleStack.Children.Add(Text("HNL Tool", 10.5, Brushes.White, FontWeights.SemiBold));
-            titleStack.Children.Add(Text("Ceiling Estimator Pro", 17, Brushes.White, FontWeights.Bold));
-            titleStack.Children.Add(Text("v0.3.0  \u2022  Palette RC5  \u2022  AutoCAD 2023\u20132027",
-                10, Brush("#BED7F6"), FontWeights.Normal));
-            Grid.SetColumn(titleStack, 1);
-            topGrid.Children.Add(titleStack);
-            top.Child = topGrid;
-            root.Children.Add(top);
-
+            // PaletteSet supplies the one and only app name and update time in
+            // AutoCAD's native dock title bar. No inner logo, title or footer.
             var tabs = new TabControl
             {
-                Margin = new Thickness(9, 10, 9, 6), Background = _background,
-                BorderThickness = new Thickness(0), Foreground = _primary
+                Margin = new Thickness(9, 10, 9, 6),
+                Background = _background,
+                BorderThickness = new Thickness(0),
+                Foreground = _primary
             };
             tabs.Items.Add(new TabItem { Header = "T\u00ednh t\u1ea5m", Content = BuildCalculationTab() });
             tabs.Items.Add(new TabItem { Header = "Ki\u1ec3m tra", Content = BuildAuditTab() });
             tabs.SelectedIndex = 0;
-            Grid.SetRow(tabs, 1);
-            root.Children.Add(tabs);
-
-            var footer = new WpfBorder
-            {
-                Padding = new Thickness(14, 10, 14, 10),
-                Background = _surface, BorderBrush = _border,
-                BorderThickness = new Thickness(0, 1, 0, 0)
-            };
-            footer.Child = Text("HNL Tool  |  Golden Core gi\u1eef nguy\u00ean  |  Runtime Candidate",
-                10, _muted, FontWeights.Normal);
-            Grid.SetRow(footer, 2);
-            root.Children.Add(footer);
-            return root;
+            return tabs;
         }
 
         private UIElement BuildCalculationTab()

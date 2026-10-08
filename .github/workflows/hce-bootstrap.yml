@@ -74,6 +74,22 @@ jobs:
             Write-Host "HCE PALETTE bridge enabled: $($p.Name)"
           }
 
+      - name: Stamp native HCE Palette title and audit no repeated header
+        shell: powershell
+        run: |
+          $uiPath = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs'
+          $ui = [IO.File]::ReadAllText($uiPath)
+          if (-not $ui.Contains('HNL HCE Pro | HCE_UPDATED_AT_VN')) { throw 'Missing HCE build-time caption marker' }
+          if ($ui.Contains('pack://application:,,,/HNL.CeilingEstimator.AutoCAD;component/Assets/HNL-Logo-Official.png')) { throw 'Redundant HCE Palette logo still present' }
+          if ($ui.Contains('titleStack.Children.Add') -or $ui.Contains('footer.Child')) { throw 'Redundant Palette header/footer still present' }
+          if (-not $ui.Contains('new PaletteSet(PaletteCaption, PaletteId)')) { throw 'Caption not wired into native AutoCAD PaletteSet' }
+          $buildTimeVN = [DateTime]::UtcNow.AddHours(7).ToString('dd/MM/yyyy HH:mm', [Globalization.CultureInfo]::InvariantCulture)
+          $ui = $ui.Replace('HCE_UPDATED_AT_VN', $buildTimeVN)
+          if ($ui.Contains('HCE_UPDATED_AT_VN')) { throw 'Unstamped HCE Palette title marker' }
+          [IO.File]::WriteAllText($uiPath, $ui, [Text.UTF8Encoding]::new($false))
+          Write-Host "HCE PALETTE NATIVE TITLE PASS: HNL HCE Pro | $buildTimeVN (UTC+07, build time)"
+          Write-Host 'HCE PALETTE HEADER-FOOTER REMOVAL PASS: tabs are first content element'
+          
       - name: Verify HCE default palette and calculator route
         shell: powershell
         run: |
