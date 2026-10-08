@@ -7,6 +7,7 @@ using HNL.CeilingEstimator.Core.Models;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Markup;
 using Autodesk.AutoCAD.Runtime;
 using Autodesk.AutoCAD.Windows;
 using CadApplication = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -109,13 +110,14 @@ namespace HNL.CeilingEstimator.AutoCAD
             try { dark = Convert.ToInt32(CadApplication.GetSystemVariable("COLORTHEME"), CultureInfo.InvariantCulture) == 0; }
             catch { /* preserve dark default if host has no theme variable */ }
 
-            _background = Brush(dark ? "#111827" : "#F3F6FB");
-            _surface = Brush(dark ? "#1B2638" : "#FFFFFF");
-            _border = Brush(dark ? "#324057" : "#DCE3EF");
-            _primary = Brush(dark ? "#F3F6FF" : "#122440");
-            _muted = Brush(dark ? "#ACBBD1" : "#52637D");
-            _accent = Brush("#2497FF");
-            _accentSoft = Brush(dark ? "#183754" : "#EAF4FF");
+            _background = Brush(dark ? "#1B1F23" : "#F3F6F8");
+            _surface = Brush(dark ? "#252A30" : "#FFFFFF");
+            _border = Brush(dark ? "#3B424A" : "#D7E0E7");
+            _primary = Brush(dark ? "#F1F5F9" : "#172033");
+            _muted = Brush(dark ? "#AEB8C4" : "#64748B");
+            _accent = Brush(dark ? "#38BDF8" : "#0284C7");
+            _accentSoft = Brush(dark ? "#102F3E" : "#EAF8FE");
+            InstallVxtTheme(dark);
 
             Background = _background;
             FontFamily = new FontFamily("Segoe UI");
@@ -125,20 +127,169 @@ namespace HNL.CeilingEstimator.AutoCAD
             RefreshLegacyControls();
         }
 
+
+        private void InstallVxtTheme(bool dark)
+        {
+            // Mirror the current HNL Ceiling Framing Pro palette resources.
+            Resources["AppBackground"] = _background;
+            Resources["CardBackground"] = _surface;
+            Resources["CardBorder"] = _border;
+            Resources["PrimaryText"] = _primary;
+            Resources["SecondaryText"] = _muted;
+            Resources["AccentStrong"] = _accent;
+            Resources["AccentSoft"] = _accentSoft;
+            Resources["AccentBorder"] = Brush(dark ? "#155E75" : "#BAE6FD");
+
+            var inputBackground = Brush(dark ? "#1E2328" : "#FFFFFF");
+            var inputBorder = Brush(dark ? "#4A535D" : "#C7D2DC");
+            Resources[SystemColors.WindowBrushKey] = inputBackground;
+            Resources[SystemColors.WindowTextBrushKey] = _primary;
+            Resources[SystemColors.ControlBrushKey] = inputBackground;
+            Resources[SystemColors.ControlTextBrushKey] = _primary;
+            Resources[SystemColors.HighlightBrushKey] = _accentSoft;
+            Resources[SystemColors.HighlightTextBrushKey] = _primary;
+            Resources[SystemColors.InactiveSelectionHighlightBrushKey] = _accentSoft;
+            Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = _primary;
+
+            var popupStyle = new Style(typeof(ComboBoxItem));
+            popupStyle.Setters.Add(new Setter(Control.ForegroundProperty, _primary));
+            popupStyle.Setters.Add(new Setter(Control.BackgroundProperty, inputBackground));
+            popupStyle.Setters.Add(new Setter(Control.BorderBrushProperty, inputBorder));
+            popupStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(8, 5, 8, 5)));
+            var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hover.Setters.Add(new Setter(Control.ForegroundProperty, _primary));
+            hover.Setters.Add(new Setter(Control.BackgroundProperty, _accentSoft));
+            popupStyle.Triggers.Add(hover);
+            var selected = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
+            selected.Setters.Add(new Setter(Control.ForegroundProperty, _primary));
+            selected.Setters.Add(new Setter(Control.BackgroundProperty, _accentSoft));
+            popupStyle.Triggers.Add(selected);
+            Resources[typeof(ComboBoxItem)] = popupStyle;
+        }
+
+        // Copy the proven 36px/30px/106px vertical tab rail from the Framing Pro.
+        // The rail is cosmetic: AutoCAD commands, settings and Core are unchanged.
+        private static Style VxtModuleRailStyle()
+        {
+            const string xaml = @"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
+                                        xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'
+                                        TargetType='{x:Type TabControl}'>
+                <Setter Property='BorderThickness' Value='0'/>
+                <Setter Property='Background' Value='{DynamicResource AppBackground}'/>
+                <Setter Property='Template'>
+                    <Setter.Value>
+                        <ControlTemplate TargetType='{x:Type TabControl}'>
+                            <Grid Background='{TemplateBinding Background}'>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width='36'/>
+                                    <ColumnDefinition Width='*'/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column='0' Background='{DynamicResource CardBackground}'
+                                        BorderBrush='{DynamicResource CardBorder}'
+                                        BorderThickness='0,0,1,0' Padding='2,5,2,5'>
+                                    <StackPanel Orientation='Vertical' IsItemsHost='True'
+                                                HorizontalAlignment='Center' VerticalAlignment='Top'
+                                                KeyboardNavigation.TabNavigation='Local'/>
+                                </Border>
+                                <ContentPresenter Grid.Column='1' x:Name='PART_SelectedContentHost'
+                                                  ContentSource='SelectedContent'
+                                                  HorizontalAlignment='Stretch' VerticalAlignment='Stretch'/>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>";
+            return (Style)XamlReader.Parse(xaml);
+        }
+
+        private static Style VxtModuleTabStyle()
+        {
+            const string xaml = @"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
+                                        xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'
+                                        TargetType='{x:Type TabItem}'>
+                <Setter Property='Foreground' Value='{DynamicResource SecondaryText}'/>
+                <Setter Property='Background' Value='Transparent'/>
+                <Setter Property='BorderBrush' Value='Transparent'/>
+                <Setter Property='FontFamily' Value='Segoe UI'/>
+                <Setter Property='FontSize' Value='11'/>
+                <Setter Property='FontWeight' Value='SemiBold'/>
+                <Setter Property='Width' Value='30'/>
+                <Setter Property='Height' Value='106'/>
+                <Setter Property='Padding' Value='4,9'/>
+                <Setter Property='Cursor' Value='Hand'/>
+                <Setter Property='Template'>
+                    <Setter.Value>
+                        <ControlTemplate TargetType='{x:Type TabItem}'>
+                            <Border x:Name='ModeSegment' Background='{TemplateBinding Background}'
+                                    BorderBrush='{TemplateBinding BorderBrush}'
+                                    BorderThickness='1' CornerRadius='5'
+                                    Width='{TemplateBinding Width}' Height='{TemplateBinding Height}'
+                                    Margin='0,0,0,5'>
+                                <ContentPresenter ContentSource='Header'
+                                                  HorizontalAlignment='Center' VerticalAlignment='Center'
+                                                  Margin='{TemplateBinding Padding}' RecognizesAccessKey='True'>
+                                    <ContentPresenter.LayoutTransform>
+                                        <RotateTransform Angle='-90'/>
+                                    </ContentPresenter.LayoutTransform>
+                                </ContentPresenter>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property='IsMouseOver' Value='True'>
+                                    <Setter TargetName='ModeSegment' Property='Background'
+                                            Value='{DynamicResource AccentSoft}'/>
+                                    <Setter Property='Foreground' Value='{DynamicResource PrimaryText}'/>
+                                </Trigger>
+                                <Trigger Property='IsSelected' Value='True'>
+                                    <Setter TargetName='ModeSegment' Property='Background'
+                                            Value='{DynamicResource AccentStrong}'/>
+                                    <Setter TargetName='ModeSegment' Property='BorderBrush'
+                                            Value='{DynamicResource AccentStrong}'/>
+                                    <!-- Dark ink on cyan is legible; fixes white-on-light-blue contrast. -->
+                                    <Setter Property='Foreground' Value='#082F49'/>
+                                </Trigger>
+                                <Trigger Property='IsEnabled' Value='False'>
+                                    <Setter TargetName='ModeSegment' Property='Opacity' Value='0.45'/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>";
+            return (Style)XamlReader.Parse(xaml);
+        }
+
+        private UIElement BuildFramingModule()
+        {
+            // The Framing Pro is a separate AutoCAD plugin. Do not pretend
+            // its trần chìm engine has been merged into HCE.
+            var content = new StackPanel { Margin = new Thickness(3, 9, 3, 10) };
+            var section = Section("Trần chìm", "#38BDF8");
+            section.Children.Add(Text(
+                "Module khung trần chìm thuộc HNL Ceiling Framing Pro (HCF). Chức năng tính tấm trong HCE không thay thế thuật toán xương trần.",
+                11, _muted, FontWeights.Normal));
+            section.Children.Add(CommandButton("Mở HNL Ceiling Framing Pro (HCF)", "HCF", true));
+            section.Children.Add(Text("Cần cài HNL Ceiling Framing Pro. Đây là lệnh mở module gốc, không tạo khung từ HCE.",
+                10, _muted, FontWeights.Normal));
+            content.Children.Add(Card(section));
+            return Scroll(content);
+        }
+
         private UIElement BuildLayout()
         {
             // PaletteSet supplies the one and only app name and update time in
             // AutoCAD's native dock title bar. No inner logo, title or footer.
             var tabs = new TabControl
             {
-                Margin = new Thickness(9, 10, 9, 6),
+                Margin = new Thickness(0),
                 Background = _background,
                 BorderThickness = new Thickness(0),
-                Foreground = _primary
+                Foreground = _primary,
+                Style = VxtModuleRailStyle()
             };
-            tabs.Items.Add(new TabItem { Header = "T\u00ednh t\u1ea5m", Content = BuildCalculationTab() });
-            tabs.Items.Add(new TabItem { Header = "Ki\u1ec3m tra", Content = BuildAuditTab() });
-            tabs.SelectedIndex = 0;
+            var moduleStyle = VxtModuleTabStyle();
+            tabs.Items.Add(new TabItem { Header = "Trần chìm", Style = moduleStyle, Content = BuildFramingModule() });
+            tabs.Items.Add(new TabItem { Header = "Trần nổi", Style = moduleStyle, Content = BuildCalculationTab() });
+            tabs.SelectedIndex = 1;
             return tabs;
         }
 
@@ -157,8 +308,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             content.Children.Add(Card(BuildLegacySettingsPanel()));
 
             var result = Section("03  Xem tr\u01b0\u1edbc v\u00e0 b\u1ea3ng", "#F59E0B");
-            result.Children.Add(Text("Sau khi ch\u1ecdn Hatch v\u00e0 x\u00e1c nh\u1eadn Use610, " +
-                "k\u1ebft qu\u1ea3 s\u1ed1 l\u01b0\u1ee3ng hi\u1ec3n th\u1ecb tr\u00ean Command Line.",
+            result.Children.Add(Text("Sau khi chọn Hatch, kết quả đếm tấm hiển thị trên Command Line. " +
+                "Hatch không chứng minh được bước lưới hoặc đơn vị chưa đúng cần xác nhận riêng.",
                 11, _muted, FontWeights.Normal));
             result.Children.Add(Text("Ch\u1ecdn Table \u0111\u1ec3 \u0111\u1eb7t b\u1ea3ng, " +
                 "ho\u1eb7c Exit \u0111\u1ec3 kh\u00f4ng ghi g\u00ec v\u00e0o DWG.",
@@ -167,6 +318,12 @@ namespace HNL.CeilingEstimator.AutoCAD
                 "(c\u1ea7n Golden parity).",
                 10, Brush("#E5A84E"), FontWeights.SemiBold));
             content.Children.Add(Card(result));
+            var check = Section("05  Kiểm tra", "#A78BFA");
+            check.Children.Add(CommandButton("Kiểm tra Hatch (HCEQA)", "HCEQA", false));
+            check.Children.Add(CommandButton("Quét Golden (HCEGOLDEN)", "HCEGOLDEN", false));
+            check.Children.Add(Text("Đây là công cụ kiểm tra của module Trần nổi, không phải một module thứ ba.",
+                10, _muted, FontWeights.Normal));
+            content.Children.Add(Card(check));
 
             return Scroll(content);
         }
