@@ -449,7 +449,7 @@ namespace HNL.VXT.UI.Views
             }
 
             var first = columns[0].Width;
-            if (!first.IsAbsolute || first.Value < 105.0 || first.Value > 200.0) return;
+            if (!first.IsAbsolute || first.Value < 100.0 || first.Value > 200.0) return;
 
             columns[0].Width = new GridLength(CommonLabelWidth);
 
