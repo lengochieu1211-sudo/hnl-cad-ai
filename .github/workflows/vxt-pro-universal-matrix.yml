@@ -117,9 +117,26 @@ jobs:
             'hatch.Origin = new Point2d(item.Plan.HatchOrigin.X, item.Plan.HatchOrigin.Y)',
             'hatch.AppendLoop(HatchLoopTypes.Outermost',
             'hatch.EvaluateHatch(true)',
-            'BuildDimension(db, run, item.Plan.ModuleShort)'
+            'BuildDimension(db, run, item.Plan.ModuleShort, dimStyleId)'
           )) {
             if (-not $layInCad.Contains($token)) { throw "Lay-in CAD contract missing: $token" }
+          }
+          # DWG-owned DimStyle and preferred Ty Block: UI, Preview and Create contracts.
+          $layInPalette = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.xaml" -Raw
+          if (-not $layInSettings.Contains('DefaultHangerBlockName = "AP_DIEM TY 06.2026"') -or
+              -not $layInVm.Contains('_host.GetDimStyleNames()') -or
+              -not $layInVm.Contains('public string SelectedDimensionStyle') -or
+              -not $layInPalette.Contains('SelectedItem="{Binding SelectedDimensionStyle, Mode=TwoWay}"') -or
+              -not $layInPalette.Contains('Text="{Binding HangerBlockName, UpdateSourceTrigger=LostFocus}"')) {
+            throw 'Lay-in DimStyle selector / default Ty Block UI gate missing.'
+          }
+          if (-not $layInCad.Contains('ResolveDimensionStyle(db, session.LayInSettings.DimensionStyle)') -or
+              -not $layInCad.Contains('ResolveDimensionStyle(db, tr, settings.DimensionStyle)') -or
+              -not $layInCad.Contains('ResolveHangerBlock(blockTable, session.LayInSettings.HangerBlockName)') -or
+              -not $layInCad.Contains('ResolveHangerBlock(bt, settings.HangerBlockName)') -or
+              -not $layInSession.Contains('LayInSettings.DimensionStyle = string.Empty;') -or
+              -not $layInVm.Contains('_settings.DimensionStyle = string.Empty;')) {
+            throw 'Lay-in named DWG DimStyle / Ty Block Preview-Create or document isolation gate missing.'
           }
           foreach ($name in @(
             'HNLCFLAYINPREVIEW', 'HNLCFLAYINCLEAR', 'HNLCFLAYINCREATE',
