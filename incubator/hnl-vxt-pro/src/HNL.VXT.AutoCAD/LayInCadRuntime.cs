@@ -451,9 +451,11 @@ namespace HNL.VXT.AutoCAD
                 throw new InvalidOperationException("Zero-length Lay-in dimension run.");
 
             var offset = Math.Max(160.0, moduleShort * 0.3);
-            var linePoint = new Point3d(
-                (a.X + b.X) * 0.5 + dy * offset / length,
-                (a.Y + b.Y) * 0.5 - dx * offset / length, 0.0);
+            var linePoint = run.DimensionLinePoint.HasValue
+                ? ToCad(run.DimensionLinePoint.Value)
+                : new Point3d(
+                    (a.X + b.X) * 0.5 + dy * offset / length,
+                    (a.Y + b.Y) * 0.5 - dx * offset / length, 0.0);
             var result = new RotatedDimension(
                 Math.Atan2(dy, dx), a, b, linePoint, run.Label, db.Dimstyle);
             result.SetDatabaseDefaults(db);
