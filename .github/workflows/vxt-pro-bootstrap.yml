@@ -268,10 +268,23 @@ jobs:
           foreach ($name in @(
             'HNLCFLAYINPREVIEW', 'HNLCFLAYINCLEAR', 'HNLCFLAYINCREATE',
             'HNLCFLAYINSTART', 'HNLCFLAYINDOOR',
-            'HNLCFLAYINHANGERBLOCK', 'HNLCFLAYINSTARTBLOCK'
+            'HNLCFLAYINHANGERBLOCK', 'HNLCFLAYINSTARTBLOCK', 'HNLCFLAYINQA'
           )) {
             if (-not $layInCommands.Contains('CommandMethod("' + $name + '"')) {
               throw "Lay-in command not registered: $name"
+            }
+          }
+          if (-not $layInCad.Contains('internal static void RunRuntimeQa()') -or
+              -not $layInCad.Contains('hatch.NumberOfLoops != 1 + holes.Count') -or
+              -not $layInCad.Contains('var hatch = CreateHatch(db, tr, ms, item, db.Clayer);')) {
+            throw 'Lay-in AutoCAD runtime QA command must exercise actual Hatch generation and loop inspection.'
+          }
+          foreach ($manifestName in @('build/HNL.VXT.bundle/PackageContents.xml',
+                                        'build/universal/PackageContents.2026-net8.xml',
+                                        'build/universal/PackageContents.2026-net10.xml')) {
+            $manifest = Get-Content (Join-Path $env:VXT_ROOT $manifestName) -Raw
+            if (-not $manifest.Contains('Global="HNLCFLAYINQA" Local="HNLCFLAYINQA"')) {
+              throw "Lay-in Runtime QA command missing from manifest: $manifestName"
             }
           }
           Write-Host 'Lay-in one-Hatch/region static contract and command registrations PASS'
