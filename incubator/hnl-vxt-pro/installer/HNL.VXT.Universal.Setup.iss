@@ -15,7 +15,8 @@ VersionInfoCompany={#MyPublisher}
 VersionInfoDescription=HNL Ceiling Framing Pro Universal AutoCAD 2023-2027 Installer
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyNumericVersion}
-DefaultDirName={commonpf}\Autodesk\ApplicationPlugins\HNL.VXT.bundle
+DefaultDirName={commonpf}\Autodesk\ApplicationPlugins\HNL.CeilingFramingPro.bundle
+UsePreviousAppDir=no
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
@@ -62,6 +63,35 @@ Source: "..\artifacts\installer-assets\HNL-VXT.ico"; DestDir: "{app}\Assets"; Fl
 Source: "..\resources\hatch\*.pat"; DestDir: "{app}\Contents\Resources"; Flags: ignoreversion
 
 [Code]
+// The previous product package used HNL.VXT.bundle. Delete only the known
+// former HNL plugin bundle, and only after the new installation succeeds.
+// Never delete arbitrary user folders or similarly named Autodesk bundles.
+function LegacyHnlBundlePath: String;
+begin
+  Result := ExpandConstant('{commonpf}\Autodesk\ApplicationPlugins\HNL.VXT.bundle');
+end;
+
+function IsLegacyHnlBundle: Boolean;
+var
+  P: String;
+begin
+  P := LegacyHnlBundlePath;
+  Result := DirExists(P) and FileExists(AddBackslash(P) + 'PackageContents.xml') and
+    (FileExists(AddBackslash(P) + 'Contents\Windows\HNL.VXT.AutoCAD.dll') or
+     FileExists(AddBackslash(P) + 'Contents\Windows\2023\HNL.VXT.AutoCAD.dll'));
+end;
+
+procedure RemoveLegacyHnlBundle;
+begin
+  if IsLegacyHnlBundle and (CompareText(LegacyHnlBundlePath, ExpandConstant('{app}')) <> 0) then
+  begin
+    if DelTree(LegacyHnlBundlePath, True, True, True) then
+      Log('HNL Tool - Migrated old HNL.VXT.bundle to HNL.CeilingFramingPro.bundle')
+    else
+      Log('HNL Tool - Could not remove old HNL.VXT.bundle; review duplicate bundle loading');
+  end;
+end;
+
 var
   Cad2026Net10Cached: Boolean;
   Cad2026ChoiceResolved: Boolean;
@@ -256,6 +286,7 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
   begin
+    RemoveLegacyHnlBundle;
     MsgBox(
       'Cài đặt HNL Ceiling Framing Pro Universal v{#MyAppVersion} hoàn tất.' + #13#10 + #13#10 +
       'Hỗ trợ: AutoCAD 2023, 2024, 2025, 2026 và 2027.' + #13#10 +
