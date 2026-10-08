@@ -77,10 +77,22 @@ namespace HNL.VXT.Core.Preview
             var longStations = GenerateStations(
                 bounds.MinX, bounds.MaxX, spec.ModuleShort, phaseX);
 
+            // Calculate the first actual complete panel independently from Hatch
+            // phase. A phase point may be outside a notch or inside a void.
+            var tileHeight = spec.HasShortCross ? spec.ModuleShort : spec.MainSpacing;
+            var firstTile = settings.DrawStartTileBlock
+                ? FindFirstFullTile(localOuter, localHoles, bounds,
+                    phaseX, phaseY, spec.ModuleShort, tileHeight)
+                : (Point2?)null;
+
             var plan = new LayInCeilingPlan
             {
                 MainAngleRadians = angle,
                 HatchOrigin = Transform2.ToWorld(new Point2(phaseX, phaseY), angle),
+                FirstTileOrigin = firstTile.HasValue
+                    ? (Point2?)Transform2.ToWorld(firstTile.Value, angle) : null,
+                FirstTileWidth = spec.ModuleShort,
+                FirstTileHeight = tileHeight,
                 HatchPatternName = spec.HatchPatternName,
                 ModuleShort = spec.ModuleShort,
                 MainTeeSpacing = spec.MainSpacing,
@@ -149,6 +161,67 @@ namespace HNL.VXT.Core.Preview
             AddDimensions(plan, settings, spec, bounds, angle, phaseX, phaseY);
             TallyMaterials(plan, spec);
             return plan;
+        }
+
+        private static Point2? FindFirstFullTile(
+            IReadOnlyList<Point2> outer, IReadOnlyList<IReadOnlyList<Point2>> holes,
+            Box2 bounds, double phaseX, double phaseY, double width, double height)
+        {
+            if (width <= Eps || height <= Eps) return null;
+            var ixFirst = (int)Math.Ceiling((bounds.MinX - phaseX) / width - Eps);
+            var ixLast = (int)Math.Floor((bounds.MaxX - width - phaseX) / width + Eps);
+            var iyFirst = (int)Math.Ceiling((bounds.MinY - phaseY) / height - Eps);
+            var iyLast = (int)Math.Floor((bounds.MaxY - height - phaseY) / height + Eps);
+            Point2? best = null;
+            double bestDistance = double.MaxValue;
+
+            for (var iy = iyFirst; iy <= iyLast; iy++)
+            {
+                var y = phaseY + iy * height;
+                for (var ix = ixFirst; ix <= ixLast; ix++)
+                {
+                    var x = phaseX + ix * width;
+                    if (!ContainsCompletePanel(outer, holes, x, y, width, height))
+                        continue;
+                    var dx = x - phaseX;
+                    var dy = y - phaseY;
+                    var dist = dx * dx + dy * dy;
+                    if (dist < bestDistance - Eps)
+                    {
+                        bestDistance = dist;
+                        best = new Point2(x, y);
+                    }
+                }
+            }
+            return best;
+        }
+
+        private static bool ContainsCompletePanel(
+            IReadOnlyList<Point2> outer, IReadOnlyList<IReadOnlyList<Point2>> holes,
+            double x, double y, double width, double height)
+        {
+            // Polygon edges only change cross-section topology at a vertex Y.
+            // Check the middle of each such band so no notch/hole is crossed
+            // even when it does not intersect the geometric panel centre.
+            var bands = new List<double> { y, y + height };
+            foreach (var p in outer)
+                if (p.Y > y + Eps && p.Y < y + height - Eps) bands.Add(p.Y);
+            foreach (var hole in holes)
+                foreach (var p in hole)
+                    if (p.Y > y + Eps && p.Y < y + height - Eps) bands.Add(p.Y);
+            bands.Sort();
+
+            for (int i = 0; i + 1 < bands.Count; i++)
+            {
+                var midY = 0.5 * (bands[i] + bands[i + 1]);
+                if (bands[i + 1] - bands[i] <= Eps) continue;
+                var spans = PolygonScanline.ClipHorizontal(outer, holes, midY);
+                if (!spans.Any(span =>
+                    Math.Min(span.A.X, span.B.X) <= x + Eps &&
+                    Math.Max(span.A.X, span.B.X) >= x + width - Eps))
+                    return false;
+            }
+            return true;
         }
 
         private static void ResolvePhases(
