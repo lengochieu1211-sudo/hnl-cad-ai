@@ -21,5 +21,13 @@ namespace HNL.VXT.UI.Hosting
         void HighlightBoundary(int boundaryIndex);
         void RequestCreate();
         void RequestCreateWithWarning();
+
+        void RequestLayInPreview(LayInCeilingSettings settings);
+        void ClearLayInPreview();
+        void RequestLayInCreate(LayInCeilingSettings settings);
+        void PickLayInManualStart(LayInCeilingSettings settings);
+        void PickLayInDoor(LayInCeilingSettings settings);
+        void PickLayInHangerBlock(LayInCeilingSettings settings);
+        void PickLayInStartMarkerBlock(LayInCeilingSettings settings);
     }
 }
