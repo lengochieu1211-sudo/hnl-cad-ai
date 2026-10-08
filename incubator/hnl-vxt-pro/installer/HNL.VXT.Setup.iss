@@ -52,6 +52,7 @@ Source: "..\artifacts\HNL.VXT.bundle\Contents\Windows\*.dll"; DestDir: "{app}\Co
 Source: "..\artifacts\HNL.VXT.bundle\Contents\Windows\*.config"; DestDir: "{app}\Contents\Windows"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\legacy\HNL-VXT-V6.7.4-Golden.lsp"; DestDir: "{app}\Contents\Legacy"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\artifacts\installer-assets\HNL-VXT.ico"; DestDir: "{app}\Assets"; Flags: ignoreversion
+Source: "..\resources\hatch\*.pat"; DestDir: "{app}\Contents\Resources"; Flags: ignoreversion
 
 [Code]
 function IsAutoCADRunning: Boolean;
