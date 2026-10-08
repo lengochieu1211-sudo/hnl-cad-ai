@@ -277,8 +277,8 @@ namespace HNL.VXT.Core.Tests
         private static bool Inside(Point2 p, Boundary2 b)
         {
             var bounds = b.GetBounds();
-            return p.X > bounds.MinX + 0.001 && p.X < bounds.MaxX - 0.001 &&
-                   p.Y > bounds.MinY + 0.001 && p.Y < bounds.MaxY - 0.001;
+            return p.X > bounds.Min.X + 0.001 && p.X < bounds.Max.X - 0.001 &&
+                   p.Y > bounds.Min.Y + 0.001 && p.Y < bounds.Max.Y - 0.001;
         }
 
         private static void AssertAngleEquivalent(double expected, double actual)
