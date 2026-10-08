@@ -169,6 +169,10 @@ jobs:
           }
           Get-ChildItem $root -Recurse -File -Filter '*Mixed*' | ForEach-Object { Write-Host "HCE_MIXED_FILE $($_.FullName)" }
 
+      - name: Core regression for six DEMTC modules with X/Y and priority S/D
+        shell: powershell
+        run: dotnet run --project HCE-OVERLAY/tests/LegacyModes/LegacyModes.csproj -c Release
+
       - name: Build Golden + AutoCAD matrix + Setup EXE
         shell: powershell
         run: ./incubator/hnl-ceiling-estimator-pro/scripts/build-universal-installer.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
