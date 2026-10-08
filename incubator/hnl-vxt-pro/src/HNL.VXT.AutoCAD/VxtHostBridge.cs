@@ -13,7 +13,9 @@ namespace HNL.VXT.AutoCAD
     internal sealed class VxtHostBridge : IVxtHostBridge
     {
         private readonly DispatcherTimer _previewTimer;
+        private readonly DispatcherTimer _layInPreviewTimer;
         private VxtSettings _pendingPreviewSettings;
+        private LayInCeilingSettings _pendingLayInPreviewSettings;
 
         public VxtHostBridge()
         {
@@ -22,6 +24,12 @@ namespace HNL.VXT.AutoCAD
                 Interval = TimeSpan.FromMilliseconds(180)
             };
             _previewTimer.Tick += PreviewTimer_Tick;
+
+            _layInPreviewTimer = new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromMilliseconds(180)
+            };
+            _layInPreviewTimer.Tick += LayInPreviewTimer_Tick;
         }
 
         public bool IsDarkTheme
@@ -63,12 +71,14 @@ namespace HNL.VXT.AutoCAD
         public void SelectBoundary()
         {
             CancelPendingPreview();
+            CancelPendingLayInPreview();
             Send("HNLVXTBOUNDARY ");
         }
 
         public void PickBoundaryPoint()
         {
             CancelPendingPreview();
+            CancelPendingLayInPreview();
             Send("HNLVXTPICKBOUNDARYPOINT ");
         }
 
@@ -206,6 +216,61 @@ namespace HNL.VXT.AutoCAD
         public void RequestCreateWithWarning()
             => RequestCreateCore(allowConstraintOverride: true);
 
+        public void RequestLayInPreview(LayInCeilingSettings settings)
+        {
+            if (settings == null) return;
+            VxtSession.Current.LayInSettings = settings.Clone();
+            _pendingLayInPreviewSettings = settings.Clone();
+            _layInPreviewTimer.Stop();
+            _layInPreviewTimer.Start();
+        }
+
+        public void ClearLayInPreview()
+        {
+            CancelPendingLayInPreview();
+            Send("HNLCFLAYINCLEAR ");
+        }
+
+        public void RequestLayInCreate(LayInCeilingSettings settings)
+        {
+            if (settings == null) return;
+            CancelPendingLayInPreview();
+            VxtSession.Current.LayInSettings = settings.Clone();
+            Send("HNLCFLAYINCREATE ");
+        }
+
+        public void PickLayInManualStart(LayInCeilingSettings settings)
+        {
+            if (settings == null) return;
+            CancelPendingLayInPreview();
+            VxtSession.Current.LayInSettings = settings.Clone();
+            Send("HNLCFLAYINSTART ");
+        }
+
+        public void PickLayInDoor(LayInCeilingSettings settings)
+        {
+            if (settings == null) return;
+            CancelPendingLayInPreview();
+            VxtSession.Current.LayInSettings = settings.Clone();
+            Send("HNLCFLAYINDOOR ");
+        }
+
+        public void PickLayInHangerBlock(LayInCeilingSettings settings)
+        {
+            if (settings == null) return;
+            CancelPendingLayInPreview();
+            VxtSession.Current.LayInSettings = settings.Clone();
+            Send("HNLCFLAYINHANGERBLOCK ");
+        }
+
+        public void PickLayInStartMarkerBlock(LayInCeilingSettings settings)
+        {
+            if (settings == null) return;
+            CancelPendingLayInPreview();
+            VxtSession.Current.LayInSettings = settings.Clone();
+            Send("HNLCFLAYINSTARTBLOCK ");
+        }
+
         private void RequestCreateCore(bool allowConstraintOverride)
         {
             var session = VxtSession.Current;
@@ -267,10 +332,34 @@ namespace HNL.VXT.AutoCAD
             Send(session.HasBoundary ? "HNLVXTPREVIEW " : "HNLVXTCLEARPREVIEW ");
         }
 
+        private void LayInPreviewTimer_Tick(object sender, EventArgs e)
+        {
+            _layInPreviewTimer.Stop();
+            if (_pendingLayInPreviewSettings == null) return;
+
+            if (IsCadCommandActive())
+            {
+                _layInPreviewTimer.Start();
+                return;
+            }
+
+            var settings = _pendingLayInPreviewSettings;
+            _pendingLayInPreviewSettings = null;
+            var session = VxtSession.Current;
+            session.LayInSettings = settings.Clone();
+            Send(session.HasBoundary ? "HNLCFLAYINPREVIEW " : "HNLCFLAYINCLEAR ");
+        }
+
         private void CancelPendingPreview()
         {
             _previewTimer.Stop();
             _pendingPreviewSettings = null;
+        }
+
+        private void CancelPendingLayInPreview()
+        {
+            _layInPreviewTimer.Stop();
+            _pendingLayInPreviewSettings = null;
         }
 
         private static bool IsCadCommandActive()
