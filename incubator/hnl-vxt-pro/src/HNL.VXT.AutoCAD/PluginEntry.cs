@@ -66,8 +66,10 @@ namespace HNL.VXT.AutoCAD
             if (doc == null) return;
 
             if (VxtSession.SynchronizeDocument(doc))
+            {
                 VxtTransientPreview.Instance.AbandonForDocumentTransition();
                 LayInCadRuntime.AbandonForDocumentTransition();
+            }
         }
 
         private static void OnDocumentToBeDestroyed(object sender, DocumentCollectionEventArgs e)
@@ -75,8 +77,10 @@ namespace HNL.VXT.AutoCAD
             var doc = e?.Document;
             if (doc == null) return;
             if (VxtSession.ReleaseDocument(doc))
+            {
                 VxtTransientPreview.Instance.AbandonForDocumentTransition();
                 LayInCadRuntime.AbandonForDocumentTransition();
+            }
         }
     }
 }
