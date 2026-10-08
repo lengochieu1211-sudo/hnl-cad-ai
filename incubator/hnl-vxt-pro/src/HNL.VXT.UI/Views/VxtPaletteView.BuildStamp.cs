@@ -30,7 +30,7 @@ namespace HNL.VXT.UI.Views
 
             var versionText = FindVersionTextBlock(view);
             if (versionText == null) return;
-            if (!string.IsNullOrEmpty(versionText.Text) && versionText.Text.Contains("• Build")) return;
+            if (!string.IsNullOrEmpty(versionText.Text) && versionText.Text.Contains("• Cập nhật")) return;
 
             BindingOperations.ClearBinding(versionText, TextBlock.TextProperty);
             versionText.Text = VxtBuildInfo.VersionLabel;
@@ -44,7 +44,7 @@ namespace HNL.VXT.UI.Views
             var direct = parent as TextBlock;
             if (direct != null &&
                 !string.IsNullOrWhiteSpace(direct.Text) &&
-                direct.Text.StartsWith("Ceiling Framing Pro ", StringComparison.OrdinalIgnoreCase))
+                direct.Text.StartsWith("v7.", StringComparison.OrdinalIgnoreCase))
             {
                 return direct;
             }
