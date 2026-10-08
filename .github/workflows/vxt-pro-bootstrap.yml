@@ -307,6 +307,23 @@ jobs:
               -not $paletteVm.Contains('_host.RequestLayInPreview(LayIn.Snapshot());')) {
             throw 'Lay-in/concealed boundary Preview tab isolation is missing.'
           }
+          # Existing layer styles belong to the DWG; Lay-in must only style new layers.
+          $layInResources = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCadResources.cs" -Raw
+          if (-not $layInResources.Contains('public static ObjectId EnsureLayInLayer(') -or
+              -not $layInResources.Contains('if (layers.Has(name))') -or
+              -not $layInCad.Contains('VxtCadResources.EnsureLayInLayer(db, tr, settings.HatchLayer') -or
+              -not $layInCad.Contains('existing.LineWeight != lineWeight')) {
+            throw 'Lay-in existing-layer preservation and runtime QA gate absent.'
+          }
+          foreach ($manifestName in @('build/HNL.VXT.bundle/PackageContents.xml',
+                                        'build/universal/PackageContents.2026-net8.xml',
+                                        'build/universal/PackageContents.2026-net10.xml')) {
+            $versioned = Get-Content (Join-Path $env:VXT_ROOT $manifestName) -Raw
+            if (-not $versioned.Contains('AppVersion="7.0.0.7"') -or
+                $versioned.Contains('Version="7.0.0.6"')) {
+              throw "AutoCAD manifest version does not match DLL/installer 7.0.0.7: $manifestName"
+            }
+          }
           Write-Host 'Lay-in one-Hatch/region static contract and command registrations PASS'
           Write-Host "HNL Ceiling Framing beta.1 functional/source/branding/multi-polyline/installer gate PASS"
       - name: Restore AutoCAD 2023 plugin
