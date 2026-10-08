@@ -321,12 +321,23 @@ namespace HNL.VXT.Core.Preview
             if (settings.DimensionMode == LayInDimensionMode.Off) return;
 
             var acrossModule = spec.HasShortCross ? spec.ModuleShort : spec.MainSpacing;
+            if (settings.DimensionMode == LayInDimensionMode.GridAndEdges)
+            {
+                // Like the supplied tn.dxf sample: a native measured DIM for the
+                // complete grid run plus a separate DIM for every cut edge.
+                // A balanced phase can create a cut at BOTH ends.
+                AddGridAxisDimensions(plan, settings, bounds, angle,
+                    bounds.MinX, bounds.MaxX, spec.ModuleShort, phaseX, true);
+                AddGridAxisDimensions(plan, settings, bounds, angle,
+                    bounds.MinY, bounds.MaxY, acrossModule, phaseY, false);
+                return;
+            }
             if (settings.DimensionMode == LayInDimensionMode.Overall)
             {
                 AddDimensionRun(plan, bounds.MinX, bounds.MinY, bounds.MaxX, bounds.MinY,
-                    bounds.Width, 1, FormatLength(bounds.Width), angle);
+                    bounds.Width, 1, FormatLength(bounds.Width), angle, bounds, settings);
                 AddDimensionRun(plan, bounds.MinX, bounds.MinY, bounds.MinX, bounds.MaxY,
-                    bounds.Height, 1, FormatLength(bounds.Height), angle);
+                    bounds.Height, 1, FormatLength(bounds.Height), angle, bounds, settings);
                 return;
             }
 
@@ -351,7 +362,7 @@ namespace HNL.VXT.Core.Preview
                     plan, xStart, bounds.MinY,
                     xStart + xCount * spec.ModuleShort, bounds.MinY,
                     spec.ModuleShort, xCount,
-                    BuildModuleLabel(xCount, spec.ModuleShort), angle);
+                    BuildModuleLabel(xCount, spec.ModuleShort), angle, bounds, settings);
             }
 
             if (yCount > 0)
@@ -360,8 +371,53 @@ namespace HNL.VXT.Core.Preview
                     plan, bounds.MinX, yStart,
                     bounds.MinX, yStart + yCount * acrossModule,
                     acrossModule, yCount,
-                    BuildModuleLabel(yCount, acrossModule), angle);
+                    BuildModuleLabel(yCount, acrossModule), angle, bounds, settings);
             }
+        }
+
+        private static void AddGridAxisDimensions(
+            LayInCeilingPlan plan, LayInCeilingSettings settings,
+            Box2 bounds, double angle, double min, double max,
+            double module, double phase, bool horizontal)
+        {
+            if (module <= Eps || max - min <= Eps) return;
+
+            var first = FirstStationAtOrAfter(min, module, phase);
+            // If the selected phase has no internal module station, the entire
+            // edge is a single cut length. Never manufacture a full module.
+            if (first >= max - Eps)
+            {
+                AddMeasuredDimension(plan, settings, bounds, angle,
+                    min, max, horizontal);
+                return;
+            }
+            if (first > min + Eps)
+                AddMeasuredDimension(plan, settings, bounds, angle,
+                    min, first, horizontal);
+
+            var whole = Math.Max(0, (int)Math.Floor((max - first) / module + Eps));
+            var last = first + whole * module;
+            if (whole > 0)
+                AddMeasuredDimension(plan, settings, bounds, angle,
+                    first, last, horizontal);
+
+            if (last < max - Eps)
+                AddMeasuredDimension(plan, settings, bounds, angle,
+                    Math.Max(min, last), max, horizontal);
+        }
+
+        private static void AddMeasuredDimension(
+            LayInCeilingPlan plan, LayInCeilingSettings settings,
+            Box2 bounds, double angle, double start, double end,
+            bool horizontal)
+        {
+            if (end - start <= Eps) return;
+            if (horizontal)
+                AddDimensionRun(plan, start, bounds.MinY, end, bounds.MinY,
+                    end - start, 1, string.Empty, angle, bounds, settings);
+            else
+                AddDimensionRun(plan, bounds.MinX, start, bounds.MinX, end,
+                    end - start, 1, string.Empty, angle, bounds, settings);
         }
 
         private static void AddDimensionRun(
@@ -373,14 +429,29 @@ namespace HNL.VXT.Core.Preview
             double module,
             int count,
             string label,
-            double angle)
+            double angle,
+            Box2 bounds,
+            LayInCeilingSettings settings)
         {
+            var horizontal = Math.Abs(y2 - y1) < Eps;
+            var distance = horizontal
+                ? Math.Max(1.0, settings.HorizontalDimDistance)
+                : Math.Max(1.0, settings.VerticalDimDistance);
+            var linePoint = horizontal
+                ? new Point2((x1 + x2) * 0.5,
+                    settings.HorizontalDimSide == LayInHorizontalDimSide.Top
+                        ? bounds.MaxY + distance : bounds.MinY - distance)
+                : new Point2(
+                    settings.VerticalDimSide == LayInVerticalDimSide.Right
+                        ? bounds.MaxX + distance : bounds.MinX - distance,
+                    (y1 + y2) * 0.5);
             plan.DimensionRuns.Add(new LayInDimensionRun(
                 Transform2.ToWorld(new Point2(x1, y1), angle),
                 Transform2.ToWorld(new Point2(x2, y2), angle),
                 module,
                 count,
-                label));
+                label,
+                Transform2.ToWorld(linePoint, angle)));
         }
 
         private static double FirstStationAtOrAfter(double min, double spacing, double phase)
