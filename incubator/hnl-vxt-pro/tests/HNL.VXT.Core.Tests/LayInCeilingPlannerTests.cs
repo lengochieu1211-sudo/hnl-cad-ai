@@ -422,6 +422,91 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void SampleTnDxf_FirstTileBlockCoversExactlyOne610Panel()
+        {
+            var plan = LayInCeilingPlanner.Build(
+                Rect(0, 0, 10000, 10000), null,
+                new LayInCeilingSettings
+                {
+                    GridSystem = LayInGridSystem.Module610x610,
+                    MainDirection = LayInMainDirectionMode.Horizontal,
+                    StartMode = LayInStartMode.ManualStart,
+                    ManualStartPoint = new Point2(0, 0)
+                });
+            Assert.IsTrue(plan.FirstTileOrigin.HasValue);
+            Assert.AreEqual(0.0, plan.FirstTileOrigin.Value.X, 0.001);
+            Assert.AreEqual(0.0, plan.FirstTileOrigin.Value.Y, 0.001);
+            Assert.AreEqual(plan.HatchOrigin.X, plan.FirstTileOrigin.Value.X, 0.001);
+            Assert.AreEqual(610.0, plan.FirstTileWidth, 0.001);
+            Assert.AreEqual(610.0, plan.FirstTileHeight, 0.001);
+        }
+
+        [TestMethod]
+        public void FirstTileBlock_UsesEachPanelModuleDimensions()
+        {
+            foreach (var item in new[]
+            {
+                Tuple.Create(LayInGridSystem.Module600x600, 600.0, 600.0),
+                Tuple.Create(LayInGridSystem.Module610x610, 610.0, 610.0),
+                Tuple.Create(LayInGridSystem.Module600x1200, 600.0, 1200.0),
+                Tuple.Create(LayInGridSystem.Module610x1220, 610.0, 1220.0)
+            })
+            {
+                var plan = LayInCeilingPlanner.Build(
+                    Rect(0, 0, 10000, 10000), null,
+                    new LayInCeilingSettings
+                    {
+                        GridSystem = item.Item1,
+                        MainDirection = LayInMainDirectionMode.Horizontal,
+                        StartMode = LayInStartMode.ManualStart,
+                        ManualStartPoint = new Point2(0, 0)
+                    });
+                Assert.IsTrue(plan.FirstTileOrigin.HasValue, item.Item1.ToString());
+                Assert.AreEqual(item.Item2, plan.FirstTileWidth, 0.001);
+                Assert.AreEqual(item.Item3, plan.FirstTileHeight, 0.001);
+            }
+        }
+
+        [TestMethod]
+        public void FirstTileBlock_SkipsHoleAndDoesNotDisturbHatchOrigin()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                GridSystem = LayInGridSystem.Module610x610,
+                MainDirection = LayInMainDirectionMode.Horizontal,
+                StartMode = LayInStartMode.ManualStart,
+                ManualStartPoint = new Point2(0, 0)
+            };
+            var plan = LayInCeilingPlanner.Build(
+                Rect(0, 0, 3050, 3050),
+                new[] { Rect(0, 0, 610, 610) }, settings);
+            Assert.IsTrue(plan.FirstTileOrigin.HasValue);
+            Assert.AreEqual(0.0, plan.HatchOrigin.X, 0.001);
+            Assert.AreEqual(0.0, plan.HatchOrigin.Y, 0.001);
+            var tile = plan.FirstTileOrigin.Value;
+            Assert.IsFalse(tile.X < 610 && tile.Y < 610);
+            Assert.IsTrue(tile.X >= 610 - 0.001 || tile.Y >= 610 - 0.001);
+        }
+
+        [TestMethod]
+        public void FirstTileBlock_DoesNotPlaceOutsideTinyRegionOrWhenDisabled()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                GridSystem = LayInGridSystem.Module610x610,
+                MainDirection = LayInMainDirectionMode.Horizontal
+            };
+            var small = LayInCeilingPlanner.Build(Rect(0, 0, 400, 400), null, settings);
+            Assert.IsFalse(small.FirstTileOrigin.HasValue);
+
+            settings.DrawStartTileBlock = false;
+            var regular = LayInCeilingPlanner.Build(Rect(0, 0, 5000, 5000), null, settings);
+            Assert.IsFalse(regular.FirstTileOrigin.HasValue);
+            Assert.IsTrue(regular.TeeSegments.Count > 0,
+                "Switching off the marker must not switch off the physical tee layout.");
+        }
+
+        [TestMethod]
         public void AutoOptimize_ReturnsOnePrincipalAxis()
         {
             var plan = LayInCeilingPlanner.Build(
