@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ApplicationPackage SchemaVersion="1.0"
-                    AppVersion="7.0.0.6"
+                    AppVersion="7.0.0.7"
                     ProductCode="{2DDE9CB2-6746-4DC2-8D1D-F562B96E2AB8}"
                     UpgradeCode="{C511DB88-A5A5-4AA6-929D-2C6E961AB6A6}"
                     Name="HNL Ceiling Framing Pro">
@@ -9,7 +9,7 @@
   <Components Description="HNL Ceiling Framing Pro v7.0.0-beta.1">
     <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.2" SeriesMax="R24.2" SupportPath="./Contents/Resources" />
     <ComponentEntry AppName="HNL Ceiling Framing Pro"
-                    Version="7.0.0.6"
+                    Version="7.0.0.7"
                     ModuleName="./Contents/Windows/HNL.VXT.AutoCAD.dll"
                     AppDescription="HNL Ceiling Framing Pro"
                     LoadOnCommandInvocation="True">
