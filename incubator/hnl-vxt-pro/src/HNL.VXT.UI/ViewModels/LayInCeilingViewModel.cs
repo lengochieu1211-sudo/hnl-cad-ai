@@ -42,6 +42,10 @@ namespace HNL.VXT.UI.ViewModels
                 () => _host.RequestLayInCreate(Snapshot()),
                 () => HasBoundary);
             ResetCommand = new RelayCommand(ResetDefaults);
+            PickHorizontalDimensionCommand = new RelayCommand(
+                () => _host.PickLayInDimensionPosition(true, Snapshot()), () => HasBoundary);
+            PickVerticalDimensionCommand = new RelayCommand(
+                () => _host.PickLayInDimensionPosition(false, Snapshot()), () => HasBoundary);
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -75,8 +79,12 @@ namespace HNL.VXT.UI.ViewModels
             "Tắt",
             "Theo một ô",
             "Gộp nhiều ô",
-            "Kích thước tổng"
+            "Kích thước tổng",
+            "Theo lưới và tấm cắt biên"
         };
+
+        public string[] HorizontalPositionOptions { get; } = { "Tự động", "Phía trên", "Phía dưới" };
+        public string[] VerticalPositionOptions { get; } = { "Tự động", "Bên trái", "Bên phải" };
 
         public ICommand SelectBoundaryCommand { get; }
         public ICommand PickBoundaryPointCommand { get; }
@@ -88,6 +96,8 @@ namespace HNL.VXT.UI.ViewModels
         public ICommand ClearPreviewCommand { get; }
         public ICommand CreateCommand { get; }
         public ICommand ResetCommand { get; }
+        public ICommand PickHorizontalDimensionCommand { get; }
+        public ICommand PickVerticalDimensionCommand { get; }
 
         public bool HasBoundary
         {
@@ -227,11 +237,84 @@ namespace HNL.VXT.UI.ViewModels
                 _settings.DimensionMode = next;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsGroupedDimension));
+                OnPropertyChanged(nameof(IsDimensionEnabled));
                 RequestPreview();
             }
         }
 
         public bool IsGroupedDimension => _settings.DimensionMode == LayInDimensionMode.Grouped;
+        public bool IsDimensionEnabled => _settings.DimensionMode != LayInDimensionMode.Off;
+
+        public string SelectedHorizontalDimPosition
+        {
+            get => _settings.HorizontalDimSide == LayInHorizontalDimSide.Top ? "Phía trên" :
+                _settings.HorizontalDimSide == LayInHorizontalDimSide.Bottom ? "Phía dưới" : "Tự động";
+            set
+            {
+                var side = value == "Phía trên" ? LayInHorizontalDimSide.Top :
+                    value == "Phía dưới" ? LayInHorizontalDimSide.Bottom : LayInHorizontalDimSide.Auto;
+                if (_settings.HorizontalDimSide == side) return;
+                _settings.HorizontalDimSide = side;
+                Changed();
+            }
+        }
+
+        public string SelectedVerticalDimPosition
+        {
+            get => _settings.VerticalDimSide == LayInVerticalDimSide.Right ? "Bên phải" :
+                _settings.VerticalDimSide == LayInVerticalDimSide.Left ? "Bên trái" : "Tự động";
+            set
+            {
+                var side = value == "Bên phải" ? LayInVerticalDimSide.Right :
+                    value == "Bên trái" ? LayInVerticalDimSide.Left : LayInVerticalDimSide.Auto;
+                if (_settings.VerticalDimSide == side) return;
+                _settings.VerticalDimSide = side;
+                Changed();
+            }
+        }
+
+        public double HorizontalDimDistance
+        {
+            get => _settings.HorizontalDimDistance;
+            set
+            {
+                var distance = Math.Max(1.0, value);
+                if (Near(_settings.HorizontalDimDistance, distance)) return;
+                _settings.HorizontalDimDistance = distance;
+                Changed();
+            }
+        }
+
+        public double VerticalDimDistance
+        {
+            get => _settings.VerticalDimDistance;
+            set
+            {
+                var distance = Math.Max(1.0, value);
+                if (Near(_settings.VerticalDimDistance, distance)) return;
+                _settings.VerticalDimDistance = distance;
+                Changed();
+            }
+        }
+
+        public void SetPickedDimensionPosition(bool horizontal, bool farSide, double distance)
+        {
+            if (horizontal)
+            {
+                _settings.HorizontalDimSide = farSide ? LayInHorizontalDimSide.Top : LayInHorizontalDimSide.Bottom;
+                _settings.HorizontalDimDistance = Math.Max(1.0, distance);
+                OnPropertyChanged(nameof(SelectedHorizontalDimPosition));
+                OnPropertyChanged(nameof(HorizontalDimDistance));
+            }
+            else
+            {
+                _settings.VerticalDimSide = farSide ? LayInVerticalDimSide.Right : LayInVerticalDimSide.Left;
+                _settings.VerticalDimDistance = Math.Max(1.0, distance);
+                OnPropertyChanged(nameof(SelectedVerticalDimPosition));
+                OnPropertyChanged(nameof(VerticalDimDistance));
+            }
+            RequestPreview();
+        }
 
         public int GroupedDimensionCount
         {
@@ -366,6 +449,8 @@ namespace HNL.VXT.UI.ViewModels
             (PickDoorCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (RefreshPreviewCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (CreateCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (PickHorizontalDimensionCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (PickVerticalDimensionCommand as RelayCommand)?.RaiseCanExecuteChanged();
         }
 
         private void SetText(Action<string> setter, string current, string value, string propertyName)
@@ -453,6 +538,7 @@ namespace HNL.VXT.UI.ViewModels
                 case LayInDimensionMode.Off: return "Tắt";
                 case LayInDimensionMode.Module: return "Theo một ô";
                 case LayInDimensionMode.Overall: return "Kích thước tổng";
+                case LayInDimensionMode.GridAndEdges: return "Theo lưới và tấm cắt biên";
                 default: return "Gộp nhiều ô";
             }
         }
@@ -462,6 +548,7 @@ namespace HNL.VXT.UI.ViewModels
             if (value == "Tắt") return LayInDimensionMode.Off;
             if (value == "Theo một ô") return LayInDimensionMode.Module;
             if (value == "Kích thước tổng") return LayInDimensionMode.Overall;
+            if (value == "Theo lưới và tấm cắt biên") return LayInDimensionMode.GridAndEdges;
             return LayInDimensionMode.Grouped;
         }
     }
