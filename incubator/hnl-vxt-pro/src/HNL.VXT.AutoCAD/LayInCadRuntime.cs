@@ -97,6 +97,15 @@ namespace HNL.VXT.AutoCAD
                     throw new InvalidOperationException("Lay-in Preview exceeds 3500 graphics; Create still uses full Core plan.");
 
                 var db = doc.Database;
+                var dimStyleId = ResolveDimensionStyle(db, session.LayInSettings.DimensionStyle);
+                ObjectId previewHangerBlock;
+                using (var readTr = db.TransactionManager.StartTransaction())
+                {
+                    var blockTable = (BlockTable)readTr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    previewHangerBlock = session.LayInSettings.DrawHangers
+                        ? ResolveHangerBlock(blockTable, session.LayInSettings.HangerBlockName)
+                        : ObjectId.Null;
+                }
                 foreach (var item in plans)
                 {
                     foreach (var tee in item.Plan.TeeSegments)
@@ -109,14 +118,16 @@ namespace HNL.VXT.AutoCAD
                     }
                     foreach (var hanger in item.Plan.HangerPoints)
                     {
-                        var marker = new Circle(ToCad(hanger), Vector3d.ZAxis, 18.0);
+                        Entity marker = previewHangerBlock.IsNull
+                            ? (Entity)new Circle(ToCad(hanger), Vector3d.ZAxis, 18.0)
+                            : new BlockReference(ToCad(hanger), previewHangerBlock);
                         marker.SetDatabaseDefaults(db);
                         marker.ColorIndex = 2;
                         AddTransient(marker);
                     }
                     foreach (var run in item.Plan.DimensionRuns)
                     {
-                        var dimension = BuildDimension(db, run, item.Plan.ModuleShort);
+                        var dimension = BuildDimension(db, run, item.Plan.ModuleShort, dimStyleId);
                         dimension.ColorIndex = 4;
                         // A transient dimension has no database owner. GenerateLayout
                         // before AddTransient so the complete labeled DIM is visible.
@@ -199,7 +210,8 @@ namespace HNL.VXT.AutoCAD
                         ? VxtCadResources.EnsureLayInLayer(db, tr, "HNL-CF-START", 3, "Continuous", "25")
                         : ObjectId.Null;
                     var hangerBlock = settings.DrawHangers
-                        ? ResolveBlock(bt, settings.HangerBlockName) : ObjectId.Null;
+                        ? ResolveHangerBlock(bt, settings.HangerBlockName) : ObjectId.Null;
+                    var dimStyleId = ResolveDimensionStyle(db, tr, settings.DimensionStyle);
                     var startBlock = settings.DrawStartTileBlock
                         ? (string.IsNullOrWhiteSpace(settings.StartMarkerBlockName)
                             ? EnsureDefaultStartTileBlock(db, tr)
@@ -229,7 +241,7 @@ namespace HNL.VXT.AutoCAD
 
                         foreach (var run in item.Plan.DimensionRuns)
                         {
-                            var dimension = BuildDimension(db, run, item.Plan.ModuleShort);
+                            var dimension = BuildDimension(db, run, item.Plan.ModuleShort, dimStyleId);
                             Append(db, tr, ms, dimension, dimLayer);
                             dimensionCount++;
                         }
@@ -572,7 +584,7 @@ namespace HNL.VXT.AutoCAD
 
                             if (plan.DimensionRuns.Count == 0 || plan.HangerPoints.Count == 0)
                                 throw new InvalidOperationException("Core plan did not create test DIM/Ty.");
-                            var dimension = BuildDimension(db, plan.DimensionRuns[0], plan.ModuleShort);
+                            var dimension = BuildDimension(db, plan.DimensionRuns[0], plan.ModuleShort, db.Dimstyle);
                             Append(db, tr, ms, dimension, db.Clayer);
                             if (dimension.ObjectId.IsNull)
                                 throw new InvalidOperationException("DIM was not materialized.");
@@ -636,7 +648,7 @@ namespace HNL.VXT.AutoCAD
 
         // Preview and Create must use the same DIM geometry, text and offset.
         private static RotatedDimension BuildDimension(
-            Database db, LayInDimensionRun run, double moduleShort)
+            Database db, LayInDimensionRun run, double moduleShort, ObjectId dimStyleId)
         {
             var a = ToCad(run.A);
             var b = ToCad(run.B);
@@ -653,9 +665,40 @@ namespace HNL.VXT.AutoCAD
                     (a.X + b.X) * 0.5 + dy * offset / length,
                     (a.Y + b.Y) * 0.5 - dx * offset / length, 0.0);
             var result = new RotatedDimension(
-                Math.Atan2(dy, dx), a, b, linePoint, run.Label, db.Dimstyle);
+                Math.Atan2(dy, dx), a, b, linePoint, run.Label, dimStyleId);
             result.SetDatabaseDefaults(db);
             return result;
+        }
+
+        private static ObjectId ResolveDimensionStyle(
+            Database db, string dimStyleName)
+        {
+            if (string.IsNullOrWhiteSpace(dimStyleName)) return db.Dimstyle;
+            using (var tr = db.TransactionManager.StartTransaction())
+                return ResolveDimensionStyle(db, tr, dimStyleName);
+        }
+
+        private static ObjectId ResolveDimensionStyle(
+            Database db, Transaction tr, string dimStyleName)
+        {
+            if (string.IsNullOrWhiteSpace(dimStyleName)) return db.Dimstyle;
+            var table = (DimStyleTable)tr.GetObject(db.DimStyleTableId, OpenMode.ForRead);
+            if (!table.Has(dimStyleName))
+                throw new InvalidOperationException(
+                    "HNL Tool - DimStyle not found in current DWG: " + dimStyleName);
+            return table[dimStyleName];
+        }
+
+        private static ObjectId ResolveHangerBlock(BlockTable table, string name)
+        {
+            // Same preferred named Ty symbol as the concealed ceiling.
+            // New/empty DWG drawings remain usable without bundled user blocks.
+            if (string.IsNullOrWhiteSpace(name)) return ObjectId.Null;
+            if (!table.Has(name) &&
+                string.Equals(name, LayInCeilingSettings.DefaultHangerBlockName,
+                    StringComparison.OrdinalIgnoreCase))
+                return ObjectId.Null;
+            return ResolveBlock(table, name);
         }
 
         private static ObjectId ResolveBlock(BlockTable table, string name)
