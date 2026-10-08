@@ -122,6 +122,26 @@ jobs:
           Write-Host "HCE_LEGACY_LISP_FILES=$($lisp.Count)"
           foreach($f in $lisp) {Write-Host "LEGACY_LISP=$($f.FullName)"}
 
+      - name: Inspect precise legacy option Core contract
+        shell: powershell
+        run: |
+          $root='incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.Core'
+          foreach($f in @(
+            "$root/Models/DemtcOptions.cs",
+            "$root/Models/StockSpec.cs",
+            "$root/Models/MixedPrimaryMode.cs",
+            "$root/DemtcEngine.cs"
+          )) {
+            if(Test-Path $f){
+              Write-Host "HCE_CORE_CONTRACT_BEGIN $f"
+              $lines=Get-Content $f
+              $max=if($f -like '*DemtcEngine.cs'){[Math]::Min(210,$lines.Count)}else{$lines.Count}
+              for($i=0;$i -lt $max;$i++){Write-Host "HCE_CORE_CODE:$($i+1): $($lines[$i])"}
+              Write-Host "HCE_CORE_CONTRACT_END"
+            }
+          }
+          Get-ChildItem $root -Recurse -File -Filter '*Mixed*' | ForEach-Object { Write-Host "HCE_MIXED_FILE $($_.FullName)" }
+
       - name: Build Golden + AutoCAD matrix + Setup EXE
         shell: powershell
         run: ./incubator/hnl-ceiling-estimator-pro/scripts/build-universal-installer.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
