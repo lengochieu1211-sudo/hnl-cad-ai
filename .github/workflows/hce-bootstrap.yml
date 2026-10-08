@@ -94,6 +94,17 @@ jobs:
         shell: powershell
         run: ./incubator/hnl-ceiling-estimator-pro/scripts/build-universal-installer.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
 
+      - name: Inspect bundled HCEUI command load policy
+        shell: powershell
+        run: |
+          $root = 'incubator/hnl-ceiling-estimator-pro'
+          $files = @(Get-ChildItem $root -Recurse -Filter 'PackageContents.xml' -File)
+          Write-Host "HCE MANIFEST files=$($files.Count)"
+          foreach ($f in $files) {
+            Write-Host "--- HCE_MANIFEST $($f.FullName)"
+            Get-Content $f.FullName | Select-Object -First 90 | ForEach-Object { Write-Host $_ }
+          }
+
       - name: Certify embedded HCE setup icon against canonical VXT master
         shell: powershell
         run: |
