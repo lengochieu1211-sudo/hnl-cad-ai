@@ -182,7 +182,7 @@ namespace HNL.VXT.AutoCAD
                 if (Active.Count > 0)
                     throw new InvalidOperationException("Previous preview graphics are still attached.");
 
-                int hatchCount = 0, hangerCount = 0, dimensionCount = 0;
+                int hatchCount = 0, hangerCount = 0, dimensionCount = 0, startTileCount = 0;
                 using (var tr = doc.Database.TransactionManager.StartTransaction())
                 {
                     var db = doc.Database;
@@ -242,18 +242,22 @@ namespace HNL.VXT.AutoCAD
                                 startBlock,
                                 string.IsNullOrWhiteSpace(settings.StartMarkerBlockName));
                             Append(db, tr, ms, marker, markerLayer);
+                            startTileCount++;
                         }
                     }
 
                     if (hatchCount != plans.Count ||
                         hangerCount != plans.Sum(p => p.Plan.HangerPoints.Count) ||
-                        dimensionCount != plans.Sum(p => p.Plan.DimensionRuns.Count))
+                        dimensionCount != plans.Sum(p => p.Plan.DimensionRuns.Count) ||
+                        startTileCount != plans.Count(p =>
+                            settings.DrawStartTileBlock && p.Plan.FirstTileOrigin.HasValue))
                         throw new InvalidOperationException("Lay-in Preview/Create materialization count mismatch.");
                     tr.Commit();
                 }
                 doc.Editor.WriteMessage("\nHNL Tool - Lay-in Create: " +
                     hatchCount + " Hatch, " + hangerCount + " Ty, " +
-                    dimensionCount + " DIM. One Hatch per region.");
+                    dimensionCount + " DIM, " + startTileCount +
+                    " Block o tran xuat phat. One Hatch per region.");
             }
             catch (Exception ex)
             {
