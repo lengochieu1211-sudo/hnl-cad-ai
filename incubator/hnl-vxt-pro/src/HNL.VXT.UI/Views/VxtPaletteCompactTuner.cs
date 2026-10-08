@@ -122,12 +122,12 @@ namespace HNL.VXT.UI.Views
                     {
                         if (text.Text == "HNL Tool")
                             text.Visibility = Visibility.Collapsed;
-                        else if (string.Equals(text.Text, "Vẽ xương trần", StringComparison.OrdinalIgnoreCase))
+                        else if (string.Equals(text.Text, "Ceiling Framing Pro", StringComparison.OrdinalIgnoreCase))
                         {
                             text.FontSize = 13.0;
                             text.Margin = new Thickness(0);
                         }
-                        else if (!string.IsNullOrWhiteSpace(text.Text) && text.Text.StartsWith("VXT Pro", StringComparison.OrdinalIgnoreCase))
+                        else if (!string.IsNullOrWhiteSpace(text.Text) && text.Text.StartsWith("v7.", StringComparison.OrdinalIgnoreCase))
                         {
                             text.FontSize = 9.0;
                             text.Margin = new Thickness(0, 1, 0, 0);
@@ -183,7 +183,7 @@ namespace HNL.VXT.UI.Views
             {
                 foreach (var text in Descendants<TextBlock>(stack))
                 {
-                    if (string.Equals(text.Text, "Vẽ xương trần", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(text.Text, "Ceiling Framing Pro", StringComparison.OrdinalIgnoreCase))
                     {
                         titleStack = stack;
                         break;
