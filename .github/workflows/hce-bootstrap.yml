@@ -51,6 +51,26 @@ jobs:
           Copy-Item $src $dst -Force
           Write-Host 'HCE bridge overlay applied; protected Core and Golden fixtures unchanged.'
 
+      - name: Enable isolated HCE WPF Palette source for five AutoCAD bridge builds
+        shell: powershell
+        run: |
+          $root = 'incubator/hnl-ceiling-estimator-pro'
+          $overlay = 'HCE-OVERLAY/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs'
+          $dst = "$root/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs"
+          if (-not (Test-Path $overlay)) { throw 'Missing HCE palette overlay' }
+          Copy-Item $overlay $dst -Force
+          $projects = @(Get-ChildItem "$root/src/Bridges" -Filter 'HNL.CeilingEstimator.AutoCAD.*.csproj' -Recurse -File)
+          if ($projects.Count -ne 5) { throw "Unexpected HCE bridge count: $($projects.Count)" }
+          foreach ($p in $projects) {
+            $xml = Get-Content $p.FullName -Raw
+            if ($xml -match '<UseWPF>') { throw "Unexpected pre-existing WPF property in $($p.Name)" }
+            $xml = $xml.Replace('<TargetFramework>', '<UseWPF>true</UseWPF>' + [Environment]::NewLine + '    <TargetFramework>')
+            $resource = '<Resource Include="..\..\..\installer\assets\HNL-Logo-Official.png" Link="Assets\HNL-Logo-Official.png" />'
+            $xml = $xml.Replace('</Project>', '  <ItemGroup>' + [Environment]::NewLine + '    ' + $resource + [Environment]::NewLine + '  </ItemGroup>' + [Environment]::NewLine + '</Project>')
+            [IO.File]::WriteAllText($p.FullName, $xml, [Text.UTF8Encoding]::new($false))
+            Write-Host "HCE PALETTE bridge enabled: $($p.Name)"
+          }
+
       - name: Setup .NET 8 and 10
         uses: actions/setup-dotnet@v4
         with:
