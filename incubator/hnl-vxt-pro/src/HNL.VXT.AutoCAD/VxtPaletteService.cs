@@ -24,7 +24,7 @@ namespace HNL.VXT.AutoCAD
             // Explicit user invocation is the first point where runtime document hooks are enabled.
             // AutoCAD startup remains completely free of VXT Session/Transient/WPF work.
             PluginEntry.EnableRuntimeHooks();
-            TraceUiStartup("HVX Show begin");
+            TraceUiStartup("HCF Show begin");
 
             if (_palette == null)
             {
@@ -62,7 +62,7 @@ namespace HNL.VXT.AutoCAD
             if (!_uiPolishScheduled && !_uiPolishCompleted && _view != null)
                 ScheduleUiPolish(new VxtHostBridge());
 
-            TraceUiStartup("HVX Show end");
+            TraceUiStartup("HCF Show end");
         }
 
         private static void ScheduleUiPolish(VxtHostBridge bridge)
@@ -160,7 +160,7 @@ namespace HNL.VXT.AutoCAD
                 var root = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "HNL Tool",
-                    "VXT Pro");
+                    "Ceiling Framing Pro");
                 Directory.CreateDirectory(root);
                 var path = Path.Combine(root, "palette-startup.log");
                 File.AppendAllText(
