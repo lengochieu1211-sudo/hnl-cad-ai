@@ -186,6 +186,7 @@ namespace HNL.VXT.Core.Preview
                     var dx = x - phaseX;
                     var dy = y - phaseY;
                     var dist = dx * dx + dy * dy;
+                    if (dist <= Eps) return new Point2(x, y);
                     if (dist < bestDistance - Eps)
                     {
                         bestDistance = dist;
