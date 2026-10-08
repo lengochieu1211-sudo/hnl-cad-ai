@@ -421,6 +421,29 @@ jobs:
               throw "Lay-in first-tile Block regression absent: $testName"
             }
           }
+          # Mode-tab regression: one equal-width segmented selector, fully bound
+          # to the existing SelectedCeilingTabIndex; no second state/commands.
+          # All Lay-in editor rows use a common 132px label axis and keep
+          # Block pick buttons in a dedicated reserved column at narrow docks.
+          $headerTuner = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteCompactTuner.cs" -Raw
+          $headerPolish = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteRuntimePolish.cs" -Raw
+          if (-not $ceilingUi.Contains('x:Key="CeilingModeTabControl"') -or
+              -not $ceilingUi.Contains('x:Key="CeilingModeTabItem"') -or
+              -not $ceilingUi.Contains('<UniformGrid Rows="1" IsItemsHost="True"') -or
+              -not $ceilingUi.Contains('SelectedIndex="{Binding SelectedCeilingTabIndex, Mode=TwoWay}"') -or
+              -not $ceilingUi.Contains('Style="{StaticResource CeilingModeTabItem}"') -or
+              -not $ceilingUi.Contains('SelectedHorizontalDimPosition') -or
+              -not $ceilingUi.Contains('<ColumnDefinition Width="132"/>') -or
+              -not $headerTuner.Contains('private const double LabelWidth = 132.0;') -or
+              -not $headerPolish.Contains('private const double CommonLabelWidth = 132.0;') -or
+              -not $headerTuner.Contains('private const double PickButtonWidth = 74.0;') -or
+              -not $headerPolish.Contains('private const double CommonPickButtonWidth = 74.0;')) {
+            throw 'Ceiling mode segmented tab or aligned form column UI contract is missing.'
+          }
+          [xml]$validatedUi = $ceilingUi
+          if ($validatedUi.DocumentElement.LocalName -ne 'UserControl') {
+            throw 'Ceiling mode XAML must remain a valid WPF UserControl.'
+          }
           Write-Host 'Lay-in one-Hatch/region static contract and command registrations PASS'
           Write-Host "HNL Ceiling Framing beta.1 functional/source/branding/multi-polyline/installer gate PASS"
       - name: Restore AutoCAD 2023 plugin
