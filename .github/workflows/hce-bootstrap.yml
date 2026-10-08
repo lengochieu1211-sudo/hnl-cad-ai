@@ -90,6 +90,28 @@ jobs:
           Write-Host "HCE PALETTE NATIVE TITLE PASS: HNL HCE Pro | $buildTimeVN (UTC+07, build time)"
           Write-Host 'HCE PALETTE HEADER-FOOTER REMOVAL PASS: tabs are first content element'
           
+      - name: Validate VXT module rail parity and Hatch Area safeguards
+        shell: powershell
+        run: |
+          $dir='incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
+          $ui=Get-Content "$dir/HcePaletteUi.cs" -Raw
+          $adapter=Get-Content "$dir/Commands.cs" -Raw
+          foreach($phrase in @("Width='36'", "Width' Value='30'", "Height' Value='106'", "Angle='-90'", 'Trần chìm', 'Trần nổi', 'HCF', 'VxtModuleRailStyle', 'VxtModuleTabStyle')) {
+            if(-not $ui.Contains($phrase)){throw "Missing VXT module rail contract: $phrase"}
+          }
+          foreach($phrase in @('HasNonAdjacentIntersections(segments)','AreaFromBoundary = usedBoundaryArea','native Hatch.Area=NotApplicable','UnitsValue.Millimeters','needsConfirmation = rejected == 0')) {
+            if(-not $adapter.Contains($phrase)){throw "Missing safe Hatch.Area or confirmation gate: $phrase"}
+          }
+          if($adapter.Contains('[Use600/Use610/Cancel]')){throw 'Unexpected old redundant family confirmation prompt'}
+          Add-Type -AssemblyName PresentationFramework
+          $matches=[regex]::Matches($ui,'const string xaml = @"(.*?)";',[Text.RegularExpressions.RegexOptions]::Singleline)
+          if($matches.Count -ne 2){throw "Expected two Framing-style WPF rail templates; found $($matches.Count)"}
+          foreach($match in $matches){
+            $style=[System.Windows.Markup.XamlReader]::Parse($match.Groups[1].Value)
+            if($style -isnot [System.Windows.Style]){throw 'WPF module style parsing returned unexpected type'}
+          }
+          Write-Host 'HCE/VXT MODULE RAIL + WPF XAML PARSE + HATCH AREA/PROMPT GATES PASS'
+
       - name: Verify HCE default palette and calculator route
         shell: powershell
         run: |
