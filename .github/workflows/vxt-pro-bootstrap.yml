@@ -324,6 +324,42 @@ jobs:
               throw "AutoCAD manifest version does not match DLL/installer 7.0.0.7: $manifestName"
             }
           }
+          # UI/installer identity audit: build timestamp must come from the compiled
+          # assembly, controls must fit the docked CAD palette, and the old bundle
+          # directory must not become an accidental second AutoCAD plugin load.
+          $buildInfo = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Infrastructure\VxtBuildInfo.cs" -Raw
+          $buildProps = Get-Content "$env:VXT_ROOT\Directory.Build.props" -Raw
+          $ceilingUi = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.xaml" -Raw
+          $layInLabels = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\LayInCeilingViewModel.cs" -Raw
+          if (-not $buildInfo.Contains('MetadataKey = "HNLBuildDateTime"') -or
+              -not $buildInfo.Contains('Cập nhật ') -or
+              -not $buildInfo.Contains('HNL Ceiling Framing Pro') -or
+              -not $buildProps.Contains('AssemblyMetadata Include="HNLBuildDateTime"') -or
+              -not $ceilingUi.Contains('MinWidth="0"') -or
+              -not $ceilingUi.Contains('Header="Trần nổi"') -or
+              -not $ceilingUi.Contains('4. Ty treo và Block Ty') -or
+              -not $layInLabels.Contains('Song song cạnh ngắn') -or
+              -not $layInLabels.Contains('Cân đều hai biên')) {
+            throw 'HNL Ceiling Framing Pro build-date / localized compact palette gate failed.'
+          }
+          foreach ($brandStage in @('VxtPaletteRuntimePolish.cs',
+                                    'VxtPaletteTypography.cs',
+                                    'VxtPaletteCompactTuner.cs')) {
+            $uiPolish = Get-Content (Join-Path "$env:VXT_ROOT\src\HNL.VXT.UI\Views" $brandStage) -Raw
+            if (-not $uiPolish.Contains('StartsWith("v7."') -or
+                -not $uiPolish.Contains('"Ceiling Framing Pro"')) {
+              throw "Runtime polish still hides HNL title/build-date: $brandStage"
+            }
+          }
+          foreach ($installer in @('installer/HNL.VXT.Setup.iss',
+                                   'installer/HNL.VXT.Universal.Setup.iss')) {
+            $scriptText = Get-Content (Join-Path $env:VXT_ROOT $installer) -Raw
+            if (-not $scriptText.Contains('HNL.CeilingFramingPro.bundle') -or
+                -not $scriptText.Contains('UsePreviousAppDir=no') -or
+                -not $scriptText.Contains('RemoveLegacyHnlBundle;')) {
+              throw "Branded bundle path / safe VXT migration missing: $installer"
+            }
+          }
           Write-Host 'Lay-in one-Hatch/region static contract and command registrations PASS'
           Write-Host "HNL Ceiling Framing beta.1 functional/source/branding/multi-polyline/installer gate PASS"
       - name: Restore AutoCAD 2023 plugin
