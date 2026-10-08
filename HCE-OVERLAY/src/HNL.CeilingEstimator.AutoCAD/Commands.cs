@@ -91,6 +91,88 @@ namespace HNL.CeilingEstimator.AutoCAD
             editor.WriteMessage("\nHNL Tool - HCEQA finished; no drawing changes.");
         }
 
+        // Read-only complete current-space audit. Intended for AutoCAD 2023
+        // Runtime proof; printed counts must still be compared with real DXF Golden.
+        [CommandMethod("HCEGOLDEN", CommandFlags.Modal)]
+        public void GoldenAudit()
+        {
+            var document = Application.DocumentManager.MdiActiveDocument;
+            if (document == null) return;
+            var editor = document.Editor;
+            var database = document.Database;
+            var inputs = new List<HatchInput>();
+            var total = 0;
+            var rejected = 0;
+            editor.WriteMessage("\nHNL Tool - HCEGOLDEN read-only current-space Hatch audit.");
+            editor.WriteMessage("\nHNL Tool - Drawing units=" + database.Insunits +
+                "; assumed tile pitch=610mm; verify actual Hatch definition.");
+            try
+            {
+                using (var transaction = database.TransactionManager.StartTransaction())
+                {
+                    var space = (BlockTableRecord)transaction.GetObject(
+                        database.CurrentSpaceId, OpenMode.ForRead);
+                    foreach (ObjectId id in space)
+                    {
+                        if (id.IsNull) continue;
+                        var hatch = transaction.GetObject(id, OpenMode.ForRead, false) as Hatch;
+                        if (hatch == null) continue;
+                        total++;
+                        try
+                        {
+                            HatchInput input;
+                            string reason;
+                            if (TryExtractHatch(hatch, out input, out reason))
+                            {
+                                inputs.Add(input);
+                                editor.WriteMessage("\nHCEGOLDEN INPUT handle=" + input.Handle +
+                                    " pattern=" + input.PatternName +
+                                    " scale=" + Fmt(input.PatternScale) +
+                                    " area=" + Fmt(input.Area) +
+                                    " segments=" + input.Segments.Count +
+                                    " origin=" + Fmt(input.Frame.Origin.X) + "," +
+                                    Fmt(input.Frame.Origin.Y) +
+                                    " angleRad=" + Fmt(input.Frame.AngleRadians) +
+                                    " gridVerified=" + input.UserGridVerified);
+                            }
+                            else
+                            {
+                                rejected++;
+                                editor.WriteMessage("\nHCEGOLDEN REJECT handle=" +
+                                    hatch.Handle + " reason=" + reason);
+                            }
+                        }
+                        catch (System.Exception ex)
+                        {
+                            rejected++;
+                            editor.WriteMessage("\nHCEGOLDEN REJECT handle=" +
+                                hatch.Handle + " exception=" + ex.Message);
+                        }
+                    }
+                }
+
+                editor.WriteMessage("\nHCEGOLDEN SCAN total=" + total +
+                    " accepted=" + inputs.Count + " rejected=" + rejected);
+                if (inputs.Count == 0)
+                {
+                    editor.WriteMessage("\nHCEGOLDEN STATUS=NO_SUPPORTED_HATCH; no DWG changes.");
+                    return;
+                }
+                var report = CalculateOnce(inputs, editor, ref rejected, true);
+                WritePreview(editor, report, rejected);
+                editor.WriteMessage("\nHCEGOLDEN STATUS=" +
+                    (rejected == 0 && report.Groups.Count > 0 ? "COMPLETE" : "INCOMPLETE") +
+                    "; calculated using assumed 610mm policy.");
+                editor.WriteMessage("\nHCEGOLDEN Runtime Golden certification is PENDING real AutoCAD evidence.");
+                editor.WriteMessage("\nHNL Tool - Audit finished. No DWG changes.");
+            }
+            catch (System.Exception ex)
+            {
+                editor.WriteMessage("\nHCEGOLDEN ADAPTER ERROR=" + ex.Message +
+                    "; no DWG changes.");
+            }
+        }
+
         private static string Fmt(double value)
         {
             return value.ToString("0.########", CultureInfo.InvariantCulture);
@@ -181,6 +263,16 @@ namespace HNL.CeilingEstimator.AutoCAD
                 if (report.Groups.Count == 0)
                 {
                     editor.WriteMessage("\nHNL Tool - No successful calculation. No drawing changes.");
+                    return;
+                }
+
+                // Preview remains available for diagnosing accepted Hatches.
+                // Never create a seemingly complete quantity table from a partial selection.
+                if (rejected > 0)
+                {
+                    WritePreview(editor, report, rejected);
+                    editor.WriteMessage("\nHNL Tool - INCOMPLETE SELECTION. " +
+                        "Table is blocked; resolve rejected Hatch handles and rerun.");
                     return;
                 }
 
@@ -279,7 +371,14 @@ namespace HNL.CeilingEstimator.AutoCAD
                 var dxx = first.X - last.X;
                 var dyy = first.Y - last.Y;
                 if (vertexCount > 3 && dxx * dxx + dyy * dyy <= 1e-12)
+                {
+                    if (Math.Abs(polyline[vertexCount - 1].Bulge) > 1e-10)
+                    {
+                        reason = "loop=0 duplicated terminal vertex has arc bulge";
+                        return false;
+                    }
                     vertexCount--;
+                }
                 for (var i = 0; i < vertexCount; i++)
                 {
                     var vertex = polyline[i];
@@ -344,6 +443,25 @@ namespace HNL.CeilingEstimator.AutoCAD
                 reason = "invalid Hatch.Area";
                 return false;
             }
+            // Detect a broken single-ring extractor before passing it into Core.
+            // Translate to the first point to reduce cancellation at large DWG coordinates.
+            var refX = segments[0].X1;
+            var refY = segments[0].Y1;
+            var twiceArea = 0.0;
+            foreach (var segment in segments)
+            {
+                twiceArea += (segment.X1 - refX) * (segment.Y2 - refY)
+                    - (segment.X2 - refX) * (segment.Y1 - refY);
+            }
+            var boundaryArea = Math.Abs(twiceArea) * 0.5;
+            var areaTolerance = Math.Max(0.01, area * 0.00001);
+            if (double.IsNaN(boundaryArea) || double.IsInfinity(boundaryArea) ||
+                Math.Abs(boundaryArea - area) > areaTolerance)
+            {
+                reason = "boundary/Hatch.Area mismatch: boundary=" + Fmt(boundaryArea) +
+                    " hatch=" + Fmt(area) + " tolerance=" + Fmt(areaTolerance);
+                return false;
+            }
             if (double.IsNaN(hatch.Origin.X) || double.IsNaN(hatch.Origin.Y) ||
                 double.IsNaN(hatch.PatternAngle) || double.IsInfinity(hatch.PatternAngle))
             {
@@ -388,7 +506,8 @@ namespace HNL.CeilingEstimator.AutoCAD
         }
 
         private static CalculationReport CalculateOnce(
-            List<HatchInput> inputs, Editor editor, ref int rejected)
+            List<HatchInput> inputs, Editor editor, ref int rejected,
+            bool tracePerHatch = false)
         {
             var engine = new DemtcEngine();
             // Default options are the unchanged v0.3.0 Golden policy.
@@ -426,6 +545,17 @@ namespace HNL.CeilingEstimator.AutoCAD
                     report.Groups.Add(group);
                 }
 
+                if (tracePerHatch)
+                {
+                    editor.WriteMessage("\nHCEGOLDEN RESULT handle=" + input.Handle +
+                        " path=" + calc.Path +
+                        " full=" + calc.PureResult.TotalFullCount +
+                        " boundary=" + calc.PureResult.BoundaryCandidateCount +
+                        " cutPieces=" + calc.PureResult.CutPieces.Count +
+                        " slivers=" + calc.PureResult.SliverCount +
+                        " areaResidual=" + Fmt(calc.PureResult.AreaResidual) +
+                        " group=" + input.GroupKey);
+                }
                 group.HatchCount++;
                 group.Full += calc.PureResult.TotalFullCount;
                 group.BoundaryCells += calc.PureResult.BoundaryCandidateCount;
@@ -451,6 +581,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     " | Full=" + group.Full +
                     " | Boundary=" + group.BoundaryCells +
                     " | Cuts=" + group.Cuts.Count +
+                    " | Slivers=" + group.Slivers +
                     " | Small=" + BinCount(group, "S") +
                     " | Long=" + BinCount(group, "D") +
                     " | Oversize=" + group.Packing.Oversize.Count +

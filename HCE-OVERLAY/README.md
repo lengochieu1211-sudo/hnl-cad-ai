@@ -1,21 +1,24 @@
-# HCE AutoCAD Runtime Bridge Overlay - RC2
+# HCE AutoCAD Runtime Bridge Overlay - RC3
 
-Base: HCE RC1 2cb4aeed191be8f6309c3610defbecf586e6415f
-Core source and Golden fixtures in HCE-PAYLOAD are FROZEN, unchanged.
+Base: RC2 `ca2000064dfc676d0109e819501787e5623ae3fe`, branch `research/hce-pro-bootstrap`.
 
-RC2 safe additions:
-- HCEQA diagnostic command inspects Hatch pattern/type, spacing, double flag,
-  origin, angle, area, loops, and adapter eligibility, read-only.
-- User-defined Hatch patterns require true double-grid and 610mm spacing.
-- Predefined and custom patterns have unverified effective spacing; HCE requires
-  explicit Use610 acknowledgement (default Cancel) before calculating.
-- Explicit unit assumption displayed; no automatic drawing scale conversion.
-- Duplicate terminal polyline vertex excluded to avoid false degenerate closing edge.
-- Result table title carries the "610mm grid assumed" label.
-- HCE/DTC/DEMTC and Golden 610x610/packing Core unchanged.
+**Frozen**: `HCE-PAYLOAD/**` (Golden C# Core, fixture expected values, original installer) remains unchanged.
+RC3 changes only overlay AutoCAD adapter and this README.
 
-Limitations:
-- No CAD runtime evidence yet; HCEQA is meant to collect it.
-- Curves, multiple loop holes, and non-+Z Hatch remain safely rejected.
-- Visual geometry Preview/Create parity is pending; current Preview is numbers.
-- No unsupported geometry is silently approximated into a different area.
+- New `HCEGOLDEN`: enumerate all Hatches in the current drawing space with no interactive selection, log handle/pattern/origin/grid/area, call the unchanged Core **once per accepted Hatch**, log full/boundary/cut/sliver/fallback/residual and consolidated material-group pack. **Read-only**; no entity creation.
+- **Table safety**: if any selected Hatch was rejected during extraction or engine execution, print incomplete numeric preview but **do not create an incomplete quantity table**.
+- Single-ring area guard: compare extracted shoelace area with `Hatch.Area` before calling Core; reject mismatch and log handle/reason.
+- Duplicate-terminal polyline vertex with bulge is rejected rather than silently discarding a curved closing edge.
+- Group preview additionally prints sliver counts for Runtime Golden comparison.
+- HCE / DTC / DEMTC aliases, Golden policy 610x610 main, mixed small-main packing and five-version installer are otherwise unchanged.
+
+## Runtime script checklist
+1. **On a copy** of the Golden DWG/DXF, run `HCEQA`, select relevant Hatches, capture output.
+2. Run `HCEGOLDEN` from Model Space (or explicitly switch to desired Layout). Use `LOGFILEON` / `LOGFILEOFF` to capture read-only per-handle and aggregate counts.
+3. Group by layer/ACI/pattern. Reconcile per-handle rejections before accepting any table output.
+4. Run `HCE`, `DTC`, `DEMTC` on the same selection to check parity; verify 610mm and millimeter units before `Use610`.
+5. Verify Exit/Cancel creates no objects, Table creates one entity, Undo reverses it, and re-run/switch DWG works.
+6. Compare with unchanged Golden DEM BLOCK 2 (full 20290, boundary 857, cuts 872, bins 299), 18 blue (full 66853, cuts 3081, boundary 3191), 6 green (full 74, cuts 52, slivers 36).
+7. Store real AutoCAD 2023 logs/screenshots/DXF identifiers in existing Drive `05_SCREENSHOT_VIDEO_LOG`.
+
+**Gate**: CI PASS only certifies Core Golden fixture and AutoCAD binary compilation, **not** AutoCAD runtime, actual DXF parity or geometric Preview/Create parity. Multi-loop/hole, curved edges and non-+Z Hatch stay explicitly unsupported by RC3; no silent approximations.
