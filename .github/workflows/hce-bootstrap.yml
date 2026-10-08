@@ -102,6 +102,26 @@ jobs:
         shell: powershell
         run: ./incubator/hnl-ceiling-estimator-pro/scripts/verify-universal.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
 
+      - name: Audit old DEMTC capability/options before UI restoration
+        shell: powershell
+        run: |
+          $root='incubator/hnl-ceiling-estimator-pro'
+          $sources=@(Get-ChildItem "$root/src" -Recurse -File -Filter '*.cs')
+          $matches=@($sources | Select-String -Pattern 'class DemtcOptions','enum Module','enum Material','enum Packing','enum Grid' -List)
+          Write-Host "HCE_OLD_OPTIONS_SOURCE_COUNT=$($matches.Count)"
+          foreach($m in $matches) {
+            Write-Host "HCE_OLD_OPTIONS_FILE=$($m.Path)"
+            $lines=[IO.File]::ReadAllLines($m.Path)
+            $start=[Math]::Max(0,$m.LineNumber-1)
+            $end=[Math]::Min($lines.Length-1,$start+120)
+            for($i=$start;$i -le $end;$i++) {
+              Write-Host ("HCE_OPTION_SRC:{0}: {1}" -f ($i+1), $lines[$i])
+            }
+          }
+          $lisp=@(Get-ChildItem $root -Recurse -File -Filter '*.lsp')
+          Write-Host "HCE_LEGACY_LISP_FILES=$($lisp.Count)"
+          foreach($f in $lisp) {Write-Host "LEGACY_LISP=$($f.FullName)"}
+
       - name: Build Golden + AutoCAD matrix + Setup EXE
         shell: powershell
         run: ./incubator/hnl-ceiling-estimator-pro/scripts/build-universal-installer.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
