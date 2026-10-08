@@ -22,10 +22,12 @@ namespace HNL.VXT.UI.ViewModels
         private string _furringEquipmentStatus = "Chưa chọn";
         private bool _hasBoundary;
         private bool _applyingPreset;
+        private int _selectedCeilingTabIndex;
 
         public VxtPaletteViewModel(IVxtHostBridge host)
         {
             _host = host ?? throw new ArgumentNullException(nameof(host));
+            LayIn = new LayInCeilingViewModel(_host);
 
             SelectBoundaryCommand = new RelayCommand(() => _host.SelectBoundary());
             PickBoundaryPointCommand = new RelayCommand(() => _host.PickBoundaryPoint());
@@ -60,6 +62,13 @@ namespace HNL.VXT.UI.ViewModels
 
         public string VersionLabel => VxtBuildInfo.VersionLabel;
         public string Subtitle => "WYSIWYG Preview • tương thích V6.7.4 • AutoCAD 2023–2027";
+        public LayInCeilingViewModel LayIn { get; }
+
+        public int SelectedCeilingTabIndex
+        {
+            get => _selectedCeilingTabIndex;
+            set => Set(ref _selectedCeilingTabIndex, value);
+        }
         public bool IsDarkTheme => _host.IsDarkTheme;
 
         public string[] Presets { get; } = { "Trần chìm tiêu chuẩn", "Tùy chỉnh" };
@@ -256,6 +265,7 @@ namespace HNL.VXT.UI.ViewModels
         {
             BoundaryStatus = display;
             HasBoundary = hasBoundary;
+            LayIn?.SetBoundaryStatus(display, hasBoundary);
             PreviewStatus = hasBoundary
                 ? "Xem trước đang bật • thay đổi thông số để cập nhật."
                 : "Chọn Polyline hoặc Chọn điểm để bắt đầu xem trước.";
