@@ -204,14 +204,7 @@ namespace HNL.VXT.AutoCAD
                 ed.WriteMessage(".");
             }
 
-            var mode = VxtSession.Current.Settings.MainDirection;
-            if (mode == MainDirectionMode.TwoPoints ||
-                mode == MainDirectionMode.PolylinePath ||
-                mode == MainDirectionMode.RectangleRegions)
-                VxtTransientPreview.Instance.Clear();
-            else
-                VxtTransientPreview.Instance.Refresh();
-
+            RefreshBoundaryPreviewForActiveTab(doc);
             QueueBoundaryFollowUp(doc);
         }
 
@@ -365,6 +358,27 @@ namespace HNL.VXT.AutoCAD
                 accepted.Count + " mảng trần bằng Chọn điểm" +
                 (totalHoles > 0 ? ", có " + totalHoles + " lỗ trong." : "."));
 
+            RefreshBoundaryPreviewForActiveTab(doc);
+            QueueBoundaryFollowUp(doc);
+        }
+
+        // Keep legacy preview behavior in the concealed tab. Lay-in always uses
+        // its own settings and AutoCAD command-context transient renderer.
+        internal static void RefreshBoundaryPreviewForActiveTab(Document doc)
+        {
+            if (doc == null) return;
+            var session = VxtSession.Current;
+            if (session.ViewModel?.SelectedCeilingTabIndex == 1)
+            {
+                VxtTransientPreview.Instance.Clear();
+                session.LayInSettings = session.ViewModel.LayIn.Snapshot();
+                doc.SendStringToExecute(
+                    session.HasBoundary ? "HNLCFLAYINPREVIEW " : "HNLCFLAYINCLEAR ",
+                    true, false, false);
+                return;
+            }
+
+            LayInCadRuntime.ClearPreview();
             var mode = session.Settings.MainDirection;
             if (mode == MainDirectionMode.TwoPoints ||
                 mode == MainDirectionMode.PolylinePath ||
@@ -372,13 +386,11 @@ namespace HNL.VXT.AutoCAD
                 VxtTransientPreview.Instance.Clear();
             else
                 VxtTransientPreview.Instance.Refresh();
-
-            QueueBoundaryFollowUp(doc);
         }
 
         internal static void QueueBoundaryFollowUp(Document doc)
         {
-            if (doc == null) return;
+            if (doc == null || VxtSession.Current.ViewModel?.SelectedCeilingTabIndex == 1) return;
 
             switch (VxtSession.Current.Settings.MainDirection)
             {
