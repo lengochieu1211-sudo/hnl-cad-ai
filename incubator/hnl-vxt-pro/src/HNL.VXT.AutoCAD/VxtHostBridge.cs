@@ -16,6 +16,7 @@ namespace HNL.VXT.AutoCAD
         private readonly DispatcherTimer _layInPreviewTimer;
         private VxtSettings _pendingPreviewSettings;
         private LayInCeilingSettings _pendingLayInPreviewSettings;
+        private Autodesk.AutoCAD.ApplicationServices.Document _pendingLayInPreviewDocument;
 
         public VxtHostBridge()
         {
@@ -221,6 +222,7 @@ namespace HNL.VXT.AutoCAD
             if (settings == null) return;
             VxtSession.Current.LayInSettings = settings.Clone();
             _pendingLayInPreviewSettings = settings.Clone();
+            _pendingLayInPreviewDocument = Application.DocumentManager.MdiActiveDocument;
             _layInPreviewTimer.Stop();
             _layInPreviewTimer.Start();
         }
@@ -336,6 +338,11 @@ namespace HNL.VXT.AutoCAD
         {
             _layInPreviewTimer.Stop();
             if (_pendingLayInPreviewSettings == null) return;
+            if (!ReferenceEquals(Application.DocumentManager.MdiActiveDocument, _pendingLayInPreviewDocument))
+            {
+                CancelPendingLayInPreview();
+                return;
+            }
 
             if (IsCadCommandActive())
             {
@@ -345,6 +352,7 @@ namespace HNL.VXT.AutoCAD
 
             var settings = _pendingLayInPreviewSettings;
             _pendingLayInPreviewSettings = null;
+            _pendingLayInPreviewDocument = null;
             var session = VxtSession.Current;
             session.LayInSettings = settings.Clone();
             Send(session.HasBoundary ? "HNLCFLAYINPREVIEW " : "HNLCFLAYINCLEAR ");
@@ -360,6 +368,7 @@ namespace HNL.VXT.AutoCAD
         {
             _layInPreviewTimer.Stop();
             _pendingLayInPreviewSettings = null;
+            _pendingLayInPreviewDocument = null;
         }
 
         private static bool IsCadCommandActive()
