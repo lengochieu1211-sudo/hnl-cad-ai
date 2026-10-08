@@ -265,6 +265,14 @@ namespace HNL.VXT.AutoCAD
             Send("HNLCFLAYINHANGERBLOCK ");
         }
 
+        public void PickLayInDimensionPosition(bool horizontal, LayInCeilingSettings settings)
+        {
+            if (settings == null) return;
+            CancelPendingLayInPreview();
+            VxtSession.Current.LayInSettings = settings.Clone();
+            Send(horizontal ? "HNLCFLAYINDIMH " : "HNLCFLAYINDIMV ");
+        }
+
         public void PickLayInStartMarkerBlock(LayInCeilingSettings settings)
         {
             if (settings == null) return;
