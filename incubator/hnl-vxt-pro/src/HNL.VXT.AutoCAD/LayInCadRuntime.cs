@@ -97,7 +97,9 @@ namespace HNL.VXT.AutoCAD
                     throw new InvalidOperationException("Lay-in Preview exceeds 3500 graphics; Create still uses full Core plan.");
 
                 var db = doc.Database;
-                var dimStyleId = ResolveDimensionStyle(db, session.LayInSettings.DimensionStyle);
+                var dimStyleId = plans.Any(p => p.Plan.DimensionRuns.Count > 0)
+                    ? ResolveDimensionStyle(db, session.LayInSettings.DimensionStyle)
+                    : db.Dimstyle;
                 ObjectId previewHangerBlock;
                 using (var readTr = db.TransactionManager.StartTransaction())
                 {
@@ -211,7 +213,8 @@ namespace HNL.VXT.AutoCAD
                         : ObjectId.Null;
                     var hangerBlock = settings.DrawHangers
                         ? ResolveHangerBlock(bt, settings.HangerBlockName) : ObjectId.Null;
-                    var dimStyleId = ResolveDimensionStyle(db, tr, settings.DimensionStyle);
+                    var dimStyleId = settings.DimensionMode == LayInDimensionMode.Off
+                        ? db.Dimstyle : ResolveDimensionStyle(db, tr, settings.DimensionStyle);
                     var startBlock = settings.DrawStartTileBlock
                         ? (string.IsNullOrWhiteSpace(settings.StartMarkerBlockName)
                             ? EnsureDefaultStartTileBlock(db, tr)
@@ -584,7 +587,22 @@ namespace HNL.VXT.AutoCAD
 
                             if (plan.DimensionRuns.Count == 0 || plan.HangerPoints.Count == 0)
                                 throw new InvalidOperationException("Core plan did not create test DIM/Ty.");
-                            var dimension = BuildDimension(db, plan.DimensionRuns[0], plan.ModuleShort, db.Dimstyle);
+                            // Resolve a named DWG DimStyle without changing the global
+                            // current DIMSTYLE; native materialization must use that ID.
+                            var activeDimStyle = db.Dimstyle;
+                            var dimTable = (DimStyleTable)tr.GetObject(
+                                db.DimStyleTableId, OpenMode.ForRead);
+                            foreach (ObjectId id in dimTable)
+                            {
+                                var namedStyle = (DimStyleTableRecord)tr.GetObject(id, OpenMode.ForRead);
+                                if (ResolveDimensionStyle(db, tr, namedStyle.Name) != id)
+                                    throw new InvalidOperationException("Lay-in named DimStyle lookup mismatch.");
+                                break;
+                            }
+                            if (db.Dimstyle != activeDimStyle)
+                                throw new InvalidOperationException("Lay-in modified drawing DIMSTYLE.");
+                            var dimension = BuildDimension(db, plan.DimensionRuns[0],
+                                plan.ModuleShort, activeDimStyle);
                             Append(db, tr, ms, dimension, db.Clayer);
                             if (dimension.ObjectId.IsNull)
                                 throw new InvalidOperationException("DIM was not materialized.");
