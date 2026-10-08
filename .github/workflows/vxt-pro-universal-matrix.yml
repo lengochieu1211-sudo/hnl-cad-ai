@@ -143,6 +143,26 @@ jobs:
               throw "Lay-in Runtime QA command missing from manifest: $manifestName"
             }
           }
+          # Deep audit gates: DIM labels must equal measured post-phase lengths.
+          $layInCore = Get-Content "$env:VXT_ROOT\src\HNL.VXT.Core\Preview\LayInCeilingPlanner.cs" -Raw
+          $layInTests = Get-Content "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\LayInCeilingPlannerTests.cs" -Raw
+          if (-not $layInCore.Contains('(bounds.MaxX - xStart) / spec.ModuleShort') -or
+              -not $layInCore.Contains('(bounds.MaxY - yStart) / acrossModule') -or
+              -not $layInTests.Contains('ManualStart_GroupedDimensionsMatchExactMeasuredSpan') -or
+              -not $layInTests.Contains('NarrowBoundary_SkipsFullModuleDimsInsteadOfDrawingFalseLabel')) {
+            throw 'Lay-in measured-DIM regression protections are missing.'
+          }
+          # Selecting boundaries and switching UI tabs must route to the active ceiling renderer.
+          $boundaryCommands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
+          $boundaryAdapter = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtBoundarySelectionAdapter.cs" -Raw
+          $paletteVm = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\VxtPaletteViewModel.cs" -Raw
+          if (-not $boundaryCommands.Contains('RefreshBoundaryPreviewForActiveTab(doc);') -or
+              -not $boundaryCommands.Contains('SelectedCeilingTabIndex == 1') -or
+              -not $boundaryAdapter.Contains('VxtCommands.RefreshBoundaryPreviewForActiveTab(doc);') -or
+              -not $paletteVm.Contains('_host.ClearLayInPreview();') -or
+              -not $paletteVm.Contains('_host.RequestLayInPreview(LayIn.Snapshot());')) {
+            throw 'Lay-in/concealed boundary Preview tab isolation is missing.'
+          }
           Write-Host 'Lay-in one-Hatch/region static contract and command registrations PASS'
           Write-Host 'HNL Ceiling Framing beta.1 source/branding/multi-polyline gate PASS'
       - name: Run golden core tests
