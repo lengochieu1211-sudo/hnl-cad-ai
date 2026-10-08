@@ -72,6 +72,11 @@ namespace HNL.VXT.AutoCAD
             GlobalFurringFromFarEdge = false;
             PendingBoundaryHighlightIndex = -1;
 
+            // Lay-in preset/layer/block settings are application-wide, but manual/door points belong
+            // to one DWG coordinate system and must never leak across document switches.
+            LayInSettings.ManualStartPoint = null;
+            LayInSettings.DoorPoint = null;
+
             // Keep the palette instance and all user settings, but clear drawing-specific UI facts.
             ViewModel?.SetBoundaryStatus("Chưa chọn biên trần.", false);
             ViewModel?.SetPreviewStats(0, 0, 0, 0);
@@ -103,6 +108,7 @@ namespace HNL.VXT.AutoCAD
         }
 
         public VxtSettings Settings { get; set; } = new VxtSettings();
+        public LayInCeilingSettings LayInSettings { get; set; } = new LayInCeilingSettings();
         public VxtPaletteViewModel ViewModel { get; set; }
 
         public ObjectId[] GeneralEquipmentIds { get; set; } = new ObjectId[0];
