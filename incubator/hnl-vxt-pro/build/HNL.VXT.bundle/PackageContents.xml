@@ -39,7 +39,9 @@
         <Command Global="HNLCFLAYINSTART" Local="HNLCFLAYINSTART" />
         <Command Global="HNLCFLAYINDOOR" Local="HNLCFLAYINDOOR" />
         <Command Global="HNLCFLAYINHANGERBLOCK" Local="HNLCFLAYINHANGERBLOCK" />
-        <Command Global="HNLCFLAYINSTARTBLOCK" Local="HNLCFLAYINSTARTBLOCK" /><Command Global="HNLCFLAYINQA" Local="HNLCFLAYINQA" />
+        <Command Global="HNLCFLAYINSTARTBLOCK" Local="HNLCFLAYINSTARTBLOCK" /><Command Global="HNLCFLAYINDIMH" Local="HNLCFLAYINDIMH" />
+        <Command Global="HNLCFLAYINDIMV" Local="HNLCFLAYINDIMV" />
+        <Command Global="HNLCFLAYINQA" Local="HNLCFLAYINQA" />
         <Command Global="HNLVXTGOLDEN" Local="HNLVXTGOLDEN" />
         <Command Global="HNLVXTPROGOLDEN" Local="HNLVXTPROGOLDEN" />
         <Command Global="HNLVXTPROAUTOQA" Local="HNLVXTPROAUTOQA" />
