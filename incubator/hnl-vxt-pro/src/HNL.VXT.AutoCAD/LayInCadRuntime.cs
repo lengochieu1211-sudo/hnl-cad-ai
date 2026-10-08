@@ -9,6 +9,7 @@ using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.GraphicsInterface;
 using HNL.VXT.Core.Geometry;
 using HNL.VXT.Core.Models;
+using HNL.VXT.Core.Preview;
 
 namespace HNL.VXT.AutoCAD
 {
@@ -85,7 +86,7 @@ namespace HNL.VXT.AutoCAD
                 if (!session.HasBoundary) return;
                 var plans = LayInRuntimePlanner.Build(session, session.LayInSettings);
                 var total = plans.Sum(p => p.Plan.TeeSegments.Count +
-                    p.Plan.HangerPoints.Count + p.Plan.DimensionRuns.Count);
+                    p.Plan.HangerPoints.Count + p.Plan.DimensionRuns.Count + 1);
                 if (total > MaxPreviewDrawables)
                     throw new InvalidOperationException("Lay-in Preview exceeds 3500 graphics; Create still uses full Core plan.");
 
@@ -109,11 +110,17 @@ namespace HNL.VXT.AutoCAD
                     }
                     foreach (var run in item.Plan.DimensionRuns)
                     {
-                        var line = new Line(ToCad(run.A), ToCad(run.B));
-                        line.SetDatabaseDefaults(db);
-                        line.ColorIndex = 4;
-                        AddTransient(line);
+                        var dimension = BuildDimension(db, run, item.Plan.ModuleShort);
+                        dimension.ColorIndex = 4;
+                        // A transient dimension has no database owner. GenerateLayout
+                        // before AddTransient so the complete labeled DIM is visible.
+                        dimension.GenerateLayout();
+                        AddTransient(dimension);
                     }
+                    var startMarker = new Circle(ToCad(item.Plan.HatchOrigin), Vector3d.ZAxis, 28.0);
+                    startMarker.SetDatabaseDefaults(db);
+                    startMarker.ColorIndex = 3;
+                    AddTransient(startMarker);
                 }
                 int main, longCross, shortCross, hangers;
                 double waste;
@@ -206,18 +213,7 @@ namespace HNL.VXT.AutoCAD
 
                         foreach (var run in item.Plan.DimensionRuns)
                         {
-                            var a = ToCad(run.A);
-                            var b = ToCad(run.B);
-                            var dx = b.X - a.X;
-                            var dy = b.Y - a.Y;
-                            var len = Math.Sqrt(dx * dx + dy * dy);
-                            if (len < 1e-6) continue;
-                            var offset = Math.Max(160.0, item.Plan.ModuleShort * 0.3);
-                            var linePoint = new Point3d(
-                                (a.X + b.X) / 2 + dy * offset / len,
-                                (a.Y + b.Y) / 2 - dx * offset / len, 0.0);
-                            var dimension = new RotatedDimension(
-                                Math.Atan2(dy, dx), a, b, linePoint, run.Label, db.Dimstyle);
+                            var dimension = BuildDimension(db, run, item.Plan.ModuleShort);
                             Append(db, tr, ms, dimension, dimLayer);
                             dimensionCount++;
                         }
@@ -226,7 +222,7 @@ namespace HNL.VXT.AutoCAD
                         var origin = ToCad(item.Plan.HatchOrigin);
                         if (startBlock.IsNull)
                         {
-                            var point = new DBPoint(origin);
+                            var point = new Circle(origin, Vector3d.ZAxis, 28.0);
                             Append(db, tr, ms, point, markerLayer);
                         }
                         else
@@ -297,6 +293,28 @@ namespace HNL.VXT.AutoCAD
                 // Outer transaction rolls back both the Hatch and temporary boundaries.
                 throw;
             }
+        }
+
+        // Preview and Create must use the same DIM geometry, text and offset.
+        private static RotatedDimension BuildDimension(
+            Database db, LayInDimensionRun run, double moduleShort)
+        {
+            var a = ToCad(run.A);
+            var b = ToCad(run.B);
+            var dx = b.X - a.X;
+            var dy = b.Y - a.Y;
+            var length = Math.Sqrt(dx * dx + dy * dy);
+            if (length <= 1e-6)
+                throw new InvalidOperationException("Zero-length Lay-in dimension run.");
+
+            var offset = Math.Max(160.0, moduleShort * 0.3);
+            var linePoint = new Point3d(
+                (a.X + b.X) * 0.5 + dy * offset / length,
+                (a.Y + b.Y) * 0.5 - dx * offset / length, 0.0);
+            var result = new RotatedDimension(
+                Math.Atan2(dy, dx), a, b, linePoint, run.Label, db.Dimstyle);
+            result.SetDatabaseDefaults(db);
+            return result;
         }
 
         private static ObjectId ResolveBlock(BlockTable table, string name)
