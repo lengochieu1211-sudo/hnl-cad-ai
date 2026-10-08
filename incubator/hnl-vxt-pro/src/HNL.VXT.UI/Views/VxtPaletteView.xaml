@@ -991,18 +991,44 @@
                             </Expander>
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
-                            <Expander Header="5. Ghi kích thước (DIM)" IsExpanded="False" HorizontalContentAlignment="Stretch">
+                            <Expander Header="5. Ghi kích thước (DIM)" IsExpanded="True" HorizontalContentAlignment="Stretch">
                                 <StackPanel Margin="0,8,0,0">
-                                    <Grid Margin="0,0,0,7">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="106"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="Kiểu ghi DIM" Style="{StaticResource FieldLabel}"/>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="91"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Cách ghi DIM" Style="{StaticResource FieldLabel}"/>
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding DimensionOptions}" SelectedItem="{Binding SelectedDimensionMode, Mode=TwoWay}"/>
                                     </Grid>
-                                    <Grid IsEnabled="{Binding IsGroupedDimension}">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="Số ô gộp (ví dụ: 12 × 600)" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
+                                    <TextBlock Text="Theo lưới và tấm cắt biên: đo riêng phần ô nguyên và từng mép cắt, như bản vẽ mẫu." TextWrapping="Wrap"
+                                               Style="{StaticResource HintText}" Margin="0,0,0,8"/>
+                                    <Grid Margin="0,0,0,8" IsEnabled="{Binding IsGroupedDimension}">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="145"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Số ô DIM gộp" Style="{StaticResource FieldLabel}"/>
                                         <TextBox Grid.Column="1" Text="{Binding GroupedDimensionCount, UpdateSourceTrigger=LostFocus}"/>
                                     </Grid>
+                                    <StackPanel IsEnabled="{Binding IsDimensionEnabled}">
+                                        <Grid Margin="0,0,0,7">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="77"/><ColumnDefinition Width="*"/><ColumnDefinition Width="73"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="DIM ngang" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding HorizontalPositionOptions}" SelectedItem="{Binding SelectedHorizontalDimPosition, Mode=TwoWay}"/>
+                                            <Button Grid.Column="2" Content="Chọn" Command="{Binding PickHorizontalDimensionCommand}" Style="{StaticResource PickButton}" Margin="5,0,0,0"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="145"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Cách khung (mm)" Style="{StaticResource FieldLabel}"/>
+                                            <controls:HnlNumericBox Grid.Column="1" Value="{Binding HorizontalDimDistance, Mode=TwoWay}" Minimum="1" Step="50"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,7">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="77"/><ColumnDefinition Width="*"/><ColumnDefinition Width="73"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="DIM dọc" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding VerticalPositionOptions}" SelectedItem="{Binding SelectedVerticalDimPosition, Mode=TwoWay}"/>
+                                            <Button Grid.Column="2" Content="Chọn" Command="{Binding PickVerticalDimensionCommand}" Style="{StaticResource PickButton}" Margin="5,0,0,0"/>
+                                        </Grid>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="145"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Cách khung (mm)" Style="{StaticResource FieldLabel}"/>
+                                            <controls:HnlNumericBox Grid.Column="1" Value="{Binding VerticalDimDistance, Mode=TwoWay}" Minimum="1" Step="50"/>
+                                        </Grid>
+                                    </StackPanel>
                                 </StackPanel>
                             </Expander>
                         </Border>
