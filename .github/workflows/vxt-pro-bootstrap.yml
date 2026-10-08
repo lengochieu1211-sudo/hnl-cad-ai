@@ -333,7 +333,7 @@ jobs:
           $layInLabels = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\LayInCeilingViewModel.cs" -Raw
           if (-not $buildInfo.Contains('MetadataKey = "HNLBuildDateTime"') -or
               -not $buildInfo.Contains('Cập nhật ') -or
-              -not $buildInfo.Contains('HNL Ceiling Framing Pro') -or
+              -not $buildInfo.Contains('public static string PaletteTitle => "Ceiling Framing Pro • " + BuildText;') -or
               -not $buildProps.Contains('AssemblyMetadata Include="HNLBuildDateTime"') -or
               -not $ceilingUi.Contains('MinWidth="0"') -or
               -not $ceilingUi.Contains('Header="Trần nổi"') -or
@@ -443,6 +443,21 @@ jobs:
           [xml]$validatedUi = $ceilingUi
           if ($validatedUi.DocumentElement.LocalName -ne 'UserControl') {
             throw 'Ceiling mode XAML must remain a valid WPF UserControl.'
+          }
+          # Runtime field feedback: one title in AutoCAD caption, no duplicate
+          # logo/version card within the palette, and concealed resources must
+          # remain accessible after moving the scroll into the first tab.
+          $uiResourcePolish = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteRuntimePolish.cs" -Raw
+          $uiSectionOrder = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteSectionOrder.cs" -Raw
+          if ($ceilingUi.Contains('<controls:HnlLogo Grid.Column="0"') -or
+              $ceilingUi.Contains('Text="Bật Xương chính"') -or
+              $ceilingUi.Contains('Text="Bật Xương phụ"') -or
+              $ceilingUi.Contains('Text="Bật Ty treo"') -or
+              -not $ceilingUi.Contains('<RowDefinition Height="0"/>') -or
+              -not $uiResourcePolish.Contains('tabs.Items[0] as TabItem') -or
+              -not $uiSectionOrder.Contains('tabs.Items[0] as TabItem') -or
+              -not $uiResourcePolish.Contains('nameof(VxtPaletteViewModel.DimensionLayer)')) {
+            throw 'Concealed tab Layer/DIM restoration, concise caption or redundant-toggle cleanup missing.'
           }
           Write-Host 'Lay-in one-Hatch/region static contract and command registrations PASS'
           Write-Host "HNL Ceiling Framing beta.1 functional/source/branding/multi-polyline/installer gate PASS"
