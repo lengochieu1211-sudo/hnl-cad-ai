@@ -220,6 +220,60 @@ namespace HNL.VXT.AutoCAD
             VxtTransientPreview.Instance.Clear();
         }
 
+        // Modeless Lay-in palette calls are marshalled back into AutoCAD's modal
+        // command context, using the same Core planner for Preview and Create.
+        [CommandMethod("HNLCFLAYINPREVIEW", CommandFlags.Modal)]
+        public void LayInPreview()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            LayInCadRuntime.Preview();
+        }
+
+        [CommandMethod("HNLCFLAYINCLEAR", CommandFlags.Modal)]
+        public void LayInClear()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            LayInCadRuntime.ClearPreview();
+        }
+
+        [CommandMethod("HNLCFLAYINCREATE", CommandFlags.Modal | CommandFlags.UsePickSet)]
+        public void LayInCreate()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            if (!VxtSession.Current.HasBoundary)
+                VxtBoundarySelectionAdapter.TryAdoptImpliedSelection(
+                    refreshPreview: false, writeMessage: true);
+            LayInCadRuntime.Create();
+        }
+
+        [CommandMethod("HNLCFLAYINSTART", CommandFlags.Modal)]
+        public void LayInPickStart()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            LayInCadRuntime.PickPoint(false);
+        }
+
+        [CommandMethod("HNLCFLAYINDOOR", CommandFlags.Modal)]
+        public void LayInPickDoor()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            LayInCadRuntime.PickPoint(true);
+        }
+
+        [CommandMethod("HNLCFLAYINHANGERBLOCK", CommandFlags.Modal)]
+        public void LayInPickHangerBlock()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            LayInCadRuntime.PickBlock(false);
+        }
+
+        [CommandMethod("HNLCFLAYINSTARTBLOCK", CommandFlags.Modal)]
+        public void LayInPickStartMarkerBlock()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            LayInCadRuntime.PickBlock(true);
+        }
+
         // Mxx diagnostic selection must be exposed on the only registered CommandClass.
         // VxtCommands contains the implementation but is intentionally not registered.
         [CommandMethod("HNLVXTFOCUSBOUNDARY", CommandFlags.Modal)]
