@@ -1,8 +1,8 @@
-#define MyAppName "HNL Tool - VXT Pro"
+#define MyAppName "HNL Ceiling Framing Pro"
 #define MyAppVersion "7.0.0-beta.1"
 #define MyNumericVersion "7.0.0.7"
 #define MyPublisher "HNL Tool"
-#define MySetupBaseName "HNL_VXT_Pro_Setup_7.0.0-beta.1"
+#define MySetupBaseName "HNL_Ceiling_Framing_Pro_Setup_7.0.0-beta.1"
 
 [Setup]
 AppId={{A71F4558-7412-4B35-9EB8-6A2E2F2F6D44}
@@ -12,7 +12,7 @@ AppVerName={#MyAppName} v{#MyAppVersion}
 AppPublisher={#MyPublisher}
 VersionInfoVersion={#MyNumericVersion}
 VersionInfoCompany={#MyPublisher}
-VersionInfoDescription=HNL Tool - VXT Pro AutoCAD 2023 Installer
+VersionInfoDescription=HNL Ceiling Framing Pro AutoCAD 2023 Installer
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyNumericVersion}
 DefaultDirName={commonpf}\Autodesk\ApplicationPlugins\HNL.VXT.bundle
@@ -77,8 +77,8 @@ begin
   if IsAutoCADRunning then
   begin
     MsgBox(
-      'HNL Tool - VXT Pro' + #13#10 + #13#10 +
-      'AutoCAD đang mở. Hãy đóng toàn bộ AutoCAD trước khi cài hoặc cập nhật VXT Pro.',
+      'HNL Ceiling Framing Pro' + #13#10 + #13#10 +
+      'AutoCAD đang mở. Hãy đóng toàn bộ AutoCAD trước khi cài hoặc cập nhật Ceiling Framing Pro.',
       mbError, MB_OK);
     Exit;
   end;
@@ -100,8 +100,8 @@ begin
   Result := not IsAutoCADRunning;
   if not Result then
     MsgBox(
-      'HNL Tool - VXT Pro' + #13#10 + #13#10 +
-      'Hãy đóng AutoCAD trước khi gỡ VXT Pro.',
+      'HNL Ceiling Framing Pro' + #13#10 + #13#10 +
+      'Hãy đóng AutoCAD trước khi gỡ Ceiling Framing Pro.',
       mbError, MB_OK);
 end;
 
@@ -110,8 +110,8 @@ begin
   if CurStep = ssPostInstall then
   begin
     MsgBox(
-      'Cài đặt HNL Tool - VXT Pro v{#MyAppVersion} hoàn tất.' + #13#10 + #13#10 +
-      'Mở AutoCAD 2023 và gõ HVX để mở giao diện HNL VXT Pro.',
+      'Cài đặt HNL Ceiling Framing Pro v{#MyAppVersion} hoàn tất.' + #13#10 + #13#10 +
+      'Mở AutoCAD 2023 và gõ HCF để mở giao diện HNL Ceiling Framing Pro.',
       mbInformation, MB_OK);
   end;
 end;
