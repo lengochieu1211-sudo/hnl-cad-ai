@@ -31,8 +31,12 @@ namespace HNL.VXT.Core.Models
         Off,
         Module,
         Grouped,
-        Overall
+        Overall,
+        GridAndEdges
     }
+
+    public enum LayInHorizontalDimSide { Auto, Top, Bottom }
+    public enum LayInVerticalDimSide { Auto, Left, Right }
 
     public enum LayInTeeKind
     {
@@ -54,8 +58,12 @@ namespace HNL.VXT.Core.Models
         public double HangerMaxSpacing { get; set; }
         public double HangerEdgeTarget { get; set; }
 
-        public LayInDimensionMode DimensionMode { get; set; } = LayInDimensionMode.Grouped;
+        public LayInDimensionMode DimensionMode { get; set; } = LayInDimensionMode.GridAndEdges;
         public int GroupedDimensionCount { get; set; } = 12;
+        public LayInHorizontalDimSide HorizontalDimSide { get; set; } = LayInHorizontalDimSide.Auto;
+        public LayInVerticalDimSide VerticalDimSide { get; set; } = LayInVerticalDimSide.Auto;
+        public double HorizontalDimDistance { get; set; } = 1200.0;
+        public double VerticalDimDistance { get; set; } = 1200.0;
 
         public string HatchLayer { get; set; } = "HNL-CF-LAYIN";
         public string HangerLayer { get; set; } = "HNL-CF-HANGER";
