@@ -1,25 +1,21 @@
-# HCE AutoCAD Runtime Bridge Overlay - RC1
+# HCE AutoCAD Runtime Bridge Overlay - RC2
 
-Base checkpoint: research/hce-pro-bootstrap @ 65bfbed5a273d209bdf2a65f824def0279b5b373 (v0.3.0).
+Base: HCE RC1 2cb4aeed191be8f6309c3610defbecf586e6415f
+Core source and Golden fixtures in HCE-PAYLOAD are FROZEN, unchanged.
 
-The canonical C# Core and Golden fixture remain inside HCE-PAYLOAD, unchanged.
-The CI workflow expands that frozen ZIP, then copies the adapter source in this overlay
-into its AutoCAD adapter directory BEFORE Golden/build/installer. This avoids repacking
-the frozen Core or accidentally modifying Golden.
+RC2 safe additions:
+- HCEQA diagnostic command inspects Hatch pattern/type, spacing, double flag,
+  origin, angle, area, loops, and adapter eligibility, read-only.
+- User-defined Hatch patterns require true double-grid and 610mm spacing.
+- Predefined and custom patterns have unverified effective spacing; HCE requires
+  explicit Use610 acknowledgement (default Cancel) before calculating.
+- Explicit unit assumption displayed; no automatic drawing scale conversion.
+- Duplicate terminal polyline vertex excluded to avoid false degenerate closing edge.
+- Result table title carries the "610mm grid assumed" label.
+- HCE/DTC/DEMTC and Golden 610x610/packing Core unchanged.
 
-Scope RC1:
-- HCE/DTC/DEMTC use one entry point and calculation report.
-- Multi-Hatch selection, direct straight-edge HatchLoop extraction (no HATCHEDIT/Region).
-- Hatch pattern WCS origin and pattern angle mapped to unchanged Core default grid.
-- Group by layer/ACI/pattern; packing once per material group.
-- Read-only numeric preview; optional AutoCAD result Table, same report, one undoable write.
-- Reject unsupported normals, solid fills, multi-loop/hole and curved edges with handle reason.
-- Cancel/Exit makes no drawing changes.
-
-NOT YET INCLUDED / NOT CLAIMED:
-- visual tile-geometry preview/create: Core only returns aggregate inner full counts;
-- safe handling of arc/ellipse/spline and multiple nested boundary loops;
-- pattern spacing deduction from arbitrary user Hatch pattern;
-- actual AutoCAD 2023 runtime, screenshot/Undo/DWG switch/GOLDEN confirmation.
-
-This is a Runtime CANDIDATE; a passing build alone does not certify runtime.
+Limitations:
+- No CAD runtime evidence yet; HCEQA is meant to collect it.
+- Curves, multiple loop holes, and non-+Z Hatch remain safely rejected.
+- Visual geometry Preview/Create parity is pending; current Preview is numbers.
+- No unsupported geometry is silently approximated into a different area.

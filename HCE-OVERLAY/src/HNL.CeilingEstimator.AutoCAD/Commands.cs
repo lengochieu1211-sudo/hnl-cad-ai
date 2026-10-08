@@ -24,6 +24,78 @@ namespace HNL.CeilingEstimator.AutoCAD
         [CommandMethod("DEMTC", CommandFlags.Modal)]
         public void DemtcCompatibilityAlias() { RunCeilingEstimator(); }
 
+        [CommandMethod("HCEQA", CommandFlags.Modal)]
+        public void HatchDiagnostic()
+        {
+            var document = Application.DocumentManager.MdiActiveDocument;
+            if (document == null) return;
+            var editor = document.Editor;
+            var selection = editor.GetSelection(
+                new PromptSelectionOptions
+                {
+                    MessageForAdding = "\nHNL Tool - HCEQA select Hatches to inspect: "
+                },
+                new SelectionFilter(new[] { new TypedValue((int)DxfCode.Start, "HATCH") }));
+            if (selection.Status != PromptStatus.OK || selection.Value == null)
+            {
+                editor.WriteMessage("\nHNL Tool - HCEQA cancelled; read-only.");
+                return;
+            }
+            using (var tr = document.Database.TransactionManager.StartTransaction())
+            {
+                editor.WriteMessage("\nHNL Tool - HCEQA drawing units=" +
+                    document.Database.Insunits.ToString());
+                foreach (SelectedObject selected in selection.Value)
+                {
+                    if (selected == null || selected.ObjectId.IsNull) continue;
+                    try
+                    {
+                        var hatch = tr.GetObject(selected.ObjectId, OpenMode.ForRead, false) as Hatch;
+                        if (hatch == null) continue;
+                        editor.WriteMessage("\nHCEQA handle=" + hatch.Handle.ToString() +
+                            " layer=" + hatch.Layer +
+                            " pattern=" + hatch.PatternName +
+                            " type=" + hatch.PatternType.ToString() +
+                            " scale=" + Fmt(hatch.PatternScale) +
+                            " space=" + Fmt(hatch.PatternSpace) +
+                            " double=" + hatch.PatternDouble.ToString() +
+                            " origin=" + Fmt(hatch.Origin.X) + "," + Fmt(hatch.Origin.Y) +
+                            " angleRad=" + Fmt(hatch.PatternAngle) +
+                            " area=" + Fmt(hatch.Area) +
+                            " normalZ=" + Fmt(hatch.Normal.Z) +
+                            " loops=" + hatch.NumberOfLoops +
+                            " definitions=" + hatch.NumberOfPatternDefinitions);
+                        for (var i = 0; i < hatch.NumberOfLoops; i++)
+                        {
+                            var loop = hatch.GetLoopAt(i);
+                            var totalEdges = loop.IsPolyline ? loop.Polyline.Count : loop.Curves.Count;
+                            editor.WriteMessage("\n  loop=" + i +
+                                " kind=" + (loop.IsPolyline ? "polyline" : "curves") +
+                                " type=" + loop.LoopType.ToString() +
+                                " edges=" + totalEdges);
+                        }
+                        HatchInput extracted;
+                        string failure;
+                        if (TryExtractHatch(hatch, out extracted, out failure))
+                            editor.WriteMessage("\n  bridge=accepted (assumes 610x610 for unverified patterns)");
+                        else
+                            editor.WriteMessage("\n  bridge=rejected: " + failure);
+                    }
+                    catch (System.Exception ex)
+                    {
+                        editor.WriteMessage("\nHCEQA id=" + selected.ObjectId.ToString() +
+                            " read failure: " + ex.Message);
+                    }
+                }
+            }
+            editor.WriteMessage("\nHNL Tool - HCEQA finished; no drawing changes.");
+        }
+
+        private static string Fmt(double value)
+        {
+            return value.ToString("0.########", CultureInfo.InvariantCulture);
+        }
+
         private static void RunCeilingEstimator()
         {
             var document = Application.DocumentManager.MdiActiveDocument;
@@ -73,6 +145,35 @@ namespace HNL.CeilingEstimator.AutoCAD
                 if (inputs.Count == 0)
                 {
                     editor.WriteMessage("\nHNL Tool - No supported Hatch boundary found. No drawing changes.");
+                    return;
+                }
+
+                // Reject implicit assumptions. Non-user-defined PAT spacing cannot be
+                // proven from PatternScale alone, so require explicit user acceptance.
+                editor.WriteMessage("\nHNL Tool - Unit mode=" +
+                    document.Database.Insunits.ToString() +
+                    ". Golden input coordinates are millimeters.");
+                editor.WriteMessage("\nHNL Tool - Grid policy fixed at 610x610 mm.");
+                foreach (var input in inputs)
+                {
+                    if (!input.UserGridVerified)
+                        editor.WriteMessage("\nHNL Tool - Hatch " + input.Handle +
+                            " pattern=" + input.PatternName +
+                            " scale=" + Fmt(input.PatternScale) +
+                            " has no certified 610mm spacing; verify before proceeding.");
+                }
+                var acknowledge = new PromptKeywordOptions(
+                    "\nHNL Tool - Acknowledge 610mm grid and drawing units [Use610/Cancel] <Cancel>: ")
+                {
+                    AllowNone = true
+                };
+                acknowledge.Keywords.Add("Use610");
+                acknowledge.Keywords.Add("Cancel");
+                var consent = editor.GetKeywords(acknowledge);
+                if (consent.Status != PromptStatus.OK ||
+                    !string.Equals(consent.StringResult, "Use610", StringComparison.OrdinalIgnoreCase))
+                {
+                    editor.WriteMessage("\nHNL Tool - Unverified grid rejected by operator. No drawing changes.");
                     return;
                 }
 
@@ -137,6 +238,22 @@ namespace HNL.CeilingEstimator.AutoCAD
                 reason = "solid fill has no reliable 610 mm pattern grid";
                 return false;
             }
+            if (double.IsNaN(hatch.PatternScale) ||
+                double.IsInfinity(hatch.PatternScale) ||
+                !(hatch.PatternScale > 0))
+            {
+                reason = "invalid Hatch.PatternScale";
+                return false;
+            }
+            if (hatch.PatternType == HatchPatternType.UserDefined &&
+                (!hatch.PatternDouble ||
+                 double.IsNaN(hatch.PatternSpace) ||
+                 Math.Abs(hatch.PatternSpace - 610.0) > 0.01))
+            {
+                reason = "user-defined grid is not 610x610 double pattern (space=" +
+                    Fmt(hatch.PatternSpace) + ", double=" + hatch.PatternDouble + ")";
+                return false;
+            }
             if (hatch.NumberOfLoops != 1)
             {
                 reason = "loopCount=" + hatch.NumberOfLoops +
@@ -154,10 +271,19 @@ namespace HNL.CeilingEstimator.AutoCAD
                     reason = "loop=0 polyline has fewer than 3 vertices";
                     return false;
                 }
-                for (var i = 0; i < polyline.Count; i++)
+                // Some Hatch polylines repeat the first vertex as the last.
+                // Ignore that duplicate rather than creating a zero-length closing edge.
+                var vertexCount = polyline.Count;
+                var first = polyline[0].Vertex;
+                var last = polyline[vertexCount - 1].Vertex;
+                var dxx = first.X - last.X;
+                var dyy = first.Y - last.Y;
+                if (vertexCount > 3 && dxx * dxx + dyy * dyy <= 1e-12)
+                    vertexCount--;
+                for (var i = 0; i < vertexCount; i++)
                 {
                     var vertex = polyline[i];
-                    var next = polyline[(i + 1) % polyline.Count];
+                    var next = polyline[(i + 1) % vertexCount];
                     if (Math.Abs(vertex.Bulge) > 1e-10)
                     {
                         reason = "loop=0 edge=" + i + " bulge/arc requires curve parity validation";
@@ -234,6 +360,9 @@ namespace HNL.CeilingEstimator.AutoCAD
             input.Segments = segments;
             input.Area = area;
             input.PatternScale = hatch.PatternScale;
+            input.PatternName = hatch.PatternName;
+            input.UserGridVerified = hatch.PatternType == HatchPatternType.UserDefined &&
+                hatch.PatternDouble && Math.Abs(hatch.PatternSpace - 610.0) <= 0.01;
             return true;
         }
 
@@ -353,7 +482,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     table.SetRowHeight(55);
                     table.SetColumnWidth(230);
                     table.Position = point;
-                    table.Cells[0, 0].TextString = "HNL Tool - Ceiling Estimator Pro";
+                    table.Cells[0, 0].TextString = "HNL Tool - Ceiling Estimator Pro (610mm grid assumed)";
                     string[] headers =
                     {
                         "Material / Hatch group", "Hatch", "Full", "Boundary",
@@ -416,6 +545,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             public List<Segment2> Segments = new List<Segment2>();
             public double Area;
             public double PatternScale;
+            public string PatternName = string.Empty;
+            public bool UserGridVerified;
         }
 
         private sealed class CalculationReport
