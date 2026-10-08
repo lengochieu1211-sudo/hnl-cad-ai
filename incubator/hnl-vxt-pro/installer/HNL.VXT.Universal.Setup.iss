@@ -59,6 +59,7 @@ Source: "..\artifacts\universal\2026-net8\*"; DestDir: "{app}\Contents\Windows\2
 Source: "..\artifacts\universal\2026-net10\*"; DestDir: "{app}\Contents\Windows\2026"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: UseCad2026Net10
 Source: "..\artifacts\universal\2027\*"; DestDir: "{app}\Contents\Windows\2027"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\artifacts\installer-assets\HNL-VXT.ico"; DestDir: "{app}\Assets"; Flags: ignoreversion
+Source: "..\resources\hatch\*.pat"; DestDir: "{app}\Contents\Resources"; Flags: ignoreversion
 
 [Code]
 var
