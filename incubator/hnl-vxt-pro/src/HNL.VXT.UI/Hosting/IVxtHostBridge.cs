@@ -29,5 +29,6 @@ namespace HNL.VXT.UI.Hosting
         void PickLayInDoor(LayInCeilingSettings settings);
         void PickLayInHangerBlock(LayInCeilingSettings settings);
         void PickLayInStartMarkerBlock(LayInCeilingSettings settings);
+        void PickLayInDimensionPosition(bool horizontal, LayInCeilingSettings settings);
     }
 }
