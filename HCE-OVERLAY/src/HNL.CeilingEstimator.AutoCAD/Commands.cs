@@ -199,7 +199,31 @@ namespace HNL.CeilingEstimator.AutoCAD
             var document = Application.DocumentManager.MdiActiveDocument;
             if (document == null) return;
             var editor = document.Editor;
-            editor.WriteMessage("\nHNL Tool - Ceiling Estimator Pro RC5.2 (Hatch extractor diagnostics; Runtime Candidate).");
+            var profile = HceLegacyProfiles.For(document.Database).Clone();
+            var options = profile.ToOptions();
+            editor.WriteMessage("\nHNL Tool - Ceiling Estimator Pro RC5.3 (DEMTC UI mapping; Runtime Candidate).");
+            editor.WriteMessage("\nHNL Tool - " + profile.Summary());
+
+            Point2? chosenGridOrigin = null;
+            double chosenGridAngle = 0.0;
+            if (profile.GridMode == "2")
+            {
+                var origin = editor.GetPoint("\nHNL Tool - Pick grid origin: ");
+                if (origin.Status != PromptStatus.OK) return;
+                var next = new PromptPointOptions("\nHNL Tool - Pick grid X direction: ")
+                    { UseBasePoint = true, BasePoint = origin.Value };
+                var direction = editor.GetPoint(next);
+                if (direction.Status != PromptStatus.OK) return;
+                var ddx = direction.Value.X - origin.Value.X;
+                var ddy = direction.Value.Y - origin.Value.Y;
+                if (ddx * ddx + ddy * ddy <= 1e-12)
+                {
+                    editor.WriteMessage("\nHNL Tool - Grid direction too short; no changes.");
+                    return;
+                }
+                chosenGridOrigin = new Point2(origin.Value.X, origin.Value.Y);
+                chosenGridAngle = Math.Atan2(ddy, ddx);
+            }
 
             var selectionOptions = new PromptSelectionOptions
             {
@@ -228,8 +252,12 @@ namespace HNL.CeilingEstimator.AutoCAD
                             if (hatch == null) continue;
                             HatchInput input;
                             string reason;
-                            if (TryExtractHatch(hatch, out input, out reason))
+                            if (TryExtractHatch(hatch, out input, out reason, profile.Family))
                             {
+                                if (profile.GridMode == "1")
+                                    input.Frame = new GridFrame(new Point2(0, 0), 0);
+                                else if (profile.GridMode == "2" && chosenGridOrigin.HasValue)
+                                    input.Frame = new GridFrame(chosenGridOrigin.Value, chosenGridAngle);
                                 inputs.Add(input);
                             }
                             else
@@ -260,31 +288,33 @@ namespace HNL.CeilingEstimator.AutoCAD
                 editor.WriteMessage("\nHNL Tool - Unit mode=" +
                     document.Database.Insunits.ToString() +
                     ". Golden input coordinates are millimeters.");
-                editor.WriteMessage("\nHNL Tool - Grid policy fixed at 610x610 mm.");
+                editor.WriteMessage("\nHNL Tool - Module policy=" + options.GridWidth + "x" +
+                    options.GridHeight + " mm; pitch family=" + profile.Family + ".");
                 foreach (var input in inputs)
                 {
                     if (!input.UserGridVerified)
                         editor.WriteMessage("\nHNL Tool - Hatch " + input.Handle +
                             " pattern=" + input.PatternName +
                             " scale=" + Fmt(input.PatternScale) +
-                            " has no certified 610mm spacing; verify before proceeding.");
+                            " has no certified " + profile.Family +
+                            "mm spacing; verify before proceeding.");
                 }
+                var acceptKey = profile.Family == 610 ? "Use610" : "Use600";
                 var acknowledge = new PromptKeywordOptions(
-                    "\nHNL Tool - Acknowledge 610mm grid and drawing units [Use610/Cancel] <Cancel>: ")
-                {
-                    AllowNone = true
-                };
+                    "\nHNL Tool - Verify drawing units and family " + profile.Family +
+                    " [Use600/Use610/Cancel] <Cancel>: ") { AllowNone = true };
+                acknowledge.Keywords.Add("Use600");
                 acknowledge.Keywords.Add("Use610");
                 acknowledge.Keywords.Add("Cancel");
                 var consent = editor.GetKeywords(acknowledge);
                 if (consent.Status != PromptStatus.OK ||
-                    !string.Equals(consent.StringResult, "Use610", StringComparison.OrdinalIgnoreCase))
+                    !string.Equals(consent.StringResult, acceptKey, StringComparison.OrdinalIgnoreCase))
                 {
                     editor.WriteMessage("\nHNL Tool - Unverified grid rejected by operator. No drawing changes.");
                     return;
                 }
 
-                var report = CalculateOnce(inputs, editor, ref rejected);
+                var report = CalculateOnce(inputs, editor, ref rejected, false, options);
                 if (report.Groups.Count == 0)
                 {
                     editor.WriteMessage("\nHNL Tool - No successful calculation. No drawing changes.");
@@ -337,7 +367,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             }
         }
 
-        private static bool TryExtractHatch(Hatch hatch, out HatchInput input, out string reason)
+        private static bool TryExtractHatch(Hatch hatch, out HatchInput input, out string reason,
+            double expectedPitch = 610.0)
         {
             input = new HatchInput();
             reason = string.Empty;
@@ -386,9 +417,10 @@ namespace HNL.CeilingEstimator.AutoCAD
                 var doublePattern = hatch.PatternDouble;
                 var spacing = hatch.PatternSpace;
                 if (!doublePattern || double.IsNaN(spacing) ||
-                    Math.Abs(spacing - 610.0) > 0.01)
+                    Math.Abs(spacing - expectedPitch) > 0.01)
                 {
-                    reason = "user-defined grid is not 610x610 double pattern (space=" +
+                    reason = "user-defined grid is not " + Fmt(expectedPitch) +
+                        "x" + Fmt(expectedPitch) + " double pattern (space=" +
                         Fmt(spacing) + ", double=" + doublePattern + ")";
                     return false;
                 }
@@ -571,11 +603,11 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         private static CalculationReport CalculateOnce(
             List<HatchInput> inputs, Editor editor, ref int rejected,
-            bool tracePerHatch = false)
+            bool tracePerHatch = false, DemtcOptions? selectedOptions = null)
         {
             var engine = new DemtcEngine();
-            // Default options are the unchanged v0.3.0 Golden policy.
-            var options = new DemtcOptions();
+            // HCEGOLDEN always uses unchanged defaults. UI is a separate snapshot.
+            var options = selectedOptions ?? new DemtcOptions();
             var report = new CalculationReport();
             var groups = new Dictionary<string, MaterialGroup>(StringComparer.Ordinal);
             foreach (var input in inputs)

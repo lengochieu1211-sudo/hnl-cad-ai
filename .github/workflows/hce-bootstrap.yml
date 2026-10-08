@@ -83,6 +83,30 @@ jobs:
           if ($ui -notmatch 'CommandButton\([^\r\n]+, "HCECALC", true\)') { throw 'HCE button must calculate, not reopen the palette' }
           Write-Host 'HCE command routing contract PASS: HCE => Palette; HCECALC => existing Core; UI => HCECALC.'
 
+      - name: Validate DCL options restored in WPF UI
+        shell: powershell
+        run: |
+          $ui = Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs' -Raw
+          $controls = @('Family','Module','Priority','Direction','Grid','_legacySnap','_legacyTolerance')
+          foreach($control in $controls) {
+            if(-not $ui.Contains($control)) {throw "Missing control $control"}
+          }
+          Write-Host 'HCE DEMTC UI control inventory PASS: family/module/priority/direction/grid/snap/tolerance'
+
+      - name: Verify six DEMTC mode mapping without changing protected Core
+        shell: powershell
+        run: |
+          $root = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
+          $ui = Get-Content "$root/HcePaletteUi.cs" -Raw
+          $bridge = Get-Content "$root/Commands.cs" -Raw
+          foreach ($required in @('Family = 610', 'MixedPrimaryMode.LargeMain', 'Module == "D" ? large : small', 'SnapTolerance = Tolerance')) {
+            if (-not $ui.Contains($required)) { throw "Missing DEMTC UI setting $required" }
+          }
+          foreach ($required in @('profile.ToOptions()', 'TryExtractHatch(hatch, out input, out reason, profile.Family)', 'ref rejected, false, options', 'GridMode == "2"')) {
+            if (-not $bridge.Contains($required)) { throw "Missing DEMTC bridge setting $required" }
+          }
+          Write-Host 'HCE six-mode command/UI wiring source check PASS; Golden fixture still runs with defaults.'
+
       - name: Setup .NET 8 and 10
         uses: actions/setup-dotnet@v4
         with:

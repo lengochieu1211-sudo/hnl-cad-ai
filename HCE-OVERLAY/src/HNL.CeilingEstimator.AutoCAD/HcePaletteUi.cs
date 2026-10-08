@@ -1,6 +1,9 @@
 using System;
 using DrawingSize = System.Drawing.Size;
 using System.Globalization;
+using System.Runtime.CompilerServices;
+using Autodesk.AutoCAD.DatabaseServices;
+using HNL.CeilingEstimator.Core.Models;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -60,6 +63,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 _view = view;
                 _palette = palette;
             }
+            _view?.RefreshLegacyControls();
             _palette.Visible = true;
         }
     }
@@ -73,6 +77,13 @@ namespace HNL.CeilingEstimator.AutoCAD
         private readonly SolidColorBrush _muted;
         private readonly SolidColorBrush _accent;
         private readonly SolidColorBrush _accentSoft;
+        private readonly System.Collections.Generic.Dictionary<string, ComboBox> _legacySelectors =
+            new System.Collections.Generic.Dictionary<string, ComboBox>();
+        private CheckBox? _legacySnap;
+        private TextBox? _legacyTolerance;
+        private WpfText? _legacyStatus;
+        private WpfText? _legacyValidation;
+        private bool _loadingLegacyControls;
 
         public HcePaletteView()
         {
@@ -93,6 +104,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             FontSize = 12;
             MinWidth = 360;
             Content = BuildLayout();
+            RefreshLegacyControls();
         }
 
         private UIElement BuildLayout()
@@ -179,14 +191,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 10, _muted, FontWeights.Normal));
             content.Children.Add(Card(selection));
 
-            var config = Section("02  H\u1ec7 t\u1ea5m v\u00e0 ki\u1ec3m tra", "#22C55E");
-            config.Children.Add(Field("H\u1ec7 t\u1ea5m", "610 \u00d7 610 mm  (Golden c\u1ed1 \u0111\u1ecbnh)"));
-            config.Children.Add(Field("Kh\u1ed5 t\u1ea5m d\u00e0i", "1220 \u00d7 610 mm"));
-            config.Children.Add(Field("B\u1ea3n v\u1ebd", "mm  \u2022  Hatch \u0111o\u1ea1n th\u1eb3ng"));
-            config.Children.Add(Text("C\u00e1c th\u00f4ng s\u1ed1 tr\u00ean \u0111ang \u0111\u01b0\u1ee3c kho\u00e1 theo Golden; " +
-                "ch\u01b0a cho ch\u1ec9nh trong UI \u0111\u1ec3 tr\u00e1nh sai s\u1ed1 l\u01b0\u1ee3ng.",
-                10, _muted, FontWeights.Normal));
-            content.Children.Add(Card(config));
+            content.Children.Add(Card(BuildLegacySettingsPanel()));
 
             var result = Section("03  Xem tr\u01b0\u1edbc v\u00e0 b\u1ea3ng", "#F59E0B");
             result.Children.Add(Text("Sau khi ch\u1ecdn Hatch v\u00e0 x\u00e1c nh\u1eadn Use610, " +
@@ -201,6 +206,169 @@ namespace HNL.CeilingEstimator.AutoCAD
             content.Children.Add(Card(result));
 
             return Scroll(content);
+        }
+
+
+        private StackPanel BuildLegacySettingsPanel()
+        {
+            var config = Section("02  Hệ tấm & module", "#22C55E");
+            config.Children.Add(Choice("Family", "Hệ trần", new[] { "600 mm", "610 mm" },
+                new[] { "600", "610" }));
+            config.Children.Add(Choice("Module", "Loại tấm", new[] {
+                "Tấm ngắn", "Tấm dài", "Kết hợp"
+            }, new[] { "S", "D", "M" }));
+            config.Children.Add(Choice("Priority", "Ưu tiên kết hợp", new[] {
+                "Tấm ngắn làm chính", "Tấm dài làm chính"
+            }, new[] { "S", "D" }));
+            config.Children.Add(Choice("Direction", "Hướng tấm dài", new[] {
+                "Theo X", "Theo Y"
+            }, new[] { "X", "Y" }));
+
+            var gridSection = Section("03  Căn lưới", "#2497FF");
+            gridSection.Children.Add(Choice("Grid", "Chế độ lưới", new[] {
+                "Theo Hatch (gốc/hướng)", "Chọn gốc + hướng", "WCS (0,0)"
+            }, new[] { "3", "2", "1" }));
+            var snapRow = new Grid { Margin = new Thickness(0, 3, 0, 8) };
+            snapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
+            snapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            _legacySnap = new CheckBox { Content = "Bật sai số nhỏ", Foreground = _primary };
+            Grid.SetColumn(_legacySnap, 1);
+            _legacySnap.Checked += (sender, args) => SaveLegacySnap(true);
+            _legacySnap.Unchecked += (sender, args) => SaveLegacySnap(false);
+            snapRow.Children.Add(Text("Sai số lưới", 11, _muted, FontWeights.Normal));
+            snapRow.Children.Add(_legacySnap);
+            gridSection.Children.Add(snapRow);
+            var tol = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            tol.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
+            tol.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            tol.Children.Add(Text("Dung sai (0-10 mm)", 11, _muted, FontWeights.Normal));
+            _legacyTolerance = new TextBox { MinWidth = 85, MaxWidth = 130,
+                HorizontalAlignment = HorizontalAlignment.Left, Foreground = _primary,
+                Background = _surface, BorderBrush = _border, Padding = new Thickness(6, 3, 6, 3) };
+            _legacyTolerance.LostFocus += (sender, args) => SaveLegacyTolerance();
+            Grid.SetColumn(_legacyTolerance, 1);
+            tol.Children.Add(_legacyTolerance);
+            gridSection.Children.Add(tol);
+
+            var wrapped = new StackPanel();
+            wrapped.Children.Add(Card(config));
+            wrapped.Children.Add(Card(gridSection));
+            var current = Section("04  Kết quả cấu hình", "#F59E0B");
+            _legacyStatus = Text("", 11, _primary, FontWeights.SemiBold);
+            _legacyValidation = Text("", 10, Brush("#F87171"), FontWeights.SemiBold);
+            current.Children.Add(_legacyStatus);
+            current.Children.Add(_legacyValidation);
+            current.Children.Add(Text(
+                "Mỗi bản vẽ giữ cấu hình riêng. Chế độ 600, tấm dài, G2/G1 và ưu tiên D cần đối chiếu Runtime với LISP trước khi chứng nhận Golden.",
+                10, _muted, FontWeights.Normal));
+            wrapped.Children.Add(Card(current));
+            var root = Section("Cài đặt DEMTC gốc", "#22C55E");
+            root.Children.Add(wrapped);
+            return root;
+        }
+
+        private UIElement Choice(string key, string label, string[] names, string[] values)
+        {
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.Children.Add(Text(label, 11, _muted, FontWeights.Normal));
+            var selector = new ComboBox
+            {
+                MinHeight = 27, Background = _surface, Foreground = _primary,
+                BorderBrush = _border, Tag = values
+            };
+            foreach (var name in names) selector.Items.Add(name);
+            selector.SelectionChanged += (sender, args) =>
+            {
+                if (_loadingLegacyControls || selector.SelectedIndex < 0) return;
+                var profile = ActiveLegacyProfile();
+                if (profile == null) return;
+                var value = values[selector.SelectedIndex];
+                switch (key)
+                {
+                    case "Family": profile.Family = value == "600" ? 600 : 610; break;
+                    case "Module": profile.Module = value; break;
+                    case "Priority": profile.Priority = value; break;
+                    case "Direction": profile.Direction = value; break;
+                    case "Grid": profile.GridMode = value; break;
+                }
+                RefreshLegacyControls();
+            };
+            _legacySelectors[key] = selector;
+            Grid.SetColumn(selector, 1);
+            row.Children.Add(selector);
+            return row;
+        }
+
+        private static HceLegacyProfile? ActiveLegacyProfile()
+        {
+            var doc = CadApplication.DocumentManager.MdiActiveDocument;
+            return doc == null ? null : HceLegacyProfiles.For(doc.Database);
+        }
+
+        private void SaveLegacySnap(bool enabled)
+        {
+            if (_loadingLegacyControls) return;
+            var profile = ActiveLegacyProfile();
+            if (profile == null) return;
+            profile.SnapEnabled = enabled;
+            RefreshLegacyControls();
+        }
+
+        private void SaveLegacyTolerance()
+        {
+            if (_loadingLegacyControls || _legacyTolerance == null) return;
+            var profile = ActiveLegacyProfile();
+            if (profile == null) return;
+            if (double.TryParse(_legacyTolerance.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
+                value >= 0 && value <= 10 && !double.IsInfinity(value) && !double.IsNaN(value))
+            {
+                profile.Tolerance = value;
+                if (_legacyValidation != null) _legacyValidation.Text = "";
+                RefreshLegacyControls();
+            }
+            else
+            {
+                if (_legacyValidation != null)
+                    _legacyValidation.Text = "HNL Tool: Dung sai phải từ 0 đến 10 mm.";
+            }
+        }
+
+        internal void RefreshLegacyControls()
+        {
+            var profile = ActiveLegacyProfile();
+            if (profile == null) return;
+            _loadingLegacyControls = true;
+            try
+            {
+                SetChoice("Family", profile.Family.ToString(CultureInfo.InvariantCulture));
+                SetChoice("Module", profile.Module);
+                SetChoice("Priority", profile.Priority);
+                SetChoice("Direction", profile.Direction);
+                SetChoice("Grid", profile.GridMode);
+                if (_legacySnap != null) _legacySnap.IsChecked = profile.SnapEnabled;
+                if (_legacyTolerance != null)
+                {
+                    _legacyTolerance.Text = profile.Tolerance.ToString("0.###", CultureInfo.CurrentCulture);
+                    _legacyTolerance.IsEnabled = profile.SnapEnabled;
+                }
+                if (_legacySelectors.TryGetValue("Priority", out var p))
+                    p.IsEnabled = profile.Module == "M";
+                if (_legacySelectors.TryGetValue("Direction", out var d))
+                    d.IsEnabled = profile.Module != "S";
+                if (_legacyStatus != null) _legacyStatus.Text = profile.Summary();
+                if (_legacyValidation != null) _legacyValidation.Text = "";
+            }
+            finally { _loadingLegacyControls = false; }
+        }
+
+        private void SetChoice(string key, string value)
+        {
+            if (!_legacySelectors.TryGetValue(key, out var combo)) return;
+            var values = (string[])combo.Tag;
+            var found = Array.IndexOf(values, value);
+            if (found >= 0) combo.SelectedIndex = found;
         }
 
         private UIElement BuildAuditTab()
@@ -316,4 +484,75 @@ namespace HNL.CeilingEstimator.AutoCAD
             return new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
         }
     }
+
+    // Per-DWG option storage: a closed Database does not retain palette state.
+    // This is an AutoCAD adapter/view model only; protected DemtcEngine is unchanged.
+    internal sealed class HceLegacyProfile
+    {
+        public int Family = 610;
+        public string Module = "M";
+        public string Priority = "S";
+        public string Direction = "X";
+        public string GridMode = "3";
+        public bool SnapEnabled = true;
+        public double Tolerance = 3.0;
+
+        public HceLegacyProfile Clone()
+        {
+            return (HceLegacyProfile)MemberwiseClone();
+        }
+
+        public DemtcOptions ToOptions()
+        {
+            var n = Family;
+            if (n != 600 && n != 610) throw new InvalidOperationException("Invalid ceiling family");
+            if (Module != "S" && Module != "D" && Module != "M")
+                throw new InvalidOperationException("Invalid module");
+            if (GridMode != "1" && GridMode != "2" && GridMode != "3")
+                throw new InvalidOperationException("Invalid grid mode");
+            if (Tolerance < 0 || Tolerance > 10 || double.IsNaN(Tolerance) || double.IsInfinity(Tolerance))
+                throw new InvalidOperationException("Grid tolerance must be within 0..10mm");
+            var isLongY = Direction == "Y";
+            var longW = isLongY ? n : n * 2;
+            var longH = isLongY ? n * 2 : n;
+            var small = new StockSpec("S", n, n, n == 600 ? "595x595" : "605x605");
+            var large = new StockSpec("D", longW, longH, n == 600 ? "595x1190" : "605x1210");
+            var isMixed = Module == "M";
+            var largeMain = Module == "D" || (isMixed && Priority == "D");
+            return new DemtcOptions
+            {
+                GridWidth = largeMain ? longW : n,
+                GridHeight = largeMain ? longH : n,
+                SnapEnabled = SnapEnabled,
+                SnapTolerance = Tolerance,
+                AllowRotate90 = true,
+                MixedMode = isMixed,
+                MixedPrimary = largeMain ? MixedPrimaryMode.LargeMain : MixedPrimaryMode.SmallMain,
+                // PackSingleStock always uses SmallStock; for a D-only mode it
+                // must be the long board, not the default short board.
+                SmallStock = Module == "D" ? large : small,
+                LargeStock = large
+            };
+        }
+
+        public string Summary()
+        {
+            var options = ToOptions();
+            return "Lưới " + options.GridWidth.ToString("0", CultureInfo.InvariantCulture) +
+                " × " + options.GridHeight.ToString("0", CultureInfo.InvariantCulture) +
+                " mm | " + (Module == "M" ? "Kết hợp • " + (Priority == "D" ? "dài chính" : "ngắn chính") :
+                 Module == "D" ? "Chỉ tấm dài" : "Chỉ tấm ngắn") +
+                " | " + (GridMode == "3" ? "Theo Hatch" : GridMode == "2" ? "Chọn gốc/hướng" : "WCS 0,0");
+        }
+    }
+
+    internal static class HceLegacyProfiles
+    {
+        private static readonly ConditionalWeakTable<Database, HceLegacyProfile> Values =
+            new ConditionalWeakTable<Database, HceLegacyProfile>();
+
+        public static HceLegacyProfile For(Database database) => Values.GetValue(
+            database, key => new HceLegacyProfile());
+    }
+
 }
