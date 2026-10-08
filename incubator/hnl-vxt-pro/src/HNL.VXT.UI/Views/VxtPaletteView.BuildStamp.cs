@@ -44,7 +44,7 @@ namespace HNL.VXT.UI.Views
             var direct = parent as TextBlock;
             if (direct != null &&
                 !string.IsNullOrWhiteSpace(direct.Text) &&
-                direct.Text.StartsWith("VXT Pro ", StringComparison.OrdinalIgnoreCase))
+                direct.Text.StartsWith("Ceiling Framing Pro ", StringComparison.OrdinalIgnoreCase))
             {
                 return direct;
             }
