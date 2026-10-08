@@ -45,6 +45,10 @@ jobs:
         shell: powershell
         run: choco install innosetup -y --no-progress
 
+      - name: Use canonical HNL VXT logo for HCE installer
+        shell: powershell
+        run: ./HCE-OVERLAY/scripts/apply-vxt-branding.ps1 -Root .
+
       - name: Verify package contract
         shell: powershell
         run: ./incubator/hnl-ceiling-estimator-pro/scripts/verify-universal.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
@@ -52,6 +56,13 @@ jobs:
       - name: Build Golden + AutoCAD matrix + Setup EXE
         shell: powershell
         run: ./incubator/hnl-ceiling-estimator-pro/scripts/build-universal-installer.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
+
+      - name: Certify embedded HCE setup icon against canonical VXT master
+        shell: powershell
+        run: |
+          $setup = Get-ChildItem 'incubator/hnl-ceiling-estimator-pro/artifacts/universal-installer' -Filter '*.exe' -File | Select-Object -First 1
+          if ($null -eq $setup) { throw 'HCE setup missing' }
+          ./incubator/hnl-vxt-pro/scripts/verify-installer-icon.ps1 -ExePath $setup.FullName -IcoPath ./incubator/hnl-ceiling-estimator-pro/installer/assets/HNL-HCE.ico
 
       - name: Upload Universal Setup
         uses: actions/upload-artifact@v4
