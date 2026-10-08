@@ -274,6 +274,14 @@ namespace HNL.VXT.AutoCAD
             LayInCadRuntime.PickBlock(true);
         }
 
+        // Explicit Lay-in Hatch/DIM/Ty field QA. All synthetic CAD entities roll back.
+        [CommandMethod("HNLCFLAYINQA", CommandFlags.Modal)]
+        public void LayInRuntimeQa()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            LayInCadRuntime.RunRuntimeQa();
+        }
+
         // Mxx diagnostic selection must be exposed on the only registered CommandClass.
         // VxtCommands contains the implementation but is intentionally not registered.
         [CommandMethod("HNLVXTFOCUSBOUNDARY", CommandFlags.Modal)]
