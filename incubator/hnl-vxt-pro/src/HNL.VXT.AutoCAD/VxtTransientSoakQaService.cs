@@ -51,7 +51,7 @@ namespace HNL.VXT.AutoCAD
                               preview.RetiredDrawableCount +
                               " | delayed-dispose guard ON | Dim GenerateLayout ON | Preview chạy trong command context.";
                 WriteLog("PASS", summary);
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: " + summary);
                 return summary;
             }
             catch (System.Exception ex)
@@ -64,7 +64,7 @@ namespace HNL.VXT.AutoCAD
 
                 var summary = "Lỗi Transient Soak QA: " + ex.Message;
                 WriteLog("FAIL", summary);
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: " + summary);
                 return summary;
             }
         }
