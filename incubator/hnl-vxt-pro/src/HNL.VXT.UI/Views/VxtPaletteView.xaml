@@ -506,7 +506,9 @@
             </Grid>
         </Border>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8">
+        <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedCeilingTabIndex, Mode=TwoWay}" Background="{DynamicResource AppBackground}">
+            <TabItem Header="Trần chìm">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8">
             <StackPanel>
                 <!-- PRESET -->
                 <Border Style="{StaticResource SectionCard}" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}">
@@ -916,12 +918,120 @@
                 </Border>
             </StackPanel>
         </ScrollViewer>
+            </TabItem>
+            <TabItem Header="Trần nổi (Lay-in)">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8">
+                    <StackPanel DataContext="{Binding LayIn}">
+                        <Border Style="{StaticResource SectionCard}">
+                            <StackPanel>
+                                <TextBlock Text="HNL Tool • Bố trí khung trần nổi" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
+                                <WrapPanel Margin="0,0,0,6">
+                                    <Button Content="Chọn Polyline" Command="{Binding SelectBoundaryCommand}" Style="{StaticResource BoundaryPickButton}" Margin="0,0,6,0"/>
+                                    <Button Content="Chọn điểm" Command="{Binding PickBoundaryPointCommand}" Style="{StaticResource BoundaryPickButton}"/>
+                                </WrapPanel>
+                                <TextBlock Text="{Binding BoundaryStatus}" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource SectionCard}">
+                            <StackPanel>
+                                <TextBlock Text="Hệ khung và hướng thanh chính" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
+                                <TextBlock Text="Hệ module" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox ItemsSource="{Binding GridOptions}" SelectedItem="{Binding SelectedGrid, Mode=TwoWay}" Margin="0,2,0,6"/>
+                                <TextBlock Text="Hướng Main Tee" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox ItemsSource="{Binding DirectionOptions}" SelectedItem="{Binding SelectedDirection, Mode=TwoWay}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource SectionCard}">
+                            <StackPanel>
+                                <TextBlock Text="Điểm bắt đầu lưới" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
+                                <ComboBox ItemsSource="{Binding StartOptions}" SelectedItem="{Binding SelectedStart, Mode=TwoWay}" Margin="0,0,0,6"/>
+                                <WrapPanel>
+                                    <Button Content="Chọn điểm bắt đầu" Command="{Binding PickManualStartCommand}" IsEnabled="{Binding IsManualStart}" Style="{StaticResource PickButton}" Margin="0,0,6,0"/>
+                                    <Button Content="Chọn cửa" Command="{Binding PickDoorCommand}" IsEnabled="{Binding IsDoorStart}" Style="{StaticResource PickButton}"/>
+                                </WrapPanel>
+                                <TextBlock Text="Block đánh dấu hướng bắt đầu" Style="{StaticResource FieldLabel}" Margin="0,8,0,2"/>
+                                <DockPanel>
+                                    <Button Content="Chọn" DockPanel.Dock="Right" Command="{Binding PickStartMarkerBlockCommand}" Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
+                                    <TextBox Text="{Binding StartMarkerBlockName, UpdateSourceTrigger=LostFocus}"/>
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource SectionCard}">
+                            <StackPanel>
+                                <CheckBox Content="Bố trí Ty trên Main Tee" IsChecked="{Binding DrawHangers, Mode=TwoWay}" Margin="0,0,0,7"/>
+                                <TextBlock Text="Khoảng cách Ty tối đa (mm, 0 = mặc định)" Style="{StaticResource FieldLabel}"/>
+                                <controls:HnlNumericBox Value="{Binding HangerMaxSpacing, Mode=TwoWay}" Minimum="0" Step="100" Margin="0,2,0,6"/>
+                                <TextBlock Text="Khoảng cách Ty đến biên (mm, 0 = mặc định)" Style="{StaticResource FieldLabel}"/>
+                                <controls:HnlNumericBox Value="{Binding HangerEdgeTarget, Mode=TwoWay}" Minimum="0" Step="50" Margin="0,2,0,6"/>
+                                <TextBlock Text="Block Ty treo (để trống dùng ký hiệu)" Style="{StaticResource FieldLabel}"/>
+                                <DockPanel>
+                                    <Button Content="Chọn" DockPanel.Dock="Right" Command="{Binding PickHangerBlockCommand}" Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
+                                    <TextBox Text="{Binding HangerBlockName, UpdateSourceTrigger=LostFocus}"/>
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource SectionCard}">
+                            <StackPanel>
+                                <TextBlock Text="Ghi kích thước (DIM)" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
+                                <ComboBox ItemsSource="{Binding DimensionOptions}" SelectedItem="{Binding SelectedDimensionMode, Mode=TwoWay}"/>
+                                <TextBlock Text="Số ô gộp DIM (ví dụ: 12 × 600)" Style="{StaticResource FieldLabel}" Margin="0,7,0,2"/>
+                                <TextBox Text="{Binding GroupedDimensionCount, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding IsGroupedDimension}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource SectionCard}">
+                            <StackPanel>
+                                <TextBlock Text="Layer xuất CAD" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
+                                <TextBlock Text="Hatch khung trần" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding HatchLayer, UpdateSourceTrigger=LostFocus}" Margin="0,2,0,6"/>
+                                <TextBlock Text="Ty treo" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding HangerLayer, UpdateSourceTrigger=LostFocus}" Margin="0,2,0,6"/>
+                                <TextBlock Text="DIM" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding DimensionLayer, UpdateSourceTrigger=LostFocus}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource SectionCard}" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}">
+                            <StackPanel>
+                                <TextBlock Text="Xem trước • 1 Hatch / mảng trần" Style="{StaticResource SectionTitle}"/>
+                                <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,6,0,3"/>
+                                <TextBlock Text="{Binding PreviewStatus}" TextWrapping="Wrap" Foreground="{DynamicResource AccentStrong}"/>
+                                <WrapPanel Margin="0,8,0,0">
+                                    <Button Content="Cập nhật" Command="{Binding RefreshPreviewCommand}" Style="{StaticResource RefreshButton}" Margin="0,0,6,0"/>
+                                    <Button Content="Ẩn" Command="{Binding ClearPreviewCommand}" Style="{StaticResource HidePreviewButton}" Margin="0,0,6,0"/>
+                                    <Button Content="Mặc định" Command="{Binding ResetCommand}" Style="{StaticResource ResetButton}"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
 
         <!-- FOOTER: primary action only. Build/version identity lives in the header. -->
         <Border Grid.Row="2" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="6,4">
             <StackPanel>
-                <Button Style="{StaticResource PrimaryCreateButton}"
-                        HorizontalAlignment="Stretch"/>
+                <Button HorizontalAlignment="Stretch">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryCreateButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedCeilingTabIndex}" Value="1">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="Tạo khung trần nổi" Command="{Binding LayIn.CreateCommand}" HorizontalAlignment="Stretch">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedCeilingTabIndex}" Value="1">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
             </StackPanel>
         </Border>
     </Grid>
