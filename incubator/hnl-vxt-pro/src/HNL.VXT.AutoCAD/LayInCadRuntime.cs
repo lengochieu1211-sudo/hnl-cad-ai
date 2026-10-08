@@ -490,6 +490,24 @@ namespace HNL.VXT.AutoCAD
                             Append(db, tr, ms, hanger, db.Clayer);
                             if (hanger.ObjectId.IsNull)
                                 throw new InvalidOperationException("Ty marker was not materialized.");
+                            if (plan.FirstTileOrigin.HasValue)
+                            {
+                                var symbolId = EnsureDefaultStartTileBlock(db, tr);
+                                var marker = new BlockReference(
+                                    ToCad(plan.FirstTileOrigin.Value), symbolId)
+                                {
+                                    Rotation = plan.MainAngleRadians,
+                                    ScaleFactors = new Scale3d(
+                                        plan.FirstTileWidth, plan.FirstTileHeight, 1.0)
+                                };
+                                Append(db, tr, ms, marker, db.Clayer);
+                                if (marker.ObjectId.IsNull ||
+                                    marker.BlockTableRecord != symbolId ||
+                                    Math.Abs(marker.ScaleFactors.X - plan.FirstTileWidth) > 1e-6 ||
+                                    Math.Abs(marker.ScaleFactors.Y - plan.FirstTileHeight) > 1e-6)
+                                    throw new InvalidOperationException(
+                                        "First-tile Block insertion or module scale is invalid.");
+                            }
                             // Deliberately no Commit: closing the transaction removes every
                             // QA Hatch, boundary, DIM and Ty marker from the user's drawing.
                         }
