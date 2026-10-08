@@ -367,6 +367,19 @@ namespace HNL.VXT.AutoCAD
                         {
                             var db = doc.Database;
                             var ms = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
+                            // Verify Lay-in does not restyle an existing drawing layer.
+                            var existing = (LayerTableRecord)tr.GetObject(db.Clayer, OpenMode.ForRead);
+                            var colorIndex = existing.Color.ColorIndex;
+                            var lineWeight = existing.LineWeight;
+                            var lineTypeId = existing.LinetypeObjectId;
+                            var reusedId = VxtCadResources.EnsureLayInLayer(
+                                db, tr, existing.Name, 1, "Continuous", "50");
+                            if (reusedId != db.Clayer ||
+                                existing.Color.ColorIndex != colorIndex ||
+                                existing.LineWeight != lineWeight ||
+                                existing.LinetypeObjectId != lineTypeId)
+                                throw new InvalidOperationException("Lay-in changed existing DWG layer styling.");
+
                             var hatch = CreateHatch(db, tr, ms, item, db.Clayer);
                             if (hatch.IsErased || hatch.NumberOfLoops != 1 + holes.Count)
                                 throw new InvalidOperationException("Hatch missing or wrong number of boundary loops.");
