@@ -1,0 +1,53 @@
+name: HCE Bootstrap Universal 2023-2027
+
+on:
+  push:
+    branches: [research/hce-pro-bootstrap]
+    paths:
+      - 'HCE-PAYLOAD/**'
+      - '.github/workflows/hce-bootstrap.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct HCE source payload
+        shell: powershell
+        run: |
+          $parts = Get-ChildItem HCE-PAYLOAD\part-*.b64 | Sort-Object Name
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          $bytes = [Convert]::FromBase64String($b64)
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\hce.zip", $bytes)
+          New-Item -ItemType Directory -Force -Path incubator\hnl-ceiling-estimator-pro | Out-Null
+          Expand-Archive "$env:RUNNER_TEMP\hce.zip" incubator\hnl-ceiling-estimator-pro -Force
+
+      - name: Setup .NET 8 and 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup -y --no-progress
+
+      - name: Verify package contract
+        shell: powershell
+        run: ./incubator/hnl-ceiling-estimator-pro/scripts/verify-universal.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
+
+      - name: Build Golden + AutoCAD matrix + Setup EXE
+        shell: powershell
+        run: ./incubator/hnl-ceiling-estimator-pro/scripts/build-universal-installer.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
+
+      - name: Upload Universal Setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: HNL-Ceiling-Estimator-Pro-v0.3.0-Universal-AutoCAD2023-2027
+          path: |
+            incubator/hnl-ceiling-estimator-pro/artifacts/universal-installer/*
+            incubator/hnl-ceiling-estimator-pro/HNL-HCE-v0.3.0-STATIC-REGRESSION.txt
+          if-no-files-found: error
