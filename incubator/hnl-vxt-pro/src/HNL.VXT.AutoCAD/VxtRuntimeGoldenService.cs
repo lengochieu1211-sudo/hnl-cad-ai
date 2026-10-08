@@ -152,7 +152,7 @@ namespace HNL.VXT.AutoCAD
                               " • Dim " + ExpectedDimensions + " | Resource rollback OK | " + sw.ElapsedMilliseconds +
                               " ms | DWG không bị thay đổi.";
                 WriteGoldenLog("PASS", stageName, optimizationMode, summary, counts, null);
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: " + summary);
                 VxtSession.Current.ViewModel?.SetRuntimeGoldenResult(true, summary, null);
                 return summary;
             }
@@ -163,7 +163,7 @@ namespace HNL.VXT.AutoCAD
                 var summary = "Lỗi " + testName + ": " + ex.Message +
                               (string.IsNullOrWhiteSpace(diagnosticPath) ? string.Empty : " | Diagnostic: " + diagnosticPath);
                 WriteGoldenLog("FAIL", stageName, optimizationMode, summary, counts, diagnosticPath);
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: " + summary);
                 VxtSession.Current.ViewModel?.SetRuntimeGoldenResult(false, summary, diagnosticPath);
                 return summary;
             }
