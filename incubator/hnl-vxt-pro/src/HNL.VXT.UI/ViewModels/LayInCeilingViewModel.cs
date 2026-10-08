@@ -215,6 +215,17 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
+        public bool DrawStartTileBlock
+        {
+            get => _settings.DrawStartTileBlock;
+            set
+            {
+                if (_settings.DrawStartTileBlock == value) return;
+                _settings.DrawStartTileBlock = value;
+                Changed();
+            }
+        }
+
         public string StartMarkerBlockName
         {
             get => _settings.StartMarkerBlockName;
@@ -224,6 +235,7 @@ namespace HNL.VXT.UI.ViewModels
                 if (string.Equals(_settings.StartMarkerBlockName, value, StringComparison.Ordinal)) return;
                 _settings.StartMarkerBlockName = value;
                 OnPropertyChanged();
+                RequestPreview();
             }
         }
 
@@ -401,6 +413,7 @@ namespace HNL.VXT.UI.ViewModels
         {
             _settings.StartMarkerBlockName = blockName ?? string.Empty;
             OnPropertyChanged(nameof(StartMarkerBlockName));
+            RequestPreview();
         }
 
         public void SetPreviewStats(
