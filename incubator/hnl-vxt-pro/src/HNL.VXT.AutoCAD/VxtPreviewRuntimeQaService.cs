@@ -25,7 +25,7 @@ namespace HNL.VXT.AutoCAD
             if (!session.HasBoundary)
             {
                 var missing = "FAIL Preview QA: Chưa chọn biên trần thực tế.";
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + missing);
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: " + missing);
                 WriteLog("FAIL", missing);
                 return missing;
             }
@@ -71,14 +71,14 @@ namespace HNL.VXT.AutoCAD
                     " | mode=" + mode + ".";
 
                 WriteLog("PASS", summary);
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: " + summary);
                 return summary;
             }
             catch (System.Exception ex)
             {
                 var summary = "FAIL Preview QA: " + ex.Message;
                 WriteLog("FAIL", summary);
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: " + summary);
                 return summary;
             }
         }
