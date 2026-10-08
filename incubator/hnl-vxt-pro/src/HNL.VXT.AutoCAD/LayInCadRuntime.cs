@@ -21,6 +21,9 @@ namespace HNL.VXT.AutoCAD
     {
         private const int TransientSubMode = 191;
         private const int MaxPreviewDrawables = 3500;
+        private const string DefaultStartTileBlockName = "HNL_CF_FIRST_TILE_V1";
+        private static readonly IReadOnlyList<HNL.VXT.Core.Geometry.Point2[]> StartTileStrokes = MakeStartTileStrokes();
+
         private static readonly IntegerCollection Viewports = new IntegerCollection();
         private static readonly List<Drawable> Active = new List<Drawable>();
         private static readonly List<Tuple<Drawable, DateTime>> Retired = new List<Tuple<Drawable, DateTime>>();
@@ -86,7 +89,9 @@ namespace HNL.VXT.AutoCAD
                 if (!session.HasBoundary) return;
                 var plans = LayInRuntimePlanner.Build(session, session.LayInSettings);
                 var total = plans.Sum(p => p.Plan.TeeSegments.Count +
-                    p.Plan.HangerPoints.Count + p.Plan.DimensionRuns.Count + 1);
+                    p.Plan.HangerPoints.Count + p.Plan.DimensionRuns.Count +
+                    (session.LayInSettings.DrawStartTileBlock && p.Plan.FirstTileOrigin.HasValue
+                        ? StartTileStrokes.Count : 0));
                 if (total > MaxPreviewDrawables)
                     throw new InvalidOperationException("Lay-in Preview exceeds 3500 graphics; Create still uses full Core plan.");
 
@@ -117,10 +122,9 @@ namespace HNL.VXT.AutoCAD
                         dimension.GenerateLayout();
                         AddTransient(dimension);
                     }
-                    var startMarker = new Circle(ToCad(item.Plan.HatchOrigin), Vector3d.ZAxis, 28.0);
-                    startMarker.SetDatabaseDefaults(db);
-                    startMarker.ColorIndex = 3;
-                    AddTransient(startMarker);
+                    if (session.LayInSettings.DrawStartTileBlock &&
+                        item.Plan.FirstTileOrigin.HasValue)
+                        PreviewStartTile(db, item.Plan);
                 }
                 int main, longCross, shortCross, hangers;
                 double waste;
@@ -190,9 +194,16 @@ namespace HNL.VXT.AutoCAD
                     var dimLayer = settings.DimensionMode != LayInDimensionMode.Off
                         ? VxtCadResources.EnsureLayInLayer(db, tr, settings.DimensionLayer, 4, "Continuous", "25")
                         : ObjectId.Null;
-                    var markerLayer = VxtCadResources.EnsureLayInLayer(db, tr, "HNL-CF-START", 3, "Continuous", "25");
-                    var hangerBlock = ResolveBlock(bt, settings.HangerBlockName);
-                    var startBlock = ResolveBlock(bt, settings.StartMarkerBlockName);
+                    var markerLayer = settings.DrawStartTileBlock
+                        ? VxtCadResources.EnsureLayInLayer(db, tr, "HNL-CF-START", 3, "Continuous", "25")
+                        : ObjectId.Null;
+                    var hangerBlock = settings.DrawHangers
+                        ? ResolveBlock(bt, settings.HangerBlockName) : ObjectId.Null;
+                    var startBlock = settings.DrawStartTileBlock
+                        ? (string.IsNullOrWhiteSpace(settings.StartMarkerBlockName)
+                            ? EnsureDefaultStartTileBlock(db, tr)
+                            : ResolveBlock(bt, settings.StartMarkerBlockName))
+                        : ObjectId.Null;
 
                     foreach (var item in plans)
                     {
@@ -222,16 +233,16 @@ namespace HNL.VXT.AutoCAD
                             dimensionCount++;
                         }
 
-                        // Mark the exact phase origin used by the hatch and physical grid.
-                        var origin = ToCad(item.Plan.HatchOrigin);
-                        if (startBlock.IsNull)
+                        // One physical FIRST TILE symbol per region; always anchor at the
+                        // valid full panel chosen by the Core planner, not an outside phase.
+                        if (settings.DrawStartTileBlock && item.Plan.FirstTileOrigin.HasValue)
                         {
-                            var point = new Circle(origin, Vector3d.ZAxis, 28.0);
-                            Append(db, tr, ms, point, markerLayer);
-                        }
-                        else
-                        {
-                            var marker = new BlockReference(origin, startBlock);
+                            var marker = new BlockReference(
+                                ToCad(item.Plan.FirstTileOrigin.Value), startBlock);
+                            marker.Rotation = item.Plan.MainAngleRadians;
+                            if (string.IsNullOrWhiteSpace(settings.StartMarkerBlockName))
+                                marker.ScaleFactors = new Scale3d(
+                                    item.Plan.FirstTileWidth, item.Plan.FirstTileHeight, 1.0);
                             Append(db, tr, ms, marker, markerLayer);
                         }
                     }
@@ -297,6 +308,83 @@ namespace HNL.VXT.AutoCAD
             {
                 // Outer transaction rolls back both the Hatch and temporary boundaries.
                 throw;
+            }
+        }
+
+        private static IReadOnlyList<HNL.VXT.Core.Geometry.Point2[]> MakeStartTileStrokes()
+        {
+            // Normalized from tn.dxf: one tile border, diagonals, directions
+            // toward top/right and a small center ring. Scale 1 x 1 to the
+            // actual module, e.g. 610 x 610 instead of 305 x 2.
+            HNL.VXT.Core.Geometry.Point2 P(double x, double y)
+                => new HNL.VXT.Core.Geometry.Point2(x, y);
+            var ring = Enumerable.Range(0, 17).Select(i =>
+                P(0.5 + Math.Cos(i * Math.PI / 8) * 0.0347,
+                  0.5 + Math.Sin(i * Math.PI / 8) * 0.0347)).ToArray();
+            return new[]
+            {
+                new[] { P(0,0), P(1,0), P(1,1), P(0,1), P(0,0) },
+                new[] { P(0,0), P(1,1) },
+                new[] { P(1,0), P(0,1) },
+                new[] { P(1,0.5), P(0.5,0.5), P(0.5,1) },
+                new[] { P(0.928,0.38), P(1,0.5), P(0.928,0.62) },
+                new[] { P(0.38,0.928), P(0.5,1), P(0.62,0.928) },
+                ring
+            };
+        }
+
+        private static Polyline MakeSymbolPolyline(
+            IReadOnlyList<HNL.VXT.Core.Geometry.Point2> points)
+        {
+            var line = new Polyline();
+            for (int i = 0; i < points.Count; i++)
+                line.AddVertexAt(i, new Point2d(points[i].X, points[i].Y),
+                    0.0, 0.0, 0.0);
+            return line;
+        }
+
+        private static ObjectId EnsureDefaultStartTileBlock(Database db, Transaction tr)
+        {
+            var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+            if (bt.Has(DefaultStartTileBlockName))
+                return bt[DefaultStartTileBlockName];
+
+            bt.UpgradeOpen();
+            var definition = new BlockTableRecord
+            {
+                Name = DefaultStartTileBlockName,
+                Origin = Point3d.Origin
+            };
+            var id = bt.Add(definition);
+            tr.AddNewlyCreatedDBObject(definition, true);
+            foreach (var path in StartTileStrokes)
+            {
+                var stroke = MakeSymbolPolyline(path);
+                stroke.SetDatabaseDefaults(db);
+                stroke.ColorIndex = 0; // ByBlock; inherits HNL-CF-START layer.
+                definition.AppendEntity(stroke);
+                tr.AddNewlyCreatedDBObject(stroke, true);
+            }
+            return id;
+        }
+
+        private static void PreviewStartTile(Database db, LayInCeilingPlan plan)
+        {
+            var anchor = plan.FirstTileOrigin.Value;
+            var cos = Math.Cos(plan.MainAngleRadians);
+            var sin = Math.Sin(plan.MainAngleRadians);
+            foreach (var path in StartTileStrokes)
+            {
+                var vertices = path.Select(p =>
+                    new HNL.VXT.Core.Geometry.Point2(
+                        anchor.X + cos * p.X * plan.FirstTileWidth -
+                            sin * p.Y * plan.FirstTileHeight,
+                        anchor.Y + sin * p.X * plan.FirstTileWidth +
+                            cos * p.Y * plan.FirstTileHeight)).ToList();
+                var line = MakeSymbolPolyline(vertices);
+                line.SetDatabaseDefaults(db);
+                line.ColorIndex = 3;
+                AddTransient(line);
             }
         }
 
