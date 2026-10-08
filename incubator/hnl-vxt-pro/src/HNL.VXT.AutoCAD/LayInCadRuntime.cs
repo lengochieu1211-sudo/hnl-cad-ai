@@ -237,12 +237,9 @@ namespace HNL.VXT.AutoCAD
                         // valid full panel chosen by the Core planner, not an outside phase.
                         if (settings.DrawStartTileBlock && item.Plan.FirstTileOrigin.HasValue)
                         {
-                            var marker = new BlockReference(
-                                ToCad(item.Plan.FirstTileOrigin.Value), startBlock);
-                            marker.Rotation = item.Plan.MainAngleRadians;
-                            if (string.IsNullOrWhiteSpace(settings.StartMarkerBlockName))
-                                marker.ScaleFactors = new Scale3d(
-                                    item.Plan.FirstTileWidth, item.Plan.FirstTileHeight, 1.0);
+                            var marker = MakeStartTileReference(db, tr, item.Plan,
+                                startBlock,
+                                string.IsNullOrWhiteSpace(settings.StartMarkerBlockName));
                             Append(db, tr, ms, marker, markerLayer);
                         }
                     }
@@ -366,6 +363,78 @@ namespace HNL.VXT.AutoCAD
                 tr.AddNewlyCreatedDBObject(stroke, true);
             }
             return id;
+        }
+
+        private static BlockReference MakeStartTileReference(
+            Database db, Transaction tr, LayInCeilingPlan plan,
+            ObjectId definitionId, bool builtin)
+        {
+            double minX = 0.0, minY = 0.0, sourceWidth = 1.0, sourceHeight = 1.0;
+            if (!builtin)
+            {
+                var definition = (BlockTableRecord)tr.GetObject(
+                    definitionId, OpenMode.ForRead);
+                bool hasExtents = false;
+                double maxX = 0.0, maxY = 0.0;
+                foreach (ObjectId id in definition)
+                {
+                    var entity = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (entity == null) continue;
+                    try
+                    {
+                        var extent = entity.GeometricExtents;
+                        if (!hasExtents)
+                        {
+                            minX = extent.MinPoint.X;
+                            minY = extent.MinPoint.Y;
+                            maxX = extent.MaxPoint.X;
+                            maxY = extent.MaxPoint.Y;
+                            hasExtents = true;
+                        }
+                        else
+                        {
+                            minX = Math.Min(minX, extent.MinPoint.X);
+                            minY = Math.Min(minY, extent.MinPoint.Y);
+                            maxX = Math.Max(maxX, extent.MaxPoint.X);
+                            maxY = Math.Max(maxY, extent.MaxPoint.Y);
+                        }
+                    }
+                    catch (Autodesk.AutoCAD.Runtime.Exception)
+                    {
+                        // Dimension/Attribute entities may not expose usable extents.
+                    }
+                }
+                if (hasExtents && maxX - minX > 1e-5 && maxY - minY > 1e-5)
+                {
+                    sourceWidth = maxX - minX;
+                    sourceHeight = maxY - minY;
+                }
+                else
+                {
+                    // Do not resize degenerate arbitrary custom annotations.
+                    minX = 0.0;
+                    minY = 0.0;
+                    sourceWidth = plan.FirstTileWidth;
+                    sourceHeight = plan.FirstTileHeight;
+                }
+            }
+
+            var scaleX = plan.FirstTileWidth / sourceWidth;
+            var scaleY = plan.FirstTileHeight / sourceHeight;
+            var angle = plan.MainAngleRadians;
+            var anchor = plan.FirstTileOrigin.Value;
+            var cos = Math.Cos(angle);
+            var sin = Math.Sin(angle);
+            // Nonzero base-extents from custom blocks are translated to the
+            // exact first panel corner before rotating the BlockReference.
+            var insert = new Point3d(
+                anchor.X - (minX * scaleX * cos - minY * scaleY * sin),
+                anchor.Y - (minX * scaleX * sin + minY * scaleY * cos), 0.0);
+            return new BlockReference(insert, definitionId)
+            {
+                Rotation = angle,
+                ScaleFactors = new Scale3d(scaleX, scaleY, 1.0)
+            };
         }
 
         private static void PreviewStartTile(Database db, LayInCeilingPlan plan)
@@ -674,7 +743,10 @@ namespace HNL.VXT.AutoCAD
             {
                 var br = tr.GetObject(result.ObjectId, OpenMode.ForRead) as BlockReference;
                 if (br == null) return;
-                var id = br.IsDynamicBlock ? br.DynamicBlockTableRecord : br.BlockTableRecord;
+                // First-tile art must match the actual selected dynamic/anonymous
+                // geometry (tn.dxf uses *U6 at 2x), not the unstretched parent.
+                var id = startMarker ? br.BlockTableRecord :
+                    (br.IsDynamicBlock ? br.DynamicBlockTableRecord : br.BlockTableRecord);
                 var definition = tr.GetObject(id, OpenMode.ForRead) as BlockTableRecord;
                 if (definition == null || string.IsNullOrWhiteSpace(definition.Name)) return;
                 if (startMarker)
