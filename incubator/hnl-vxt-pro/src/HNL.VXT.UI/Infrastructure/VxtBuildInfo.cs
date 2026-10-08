@@ -16,8 +16,8 @@ namespace HNL.VXT.UI.Infrastructure
         private static readonly string _buildText = ResolveBuildText();
 
         public static string BuildText => _buildText;
-        public static string VersionLabel => "VXT Pro " + Version + " • Build " + BuildText;
-        public static string PaletteTitle => "HNL Tool - " + VersionLabel;
+        public static string VersionLabel => "Ceiling Framing Pro " + Version + " • Build " + BuildText;
+        public static string PaletteTitle => "HNL " + VersionLabel;
 
         private static string ResolveBuildText()
         {
