@@ -59,6 +59,9 @@ jobs:
           $dst = "$root/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs"
           if (-not (Test-Path $overlay)) { throw 'Missing HCE palette overlay' }
           Copy-Item $overlay $dst -Force
+          $profile = 'HCE-OVERLAY/src/HNL.CeilingEstimator.AutoCAD/HceLegacyProfile.cs'
+          if (-not (Test-Path $profile)) { throw 'HCE legacy model missing' }
+          Copy-Item $profile "$root/src/HNL.CeilingEstimator.AutoCAD/HceLegacyProfile.cs" -Force
           $projects = @(Get-ChildItem "$root/src/Bridges" -Filter 'HNL.CeilingEstimator.AutoCAD.*.csproj' -Recurse -File)
           if ($projects.Count -ne 5) { throw "Unexpected HCE bridge count: $($projects.Count)" }
           foreach ($p in $projects) {
