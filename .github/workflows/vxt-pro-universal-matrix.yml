@@ -88,6 +88,33 @@ jobs:
             $patText = Get-Content $patPath -Raw
             if (-not $patText.Contains("*$pat")) { throw "Lay-in hatch pattern/header mismatch: $pat.pat" }
           }
+          # Lay-in static contract only; AutoCAD runtime still requires field QA.
+          $layInCad = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\LayInCadRuntime.cs" -Raw
+          $layInCommands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
+          $layInSettings = Get-Content "$env:VXT_ROOT\src\HNL.VXT.Core\Models\LayInCeilingSettings.cs" -Raw
+          if (-not $layInSettings.Contains('string HangerBlockName')) { throw 'Lay-in hanger block setting absent.' }
+          foreach ($token in @(
+            'LayInRuntimePlanner.Build(session, settings)',
+            'CreateHatch(db, tr, ms, item, hatchLayer)',
+            'HatchPatternType.CustomDefined',
+            'hatch.PatternAngle = item.Plan.MainAngleRadians',
+            'hatch.Origin = new Point2d(item.Plan.HatchOrigin.X, item.Plan.HatchOrigin.Y)',
+            'hatch.AppendLoop(HatchLoopTypes.Outermost',
+            'hatch.EvaluateHatch(true)',
+            'BuildDimension(db, run, item.Plan.ModuleShort)'
+          )) {
+            if (-not $layInCad.Contains($token)) { throw "Lay-in CAD contract missing: $token" }
+          }
+          foreach ($name in @(
+            'HNLCFLAYINPREVIEW', 'HNLCFLAYINCLEAR', 'HNLCFLAYINCREATE',
+            'HNLCFLAYINSTART', 'HNLCFLAYINDOOR',
+            'HNLCFLAYINHANGERBLOCK', 'HNLCFLAYINSTARTBLOCK'
+          )) {
+            if (-not $layInCommands.Contains('CommandMethod("' + $name + '"')) {
+              throw "Lay-in command not registered: $name"
+            }
+          }
+          Write-Host 'Lay-in one-Hatch/region static contract and command registrations PASS'
           Write-Host 'HNL Ceiling Framing beta.1 source/branding/multi-polyline gate PASS'
       - name: Run golden core tests
         shell: pwsh
