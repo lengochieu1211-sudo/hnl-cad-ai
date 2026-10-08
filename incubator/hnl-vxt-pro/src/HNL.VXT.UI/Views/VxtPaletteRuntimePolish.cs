@@ -107,13 +107,13 @@ namespace HNL.VXT.UI.Views
                 {
                     text.Visibility = Visibility.Collapsed;
                 }
-                else if (string.Equals(value, "Vẽ xương trần", StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(value, "Ceiling Framing Pro", StringComparison.OrdinalIgnoreCase))
                 {
                     text.Visibility = Visibility.Visible;
                     text.FontSize = 13.0;
                     text.Margin = new Thickness(0);
                 }
-                else if (value.StartsWith("VXT Pro", StringComparison.OrdinalIgnoreCase))
+                else if (value.StartsWith("v7.", StringComparison.OrdinalIgnoreCase))
                 {
                     text.Visibility = Visibility.Visible;
                     text.FontSize = 9.0;
