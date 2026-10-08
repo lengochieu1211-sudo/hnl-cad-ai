@@ -335,10 +335,10 @@ namespace HNL.VXT.AutoCAD
             };
         }
 
-        private static Polyline MakeSymbolPolyline(
+        private static Autodesk.AutoCAD.DatabaseServices.Polyline MakeSymbolPolyline(
             IReadOnlyList<HNL.VXT.Core.Geometry.Point2> points)
         {
-            var line = new Polyline();
+            var line = new Autodesk.AutoCAD.DatabaseServices.Polyline();
             for (int i = 0; i < points.Count; i++)
                 line.AddVertexAt(i, new Point2d(points[i].X, points[i].Y),
                     0.0, 0.0, 0.0);
