@@ -264,7 +264,7 @@ jobs:
               -not $layInCore.Contains('ContainsCompletePanel') -or
               -not $layInCad.Contains('EnsureDefaultStartTileBlock(db, tr)') -or
               -not $layInCad.Contains('DefaultStartTileBlockName') -or
-              -not $layInCad.Contains('PreviewStartTile(db, item.Plan)') -or
+              -not $layInCad.Contains('PreviewStartTile(db, item.Plan, session.LayInSettings)') -or
               -not $ceilingUi.Contains('Chèn Block ký hiệu ô trần đầu tiên')) {
             throw 'Lay-in one-panel start Block Core/Preview/Create contract missing.'
           }
