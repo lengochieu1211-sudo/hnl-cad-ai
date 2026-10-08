@@ -174,7 +174,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var selection = Section("01  Ch\u1ecdn m\u1ea3ng tr\u1ea7n", "#2497FF");
             selection.Children.Add(Text("Ch\u1ecdn m\u1ed9t ho\u1eb7c nhi\u1ec1u Hatch tr\u1ea7n n\u1ed5i tr\u00ean CAD.",
                 11, _muted, FontWeights.Normal));
-            selection.Children.Add(CommandButton("Ch\u1ecdn Hatch v\u00e0 t\u00ednh t\u1ea5m", "HCE", true));
+            selection.Children.Add(CommandButton("Ch\u1ecdn Hatch v\u00e0 t\u00ednh t\u1ea5m", "HCECALC", true));
             selection.Children.Add(Text("B\u1ea5m n\u00fat, qu\u00e9t ch\u1ecdn Hatch trong CAD r\u1ed3i Enter.",
                 10, _muted, FontWeights.Normal));
             content.Children.Add(Card(selection));

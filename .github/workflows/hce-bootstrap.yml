@@ -71,6 +71,18 @@ jobs:
             Write-Host "HCE PALETTE bridge enabled: $($p.Name)"
           }
 
+      - name: Verify HCE default palette and calculator route
+        shell: powershell
+        run: |
+          $commands = Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/Commands.cs' -Raw
+          $ui = Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs' -Raw
+          if ($commands -notmatch '\[CommandMethod\("HCE", CommandFlags.Modal\)\]') { throw 'HCE command missing' }
+          if ($commands -notmatch 'public void Hce\(\) \{ new HcePaletteCommands\(\).Open\(\); \}') { throw 'HCE must open palette' }
+          if ($commands -notmatch '\[CommandMethod\("HCECALC", CommandFlags.Modal\)\]') { throw 'HCECALC command missing' }
+          if ($commands -notmatch 'public void HceCalculate\(\) \{ RunCeilingEstimator\(\); \}') { throw 'HCECALC must use original engine' }
+          if ($ui -notmatch 'CommandButton\([^\r\n]+, "HCECALC", true\)') { throw 'HCE button must calculate, not reopen the palette' }
+          Write-Host 'HCE command routing contract PASS: HCE => Palette; HCECALC => existing Core; UI => HCECALC.'
+
       - name: Setup .NET 8 and 10
         uses: actions/setup-dotnet@v4
         with:

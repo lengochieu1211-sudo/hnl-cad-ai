@@ -15,8 +15,13 @@ namespace HNL.CeilingEstimator.AutoCAD
     // The same immutable-per-command report feeds Preview and Table, without recalculation.
     public sealed class Commands
     {
+        // HCE opens the same dockable palette as HCEUI, like HNL Ceiling Framing Pro.
+        // The unchanged calculation path remains callable as HCECALC.
         [CommandMethod("HCE", CommandFlags.Modal)]
-        public void Hce() { RunCeilingEstimator(); }
+        public void Hce() { new HcePaletteCommands().Open(); }
+
+        [CommandMethod("HCECALC", CommandFlags.Modal)]
+        public void HceCalculate() { RunCeilingEstimator(); }
 
         [CommandMethod("DTC", CommandFlags.Modal)]
         public void DtcCompatibilityAlias() { RunCeilingEstimator(); }
