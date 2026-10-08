@@ -25,6 +25,23 @@ jobs:
           New-Item -ItemType Directory -Force -Path incubator\hnl-ceiling-estimator-pro | Out-Null
           Expand-Archive "$env:RUNNER_TEMP\hce.zip" incubator\hnl-ceiling-estimator-pro -Force
 
+      - name: Inspect original HCE AutoCAD build project for Palette UI gate
+        shell: powershell
+        run: |
+          $root = 'incubator/hnl-ceiling-estimator-pro'
+          foreach ($file in @(
+            "$root/src/Bridges/AutoCAD2023/HNL.CeilingEstimator.AutoCAD.2023.csproj",
+            "$root/src/Bridges/AutoCAD2025/HNL.CeilingEstimator.AutoCAD.2025.csproj",
+            "$root/src/HNL.CeilingEstimator.AutoCAD/HNL.CeilingEstimator.AutoCAD.csproj",
+            "$root/Directory.Build.props",
+            "$root/installer/HNL.CeilingEstimator.Universal.Setup.iss"
+          )) {
+            if (Test-Path $file) {
+              Write-Host "--- HCE_BUILD_INSPECTION: $file"
+              Get-Content $file | Select-Object -First 100 | ForEach-Object { Write-Host $_ }
+            }
+          }
+
       - name: Apply minimal AutoCAD adapter overlay (Core untouched)
         shell: powershell
         run: |
