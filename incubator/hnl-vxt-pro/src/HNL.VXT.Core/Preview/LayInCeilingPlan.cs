@@ -26,13 +26,15 @@ namespace HNL.VXT.Core.Preview
             Point2 b,
             double module,
             int moduleCount,
-            string label)
+            string label,
+            Point2? dimensionLinePoint = null)
         {
             A = a;
             B = b;
             Module = module;
             ModuleCount = moduleCount;
             Label = label ?? string.Empty;
+            DimensionLinePoint = dimensionLinePoint;
         }
 
         public Point2 A { get; }
@@ -40,6 +42,7 @@ namespace HNL.VXT.Core.Preview
         public double Module { get; }
         public int ModuleCount { get; }
         public string Label { get; }
+        public Point2? DimensionLinePoint { get; }
     }
 
     public sealed class LayInCeilingPlan
