@@ -39,6 +39,7 @@ namespace HNL.VXT.AutoCAD
             // Do not call TransientManager during shutdown. Abandon only releases HNL ownership
             // of managed wrapper collections and leaves native graphics teardown to AutoCAD.
             try { VxtTransientPreview.Instance.AbandonForDocumentTransition(); } catch { }
+            try { LayInCadRuntime.AbandonForDocumentTransition(); } catch { }
             try { VxtSession.ReleaseDocument(null); } catch { }
         }
 
@@ -66,6 +67,7 @@ namespace HNL.VXT.AutoCAD
 
             if (VxtSession.SynchronizeDocument(doc))
                 VxtTransientPreview.Instance.AbandonForDocumentTransition();
+                LayInCadRuntime.AbandonForDocumentTransition();
         }
 
         private static void OnDocumentToBeDestroyed(object sender, DocumentCollectionEventArgs e)
@@ -74,6 +76,7 @@ namespace HNL.VXT.AutoCAD
             if (doc == null) return;
             if (VxtSession.ReleaseDocument(doc))
                 VxtTransientPreview.Instance.AbandonForDocumentTransition();
+                LayInCadRuntime.AbandonForDocumentTransition();
         }
     }
 }
