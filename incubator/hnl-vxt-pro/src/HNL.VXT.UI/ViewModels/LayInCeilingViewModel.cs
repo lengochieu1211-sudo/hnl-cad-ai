@@ -1,5 +1,7 @@
 using System;
 using System.ComponentModel;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using HNL.VXT.Core.Models;
@@ -82,6 +84,33 @@ namespace HNL.VXT.UI.ViewModels
             "Kích thước tổng",
             "Theo lưới và tấm cắt biên"
         };
+
+        public string[] DimStyleOptions
+        {
+            get
+            {
+                var list = new List<string> { "Hiện hành" };
+                var names = _host.GetDimStyleNames() ?? Array.Empty<string>();
+                list.AddRange(names.Where(n => !string.IsNullOrWhiteSpace(n))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(n => n));
+                return list.ToArray();
+            }
+        }
+
+        public string SelectedDimensionStyle
+        {
+            get => string.IsNullOrWhiteSpace(_settings.DimensionStyle)
+                ? "Hiện hành" : _settings.DimensionStyle;
+            set
+            {
+                var chosen = string.Equals(value, "Hiện hành", StringComparison.Ordinal)
+                    ? string.Empty : (value ?? string.Empty);
+                if (string.Equals(_settings.DimensionStyle, chosen, StringComparison.Ordinal)) return;
+                _settings.DimensionStyle = chosen;
+                Changed();
+            }
+        }
 
         public string[] HorizontalPositionOptions { get; } = { "Tự động", "Phía trên", "Phía dưới" };
         public string[] VerticalPositionOptions { get; } = { "Tự động", "Bên trái", "Bên phải" };
@@ -212,6 +241,7 @@ namespace HNL.VXT.UI.ViewModels
                 if (string.Equals(_settings.HangerBlockName, value, StringComparison.Ordinal)) return;
                 _settings.HangerBlockName = value;
                 OnPropertyChanged();
+                RequestPreview();
             }
         }
 
@@ -364,6 +394,8 @@ namespace HNL.VXT.UI.ViewModels
         {
             BoundaryStatus = display ?? string.Empty;
             HasBoundary = hasBoundary;
+            // DimStyle table belongs to the active DWG, not to the palette.
+            OnPropertyChanged(nameof(DimStyleOptions));
             if (!hasBoundary)
                 PreviewStatus = "Chọn vùng trần để xem trước.";
         }
@@ -407,6 +439,7 @@ namespace HNL.VXT.UI.ViewModels
         {
             _settings.HangerBlockName = blockName ?? string.Empty;
             OnPropertyChanged(nameof(HangerBlockName));
+            RequestPreview();
         }
 
         public void SetStartMarkerBlock(string blockName)
