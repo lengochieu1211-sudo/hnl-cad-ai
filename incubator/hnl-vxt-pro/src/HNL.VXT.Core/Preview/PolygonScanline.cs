@@ -59,6 +59,81 @@ namespace HNL.VXT.Core.Preview
             return PairHits(hits, x => new Point2(x, y));
         }
 
+        public static IReadOnlyList<Segment2> ClipHorizontal(
+            IReadOnlyList<Point2> outer,
+            IEnumerable<IReadOnlyList<Point2>> holes,
+            double y)
+        {
+            var source = ClipHorizontal(outer, y);
+            var cuts = (holes ?? Enumerable.Empty<IReadOnlyList<Point2>>())
+                .Where(h => h != null && h.Count >= 3)
+                .SelectMany(h => ClipHorizontal(h, y))
+                .ToList();
+
+            return SubtractHorizontal(source, cuts, y);
+        }
+
+        private static IReadOnlyList<Segment2> SubtractHorizontal(
+            IEnumerable<Segment2> source,
+            IEnumerable<Segment2> cuts,
+            double y)
+        {
+            var cutRanges = (cuts ?? Enumerable.Empty<Segment2>())
+                .Select(s => Tuple.Create(
+                    Math.Min(s.A.X, s.B.X),
+                    Math.Max(s.A.X, s.B.X)))
+                .Where(r => r.Item2 - r.Item1 > Eps)
+                .OrderBy(r => r.Item1)
+                .ToList();
+
+            var result = new List<Segment2>();
+            foreach (var segment in source ?? Enumerable.Empty<Segment2>())
+            {
+                var pieces = new List<Tuple<double, double>>
+                {
+                    Tuple.Create(
+                        Math.Min(segment.A.X, segment.B.X),
+                        Math.Max(segment.A.X, segment.B.X))
+                };
+
+                foreach (var cut in cutRanges)
+                {
+                    var next = new List<Tuple<double, double>>();
+                    foreach (var piece in pieces)
+                    {
+                        var a = piece.Item1;
+                        var b = piece.Item2;
+                        var c = cut.Item1;
+                        var d = cut.Item2;
+
+                        if (d <= a + Eps || c >= b - Eps)
+                        {
+                            next.Add(piece);
+                            continue;
+                        }
+
+                        if (c > a + Eps)
+                            next.Add(Tuple.Create(a, Math.Min(b, c)));
+                        if (d < b - Eps)
+                            next.Add(Tuple.Create(Math.Max(a, d), b));
+                    }
+
+                    pieces = next;
+                    if (pieces.Count == 0) break;
+                }
+
+                foreach (var piece in pieces)
+                {
+                    if (piece.Item2 - piece.Item1 <= Eps) continue;
+                    result.Add(new Segment2(
+                        new Point2(piece.Item1, y),
+                        new Point2(piece.Item2, y)));
+                }
+            }
+
+            return result;
+        }
+
         public static IReadOnlyList<Segment2> ClipVertical(
             IReadOnlyList<Point2> outer,
             IEnumerable<IReadOnlyList<Point2>> holes,
