@@ -459,7 +459,7 @@ namespace HNL.VXT.UI.Views
             // Functional form grids in the original XAML use 112 / 155 / 190 px labels.
             // Normalize those families to the same vertical axis. Paired Min/Max rows
             // already use the same 142 px shared label axis and are handled separately.
-            if (first.Value < 105.0 || first.Value > 195.0) return;
+            if (first.Value < 100.0 || first.Value > 195.0) return;
             if (Math.Abs(first.Value - PairLabelWidth) < 0.1 && grid.ColumnDefinitions.Count == 6) return;
 
             grid.ColumnDefinitions[0].Width = new GridLength(LabelWidth);
