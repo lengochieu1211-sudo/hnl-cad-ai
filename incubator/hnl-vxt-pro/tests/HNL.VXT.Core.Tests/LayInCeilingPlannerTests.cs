@@ -301,6 +301,127 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void SampleTnDxf_610Grid_Dimensions9760Plus240OnBothAxes()
+        {
+            var plan = LayInCeilingPlanner.Build(
+                Rect(0, 0, 10000, 10000), null,
+                new LayInCeilingSettings
+                {
+                    GridSystem = LayInGridSystem.Module610x610,
+                    MainDirection = LayInMainDirectionMode.Horizontal,
+                    StartMode = LayInStartMode.ManualStart,
+                    ManualStartPoint = new Point2(0, 0),
+                    DimensionMode = LayInDimensionMode.GridAndEdges,
+                    HorizontalDimDistance = 1190,
+                    VerticalDimDistance = 1293
+                });
+
+            Assert.AreEqual("HNL_CF_610X610", plan.HatchPatternName);
+            Assert.AreEqual(4, plan.DimensionRuns.Count);
+            var horizontal = plan.DimensionRuns.Where(d => Math.Abs(d.A.Y - d.B.Y) < 0.001).ToList();
+            var vertical = plan.DimensionRuns.Where(d => Math.Abs(d.A.X - d.B.X) < 0.001).ToList();
+            CollectionAssert.AreEqual(new[] { 9760.0, 240.0 },
+                horizontal.Select(d => d.A.DistanceTo(d.B)).ToArray());
+            CollectionAssert.AreEqual(new[] { 9760.0, 240.0 },
+                vertical.Select(d => d.A.DistanceTo(d.B)).ToArray());
+            Assert.IsTrue(plan.DimensionRuns.All(d => d.Label == string.Empty),
+                "Sample DIM uses the AutoCAD measured value, not a forced text override.");
+            Assert.IsTrue(horizontal.All(d => d.DimensionLinePoint.HasValue &&
+                Math.Abs(d.DimensionLinePoint.Value.Y + 1190) < 0.001));
+            Assert.IsTrue(vertical.All(d => d.DimensionLinePoint.HasValue &&
+                Math.Abs(d.DimensionLinePoint.Value.X + 1293) < 0.001));
+        }
+
+        [TestMethod]
+        public void BalancedGridDims_TwoCutEdgesAreMeasuredSeparately()
+        {
+            var plan = LayInCeilingPlanner.Build(
+                Rect(0, 0, 10000, 10000), null,
+                new LayInCeilingSettings
+                {
+                    GridSystem = LayInGridSystem.Module610x610,
+                    MainDirection = LayInMainDirectionMode.Horizontal,
+                    StartMode = LayInStartMode.Balanced,
+                    DimensionMode = LayInDimensionMode.GridAndEdges,
+                    HorizontalDimSide = LayInHorizontalDimSide.Top,
+                    VerticalDimSide = LayInVerticalDimSide.Right,
+                    HorizontalDimDistance = 600,
+                    VerticalDimDistance = 700
+                });
+
+            Assert.AreEqual(6, plan.DimensionRuns.Count);
+            var horizontal = plan.DimensionRuns.Where(d => Math.Abs(d.A.Y - d.B.Y) < 0.001).ToList();
+            var vertical = plan.DimensionRuns.Where(d => Math.Abs(d.A.X - d.B.X) < 0.001).ToList();
+            CollectionAssert.AreEqual(new[] { 120.0, 9760.0, 120.0 },
+                horizontal.Select(d => Math.Round(d.A.DistanceTo(d.B), 3)).ToArray());
+            CollectionAssert.AreEqual(new[] { 120.0, 9760.0, 120.0 },
+                vertical.Select(d => Math.Round(d.A.DistanceTo(d.B), 3)).ToArray());
+            Assert.IsTrue(horizontal.All(d => Math.Abs(d.DimensionLinePoint.Value.Y - 10600) < 0.001));
+            Assert.IsTrue(vertical.All(d => Math.Abs(d.DimensionLinePoint.Value.X - 10700) < 0.001));
+        }
+
+        [TestMethod]
+        public void SampleGridDims_AllFourSystemsMeasureFullWidthWithoutOverlap()
+        {
+            foreach (var item in new[]
+            {
+                Tuple.Create(LayInGridSystem.Module600x600, 9600.0, 400.0),
+                Tuple.Create(LayInGridSystem.Module610x610, 9760.0, 240.0),
+                Tuple.Create(LayInGridSystem.Module600x1200, 9600.0, 400.0),
+                Tuple.Create(LayInGridSystem.Module610x1220, 9760.0, 240.0)
+            })
+            {
+                var plan = LayInCeilingPlanner.Build(Rect(0, 0, 10000, 10000), null,
+                    new LayInCeilingSettings
+                    {
+                        GridSystem = item.Item1,
+                        MainDirection = LayInMainDirectionMode.Horizontal,
+                        StartMode = LayInStartMode.ManualStart,
+                        ManualStartPoint = new Point2(0, 0),
+                        DimensionMode = LayInDimensionMode.GridAndEdges
+                    });
+                var x = plan.DimensionRuns.Where(d => Math.Abs(d.A.Y - d.B.Y) < 0.001).ToList();
+                Assert.AreEqual(2, x.Count, item.Item1.ToString());
+                Assert.AreEqual(item.Item2, x[0].A.DistanceTo(x[0].B), 0.001);
+                Assert.AreEqual(item.Item3, x[1].A.DistanceTo(x[1].B), 0.001);
+                Assert.AreEqual(10000, x.Sum(d => d.A.DistanceTo(d.B)), 0.001);
+            }
+        }
+
+        [TestMethod]
+        public void GridDims_RotatedRegionHasLocalOutsideDimLineAndOriginalTeeGeometry()
+        {
+            const double angle = Math.PI / 6.0;
+            var boundary = new Boundary2(Rect(0, 0, 10000, 10000).Vertices
+                .Select(p => Transform2.ToWorld(p, angle)));
+            var settings = new LayInCeilingSettings
+            {
+                MainDirection = LayInMainDirectionMode.ParallelLongSide,
+                GridSystem = LayInGridSystem.Module610x610,
+                StartMode = LayInStartMode.ManualStart,
+                ManualStartPoint = new Point2(0, 0),
+                DimensionMode = LayInDimensionMode.GridAndEdges,
+                HorizontalDimSide = LayInHorizontalDimSide.Bottom,
+                VerticalDimSide = LayInVerticalDimSide.Left,
+                HorizontalDimDistance = 700,
+                VerticalDimDistance = 800
+            };
+            var result = LayInCeilingPlanner.Build(boundary, null, settings);
+            Assert.IsTrue(result.DimensionRuns.Count >= 4);
+            foreach (var d in result.DimensionRuns)
+            {
+                Assert.IsTrue(d.DimensionLinePoint.HasValue);
+                var a = Transform2.ToLocal(d.A, result.MainAngleRadians);
+                var b = Transform2.ToLocal(d.B, result.MainAngleRadians);
+                var p = Transform2.ToLocal(d.DimensionLinePoint.Value, result.MainAngleRadians);
+                if (Math.Abs(a.Y - b.Y) < 0.001)
+                    Assert.IsTrue(p.Y < Math.Min(a.Y, b.Y) - 100);
+                else
+                    Assert.IsTrue(p.X < Math.Min(a.X, b.X) - 100);
+            }
+        }
+
+        [TestMethod]
         public void AutoOptimize_ReturnsOnePrincipalAxis()
         {
             var plan = LayInCeilingPlanner.Build(
