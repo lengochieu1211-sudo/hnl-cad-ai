@@ -360,6 +360,43 @@ jobs:
               throw "Branded bundle path / safe VXT migration missing: $installer"
             }
           }
+          # tn.dxf reference DIM: 10,000 = 9,760 + 240 on both axes with
+          # a single 610 mm Hatch, native measured dimensions and editable
+          # outside placement. Both Preview and Create consume the same points.
+          $layInPlanData = Get-Content "$env:VXT_ROOT\src\HNL.VXT.Core\Preview\LayInCeilingPlan.cs" -Raw
+          $layInBridge = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtHostBridge.cs" -Raw
+          $layInPicker = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
+          $hostInterface = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Hosting\IVxtHostBridge.cs" -Raw
+          foreach ($contract in @(
+              'SampleTnDxf_610Grid_Dimensions9760Plus240OnBothAxes',
+              'BalancedGridDims_TwoCutEdgesAreMeasuredSeparately',
+              'SampleGridDims_AllFourSystemsMeasureFullWidthWithoutOverlap',
+              'GridDims_RotatedRegionHasLocalOutsideDimLineAndOriginalTeeGeometry')) {
+            if (-not $layInTests.Contains($contract)) {
+              throw "Sample Lay-in DIM fixture is missing: $contract"
+            }
+          }
+          if (-not $layInCore.Contains('LayInDimensionMode.GridAndEdges') -or
+              -not $layInCore.Contains('AddGridAxisDimensions') -or
+              -not $layInPlanData.Contains('DimensionLinePoint') -or
+              -not $layInCad.Contains('run.DimensionLinePoint.HasValue') -or
+              -not $layInBridge.Contains('PickLayInDimensionPosition') -or
+              -not $hostInterface.Contains('PickLayInDimensionPosition') -or
+              -not $layInPicker.Contains('LayInCadRuntime.PickDimensionLocation(true)') -or
+              -not $ceilingUi.Contains('SelectedHorizontalDimPosition') -or
+              -not $ceilingUi.Contains('SelectedVerticalDimPosition')) {
+            throw 'Sample Lay-in grid/edge DIM and pickable outside location contract missing.'
+          }
+          foreach ($manifestName in @('build/HNL.VXT.bundle/PackageContents.xml',
+                                        'build/universal/PackageContents.2026-net8.xml',
+                                        'build/universal/PackageContents.2026-net10.xml')) {
+            $manifest = Get-Content (Join-Path $env:VXT_ROOT $manifestName) -Raw
+            foreach ($dimCommand in @('HNLCFLAYINDIMH','HNLCFLAYINDIMV')) {
+              if (-not $manifest.Contains('Global="' + $dimCommand + '" Local="' + $dimCommand + '"')) {
+                throw "Sample Lay-in DIM picker registration missing: $manifestName $dimCommand"
+              }
+            }
+          }
           Write-Host 'Lay-in one-Hatch/region static contract and command registrations PASS'
           Write-Host "HNL Ceiling Framing beta.1 functional/source/branding/multi-polyline/installer gate PASS"
       - name: Restore AutoCAD 2023 plugin
