@@ -19,8 +19,8 @@ namespace HNL.VXT.UI.Views
     /// </summary>
     public static class VxtPaletteCompactTuner
     {
-        private const double LabelWidth = 136.0;
-        private const double PickButtonWidth = 64.0;
+        private const double LabelWidth = 132.0;
+        private const double PickButtonWidth = 74.0;
         private const double SettingsButtonWidth = 92.0;
         private const double PairLabelWidth = LabelWidth;
         private const double PairTokenWidth = 34.0;
