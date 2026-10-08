@@ -40,7 +40,7 @@ namespace HNL.VXT.AutoCAD
                               " | Legacy=" + legacy +
                               " | DWG không thay đổi.";
                 WriteLog("PASS", summary, null);
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: " + summary);
                 return summary;
             }
             catch (System.Exception ex)
@@ -52,7 +52,7 @@ namespace HNL.VXT.AutoCAD
                 var summary = "Lỗi Pro Auto QA: " + ex.Message +
                               (string.IsNullOrWhiteSpace(diagnostic) ? string.Empty : " | Diagnostic: " + diagnostic);
                 WriteLog("FAIL", summary, diagnostic);
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + summary);
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: " + summary);
                 return summary;
             }
         }
