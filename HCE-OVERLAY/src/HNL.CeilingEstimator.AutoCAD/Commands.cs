@@ -418,8 +418,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                     continue;
                 }
 
-                MaterialGroup group;
-                if (!groups.TryGetValue(input.GroupKey, out group))
+                MaterialGroup? group;
+                if (!groups.TryGetValue(input.GroupKey, out group) || group == null)
                 {
                     group = new MaterialGroup { Name = input.GroupKey };
                     groups.Add(input.GroupKey, group);
