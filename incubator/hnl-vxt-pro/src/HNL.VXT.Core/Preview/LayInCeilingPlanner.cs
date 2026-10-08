@@ -334,37 +334,34 @@ namespace HNL.VXT.Core.Preview
                 ? Math.Max(1, settings.GroupedDimensionCount)
                 : 1;
 
-            var xCount = Math.Max(1, Math.Min(
-                requestedCount,
-                (int)Math.Floor(bounds.Width / spec.ModuleShort + Eps)));
-            var yCount = Math.Max(1, Math.Min(
-                requestedCount,
-                (int)Math.Floor(bounds.Height / acrossModule + Eps)));
-
             var xStart = FirstStationAtOrAfter(bounds.MinX, spec.ModuleShort, phaseX);
             var yStart = FirstStationAtOrAfter(bounds.MinY, acrossModule, phaseY);
 
-            AddDimensionRun(
-                plan,
-                xStart,
-                bounds.MinY,
-                Math.Min(bounds.MaxX, xStart + xCount * spec.ModuleShort),
-                bounds.MinY,
-                spec.ModuleShort,
-                xCount,
-                BuildModuleLabel(xCount, spec.ModuleShort),
-                angle);
+            // Count only complete modules after the selected grid start. Counting
+            // from the overall boundary width could label 10 x 600 while the
+            // clipped dimension spans just 5700 when Manual Start is offset.
+            var xCount = Math.Min(requestedCount, Math.Max(0,
+                (int)Math.Floor((bounds.MaxX - xStart) / spec.ModuleShort + Eps)));
+            var yCount = Math.Min(requestedCount, Math.Max(0,
+                (int)Math.Floor((bounds.MaxY - yStart) / acrossModule + Eps)));
 
-            AddDimensionRun(
-                plan,
-                bounds.MinX,
-                yStart,
-                bounds.MinX,
-                Math.Min(bounds.MaxY, yStart + yCount * acrossModule),
-                acrossModule,
-                yCount,
-                BuildModuleLabel(yCount, acrossModule),
-                angle);
+            if (xCount > 0)
+            {
+                AddDimensionRun(
+                    plan, xStart, bounds.MinY,
+                    xStart + xCount * spec.ModuleShort, bounds.MinY,
+                    spec.ModuleShort, xCount,
+                    BuildModuleLabel(xCount, spec.ModuleShort), angle);
+            }
+
+            if (yCount > 0)
+            {
+                AddDimensionRun(
+                    plan, bounds.MinX, yStart,
+                    bounds.MinX, yStart + yCount * acrossModule,
+                    acrossModule, yCount,
+                    BuildModuleLabel(yCount, acrossModule), angle);
+            }
         }
 
         private static void AddDimensionRun(
