@@ -357,7 +357,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     editor.WriteMessage("\nHNL Tool - Table cancelled. No drawing changes.");
                     return;
                 }
-                InsertTable(document.Database, report, location.Value);
+                InsertTable(document.Database, report, location.Value, profile);
                 editor.WriteMessage("\nHNL Tool - Table created from the same calculation report.");
             }
             catch (System.Exception ex)
@@ -695,7 +695,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             return count;
         }
 
-        private static void InsertTable(Database database, CalculationReport report, Point3d point)
+        private static void InsertTable(Database database, CalculationReport report, Point3d point,
+            HceLegacyProfile profile)
         {
             // No transaction is committed until all table cells are ready. AutoCAD UNDO
             // therefore removes the single table creation in the usual manner.
@@ -709,11 +710,16 @@ namespace HNL.CeilingEstimator.AutoCAD
                     table.SetRowHeight(55);
                     table.SetColumnWidth(230);
                     table.Position = point;
-                    table.Cells[0, 0].TextString = "HNL Tool - Ceiling Estimator Pro (610mm grid assumed)";
+                    var gridSpec = profile.ToOptions();
+                    table.Cells[0, 0].TextString = "HNL Tool - Ceiling Estimator Pro (" +
+                        gridSpec.GridWidth.ToString("0", CultureInfo.InvariantCulture) + "x" +
+                        gridSpec.GridHeight.ToString("0", CultureInfo.InvariantCulture) +
+                        " grid, family " + profile.Family + ")";
                     string[] headers =
                     {
                         "Material / Hatch group", "Hatch", "Full", "Boundary",
-                        "Cuts", "Small 610", "Long 1220", "Oversize"
+                        "Cuts", "Small " + profile.Family,
+                        "Long " + (profile.Family * 2), "Oversize"
                     };
                     for (var i = 0; i < headers.Length; i++)
                         table.Cells[1, i].TextString = headers[i];
