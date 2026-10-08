@@ -6,20 +6,27 @@ using HNL.VXT.Core.Preview;
 namespace HNL.VXT.AutoCAD
 {
     /// <summary>
-    /// The only registered AutoCAD command surface for HNL VXT Pro.
-    /// User-facing shortcut: HVX (HNL + Ve Xuong), short for daily use and distinct
-    /// from the legacy Lisp command VXT. Technical commands keep the longer HNLVXT
+    /// The only registered AutoCAD command surface for HNL Ceiling Framing Pro.
+    /// Primary user-facing command: HCF (HNL Ceiling Framing).
+    /// HVX remains a compatibility alias for existing users/scripts.
+    /// Technical commands keep the longer HNLVXT
     /// namespace to minimize collision risk with AutoCAD and other Lisp tools.
     /// VxtCommands remains the implementation class but is intentionally not
     /// registered as a CommandClass, so its legacy VXT* attributes are not exposed.
     /// </summary>
     public sealed class HnlVxtCommands
     {
-        [CommandMethod("HVX", CommandFlags.Modal)]
+        [CommandMethod("HCF", CommandFlags.Modal)]
         public void ShowPalette()
         {
             if (!VxtAuthorization.EnsureAuthorized()) return;
             new VxtCommands().ShowPalette();
+        }
+
+        [CommandMethod("HVX", CommandFlags.Modal)]
+        public void ShowPaletteLegacyAlias()
+        {
+            ShowPalette();
         }
 
         [CommandMethod("HNLVXTCREATE", CommandFlags.Modal | CommandFlags.UsePickSet)]
@@ -58,7 +65,7 @@ namespace HNL.VXT.AutoCAD
                 : "HNL Tool sẽ kiểm tra lại lỗi bố trí HARD trước khi tạo.";
 
             var answer = System.Windows.MessageBox.Show(
-                "HNL Tool - VXT Pro\n\n" +
+                "HNL Tool - Ceiling Framing Pro\n\n" +
                 detail +
                 "\n\nNếu tiếp tục, HNL Tool chỉ được phép bỏ chặn các lỗi bố trí có thể chỉnh thủ công." +
                 "\nLỗi cấu hình, tài nguyên CAD, parity Preview/Create hoặc runtime vẫn bị chặn và rollback." +
@@ -288,7 +295,7 @@ namespace HNL.VXT.AutoCAD
             if (doc == null) return;
 
             var ed = doc.Editor;
-            ed.WriteMessage("\nHNL Tool - VXT Pro: Bắt đầu chạy 5 bài kiểm tra Runtime QA...");
+            ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Bắt đầu chạy 5 bài kiểm tra Runtime QA...");
 
             RunQaStep(ed, "HNLVXTGOLDEN", VxtRuntimeGoldenService.Run);
             RunQaStep(ed, "HNLVXTPROGOLDEN", VxtRuntimeGoldenService.RunPro);
@@ -296,7 +303,7 @@ namespace HNL.VXT.AutoCAD
             RunQaStep(ed, "HNLVXTPROMULTIQA", VxtProMultiRuntimeQaService.Run);
             RunQaStep(ed, "HNLVXTSOAKQA", VxtTransientSoakQaService.Run);
 
-            ed.WriteMessage("\nHNL Tool - VXT Pro: Đã chạy xong 5 QA. Kiểm tra từng dòng PASS/FAIL phía trên.");
+            ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã chạy xong 5 QA. Kiểm tra từng dòng PASS/FAIL phía trên.");
         }
 
         private static void RunQaStep(
@@ -311,7 +318,7 @@ namespace HNL.VXT.AutoCAD
             catch (System.Exception ex)
             {
                 // Continue the remaining QA steps even when one service throws unexpectedly.
-                ed.WriteMessage("\nHNL Tool - VXT Pro: " + commandName + " lỗi: " + ex.Message);
+                ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: " + commandName + " lỗi: " + ex.Message);
             }
         }
     }
