@@ -406,6 +406,9 @@ namespace HNL.VXT.UI.ViewModels
         {
             _settings.ManualStartPoint = null;
             _settings.DoorPoint = null;
+            _settings.DimensionStyle = string.Empty;
+            OnPropertyChanged(nameof(SelectedDimensionStyle));
+            OnPropertyChanged(nameof(DimStyleOptions));
             if (_settings.StartMode != LayInStartMode.Balanced)
             {
                 _settings.StartMode = LayInStartMode.Balanced;
