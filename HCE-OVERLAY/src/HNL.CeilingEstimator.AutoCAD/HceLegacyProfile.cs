@@ -14,6 +14,10 @@ namespace HNL.CeilingEstimator.AutoCAD
         public string GridMode = "3";
         public bool SnapEnabled = true;
         public double Tolerance = 3.0;
+        // 0-height and empty style preserve RC5.3.3 Table formatting unchanged.
+        // These are presentation settings, not core tile/packing options.
+        public string TableTextStyle = string.Empty;
+        public double TableTextHeight = 0.0;
 
         public HceLegacyProfile Clone()
         {

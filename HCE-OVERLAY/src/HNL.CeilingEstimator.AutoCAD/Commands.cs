@@ -793,8 +793,30 @@ namespace HNL.CeilingEstimator.AutoCAD
                 using (var table = new Table())
                 {
                     table.SetSize(report.Groups.Count + 3, 8);
-                    table.SetRowHeight(55);
-                    table.SetColumnWidth(230);
+                    var textHeight = profile.TableTextHeight;
+                    if (textHeight < 0 || textHeight > 10000 ||
+                        double.IsNaN(textHeight) || double.IsInfinity(textHeight))
+                        throw new InvalidOperationException("Invalid HCE Table text height");
+                    table.SetRowHeight(Math.Max(55, textHeight * 1.6));
+                    table.SetColumnWidth(Math.Max(230, textHeight * 12));
+                    if (textHeight > 0)
+                    {
+                        table.SetTextHeight(textHeight, (int)RowType.TitleRow);
+                        table.SetTextHeight(textHeight, (int)RowType.HeaderRow);
+                        table.SetTextHeight(textHeight, (int)RowType.DataRow);
+                    }
+                    if (!string.IsNullOrEmpty(profile.TableTextStyle))
+                    {
+                        var styles = (TextStyleTable)transaction.GetObject(
+                            database.TextStyleTableId, OpenMode.ForRead);
+                        if (!styles.Has(profile.TableTextStyle))
+                            throw new InvalidOperationException("HCE Table Text Style is missing from DWG: " +
+                                profile.TableTextStyle);
+                        var textStyleId = styles[profile.TableTextStyle];
+                        table.SetTextStyle(textStyleId, (int)RowType.TitleRow);
+                        table.SetTextStyle(textStyleId, (int)RowType.HeaderRow);
+                        table.SetTextStyle(textStyleId, (int)RowType.DataRow);
+                    }
                     table.Position = point;
                     var gridSpec = profile.ToOptions();
                     table.Cells[0, 0].TextString = "HNL Tool - Ceiling Estimator Pro (" +

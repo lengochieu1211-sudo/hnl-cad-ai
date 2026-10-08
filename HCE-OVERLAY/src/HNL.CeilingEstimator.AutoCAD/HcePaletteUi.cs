@@ -100,6 +100,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             new System.Collections.Generic.Dictionary<string, ComboBox>();
         private CheckBox? _legacySnap;
         private TextBox? _legacyTolerance;
+        private ComboBox? _legacyTableStyle;
+        private TextBox? _legacyTableHeight;
         private WpfText? _legacyStatus;
         private WpfText? _legacyValidation;
         private bool _loadingLegacyControls;
@@ -373,7 +375,47 @@ namespace HNL.CeilingEstimator.AutoCAD
             var wrapped = new StackPanel();
             wrapped.Children.Add(Card(config));
             wrapped.Children.Add(Card(gridSection));
-            var current = Section("04  Kết quả cấu hình", "#F59E0B");
+            var table = Section("04  Định dạng bảng CAD", "#A78BFA");
+            var styleRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            styleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
+            styleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            styleRow.Children.Add(Text("Kiểu chữ bảng", 11, _muted, FontWeights.Normal));
+            _legacyTableStyle = new ComboBox
+            {
+                MinHeight = 27, Background = _surface, Foreground = _primary,
+                BorderBrush = _border
+            };
+            _legacyTableStyle.SelectionChanged += (sender, args) =>
+            {
+                if (_loadingLegacyControls || _legacyTableStyle.SelectedIndex < 0) return;
+                var profile = ActiveLegacyProfile();
+                if (profile == null) return;
+                profile.TableTextStyle = _legacyTableStyle.SelectedIndex == 0 ? string.Empty :
+                    _legacyTableStyle.SelectedItem?.ToString() ?? string.Empty;
+            };
+            Grid.SetColumn(_legacyTableStyle, 1);
+            styleRow.Children.Add(_legacyTableStyle);
+            table.Children.Add(styleRow);
+
+            var heightRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            heightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
+            heightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            heightRow.Children.Add(Text("Cao chữ bảng (mm)", 11, _muted, FontWeights.Normal));
+            _legacyTableHeight = new TextBox
+            {
+                MinWidth = 85, MaxWidth = 130, HorizontalAlignment = HorizontalAlignment.Left,
+                Foreground = _primary, Background = _surface, BorderBrush = _border,
+                Padding = new Thickness(6, 3, 6, 3)
+            };
+            _legacyTableHeight.LostFocus += (sender, args) => SaveLegacyTableHeight();
+            Grid.SetColumn(_legacyTableHeight, 1);
+            heightRow.Children.Add(_legacyTableHeight);
+            table.Children.Add(heightRow);
+            table.Children.Add(Text(
+                "0 = giữ kích thước chữ RC5.3.3. Giá trị khác 0 chỉ thay bảng xuất CAD, không đổi phép tính.",
+                10, _muted, FontWeights.Normal));
+            wrapped.Children.Add(Card(table));
+            var current = Section("05  Kết quả cấu hình", "#F59E0B");
             _legacyStatus = Text("", 11, _primary, FontWeights.SemiBold);
             _legacyValidation = Text("", 10, Brush("#F87171"), FontWeights.SemiBold);
             current.Children.Add(_legacyStatus);
@@ -455,6 +497,60 @@ namespace HNL.CeilingEstimator.AutoCAD
             }
         }
 
+        private void SaveLegacyTableHeight()
+        {
+            if (_loadingLegacyControls || _legacyTableHeight == null) return;
+            var profile = ActiveLegacyProfile();
+            if (profile == null) return;
+            if (double.TryParse(_legacyTableHeight.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
+                value >= 0 && value <= 10000 && !double.IsNaN(value) && !double.IsInfinity(value))
+            {
+                profile.TableTextHeight = value;
+                if (_legacyValidation != null) _legacyValidation.Text = string.Empty;
+            }
+            else if (_legacyValidation != null)
+                _legacyValidation.Text = "HNL Tool: Cao chữ bảng phải từ 0 đến 10000 mm.";
+        }
+
+        private void RefreshTableStyles(HceLegacyProfile profile)
+        {
+            if (_legacyTableStyle == null) return;
+            _legacyTableStyle.Items.Clear();
+            _legacyTableStyle.Items.Add("(Theo bảng hiện tại)");
+            var doc = CadApplication.DocumentManager.MdiActiveDocument;
+            if (doc != null)
+            {
+                try
+                {
+                    using (var tr = doc.Database.TransactionManager.StartTransaction())
+                    {
+                        var styles = (TextStyleTable)tr.GetObject(doc.Database.TextStyleTableId, OpenMode.ForRead);
+                        foreach (ObjectId id in styles)
+                        {
+                            var style = (TextStyleTableRecord)tr.GetObject(id, OpenMode.ForRead);
+                            if (style.Name != null) _legacyTableStyle.Items.Add(style.Name);
+                        }
+                    }
+                }
+                catch (System.Exception)
+                {
+                    // Selection stays read-only: do not change a DWG because of GUI refresh.
+                }
+            }
+            var selected = 0;
+            for (var i = 1; i < _legacyTableStyle.Items.Count; i++)
+                if (string.Equals(_legacyTableStyle.Items[i]?.ToString(), profile.TableTextStyle,
+                    StringComparison.OrdinalIgnoreCase)) { selected = i; break; }
+            // Preserve old choice in per-DWG memory even if its CAD style was deleted:
+            // InsertTable will reject missing styles instead of silently picking another.
+            if (selected == 0 && !string.IsNullOrEmpty(profile.TableTextStyle))
+            {
+                _legacyTableStyle.Items.Add(profile.TableTextStyle);
+                selected = _legacyTableStyle.Items.Count - 1;
+            }
+            _legacyTableStyle.SelectedIndex = selected;
+        }
+
         internal void RefreshLegacyControls()
         {
             var profile = ActiveLegacyProfile();
@@ -473,6 +569,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                     _legacyTolerance.Text = profile.Tolerance.ToString("0.###", CultureInfo.CurrentCulture);
                     _legacyTolerance.IsEnabled = profile.SnapEnabled;
                 }
+                RefreshTableStyles(profile);
+                if (_legacyTableHeight != null)
+                    _legacyTableHeight.Text = profile.TableTextHeight.ToString("0.###", CultureInfo.CurrentCulture);
                 if (_legacySelectors.TryGetValue("Priority", out var p))
                     p.IsEnabled = profile.Module == "M";
                 if (_legacySelectors.TryGetValue("Direction", out var d))

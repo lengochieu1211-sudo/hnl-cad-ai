@@ -211,6 +211,21 @@ jobs:
         shell: powershell
         run: dotnet run --project HCE-OVERLAY/tests/LegacyModes/LegacyModes.csproj -c Release
 
+      - name: Verify RC5.4 real per-DWG CAD Table display options
+        shell: powershell
+        run: |
+          $root='incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
+          $profile=Get-Content "$root/HceLegacyProfile.cs" -Raw
+          $ui=Get-Content "$root/HcePaletteUi.cs" -Raw
+          $cmd=Get-Content "$root/Commands.cs" -Raw
+          foreach($v in @('TableTextStyle', 'TableTextHeight')) {
+            if(-not $profile.Contains($v) -or -not $ui.Contains($v) -or -not $cmd.Contains($v)) { throw "Missing RC5.4 real table binding: $v" }
+          }
+          foreach($v in @('RefreshTableStyles', 'SaveLegacyTableHeight', 'TextStyleTable', 'Cao chữ bảng (mm)', 'SetTextHeight', 'SetTextStyle')) {
+            if(-not (($ui+$cmd).Contains($v))) { throw "Missing RC5.4 UI/adapter table setting: $v" }
+          }
+          Write-Host 'HCE RC5.4 CAD TABLE STYLE/HEIGHT BINDING STATIC GATE PASS'
+
       - name: Build Golden + AutoCAD matrix + Setup EXE
         shell: powershell
         run: ./incubator/hnl-ceiling-estimator-pro/scripts/build-universal-installer.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
