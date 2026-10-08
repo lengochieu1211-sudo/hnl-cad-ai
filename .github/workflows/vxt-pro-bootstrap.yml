@@ -207,7 +207,7 @@ jobs:
           }
 
           $iss = Get-Content "$env:VXT_ROOT\installer\HNL.VXT.Setup.iss" -Raw
-          if (-not $iss.Contains('DefaultDirName={commonpf}\Autodesk\ApplicationPlugins\HNL.VXT.bundle')) {
+          if (-not $iss.Contains('DefaultDirName={commonpf}\Autodesk\ApplicationPlugins\HNL.CeilingFramingPro.bundle')) {
             throw "Installer gate failed: VXT must install to trusted Program Files ApplicationPlugins."
           }
           if (-not $iss.Contains('PrivilegesRequired=admin')) {
