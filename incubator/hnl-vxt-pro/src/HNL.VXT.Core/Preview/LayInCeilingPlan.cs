@@ -53,6 +53,11 @@ namespace HNL.VXT.Core.Preview
 
         public double MainAngleRadians { get; set; }
         public Point2 HatchOrigin { get; set; }
+        // Physical first full panel, rather than a raw Hatch phase that can lie
+        // outside a concave region or in a void.
+        public Point2? FirstTileOrigin { get; set; }
+        public double FirstTileWidth { get; set; }
+        public double FirstTileHeight { get; set; }
         public string HatchPatternName { get; set; } = string.Empty;
 
         public double ModuleShort { get; set; }
