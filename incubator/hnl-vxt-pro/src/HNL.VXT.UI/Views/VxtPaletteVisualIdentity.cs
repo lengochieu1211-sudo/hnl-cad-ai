@@ -57,7 +57,7 @@ namespace HNL.VXT.UI.Views
             {
                 var text = node as TextBlock;
                 if (text == null || string.IsNullOrWhiteSpace(text.Text)) continue;
-                if (!text.Text.StartsWith("VXT Pro v7.0.0-beta.1", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!text.Text.StartsWith("Ceiling Framing Pro v7.0.0-beta.1", StringComparison.OrdinalIgnoreCase)) continue;
 
                 text.Text = display;
                 text.FontSize = Math.Min(text.FontSize, 9.5);
