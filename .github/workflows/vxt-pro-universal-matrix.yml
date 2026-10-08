@@ -1,4 +1,4 @@
-name: HNL VXT Pro Universal 2023-2027 Beta Matrix
+name: HNL Ceiling Framing Pro Universal 2023-2027 Beta Matrix
 
 on:
   push:
@@ -46,6 +46,8 @@ jobs:
           if (-not $vm.Contains('VxtBuildInfo.VersionLabel')) { throw 'Palette ViewModel is not bound to canonical VxtBuildInfo.VersionLabel.' }
           if (-not $buildInfo.Contains('public const string Version = "v7.0.0-beta.1"')) { throw 'Canonical beta.1 version label missing.' }
           $registeredCommands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
+          if (-not $registeredCommands.Contains('[CommandMethod("HCF"')) { throw 'HCF primary command missing.' }
+          if (-not $registeredCommands.Contains('[CommandMethod("HVX"')) { throw 'HVX compatibility alias missing.' }
           if (-not $registeredCommands.Contains('[CommandMethod("HNLVXTCREATE"')) { throw 'HNLVXTCREATE command missing.' }
           if (-not $registeredCommands.Contains('[CommandMethod("HNLVXTFOCUSBOUNDARY"')) { throw 'Mxx focus command is not registered on HnlVxtCommands.' }
           if (-not $registeredCommands.Contains('[CommandMethod("HNLVXTPICKBOUNDARYPOINT"')) { throw 'Pick Point command is not registered on HnlVxtCommands.' }
@@ -74,7 +76,12 @@ jobs:
           $uiProject = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\HNL.VXT.UI.csproj" -Raw
           if (-not $uiProject.Contains('..\..\installer\assets\HNL-VXT-EXE-Logo.png')) { throw 'Palette does not use canonical HNL VXT logo master.' }
           if (-not (Test-Path "$env:VXT_ROOT\scripts\verify-installer-icon.ps1")) { throw 'Compiled installer icon verifier missing.' }
-          Write-Host 'Functional beta.1 source/branding/multi-polyline gate PASS'
+          foreach ($manifestName in @('PackageContents.2026-net8.xml','PackageContents.2026-net10.xml')) {
+            $manifest = Get-Content "$env:VXT_ROOT\build\universal\$manifestName" -Raw
+            if (-not $manifest.Contains('Global="HCF" Local="HCF"')) { throw "$manifestName does not expose HCF." }
+            if (-not $manifest.Contains('Global="HVX" Local="HVX"')) { throw "$manifestName lost HVX compatibility alias." }
+          }
+          Write-Host 'HNL Ceiling Framing beta.1 source/branding/multi-polyline gate PASS'
       - name: Run golden core tests
         shell: pwsh
         run: dotnet test "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj" -c Release
@@ -203,7 +210,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $exe = Join-Path $env:VXT_ROOT 'artifacts\universal-installer\HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe'
+          $exe = Join-Path $env:VXT_ROOT 'artifacts\universal-installer\HNL_Ceiling_Framing_Pro_Universal_Setup_7.0.0-beta.1.exe'
           $sha = "$exe.sha256.txt"
           $ico = Join-Path $env:VXT_ROOT 'artifacts\installer-assets\HNL-VXT.ico'
           if (-not (Test-Path $exe)) { throw "Universal setup missing: $exe" }
@@ -218,10 +225,10 @@ jobs:
           Get-Content $sha
       - uses: actions/upload-artifact@v4
         with:
-          name: HNL-VXT-Pro-v7.0.0-beta.1-Universal-Setup-AutoCAD2023-2027
+          name: HNL-Ceiling-Framing-Pro-v7.0.0-beta.1-Universal-Setup-AutoCAD2023-2027
           path: |
-            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe
-            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_VXT_Pro_Universal_Setup_7.0.0-beta.1.exe.sha256.txt
+            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_Ceiling_Framing_Pro_Universal_Setup_7.0.0-beta.1.exe
+            ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_Ceiling_Framing_Pro_Universal_Setup_7.0.0-beta.1.exe.sha256.txt
             ${{ env.VXT_ROOT }}/artifacts/installer-assets/HNL-VXT.ico
             ${{ env.VXT_ROOT }}/artifacts/installer-assets/HNL-Logo-Official.png
           retention-days: 14
