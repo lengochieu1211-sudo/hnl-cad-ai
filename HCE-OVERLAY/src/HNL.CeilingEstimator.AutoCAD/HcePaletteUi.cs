@@ -1,5 +1,5 @@
 using System;
-using System.Drawing;
+using DrawingSize = System.Drawing.Size;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -52,8 +52,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                             PaletteSetStyles.ShowCloseButton |
                             PaletteSetStyles.ShowPropertiesMenu,
                     DockEnabled = DockSides.Left | DockSides.Right,
-                    MinimumSize = new Size(360, 470),
-                    Size = new Size(420, 730),
+                    MinimumSize = new DrawingSize(360, 470),
+                    Size = new DrawingSize(420, 730),
                     KeepFocus = false
                 };
                 palette.AddVisual("T\u00ednh t\u1ea5m tr\u1ea7n", view);
