@@ -29,7 +29,7 @@ namespace HNL.VXT.AutoCAD
 
             if (!VxtWorkflowEligibility.HasAnyTask(settings))
             {
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Không có tính năng nào được chọn.");
+                ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Không có tính năng nào được chọn.");
                 return;
             }
 
@@ -69,21 +69,21 @@ namespace HNL.VXT.AutoCAD
 
             if (!settings.DrawMain && (settings.DrawHangers || (settings.AutoDimension && settings.DimMain)))
             {
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Đã tắt Rải Xương Chính. Quét chọn Xương Chính có sẵn để rải Ty hoặc Dim.");
+                ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã tắt Rải Xương Chính. Quét chọn Xương Chính có sẵn để rải Ty hoặc Dim.");
                 if (!TrySelectExisting(ed, "LINE,LWPOLYLINE,POLYLINE,INSERT", out var ids)) return;
                 session.ManualMainIds = ids;
             }
 
             if (!settings.DrawFurring && settings.AutoDimension && settings.DimFurring)
             {
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Đã tắt Rải Xương Phụ. Quét chọn Xương Phụ có sẵn để ghi kích thước.");
+                ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã tắt Rải Xương Phụ. Quét chọn Xương Phụ có sẵn để ghi kích thước.");
                 if (!TrySelectExisting(ed, "LINE,LWPOLYLINE,POLYLINE,INSERT", out var ids)) return;
                 session.ManualFurringIds = ids;
             }
 
             if (!settings.DrawHangers && settings.AutoDimension && settings.DimHanger)
             {
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Đã tắt Rải Ty. Quét chọn Ty treo có sẵn để ghi kích thước.");
+                ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã tắt Rải Ty. Quét chọn Ty treo có sẵn để ghi kích thước.");
                 if (!TrySelectExisting(ed, "INSERT", out var ids)) return;
                 session.ManualHangerIds = ids;
             }
@@ -96,7 +96,7 @@ namespace HNL.VXT.AutoCAD
 
             if (settings.DrawHangers && !HasBlock(doc.Database, settings.HangerBlockName))
             {
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Không tìm thấy Block Ty treo '" +
+                ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Không tìm thấy Block Ty treo '" +
                                 settings.HangerBlockName + "'. Không tạo đối tượng nào.");
                 return;
             }
@@ -104,7 +104,7 @@ namespace HNL.VXT.AutoCAD
             if (!session.HasBoundary && VxtWorkflowEligibility.IsManualHangerOnlyStart(settings) &&
                 session.ManualMainIds.Length == 0)
             {
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Chưa chọn Xương Chính có sẵn để rải Ty. Không tạo đối tượng nào.");
+                ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Chưa chọn Xương Chính có sẵn để rải Ty. Không tạo đối tượng nào.");
                 return;
             }
 
@@ -122,8 +122,8 @@ namespace HNL.VXT.AutoCAD
 
             var defaultKeyword = settings.AutoShadowline ? "Yes" : "No";
             var prefix = fallbackFromCreate
-                ? "\nHNL Tool - VXT Pro: Chưa thiết lập hướng Auto. Trần có đi Shadowline không? "
-                : "\nHNL Tool - VXT Pro - Thiết lập hướng Auto: Trần có đi Shadowline không? ";
+                ? "\nHNL Tool - Ceiling Framing Pro: Chưa thiết lập hướng Auto. Trần có đi Shadowline không? "
+                : "\nHNL Tool - Ceiling Framing Pro - Thiết lập hướng Auto: Trần có đi Shadowline không? ";
             var options = new PromptKeywordOptions(prefix + "[Yes/No] <" + defaultKeyword + ">: ") { AllowNone = true };
             options.Keywords.Add("Yes");
             options.Keywords.Add("No");
@@ -144,7 +144,7 @@ namespace HNL.VXT.AutoCAD
             if (refreshPreview && session.HasBoundary)
                 VxtTransientPreview.Instance.Refresh();
 
-            doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Hướng Auto đã thiết lập Shadowline = " + (shadowline ? "Có." : "Không."));
+            doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Hướng Auto đã thiết lập Shadowline = " + (shadowline ? "Có." : "Không."));
             return true;
         }
 
@@ -153,8 +153,8 @@ namespace HNL.VXT.AutoCAD
             ids = Array.Empty<ObjectId>();
             var options = new PromptSelectionOptions
             {
-                MessageForAdding = "\nHNL Tool - VXT Pro: Chọn đối tượng có sẵn <Enter = bỏ qua, Esc = hủy>: ",
-                MessageForRemoval = "\nHNL Tool - VXT Pro: Bỏ đối tượng khỏi tập chọn: "
+                MessageForAdding = "\nHNL Tool - Ceiling Framing Pro: Chọn đối tượng có sẵn <Enter = bỏ qua, Esc = hủy>: ",
+                MessageForRemoval = "\nHNL Tool - Ceiling Framing Pro: Bỏ đối tượng khỏi tập chọn: "
             };
             var filter = new SelectionFilter(new[]
             {
@@ -228,14 +228,14 @@ namespace HNL.VXT.AutoCAD
             PromptKeywordOptions options;
             if (verticalLike)
             {
-                options = new PromptKeywordOptions("\nHNL Tool - VXT Pro: Chọn hướng rải Xương phụ cho " + label + " [Duoi/Tren] <Duoi>: ");
+                options = new PromptKeywordOptions("\nHNL Tool - Ceiling Framing Pro: Chọn hướng rải Xương phụ cho " + label + " [Duoi/Tren] <Duoi>: ");
                 options.Keywords.Add("Duoi");
                 options.Keywords.Add("Tren");
                 options.Keywords.Default = "Duoi";
             }
             else
             {
-                options = new PromptKeywordOptions("\nHNL Tool - VXT Pro: Chọn hướng rải Xương phụ cho " + label + " [Trai/Phai] <Trai>: ");
+                options = new PromptKeywordOptions("\nHNL Tool - Ceiling Framing Pro: Chọn hướng rải Xương phụ cho " + label + " [Trai/Phai] <Trai>: ");
                 options.Keywords.Add("Trai");
                 options.Keywords.Add("Phai");
                 options.Keywords.Default = "Trai";
@@ -328,13 +328,13 @@ namespace HNL.VXT.AutoCAD
             if (hasHorizontal)
                 session.ManualHangerReverseHorizontal = PromptReverse(
                     doc.Editor,
-                    "\nHNL Tool - VXT Pro: Dồn Ty 1 phía (Xương ngang) - hướng dồn [Trai/Phai] <Trai>: ",
+                    "\nHNL Tool - Ceiling Framing Pro: Dồn Ty 1 phía (Xương ngang) - hướng dồn [Trai/Phai] <Trai>: ",
                     "Trai", "Phai");
 
             if (hasVertical)
                 session.ManualHangerReverseVertical = PromptReverse(
                     doc.Editor,
-                    "\nHNL Tool - VXT Pro: Dồn Ty 1 phía (Xương dọc) - hướng dồn [Duoi/Tren] <Duoi>: ",
+                    "\nHNL Tool - Ceiling Framing Pro: Dồn Ty 1 phía (Xương dọc) - hướng dồn [Duoi/Tren] <Duoi>: ",
                     "Duoi", "Tren");
         }
 
