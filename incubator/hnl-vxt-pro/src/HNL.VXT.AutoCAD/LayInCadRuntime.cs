@@ -91,7 +91,8 @@ namespace HNL.VXT.AutoCAD
                 var total = plans.Sum(p => p.Plan.TeeSegments.Count +
                     p.Plan.HangerPoints.Count + p.Plan.DimensionRuns.Count +
                     (session.LayInSettings.DrawStartTileBlock && p.Plan.FirstTileOrigin.HasValue
-                        ? StartTileStrokes.Count : 0));
+                        ? (string.IsNullOrWhiteSpace(session.LayInSettings.StartMarkerBlockName)
+                            ? StartTileStrokes.Count : 1) : 0));
                 if (total > MaxPreviewDrawables)
                     throw new InvalidOperationException("Lay-in Preview exceeds 3500 graphics; Create still uses full Core plan.");
 
@@ -124,7 +125,7 @@ namespace HNL.VXT.AutoCAD
                     }
                     if (session.LayInSettings.DrawStartTileBlock &&
                         item.Plan.FirstTileOrigin.HasValue)
-                        PreviewStartTile(db, item.Plan);
+                        PreviewStartTile(db, item.Plan, session.LayInSettings);
                 }
                 int main, longCross, shortCross, hangers;
                 double waste;
@@ -437,8 +438,24 @@ namespace HNL.VXT.AutoCAD
             };
         }
 
-        private static void PreviewStartTile(Database db, LayInCeilingPlan plan)
+        private static void PreviewStartTile(
+            Database db, LayInCeilingPlan plan, LayInCeilingSettings settings)
         {
+            if (!string.IsNullOrWhiteSpace(settings.StartMarkerBlockName))
+            {
+                // Render the user's actual selected BlockRef, with identical scale
+                // and rotation to Create. Never make a temporary DB block here.
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var id = ResolveBlock(bt, settings.StartMarkerBlockName);
+                    var marker = MakeStartTileReference(db, tr, plan, id, false);
+                    marker.SetDatabaseDefaults(db);
+                    marker.ColorIndex = 3;
+                    AddTransient(marker);
+                }
+                return;
+            }
             var anchor = plan.FirstTileOrigin.Value;
             var cos = Math.Cos(plan.MainAngleRadians);
             var sin = Math.Sin(plan.MainAngleRadians);
