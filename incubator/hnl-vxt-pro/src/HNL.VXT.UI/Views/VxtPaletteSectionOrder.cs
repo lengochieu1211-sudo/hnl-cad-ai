@@ -84,11 +84,25 @@ namespace HNL.VXT.UI.Views
 
         private static StackPanel GetContentStack(VxtPaletteView view)
         {
+            // After separating concealed and Lay-in into real WPF tabs, the
+            // concealed ScrollViewer lives under the FIRST TabItem rather than
+            // directly under the palette's root Grid. Never attach the legacy
+            // Layer/DIM panel to Lay-in, and do not depend on which tab is active.
             var root = view.Content as Grid;
             if (root == null) return null;
 
             foreach (UIElement child in root.Children)
             {
+                var tabs = child as TabControl;
+                if (tabs != null && tabs.Items.Count > 0)
+                {
+                    var concealed = tabs.Items[0] as TabItem;
+                    var scrollInTab = concealed?.Content as ScrollViewer;
+                    var concealedStack = scrollInTab?.Content as StackPanel;
+                    if (concealedStack != null) return concealedStack;
+                }
+
+                // Preserve the pre-tab layout used by older visual test hosts.
                 var scroll = child as ScrollViewer;
                 if (scroll != null && Grid.GetRow(scroll) == 1)
                     return scroll.Content as StackPanel;
