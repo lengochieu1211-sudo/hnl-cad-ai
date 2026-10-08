@@ -273,6 +273,21 @@ namespace HNL.VXT.UI.ViewModels
                 PreviewStatus = "Chọn biên trần để xem trước Lay-in Ceiling.";
         }
 
+        // Manual and door anchors are DWG coordinates, not application-wide presets.
+        // Clear them on document transition without injecting a Preview command.
+        public void ClearDrawingPoints()
+        {
+            _settings.ManualStartPoint = null;
+            _settings.DoorPoint = null;
+            if (_settings.StartMode != LayInStartMode.Balanced)
+            {
+                _settings.StartMode = LayInStartMode.Balanced;
+                OnPropertyChanged(nameof(SelectedStart));
+                OnPropertyChanged(nameof(IsManualStart));
+                OnPropertyChanged(nameof(IsDoorStart));
+            }
+        }
+
         public void SetManualStart(HNL.VXT.Core.Geometry.Point2 point)
         {
             _settings.ManualStartPoint = point;
