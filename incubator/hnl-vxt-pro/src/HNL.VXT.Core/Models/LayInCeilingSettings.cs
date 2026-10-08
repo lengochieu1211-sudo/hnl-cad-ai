@@ -59,6 +59,7 @@ namespace HNL.VXT.Core.Models
 
         public string HatchLayer { get; set; } = "HNL-CF-LAYIN";
         public string HangerLayer { get; set; } = "HNL-CF-HANGER";
+        public string HangerBlockName { get; set; } = string.Empty;
         public string DimensionLayer { get; set; } = "HNL-CF-DIM";
         public string StartMarkerBlockName { get; set; } = string.Empty;
 
