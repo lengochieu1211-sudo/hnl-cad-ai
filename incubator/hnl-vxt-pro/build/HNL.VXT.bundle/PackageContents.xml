@@ -3,18 +3,18 @@
                     AppVersion="7.0.0.6"
                     ProductCode="{2DDE9CB2-6746-4DC2-8D1D-F562B96E2AB8}"
                     UpgradeCode="{C511DB88-A5A5-4AA6-929D-2C6E961AB6A6}"
-                    Name="HNL Tool - VXT Pro">
+                    Name="HNL Ceiling Framing Pro">
   <CompanyDetails Name="HNL Tool" />
   <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.2" SeriesMax="R24.2" />
-  <Components Description="HNL Tool - Vẽ Xương Trần | VXT Pro v7.0.0-beta.1">
+  <Components Description="HNL Ceiling Framing Pro v7.0.0-beta.1">
     <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R24.2" SeriesMax="R24.2" />
-    <ComponentEntry AppName="HNL VXT Pro"
+    <ComponentEntry AppName="HNL Ceiling Framing Pro"
                     Version="7.0.0.6"
                     ModuleName="./Contents/Windows/HNL.VXT.AutoCAD.dll"
-                    AppDescription="HNL Tool - Vẽ Xương Trần | VXT Pro"
+                    AppDescription="HNL Ceiling Framing Pro"
                     LoadOnCommandInvocation="True">
       <Commands GroupName="HNL.VXT.Commands">
-        <Command Global="HVX" Local="HVX" />
+        <Command Global="HCF" Local="HCF" /><Command Global="HVX" Local="HVX" />
         <Command Global="HNLVXTCREATE" Local="HNLVXTCREATE" /><Command Global="HNLVXTCREATEWARN" Local="HNLVXTCREATEWARN" />
         <Command Global="HNLVXTBOUNDARY" Local="HNLVXTBOUNDARY" />
         <Command Global="HNLVXTAUTOSETUP" Local="HNLVXTAUTOSETUP" />
