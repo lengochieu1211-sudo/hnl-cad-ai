@@ -253,6 +253,30 @@ jobs:
               }
             }
           }
+          # First full tile marker from tn.dxf must be a real one-panel Block
+          # (original sample is 305 x 305 with scale 2 = 610 x 610),
+          # anchored inside the region rather than a small phase circle.
+          $layInSettingsText = Get-Content "$env:VXT_ROOT\src\HNL.VXT.Core\Models\LayInCeilingSettings.cs" -Raw
+          if (-not $layInSettingsText.Contains('bool DrawStartTileBlock') -or
+              -not $layInPlanData.Contains('FirstTileOrigin') -or
+              -not $layInPlanData.Contains('FirstTileWidth') -or
+              -not $layInCore.Contains('FindFirstFullTile') -or
+              -not $layInCore.Contains('ContainsCompletePanel') -or
+              -not $layInCad.Contains('EnsureDefaultStartTileBlock(db, tr)') -or
+              -not $layInCad.Contains('DefaultStartTileBlockName') -or
+              -not $layInCad.Contains('PreviewStartTile(db, item.Plan)') -or
+              -not $ceilingUi.Contains('Chèn Block ký hiệu ô trần đầu tiên')) {
+            throw 'Lay-in one-panel start Block Core/Preview/Create contract missing.'
+          }
+          foreach ($testName in @(
+              'SampleTnDxf_FirstTileBlockCoversExactlyOne610Panel',
+              'FirstTileBlock_UsesEachPanelModuleDimensions',
+              'FirstTileBlock_SkipsHoleAndDoesNotDisturbHatchOrigin',
+              'FirstTileBlock_DoesNotPlaceOutsideTinyRegionOrWhenDisabled')) {
+            if (-not $layInTests.Contains($testName)) {
+              throw "Lay-in first-tile Block regression absent: $testName"
+            }
+          }
           Write-Host 'Lay-in one-Hatch/region static contract and command registrations PASS'
           Write-Host 'HNL Ceiling Framing beta.1 source/branding/multi-polyline gate PASS'
       - name: Run golden core tests
