@@ -5,6 +5,7 @@ on:
     branches: [research/hce-pro-bootstrap]
     paths:
       - 'HCE-PAYLOAD/**'
+      - 'HCE-OVERLAY/**'
       - '.github/workflows/hce-bootstrap.yml'
   workflow_dispatch:
 
@@ -23,6 +24,15 @@ jobs:
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\hce.zip", $bytes)
           New-Item -ItemType Directory -Force -Path incubator\hnl-ceiling-estimator-pro | Out-Null
           Expand-Archive "$env:RUNNER_TEMP\hce.zip" incubator\hnl-ceiling-estimator-pro -Force
+
+      - name: Apply minimal AutoCAD adapter overlay (Core untouched)
+        shell: powershell
+        run: |
+          $src = 'HCE-OVERLAY/src/HNL.CeilingEstimator.AutoCAD/Commands.cs'
+          $dst = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/Commands.cs'
+          if (-not (Test-Path $src)) { throw 'Missing HCE runtime bridge overlay.' }
+          Copy-Item $src $dst -Force
+          Write-Host 'HCE bridge overlay applied; protected Core and Golden fixtures unchanged.'
 
       - name: Setup .NET 8 and 10
         uses: actions/setup-dotnet@v4
