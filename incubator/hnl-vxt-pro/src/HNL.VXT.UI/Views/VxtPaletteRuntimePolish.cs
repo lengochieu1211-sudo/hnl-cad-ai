@@ -18,8 +18,8 @@ namespace HNL.VXT.UI.Views
     /// </summary>
     public static class VxtPaletteRuntimePolish
     {
-        private const double CommonLabelWidth = 142.0;
-        private const double CommonPickButtonWidth = 68.0;
+        private const double CommonLabelWidth = 132.0;
+        private const double CommonPickButtonWidth = 74.0;
         private const double CommonSettingsButtonWidth = 92.0;
         private const string FixedLayerDimTag = "HNL_VXT_FIXED_LAYER_DIM";
 
