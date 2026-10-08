@@ -76,6 +76,8 @@ namespace HNL.VXT.AutoCAD
             // to one DWG coordinate system and must never leak across document switches.
             LayInSettings.ManualStartPoint = null;
             LayInSettings.DoorPoint = null;
+            LayInSettings.StartMode = LayInStartMode.Balanced;
+            ViewModel?.LayIn?.ClearDrawingPoints();
 
             // Keep the palette instance and all user settings, but clear drawing-specific UI facts.
             ViewModel?.SetBoundaryStatus("Chưa chọn biên trần.", false);
