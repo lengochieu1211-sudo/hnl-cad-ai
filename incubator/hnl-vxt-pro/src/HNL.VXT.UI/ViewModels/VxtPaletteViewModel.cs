@@ -67,7 +67,25 @@ namespace HNL.VXT.UI.ViewModels
         public int SelectedCeilingTabIndex
         {
             get => _selectedCeilingTabIndex;
-            set => Set(ref _selectedCeilingTabIndex, value);
+            set
+            {
+                if (!Set(ref _selectedCeilingTabIndex, value)) return;
+
+                // Each tab owns one transient renderer. A tab change must not
+                // leave the other ceiling system's graphics overlaid on the DWG.
+                if (value == 1)
+                {
+                    _host.ClearPreview();
+                    if (HasBoundary)
+                        _host.RequestLayInPreview(LayIn.Snapshot());
+                }
+                else
+                {
+                    _host.ClearLayInPreview();
+                    if (HasBoundary)
+                        _host.RequestPreview(Snapshot());
+                }
+            }
         }
         public bool IsDarkTheme => _host.IsDarkTheme;
 
