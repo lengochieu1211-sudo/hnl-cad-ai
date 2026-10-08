@@ -69,6 +69,9 @@ namespace HNL.VXT.Core.Models
         public string HangerLayer { get; set; } = "HNL-CF-HANGER";
         public string HangerBlockName { get; set; } = string.Empty;
         public string DimensionLayer { get; set; } = "HNL-CF-DIM";
+        // One start-panel symbol per ceiling region. Blank custom block uses
+        // the built-in HNL_CF_FIRST_TILE geometry, sized to the selected module.
+        public bool DrawStartTileBlock { get; set; } = true;
         public string StartMarkerBlockName { get; set; } = string.Empty;
 
         public LayInCeilingSettings Clone()
