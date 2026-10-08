@@ -19,6 +19,8 @@ $iss=@(Get-ChildItem $h -Recurse -Filter '*.iss' -File)
 if ($iss.Count -lt 1) { throw 'Missing HCE Inno source' }
 foreach($f in $iss){
  $t=[IO.File]::ReadAllText($f.FullName)
+ # Remove existing branding directives before inserting new ones (Inno requires uniqueness).
+ $t=[Regex]::Replace($t,'(?mi)^[ \t]*(SetupIconFile|WizardSmallImageFile|UninstallDisplayIcon)[ \t]*=[^\r\n]*(\r?\n)?','')
  if($t -notmatch '(?m)^\[Setup\]' -or $t -notmatch '(?m)^\[Files\]') { throw 'Invalid Inno source' }
  $setup='[Setup]'+[Environment]::NewLine+'SetupIconFile='+$ico+[Environment]::NewLine+'WizardSmallImageFile='+$bmp+[Environment]::NewLine+'UninstallDisplayIcon={app}\Assets\HNL-HCE.ico'
  $t=$t.Replace('[Setup]',$setup)
