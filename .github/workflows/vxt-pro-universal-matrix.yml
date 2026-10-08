@@ -80,6 +80,13 @@ jobs:
             $manifest = Get-Content "$env:VXT_ROOT\build\universal\$manifestName" -Raw
             if (-not $manifest.Contains('Global="HCF" Local="HCF"')) { throw "$manifestName does not expose HCF." }
             if (-not $manifest.Contains('Global="HVX" Local="HVX"')) { throw "$manifestName lost HVX compatibility alias." }
+            if (-not $manifest.Contains('SupportPath="./Contents/Resources"')) { throw "$manifestName lost Lay-in hatch SupportPath." }
+          }
+          foreach ($pat in @('HNL_CF_600X600','HNL_CF_610X610','HNL_CF_600X1200','HNL_CF_610X1220')) {
+            $patPath = "$env:VXT_ROOT\resources\hatch\$pat.pat"
+            if (-not (Test-Path $patPath)) { throw "Lay-in hatch pattern missing: $pat.pat" }
+            $patText = Get-Content $patPath -Raw
+            if (-not $patText.Contains("*$pat")) { throw "Lay-in hatch pattern/header mismatch: $pat.pat" }
           }
           Write-Host 'HNL Ceiling Framing beta.1 source/branding/multi-polyline gate PASS'
       - name: Run golden core tests
