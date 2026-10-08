@@ -28,21 +28,21 @@ namespace HNL.VXT.AutoCAD
 
             if (index < 0 || index >= session.BoundaryIds.Count)
             {
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Không tìm thấy mảng Mxx cần highlight.");
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Không tìm thấy mảng Mxx cần highlight.");
                 return;
             }
 
             var id = session.BoundaryIds[index];
             if (id.IsNull)
             {
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: M" +
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: M" +
                     (index + 1).ToString("00") +
                     " được tạo bằng Chọn điểm nên không có Polyline nguồn để highlight.");
                 return;
             }
             if (!id.IsValid || id.IsErased)
             {
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Polyline của M" +
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Polyline của M" +
                     (index + 1).ToString("00") + " không còn hợp lệ trong DWG.");
                 return;
             }
@@ -60,13 +60,13 @@ namespace HNL.VXT.AutoCAD
                 doc.Editor.SetImpliedSelection(new ObjectId[0]);
                 doc.Editor.SetImpliedSelection(new[] { id });
                 TryHighlight(doc, id, true);
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: M" +
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: M" +
                     (index + 1).ToString("00") + " -> Polyline Handle " +
                     (string.IsNullOrWhiteSpace(handle) ? "N/A" : handle) + ".");
             }
             catch (System.Exception ex)
             {
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Không highlight được M" +
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Không highlight được M" +
                     (index + 1).ToString("00") + ": " + ex.Message);
             }
         }
@@ -79,7 +79,7 @@ namespace HNL.VXT.AutoCAD
             var session = VxtSession.Current;
             if (!session.HasBoundary)
             {
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Chưa chọn biên trần.");
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Chưa chọn biên trần.");
                 return;
             }
 
@@ -103,8 +103,8 @@ namespace HNL.VXT.AutoCAD
             var ed = doc.Editor;
             var options = new PromptSelectionOptions
             {
-                MessageForAdding = "\nHNL Tool - VXT Pro: Quét chọn Polyline biên trần (kín hoặc hở ≤ 1 mm): ",
-                MessageForRemoval = "\nHNL Tool - VXT Pro: Bỏ Polyline khỏi tập chọn: "
+                MessageForAdding = "\nHNL Tool - Ceiling Framing Pro: Quét chọn Polyline biên trần (kín hoặc hở ≤ 1 mm): ",
+                MessageForRemoval = "\nHNL Tool - Ceiling Framing Pro: Bỏ Polyline khỏi tập chọn: "
             };
             var filter = new SelectionFilter(new[]
             {
@@ -166,7 +166,7 @@ namespace HNL.VXT.AutoCAD
                 if (accepted.Count == 0)
                 {
                     ed.WriteMessage(
-                        "\nHNL Tool - VXT Pro: Không có biên trần hợp lệ. " +
+                        "\nHNL Tool - Ceiling Framing Pro: Không có biên trần hợp lệ. " +
                         "Cho phép khe hở đầu-cuối ≤ 1 mm và |Z| ≤ 0.01 mm.");
                     return;
                 }
@@ -189,7 +189,7 @@ namespace HNL.VXT.AutoCAD
                     (skipped > 0 ? " • Bỏ qua " + skipped : string.Empty), true);
                 tr.Commit();
 
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận " + accepted.Count + " mảng trần độc lập");
+                ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã nhận " + accepted.Count + " mảng trần độc lập");
                 if (autoClosed > 0)
                     ed.WriteMessage("; tự khép " + autoClosed + " biên, khe lớn nhất " +
                         maxAutoCloseGap.ToString("0.###") + " mm");
@@ -228,7 +228,7 @@ namespace HNL.VXT.AutoCAD
             while (true)
             {
                 var options = new PromptPointOptions(
-                    "\nHNL Tool - VXT Pro: Chọn điểm trong vùng trần [Enter để xong]: ")
+                    "\nHNL Tool - Ceiling Framing Pro: Chọn điểm trong vùng trần [Enter để xong]: ")
                 {
                     AllowNone = true
                 };
@@ -237,12 +237,12 @@ namespace HNL.VXT.AutoCAD
                     break;
                 if (result.Status == PromptStatus.Cancel)
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Đã hủy Chọn điểm; giữ nguyên vùng trần trước đó.");
+                    ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã hủy Chọn điểm; giữ nguyên vùng trần trước đó.");
                     return;
                 }
                 if (result.Status != PromptStatus.OK)
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Đã hủy Chọn điểm; giữ nguyên vùng trần trước đó.");
+                    ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã hủy Chọn điểm; giữ nguyên vùng trần trước đó.");
                     return;
                 }
 
@@ -256,13 +256,13 @@ namespace HNL.VXT.AutoCAD
                 }
                 catch (System.Exception ex)
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Không tạo được biên tại điểm này: " + ex.Message);
+                    ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Không tạo được biên tại điểm này: " + ex.Message);
                     continue;
                 }
 
                 if (traced == null || traced.Count == 0)
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Điểm này không nằm trong vùng kín hợp lệ.");
+                    ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Điểm này không nằm trong vùng kín hợp lệ.");
                     continue;
                 }
 
@@ -288,7 +288,7 @@ namespace HNL.VXT.AutoCAD
 
                 if (loops.Count == 0)
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: TraceBoundary không trả về Polyline biên hợp lệ.");
+                    ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: TraceBoundary không trả về Polyline biên hợp lệ.");
                     continue;
                 }
 
@@ -325,13 +325,13 @@ namespace HNL.VXT.AutoCAD
 
                 if (ContainsEquivalentBoundary(accepted, boundary))
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Vùng này đã được Chọn điểm trước đó; bỏ qua trùng.");
+                    ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Vùng này đã được Chọn điểm trước đó; bỏ qua trùng.");
                     continue;
                 }
 
                 accepted.Add(boundary);
                 acceptedHoleGroups.Add(holes);
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận M" +
+                ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã nhận M" +
                     accepted.Count.ToString("00") +
                     " bằng Chọn điểm" +
                     (holes.Count > 0 ? " • " + holes.Count + " lỗ" : string.Empty) +
@@ -361,7 +361,7 @@ namespace HNL.VXT.AutoCAD
                 "✓ Chọn điểm " + accepted.Count + " mảng trần" +
                 (totalHoles > 0 ? " • " + totalHoles + " lỗ" : string.Empty), true);
 
-            ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận " +
+            ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã nhận " +
                 accepted.Count + " mảng trần bằng Chọn điểm" +
                 (totalHoles > 0 ? ", có " + totalHoles + " lỗ trong." : "."));
 
@@ -476,7 +476,7 @@ namespace HNL.VXT.AutoCAD
             var pathPoints = PromptMainDirectionPath(doc);
             if (pathPoints == null || pathPoints.Count < 2)
             {
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Chưa xác định hướng; giữ thiết lập trước đó.");
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Chưa xác định hướng; giữ thiết lập trước đó.");
                 return;
             }
 
@@ -495,7 +495,7 @@ namespace HNL.VXT.AutoCAD
                 session.BoundaryRegionGroups.Clear();
                 session.ViewModel?.SetDirection(firstAngle, MainDirectionMode.TwoPoints);
                 VxtTransientPreview.Instance.Refresh();
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Chọn hướng = 1 đoạn, góc " +
+                doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Chọn hướng = 1 đoạn, góc " +
                     firstAngle.ToString("0.###") + "°.");
                 return;
             }
@@ -503,7 +503,7 @@ namespace HNL.VXT.AutoCAD
             if (!session.HasBoundary)
             {
                 doc.Editor.WriteMessage(
-                    "\nHNL Tool - VXT Pro: Tuyến gấp khúc cần có biên trần trước. " +
+                    "\nHNL Tool - Ceiling Framing Pro: Tuyến gấp khúc cần có biên trần trước. " +
                     "Hãy chọn Polyline biên trần rồi Thiết lập hướng lại.");
                 return;
             }
@@ -511,7 +511,7 @@ namespace HNL.VXT.AutoCAD
             if (session.Boundaries.Count != 1)
             {
                 doc.Editor.WriteMessage(
-                    "\nHNL Tool - VXT Pro: Chọn hướng bằng tuyến gấp khúc hiện thiết lập theo từng mảng. " +
+                    "\nHNL Tool - Ceiling Framing Pro: Chọn hướng bằng tuyến gấp khúc hiện thiết lập theo từng mảng. " +
                     "Hãy chọn 1 Polyline biên trần; chế độ Ngang/Dọc/2 điểm/HCN/Tự động vẫn hỗ trợ nhiều Polyline như cũ.");
                 return;
             }
@@ -554,7 +554,7 @@ namespace HNL.VXT.AutoCAD
             catch (System.Exception ex)
             {
                 doc.Editor.WriteMessage(
-                    "\nHNL Tool - VXT Pro: Không thể chia mảng theo tuyến gấp khúc: " + ex.Message);
+                    "\nHNL Tool - Ceiling Framing Pro: Không thể chia mảng theo tuyến gấp khúc: " + ex.Message);
                 return;
             }
 
@@ -575,7 +575,7 @@ namespace HNL.VXT.AutoCAD
             var closedPath = pathPoints.Count > 3 &&
                 pathPoints[0].DistanceTo(pathPoints[pathPoints.Count - 1]) <= 1.0;
             doc.Editor.WriteMessage(
-                "\nHNL Tool - VXT Pro: Đã nhận tuyến " +
+                "\nHNL Tool - Ceiling Framing Pro: Đã nhận tuyến " +
                 (closedPath ? "kín " : "gấp khúc ") +
                 (pathPoints.Count - 1) + " đoạn; tự chia " +
                 session.Regions.Count + " vùng hướng XC.");
@@ -590,7 +590,7 @@ namespace HNL.VXT.AutoCAD
             var session = VxtSession.Current;
             if (!session.HasBoundary)
             {
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Hãy chọn biên trần trước khi chia vùng.");
+                ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Hãy chọn biên trần trước khi chia vùng.");
                 return;
             }
 
@@ -599,7 +599,7 @@ namespace HNL.VXT.AutoCAD
             session.BoundaryRegionGroups.Clear();
             VxtTransientPreview.Instance.Clear();
 
-            ed.WriteMessage("\nHNL Tool - VXT Pro: Chia vùng HCN theo từng Polyline, giống VXT Lisp. Enter tại góc 1 để kết thúc mảng hiện tại.");
+            ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Chia vùng HCN theo từng Polyline, giống VXT Lisp. Enter tại góc 1 để kết thúc mảng hiện tại.");
 
             for (var boundaryIndex = 0; boundaryIndex < session.Boundaries.Count; boundaryIndex++)
             {
@@ -613,7 +613,7 @@ namespace HNL.VXT.AutoCAD
                 TryHighlight(doc, boundaryId, true);
                 try
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Mảng trần " + (boundaryIndex + 1) + "/" +
+                    ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Mảng trần " + (boundaryIndex + 1) + "/" +
                         session.Boundaries.Count + " đang được thiết lập.");
 
                     while (true)
@@ -632,7 +632,7 @@ namespace HNL.VXT.AutoCAD
                         var second = ed.GetCorner(cornerOptions);
                         if (second.Status != PromptStatus.OK)
                         {
-                            ed.WriteMessage("\nHNL Tool - VXT Pro: Không chọn được góc 2. Thử lại vùng hiện tại.");
+                            ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Không chọn được góc 2. Thử lại vùng hiện tại.");
                             continue;
                         }
 
@@ -642,7 +642,7 @@ namespace HNL.VXT.AutoCAD
                         var maxY = Math.Max(first.Value.Y, second.Value.Y);
                         if (maxX - minX < 1e-6 || maxY - minY < 1e-6)
                         {
-                            ed.WriteMessage("\nHNL Tool - VXT Pro: Vùng quá nhỏ, bỏ qua.");
+                            ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Vùng quá nhỏ, bỏ qua.");
                             continue;
                         }
 
@@ -669,7 +669,7 @@ namespace HNL.VXT.AutoCAD
 
                         group.Add(region);
                         session.Regions.Add(region);
-                        ed.WriteMessage("\nHNL Tool - VXT Pro: Đã nhận HCN " + regionNumber +
+                        ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã nhận HCN " + regionNumber +
                             " cho Polyline " + (boundaryIndex + 1) + ".");
                         regionNumber++;
                     }
@@ -687,7 +687,7 @@ namespace HNL.VXT.AutoCAD
                     var fallback = new VxtLayoutRegion(bounds, 0.0, false);
                     group.Add(fallback);
                     session.Regions.Add(fallback);
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Polyline " + (boundaryIndex + 1) +
+                    ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Polyline " + (boundaryIndex + 1) +
                         " chưa có HCN; dùng toàn bộ biên với hướng Ngang.");
                 }
 
@@ -695,7 +695,7 @@ namespace HNL.VXT.AutoCAD
             }
 
             VxtTransientPreview.Instance.Refresh();
-            ed.WriteMessage("\nHNL Tool - VXT Pro: Đã thiết lập " + session.Regions.Count +
+            ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã thiết lập " + session.Regions.Count +
                 " HCN trên " + session.BoundaryRegionGroups.Count +
                 " Polyline. Preview và Tạo thật xử lý từng Polyline độc lập.");
         }
@@ -801,11 +801,11 @@ namespace HNL.VXT.AutoCAD
         private static List<Point2> ReadDirectionPoints(Editor ed)
         {
             var first = ed.GetPoint(
-                "\nHNL Tool - VXT Pro: Chọn điểm 1 của hướng Xương chính: ");
+                "\nHNL Tool - Ceiling Framing Pro: Chọn điểm 1 của hướng Xương chính: ");
             if (first.Status != PromptStatus.OK) return null;
 
             var secondOptions = new PromptPointOptions(
-                "\nHNL Tool - VXT Pro: Chọn điểm 2: ")
+                "\nHNL Tool - Ceiling Framing Pro: Chọn điểm 2: ")
             {
                 BasePoint = first.Value,
                 UseBasePoint = true
@@ -826,7 +826,7 @@ namespace HNL.VXT.AutoCAD
             while (true)
             {
                 var nextOptions = new PromptPointOptions(
-                    "\nHNL Tool - VXT Pro: Chọn điểm tiếp theo, có thể khép về điểm đầu, hoặc Enter để kết thúc hướng: ")
+                    "\nHNL Tool - Ceiling Framing Pro: Chọn điểm tiếp theo, có thể khép về điểm đầu, hoặc Enter để kết thúc hướng: ")
                 {
                     AllowNone = true,
                     BasePoint = lastUcsPoint,
@@ -846,7 +846,7 @@ namespace HNL.VXT.AutoCAD
                 {
                     points.Add(points[0]);
                     ed.WriteMessage(
-                        "\nHNL Tool - VXT Pro: Đã khép tuyến hướng về điểm đầu.");
+                        "\nHNL Tool - Ceiling Framing Pro: Đã khép tuyến hướng về điểm đầu.");
                     break;
                 }
 
@@ -861,9 +861,9 @@ namespace HNL.VXT.AutoCAD
         {
             var ed = doc.Editor;
             var options = new PromptEntityOptions(
-                "\nHNL Tool - VXT Pro: Chọn Line hoặc Polyline mở làm tuyến hướng: ");
+                "\nHNL Tool - Ceiling Framing Pro: Chọn Line hoặc Polyline mở làm tuyến hướng: ");
             options.SetRejectMessage(
-                "\nHNL Tool - VXT Pro: Chỉ nhận Line hoặc Polyline 2D mở.");
+                "\nHNL Tool - Ceiling Framing Pro: Chỉ nhận Line hoặc Polyline 2D mở.");
             options.AddAllowedClass(typeof(Line), true);
             options.AddAllowedClass(typeof(Polyline), true);
 
@@ -885,14 +885,14 @@ namespace HNL.VXT.AutoCAD
                 var polyline = entity as Polyline;
                 if (polyline == null || polyline.NumberOfVertices < 2)
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Đường hướng không hợp lệ.");
+                    ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đường hướng không hợp lệ.");
                     return null;
                 }
 
                 if (polyline.Closed)
                 {
                     ed.WriteMessage(
-                        "\nHNL Tool - VXT Pro: Tuyến hướng phải là Polyline mở; không dùng Polyline kín.");
+                        "\nHNL Tool - Ceiling Framing Pro: Tuyến hướng phải là Polyline mở; không dùng Polyline kín.");
                     return null;
                 }
 
@@ -901,7 +901,7 @@ namespace HNL.VXT.AutoCAD
                     if (Math.Abs(polyline.GetBulgeAt(i)) > 1e-9)
                     {
                         ed.WriteMessage(
-                            "\nHNL Tool - VXT Pro: Tuyến hướng hiện chỉ nhận các đoạn thẳng; " +
+                            "\nHNL Tool - Ceiling Framing Pro: Tuyến hướng hiện chỉ nhận các đoạn thẳng; " +
                             "Polyline có cung/bulge chưa được dùng làm tuyến hướng.");
                         return null;
                     }
@@ -919,9 +919,9 @@ namespace HNL.VXT.AutoCAD
 
         private static double? PromptAngleByTwoPoints(Editor ed, string label)
         {
-            var p1 = ed.GetPoint("\nHNL Tool - VXT Pro: Chọn điểm thứ 1 xác định " + label + ": ");
+            var p1 = ed.GetPoint("\nHNL Tool - Ceiling Framing Pro: Chọn điểm thứ 1 xác định " + label + ": ");
             if (p1.Status != PromptStatus.OK) return null;
-            var p2opt = new PromptPointOptions("\nHNL Tool - VXT Pro: Chọn điểm thứ 2 xác định " + label + ": ")
+            var p2opt = new PromptPointOptions("\nHNL Tool - Ceiling Framing Pro: Chọn điểm thứ 2 xác định " + label + ": ")
             {
                 BasePoint = p1.Value,
                 UseBasePoint = true
@@ -932,7 +932,7 @@ namespace HNL.VXT.AutoCAD
             var dy = p2.Value.Y - p1.Value.Y;
             if (Math.Sqrt(dx * dx + dy * dy) < 1e-8)
             {
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Hai điểm quá gần nhau.");
+                ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Hai điểm quá gần nhau.");
                 return null;
             }
             return Math.Atan2(dy, dx) * 180.0 / Math.PI;
@@ -966,8 +966,8 @@ namespace HNL.VXT.AutoCAD
             if (doc == null) return;
             var ed = doc.Editor;
             var label = target == BlockTarget.Main ? "Xương chính" : target == BlockTarget.Furring ? "Xương phụ" : "Ty treo";
-            var options = new PromptEntityOptions($"\nHNL Tool - VXT Pro: Chọn Block mẫu {label}: ");
-            options.SetRejectMessage("\nHNL Tool - VXT Pro: Đối tượng phải là Block.");
+            var options = new PromptEntityOptions($"\nHNL Tool - Ceiling Framing Pro: Chọn Block mẫu {label}: ");
+            options.SetRejectMessage("\nHNL Tool - Ceiling Framing Pro: Đối tượng phải là Block.");
             options.AddAllowedClass(typeof(BlockReference), true);
             var result = ed.GetEntity(options);
             if (result.Status != PromptStatus.OK) return;
@@ -989,7 +989,7 @@ namespace HNL.VXT.AutoCAD
                     case BlockTarget.Hanger: settings.HangerBlockName = blockName; settings.HangerLayer = br.Layer; break;
                 }
                 VxtSession.Current.ViewModel?.SetBlock(target, blockName);
-                ed.WriteMessage($"\nHNL Tool - VXT Pro: Đã chọn Block {label}: {blockName}");
+                ed.WriteMessage($"\nHNL Tool - Ceiling Framing Pro: Đã chọn Block {label}: {blockName}");
                 tr.Commit();
             }
             VxtTransientPreview.Instance.Refresh();
@@ -1003,8 +1003,8 @@ namespace HNL.VXT.AutoCAD
             var label = target == EquipmentTarget.General ? "dùng chung" : target == EquipmentTarget.Main ? "cho Xương chính" : "cho Xương phụ";
             var options = new PromptSelectionOptions
             {
-                MessageForAdding = "\nHNL Tool - VXT Pro: Quét chọn đối tượng thiết bị " + label + " (Block/Polyline/Circle/Spline/Hatch/Line): ",
-                MessageForRemoval = "\nHNL Tool - VXT Pro: Bỏ đối tượng khỏi tập chọn: "
+                MessageForAdding = "\nHNL Tool - Ceiling Framing Pro: Quét chọn đối tượng thiết bị " + label + " (Block/Polyline/Circle/Spline/Hatch/Line): ",
+                MessageForRemoval = "\nHNL Tool - Ceiling Framing Pro: Bỏ đối tượng khỏi tập chọn: "
             };
             var filter = new SelectionFilter(new[]
             {
@@ -1025,7 +1025,7 @@ namespace HNL.VXT.AutoCAD
                 case EquipmentTarget.Furring: VxtSession.Current.FurringEquipmentIds = ids; break;
             }
             VxtSession.Current.ViewModel?.SetEquipmentStatus(target, ids.Length);
-            ed.WriteMessage("\nHNL Tool - VXT Pro: Đã chọn " + ids.Length + " đối tượng thiết bị " + label + ".");
+            ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã chọn " + ids.Length + " đối tượng thiết bị " + label + ".");
             VxtTransientPreview.Instance.Refresh();
         }
 
@@ -1037,11 +1037,11 @@ namespace HNL.VXT.AutoCAD
             var session = VxtSession.Current;
             if (!session.HasBoundary)
             {
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Hãy chọn biên trần trước.");
+                ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Hãy chọn biên trần trước.");
                 return;
             }
 
-            var result = ed.GetPoint("\nHNL Tool - VXT Pro: Chọn vị trí đặt đường Dim: ");
+            var result = ed.GetPoint("\nHNL Tool - Ceiling Framing Pro: Chọn vị trí đặt đường Dim: ");
             if (result.Status != PromptStatus.OK) return;
             var settings = session.Settings;
             var angle = ResolveCurrentMainAngle(settings);
