@@ -249,7 +249,7 @@ namespace HNL.VXT.AutoCAD
             }
         }
 
-        private static void CreateHatch(Database db, Transaction tr,
+        private static Hatch CreateHatch(Database db, Transaction tr,
             BlockTableRecord ms, LayInBoundaryRuntimePlan item, ObjectId layerId)
         {
             var ids = new List<ObjectId>();
@@ -287,12 +287,138 @@ namespace HNL.VXT.AutoCAD
                 hatch.EvaluateHatch(true);
                 // Nonassociative Hatch keeps its own loops; do not leave auxiliary polylines.
                 foreach (var poly in temporaryBoundaries) poly.Erase();
+                return hatch;
             }
             catch
             {
                 // Outer transaction rolls back both the Hatch and temporary boundaries.
                 throw;
             }
+        }
+
+        // Explicit field test: runs inside AutoCAD and always rolls back all test entities.
+        // No palette/session settings, DWG selection, or Golden solver are changed.
+        internal static void RunRuntimeQa()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            var ed = doc.Editor;
+            int passed = 0, failed = 0;
+            var gridSystems = new[]
+            {
+                LayInGridSystem.Module600x600, LayInGridSystem.Module610x610,
+                LayInGridSystem.Module600x1200, LayInGridSystem.Module610x1220
+            };
+
+            ed.WriteMessage("\nHNL Tool - Lay-in Runtime QA: 4 grids x 4 geometries; test entities will be rolled back.");
+            foreach (var grid in gridSystems)
+            {
+                for (int scenario = 0; scenario < 4; scenario++)
+                {
+                    string caseName = grid + " / " + new[] { "Rectangle", "Hole", "Rotated30", "Concave" }[scenario];
+                    try
+                    {
+                        var outer = scenario == 3
+                            ? new Boundary2(new[]
+                            {
+                                new HNL.VXT.Core.Geometry.Point2(0, 0),
+                                new HNL.VXT.Core.Geometry.Point2(6500, 0),
+                                new HNL.VXT.Core.Geometry.Point2(6500, 1400),
+                                new HNL.VXT.Core.Geometry.Point2(4900, 1400),
+                                new HNL.VXT.Core.Geometry.Point2(4900, 2900),
+                                new HNL.VXT.Core.Geometry.Point2(6500, 2900),
+                                new HNL.VXT.Core.Geometry.Point2(6500, 5000),
+                                new HNL.VXT.Core.Geometry.Point2(0, 5000)
+                            })
+                            : QaRectangle(0, 0, 6500, 5000);
+                        if (scenario == 2) outer = QaRotate(outer, Math.PI / 6.0);
+
+                        var holes = scenario == 1
+                            ? new List<Boundary2> { QaRectangle(2300, 1700, 3500, 2900) }
+                            : new List<Boundary2>();
+                        var settings = new LayInCeilingSettings
+                        {
+                            GridSystem = grid,
+                            MainDirection = scenario == 2
+                                ? LayInMainDirectionMode.ParallelLongSide
+                                : scenario == 3 ? LayInMainDirectionMode.Vertical
+                                : LayInMainDirectionMode.Horizontal,
+                            StartMode = scenario == 2 ? LayInStartMode.ManualStart
+                                : scenario == 3 ? LayInStartMode.FromDoor : LayInStartMode.Balanced,
+                            ManualStartPoint = new HNL.VXT.Core.Geometry.Point2(140, 100),
+                            DoorPoint = new HNL.VXT.Core.Geometry.Point2(45, 60),
+                            DrawHangers = true,
+                            DimensionMode = LayInDimensionMode.Grouped,
+                            GroupedDimensionCount = 3
+                        };
+                        var plan = LayInCeilingPlanner.Build(outer, holes, settings);
+                        var item = new LayInBoundaryRuntimePlan
+                        {
+                            Boundary = outer, Holes = holes, Plan = plan
+                        };
+
+                        // The Hatch and sampled DIM/Hanger entities use the very same
+                        // materialization helpers as Create(). Never Commit this transaction.
+                        using (var tr = doc.Database.TransactionManager.StartTransaction())
+                        {
+                            var db = doc.Database;
+                            var ms = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
+                            var hatch = CreateHatch(db, tr, ms, item, db.Clayer);
+                            if (hatch.IsErased || hatch.NumberOfLoops != 1 + holes.Count)
+                                throw new InvalidOperationException("Hatch missing or wrong number of boundary loops.");
+                            if (!string.Equals(hatch.PatternName, plan.HatchPatternName, StringComparison.OrdinalIgnoreCase))
+                                throw new InvalidOperationException("Actual Hatch pattern differs from Core plan.");
+                            if (Math.Abs(hatch.PatternAngle - plan.MainAngleRadians) > 1e-6)
+                                throw new InvalidOperationException("Actual Hatch angle differs from Core plan.");
+                            var origin = hatch.Origin;
+                            if (Math.Abs(origin.X - plan.HatchOrigin.X) > 1e-5 ||
+                                Math.Abs(origin.Y - plan.HatchOrigin.Y) > 1e-5)
+                                throw new InvalidOperationException("Actual Hatch origin differs from Core plan.");
+
+                            if (plan.DimensionRuns.Count == 0 || plan.HangerPoints.Count == 0)
+                                throw new InvalidOperationException("Core plan did not create test DIM/Ty.");
+                            var dimension = BuildDimension(db, plan.DimensionRuns[0], plan.ModuleShort);
+                            Append(db, tr, ms, dimension, db.Clayer);
+                            if (dimension.ObjectId.IsNull)
+                                throw new InvalidOperationException("DIM was not materialized.");
+                            var hanger = new Circle(ToCad(plan.HangerPoints[0]), Vector3d.ZAxis, 18.0);
+                            Append(db, tr, ms, hanger, db.Clayer);
+                            if (hanger.ObjectId.IsNull)
+                                throw new InvalidOperationException("Ty marker was not materialized.");
+                            // Deliberately no Commit: closing the transaction removes every
+                            // QA Hatch, boundary, DIM and Ty marker from the user's drawing.
+                        }
+                        passed++;
+                        ed.WriteMessage("\nHNL Tool - Lay-in QA PASS: " + caseName);
+                    }
+                    catch (Exception ex)
+                    {
+                        failed++;
+                        ed.WriteMessage("\nHNL Tool - Lay-in QA FAIL: " + caseName + " | " + ex.Message);
+                    }
+                }
+            }
+            ed.WriteMessage("\nHNL Tool - Lay-in Runtime QA: PASS=" + passed +
+                " FAIL=" + failed + " TOTAL=16; all test transactions rolled back.");
+        }
+
+        private static Boundary2 QaRectangle(double x0, double y0, double x1, double y1)
+        {
+            return new Boundary2(new[]
+            {
+                new HNL.VXT.Core.Geometry.Point2(x0, y0),
+                new HNL.VXT.Core.Geometry.Point2(x1, y0),
+                new HNL.VXT.Core.Geometry.Point2(x1, y1),
+                new HNL.VXT.Core.Geometry.Point2(x0, y1)
+            });
+        }
+
+        private static Boundary2 QaRotate(Boundary2 boundary, double radians)
+        {
+            double cosine = Math.Cos(radians), sine = Math.Sin(radians);
+            return new Boundary2(boundary.Vertices.Select(p =>
+                new HNL.VXT.Core.Geometry.Point2(
+                    p.X * cosine - p.Y * sine, p.X * sine + p.Y * cosine)));
         }
 
         // Preview and Create must use the same DIM geometry, text and offset.
