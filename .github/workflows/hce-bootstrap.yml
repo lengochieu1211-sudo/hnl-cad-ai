@@ -100,7 +100,7 @@ jobs:
         shell: powershell
         run: |
           $root = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
-          $ui = Get-Content "$root/HcePaletteUi.cs" -Raw
+          $ui = Get-Content "$root/HceLegacyProfile.cs" -Raw
           $bridge = Get-Content "$root/Commands.cs" -Raw
           foreach ($required in @('Family = 610', 'MixedPrimaryMode.LargeMain', 'Module == "D" ? large : small', 'SnapTolerance = Tolerance')) {
             if (-not $ui.Contains($required)) { throw "Missing DEMTC UI setting $required" }
