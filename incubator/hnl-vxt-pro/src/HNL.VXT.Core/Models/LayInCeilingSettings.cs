@@ -67,8 +67,13 @@ namespace HNL.VXT.Core.Models
 
         public string HatchLayer { get; set; } = "HNL-CF-LAYIN";
         public string HangerLayer { get; set; } = "HNL-CF-HANGER";
-        public string HangerBlockName { get; set; } = string.Empty;
+        // Same preferred hanger block as concealed ceiling; CAD falls back to a
+        // circle only when this standard block is absent from the current DWG.
+        public const string DefaultHangerBlockName = "AP_DIEM TY 06.2026";
+        public string HangerBlockName { get; set; } = DefaultHangerBlockName;
         public string DimensionLayer { get; set; } = "HNL-CF-DIM";
+        // Empty = use current drawing DimStyle. Never set db.Dimstyle globally.
+        public string DimensionStyle { get; set; } = string.Empty;
         // One start-panel symbol per ceiling region. Blank custom block uses
         // the built-in HNL_CF_FIRST_TILE geometry, sized to the selected module.
         public bool DrawStartTileBlock { get; set; } = true;
