@@ -57,13 +57,24 @@ namespace HNL.CeilingEstimator.AutoCAD
                     {
                         var hatch = tr.GetObject(selected.ObjectId, OpenMode.ForRead, false) as Hatch;
                         if (hatch == null) continue;
-                        editor.WriteMessage("\nHCEQA handle=" + hatch.Handle.ToString() +
+                        if (hatch.IsGradient)
+                        {
+                            editor.WriteMessage("\nHCEQA handle=" + hatch.Handle +
+                                " layer=" + hatch.Layer +
+                                " rejected: gradient fill is not a ceiling tile grid.");
+                            continue;
+                        }
+                        var userPattern = hatch.PatternType == HatchPatternType.UserDefined;
+                        var scaleText = userPattern ? "n/a (user-defined)" : Fmt(hatch.PatternScale);
+                        var spacingText = userPattern ? Fmt(hatch.PatternSpace) : "n/a";
+                        var doubleText = userPattern ? hatch.PatternDouble.ToString() : "n/a";
+                        editor.WriteMessage("\nHCEQA handle=" + hatch.Handle +
                             " layer=" + hatch.Layer +
                             " pattern=" + hatch.PatternName +
-                            " type=" + hatch.PatternType.ToString() +
-                            " scale=" + Fmt(hatch.PatternScale) +
-                            " space=" + Fmt(hatch.PatternSpace) +
-                            " double=" + hatch.PatternDouble.ToString() +
+                            " type=" + hatch.PatternType +
+                            " scale=" + scaleText +
+                            " space=" + spacingText +
+                            " double=" + doubleText +
                             " origin=" + Fmt(hatch.Origin.X) + "," + Fmt(hatch.Origin.Y) +
                             " angleRad=" + Fmt(hatch.PatternAngle) +
                             " area=" + Fmt(hatch.Area) +
@@ -188,7 +199,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var document = Application.DocumentManager.MdiActiveDocument;
             if (document == null) return;
             var editor = document.Editor;
-            editor.WriteMessage("\nHNL Tool - Ceiling Estimator Pro v0.3.0 (AutoCAD bridge candidate).");
+            editor.WriteMessage("\nHNL Tool - Ceiling Estimator Pro RC5.2 (Hatch extractor diagnostics; Runtime Candidate).");
 
             var selectionOptions = new PromptSelectionOptions
             {
@@ -211,20 +222,29 @@ namespace HNL.CeilingEstimator.AutoCAD
                     foreach (SelectedObject selected in picked.Value)
                     {
                         if (selected == null || selected.ObjectId.IsNull) continue;
-                        var hatch = transaction.GetObject(selected.ObjectId, OpenMode.ForRead, false) as Hatch;
-                        if (hatch == null) continue;
-                        HatchInput input;
-                        string reason;
-                        if (TryExtractHatch(hatch, out input, out reason))
+                        try
                         {
-                            inputs.Add(input);
+                            var hatch = transaction.GetObject(selected.ObjectId, OpenMode.ForRead, false) as Hatch;
+                            if (hatch == null) continue;
+                            HatchInput input;
+                            string reason;
+                            if (TryExtractHatch(hatch, out input, out reason))
+                            {
+                                inputs.Add(input);
+                            }
+                            else
+                            {
+                                rejected++;
+                                editor.WriteMessage("\nHNL Tool - Rejected Hatch handle=" +
+                                    hatch.Handle + " id=" + selected.ObjectId + ": " + reason);
+                            }
                         }
-                        else
+                        catch (System.Exception ex)
                         {
                             rejected++;
-                            editor.WriteMessage("\nHNL Tool - Rejected Hatch handle=" +
-                                hatch.Handle.ToString() + " id=" + selected.ObjectId.ToString() +
-                                ": " + reason);
+                            editor.WriteMessage("\nHNL Tool - Rejected Hatch id=" +
+                                selected.ObjectId + " at opening/reading: " +
+                                ex.GetType().Name + " " + ex.Message);
                         }
                     }
                 }
@@ -321,6 +341,17 @@ namespace HNL.CeilingEstimator.AutoCAD
         {
             input = new HatchInput();
             reason = string.Empty;
+            var stage = "Hatch.IsGradient";
+            try
+            {
+            // Gradients have no line-grid pattern, and some pattern APIs throw
+            // eNotApplicable on gradients. Reject before accessing their properties.
+            if (hatch.IsGradient)
+            {
+                reason = "gradient fill is not a ceiling tile grid";
+                return false;
+            }
+            stage = "Hatch.Normal";
             // HatchLoop points are in OCS; the XY WCS Core contract is valid only
             // for +Z hatches. Other normals need an explicit OCS->WCS transform gate.
             if (Math.Abs(hatch.Normal.X) > 1e-8 ||
@@ -330,27 +361,40 @@ namespace HNL.CeilingEstimator.AutoCAD
                 reason = "unsupported OCS normal; +Z WCS Hatch required";
                 return false;
             }
+            stage = "Hatch.IsSolidFill";
             if (hatch.IsSolidFill)
             {
                 reason = "solid fill has no reliable 610 mm pattern grid";
                 return false;
             }
-            if (double.IsNaN(hatch.PatternScale) ||
-                double.IsInfinity(hatch.PatternScale) ||
-                !(hatch.PatternScale > 0))
+            stage = "Hatch.PatternType";
+            var userDefined = hatch.PatternType == HatchPatternType.UserDefined;
+            stage = userDefined ? "Hatch.PatternSpace / PatternDouble" : "Hatch.PatternScale";
+            // Autodesk documents PatternScale for predefined/custom patterns,
+            // and PatternSpace/PatternDouble for user-defined patterns only.
+            // Do not query a property that does not apply to the pattern kind.
+            var patternScale = userDefined ? 1.0 : hatch.PatternScale;
+            if (double.IsNaN(patternScale) ||
+                double.IsInfinity(patternScale) || !(patternScale > 0))
             {
                 reason = "invalid Hatch.PatternScale";
                 return false;
             }
-            if (hatch.PatternType == HatchPatternType.UserDefined &&
-                (!hatch.PatternDouble ||
-                 double.IsNaN(hatch.PatternSpace) ||
-                 Math.Abs(hatch.PatternSpace - 610.0) > 0.01))
+            var userGridVerified = false;
+            if (userDefined)
             {
-                reason = "user-defined grid is not 610x610 double pattern (space=" +
-                    Fmt(hatch.PatternSpace) + ", double=" + hatch.PatternDouble + ")";
-                return false;
+                var doublePattern = hatch.PatternDouble;
+                var spacing = hatch.PatternSpace;
+                if (!doublePattern || double.IsNaN(spacing) ||
+                    Math.Abs(spacing - 610.0) > 0.01)
+                {
+                    reason = "user-defined grid is not 610x610 double pattern (space=" +
+                        Fmt(spacing) + ", double=" + doublePattern + ")";
+                    return false;
+                }
+                userGridVerified = true;
             }
+            stage = "Hatch.NumberOfLoops";
             if (hatch.NumberOfLoops != 1)
             {
                 reason = "loopCount=" + hatch.NumberOfLoops +
@@ -358,7 +402,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                 return false;
             }
 
+            stage = "Hatch.GetLoopAt(0)";
             var boundary = hatch.GetLoopAt(0);
+            stage = "HatchLoop edges";
             var segments = new List<Segment2>();
             if (boundary.IsPolyline)
             {
@@ -442,6 +488,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 return false;
             }
 
+            stage = "Hatch.Area";
             var area = hatch.Area;
             if (!(area > 0) || double.IsNaN(area) || double.IsInfinity(area))
             {
@@ -467,6 +514,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     " hatch=" + Fmt(area) + " tolerance=" + Fmt(areaTolerance);
                 return false;
             }
+            stage = "Hatch.Origin / PatternAngle";
             if (double.IsNaN(hatch.Origin.X) || double.IsNaN(hatch.Origin.Y) ||
                 double.IsNaN(hatch.PatternAngle) || double.IsInfinity(hatch.PatternAngle))
             {
@@ -474,6 +522,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 return false;
             }
 
+            stage = "Hatch.Layer / Color / PatternName";
             input.Handle = hatch.Handle.ToString();
             input.GroupKey = hatch.Layer + " | ACI=" +
                 hatch.Color.ColorIndex.ToString(CultureInfo.InvariantCulture) +
@@ -482,11 +531,21 @@ namespace HNL.CeilingEstimator.AutoCAD
                 new Point2(hatch.Origin.X, hatch.Origin.Y), hatch.PatternAngle);
             input.Segments = segments;
             input.Area = area;
-            input.PatternScale = hatch.PatternScale;
+            input.PatternScale = patternScale;
             input.PatternName = hatch.PatternName;
-            input.UserGridVerified = hatch.PatternType == HatchPatternType.UserDefined &&
-                hatch.PatternDouble && Math.Abs(hatch.PatternSpace - 610.0) <= 0.01;
+            input.UserGridVerified = userGridVerified;
             return true;
+            }
+            catch (Autodesk.AutoCAD.Runtime.Exception ex)
+            {
+                reason = "AutoCAD " + ex.ErrorStatus + " at " + stage;
+                return false;
+            }
+            catch (System.Exception ex)
+            {
+                reason = ex.GetType().Name + " at " + stage + ": " + ex.Message;
+                return false;
+            }
         }
 
         private static bool AddLine(
