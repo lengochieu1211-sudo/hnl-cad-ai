@@ -237,6 +237,22 @@ jobs:
           $layInCommands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
           $layInSettings = Get-Content "$env:VXT_ROOT\src\HNL.VXT.Core\Models\LayInCeilingSettings.cs" -Raw
           if (-not $layInSettings.Contains('string HangerBlockName')) { throw 'Lay-in hanger block setting absent.' }
+          $layInPlugin = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\PluginEntry.cs" -Raw
+          $layInSession = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtSession.cs" -Raw
+          $layInBridge = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtHostBridge.cs" -Raw
+          $layInVm = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\LayInCeilingViewModel.cs" -Raw
+          foreach ($guard in @('SynchronizeDocument(doc)', 'ReleaseDocument(doc)')) {
+            $pattern = 'if\s*\(VxtSession\.' + [regex]::Escape($guard) + '\)\s*\{\s*VxtTransientPreview\.Instance\.AbandonForDocumentTransition\(\);\s*LayInCadRuntime\.AbandonForDocumentTransition\(\);'
+            if ($layInPlugin -notmatch $pattern) { throw "Lay-in DWG transition guard missing for $guard" }
+          }
+          if (-not $layInVm.Contains('public void ClearDrawingPoints()') -or
+              -not $layInSession.Contains('ViewModel?.LayIn?.ClearDrawingPoints();') -or
+              -not $layInSession.Contains('LayInSettings.StartMode = LayInStartMode.Balanced;')) {
+            throw 'Lay-in drawing-specific anchor reset is missing.'
+          }
+          if (-not $layInBridge.Contains('if (!ReferenceEquals(Application.DocumentManager.MdiActiveDocument, _pendingLayInPreviewDocument))')) {
+            throw 'Lay-in delayed Preview is not scoped to its originating DWG.'
+          }
           foreach ($token in @(
             'LayInRuntimePlanner.Build(session, settings)',
             'CreateHatch(db, tr, ms, item, hatchLayer)',
