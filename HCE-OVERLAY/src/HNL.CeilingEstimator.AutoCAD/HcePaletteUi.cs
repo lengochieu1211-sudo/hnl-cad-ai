@@ -62,6 +62,22 @@ namespace HNL.CeilingEstimator.AutoCAD
                 palette.AddVisual("T\u00ednh t\u1ea5m tr\u1ea7n", view);
                 _view = view;
                 _palette = palette;
+                // Apply the settings of the active DWG on every document switch.
+                CadApplication.DocumentManager.DocumentActivated += (sender, args) =>
+                {
+                    var currentView = _view;
+                    if (currentView == null) return;
+                    try
+                    {
+                        currentView.Dispatcher.BeginInvoke(
+                            new Action(() => currentView.RefreshLegacyControls()),
+                            System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                    }
+                    catch (System.Exception)
+                    {
+                        // AutoCAD may be tearing down its dispatcher; presentation is fail-open.
+                    }
+                };
             }
             _view?.RefreshLegacyControls();
             _palette.Visible = true;
