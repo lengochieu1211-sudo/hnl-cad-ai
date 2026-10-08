@@ -958,12 +958,18 @@
                                     <Button Grid.Column="0" Content="Lấy điểm bắt đầu" Command="{Binding PickManualStartCommand}" IsEnabled="{Binding IsManualStart}" Style="{StaticResource BoundaryPickButton}" Margin="0,0,4,0"/>
                                     <Button Grid.Column="1" Content="Lấy điểm cửa" Command="{Binding PickDoorCommand}" IsEnabled="{Binding IsDoorStart}" Style="{StaticResource BoundaryPickButton}" Margin="4,0,0,0"/>
                                 </Grid>
-                                <TextBlock Text="Block đánh dấu điểm bắt đầu" Style="{StaticResource FieldLabel}" Margin="0,2,0,4"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
-                                    <TextBox Grid.Column="0" Text="{Binding StartMarkerBlockName, UpdateSourceTrigger=LostFocus}"/>
-                                    <Button Grid.Column="1" Content="Chọn" Command="{Binding PickStartMarkerBlockCommand}" Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
-                                </Grid>
+                                <CheckBox Content="Chèn Block ký hiệu ô trần đầu tiên"
+                                          IsChecked="{Binding DrawStartTileBlock, Mode=TwoWay}" Margin="0,4,0,6"/>
+                                <StackPanel IsEnabled="{Binding DrawStartTileBlock}">
+                                    <TextBlock Text="Mặc định dùng ký hiệu ô tấm như file tn.dxf, tự khớp 600/610 mm và hướng lưới."
+                                               TextWrapping="Wrap" Style="{StaticResource HintText}" Margin="0,0,0,5"/>
+                                    <TextBlock Text="Block riêng (để trống dùng mẫu HNL)" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0" Text="{Binding StartMarkerBlockName, UpdateSourceTrigger=LostFocus}"/>
+                                        <Button Grid.Column="1" Content="Chọn" Command="{Binding PickStartMarkerBlockCommand}" Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
+                                    </Grid>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
