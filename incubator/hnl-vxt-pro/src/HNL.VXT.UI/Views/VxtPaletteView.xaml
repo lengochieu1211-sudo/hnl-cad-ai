@@ -1002,7 +1002,7 @@
                         <!-- The three essential stages stay open; advanced sections are compact. -->
                         <Border Style="{StaticResource SectionCard}">
                             <StackPanel>
-                                <TextBlock Text="1. Chọn vùng trần" Style="{StaticResource SectionTitle}" Margin="0,0,0,7"/>
+                                <TextBlock Text="1. Phạm vi bố trí" Style="{StaticResource SectionTitle}" Margin="0,0,0,7"/>
                                 <Grid Margin="0,0,0,6" MinHeight="29">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <Button Content="Chọn Polyline" Command="{Binding SelectBoundaryCommand}" Grid.Column="0" Style="{StaticResource BoundaryPickButton}" Margin="0,0,4,0"/>
@@ -1013,7 +1013,7 @@
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
                             <StackPanel>
-                                <TextBlock Text="2. Hệ khung trần" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
+                                <TextBlock Text="2. Cấu hình hệ khung" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                                 <Grid Margin="0,0,0,7" MinHeight="29">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="Kích thước ô" Style="{StaticResource FieldLabel}"/>
@@ -1028,7 +1028,7 @@
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
                             <StackPanel>
-                                <TextBlock Text="3. Vị trí bắt đầu lưới" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
+                                <TextBlock Text="3. Điểm xuất phát lưới" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                                 <ComboBox ItemsSource="{Binding StartOptions}" SelectedItem="{Binding SelectedStart, Mode=TwoWay}" Margin="0,0,0,7"/>
                                 <Grid Margin="0,0,0,7" MinHeight="29">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1038,19 +1038,21 @@
                                 <CheckBox Content="Chèn Block ký hiệu ô trần đầu tiên"
                                           IsChecked="{Binding DrawStartTileBlock, Mode=TwoWay}" Margin="0,4,0,6"/>
                                 <StackPanel IsEnabled="{Binding DrawStartTileBlock}">
-                                    <TextBlock Text="Mặc định dùng ký hiệu ô tấm như file tn.dxf, tự khớp 600/610 mm và hướng lưới."
+                                    <TextBlock Text="Block ô đầu HNL mặc định tự khớp hệ tấm và hướng lưới."
                                                TextWrapping="Wrap" Style="{StaticResource HintText}" Margin="0,0,0,5"/>
-                                    <TextBlock Text="Block riêng (để trống dùng mẫu HNL)" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
                                     <Grid MinHeight="29">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" Text="{Binding StartMarkerBlockName, UpdateSourceTrigger=LostFocus}"/>
-                                        <Button Grid.Column="1" Content="Chọn" Command="{Binding PickStartMarkerBlockCommand}" Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Block ô đầu" Style="{StaticResource FieldLabel}" ToolTip="Để trống để dùng Block ký hiệu HNL mặc định."/>
+                                        <TextBox Grid.Column="1" Text="{Binding StartMarkerBlockName, UpdateSourceTrigger=LostFocus}"
+                                                 ToolTip="Để trống = Block HNL mặc định"/>
+                                        <Button Grid.Column="2" Content="Chọn" Command="{Binding PickStartMarkerBlockCommand}"
+                                                Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
                                     </Grid>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
-                            <Expander Header="4. Ty treo và Block Ty" IsExpanded="False" HorizontalContentAlignment="Stretch">
+                            <Expander Header="4. Ty treo" IsExpanded="False" HorizontalContentAlignment="Stretch">
                                 <StackPanel Margin="0,8,0,0">
                                     <CheckBox Content="Vẽ Ty treo trên T chính" IsChecked="{Binding DrawHangers, Mode=TwoWay}" Margin="0,0,0,7"/>
                                     <Grid Margin="0,0,0,7" IsEnabled="{Binding DrawHangers}" MinHeight="29">
@@ -1064,22 +1066,32 @@
                                         <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerEdgeTarget, Mode=TwoWay}" Minimum="0" Step="50"/>
                                     </Grid>
                                     <TextBlock Text="Để 0 nếu dùng khoảng cách mặc định." Style="{StaticResource HintText}" Margin="0,0,0,7"/>
-                                    <TextBlock Text="Block Ty treo (tùy chọn)" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
-                                    <Grid MinHeight="29">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
-                                        <TextBox Text="{Binding HangerBlockName, UpdateSourceTrigger=LostFocus}"/>
-                                        <Button Grid.Column="1" Content="Chọn" Command="{Binding PickHangerBlockCommand}" Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
+                                    <TextBlock Text="Ưu tiên Block Ty tiêu chuẩn trong DWG; thiếu Block sẽ dùng hình tròn." TextWrapping="Wrap" Style="{StaticResource HintText}" Margin="0,0,0,6"/>
+                                    <Grid MinHeight="29" IsEnabled="{Binding DrawHangers}">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Block Ty treo" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Grid.Column="1" Text="{Binding HangerBlockName, UpdateSourceTrigger=LostFocus}"
+                                                 ToolTip="Mặc định: AP_DIEM TY 06.2026. Nếu DWG thiếu Block tiêu chuẩn thì dùng ký hiệu tròn."/>
+                                        <Button Grid.Column="2" Content="Chọn" Command="{Binding PickHangerBlockCommand}"
+                                                Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
                                     </Grid>
                                 </StackPanel>
                             </Expander>
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
-                            <Expander Header="5. Ghi kích thước (DIM)" IsExpanded="True" HorizontalContentAlignment="Stretch">
+                            <Expander Header="5. Kích thước (DIM)" IsExpanded="True" HorizontalContentAlignment="Stretch">
                                 <StackPanel Margin="0,8,0,0">
                                     <Grid Margin="0,0,0,8" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Cách ghi DIM" Style="{StaticResource FieldLabel}"/>
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding DimensionOptions}" SelectedItem="{Binding SelectedDimensionMode, Mode=TwoWay}"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,8" MinHeight="29" IsEnabled="{Binding IsDimensionEnabled}">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="DimStyle" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox Grid.Column="1" ItemsSource="{Binding DimStyleOptions}"
+                                                  SelectedItem="{Binding SelectedDimensionStyle, Mode=TwoWay}"
+                                                  ToolTip="Chọn DimStyle đang có trong bản vẽ. Hiện hành = dùng DIMSTYLE của DWG."/>
                                     </Grid>
                                     <TextBlock Text="Theo lưới và tấm cắt biên: đo riêng phần ô nguyên và từng mép cắt, như bản vẽ mẫu." TextWrapping="Wrap"
                                                Style="{StaticResource HintText}" Margin="0,0,0,8"/>
@@ -1116,7 +1128,7 @@
                             </Expander>
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
-                            <Expander Header="6. Layer xuất bản vẽ" IsExpanded="False" HorizontalContentAlignment="Stretch">
+                            <Expander Header="6. Layer &amp; hiển thị" IsExpanded="False" HorizontalContentAlignment="Stretch">
                                 <StackPanel Margin="0,8,0,0">
                                     <Grid Margin="0,0,0,7" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
