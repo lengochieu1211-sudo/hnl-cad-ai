@@ -223,6 +223,15 @@ jobs:
           if (-not $manifest.Contains('Global="HVX" Local="HVX"')) {
             throw "Package compatibility gate failed: HVX alias is missing."
           }
+          if (-not $manifest.Contains('SupportPath="./Contents/Resources"')) {
+            throw "Package gate failed: Lay-in hatch SupportPath is missing."
+          }
+          foreach ($pat in @('HNL_CF_600X600','HNL_CF_610X610','HNL_CF_600X1200','HNL_CF_610X1220')) {
+            $patPath = "$env:VXT_ROOT\resources\hatch\$pat.pat"
+            if (-not (Test-Path $patPath)) { throw "Lay-in hatch pattern missing: $pat.pat" }
+            $patText = Get-Content $patPath -Raw
+            if (-not $patText.Contains("*$pat")) { throw "Lay-in hatch pattern/header mismatch: $pat.pat" }
+          }
           Write-Host "HNL Ceiling Framing beta.1 functional/source/branding/multi-polyline/installer gate PASS"
       - name: Restore AutoCAD 2023 plugin
         shell: pwsh
@@ -245,7 +254,10 @@ jobs:
           $windows = Join-Path $bundleRoot "Contents\Windows"
           if (Test-Path $artifactRoot) { Remove-Item $artifactRoot -Recurse -Force }
           New-Item -ItemType Directory -Force -Path $windows | Out-Null
+          $resources = Join-Path $bundleRoot "Contents\Resources"
+          New-Item -ItemType Directory -Force -Path $resources | Out-Null
           Copy-Item "$env:VXT_ROOT\build\HNL.VXT.bundle\PackageContents.xml" "$bundleRoot\PackageContents.xml" -Force
+          Copy-Item "$env:VXT_ROOT\resources\hatch\*.pat" $resources -Force
           $out = "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\bin\Release\net48"
           if (-not (Test-Path $out)) { throw "Missing AutoCAD Release output: $out" }
           Get-ChildItem $out -File | Where-Object {
