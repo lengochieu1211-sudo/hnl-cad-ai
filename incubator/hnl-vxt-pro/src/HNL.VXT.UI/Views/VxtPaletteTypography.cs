@@ -110,14 +110,14 @@ namespace HNL.VXT.UI.Views
                     {
                         text.FontSize = HintSize * scale;
                     }
-                    else if (string.Equals(text.Text, "Vẽ xương trần", StringComparison.OrdinalIgnoreCase))
+                    else if (string.Equals(text.Text, "Ceiling Framing Pro", StringComparison.OrdinalIgnoreCase))
                     {
                         // Product/brand title uses natural sentence case; technical acronyms remain uppercase.
                         text.FontSize = ProductTitleSize * scale;
                         text.FontWeight = FontWeights.SemiBold;
                     }
                     else if (!string.IsNullOrWhiteSpace(text.Text) &&
-                             text.Text.StartsWith("VXT Pro", StringComparison.OrdinalIgnoreCase))
+                             text.Text.StartsWith("v7.", StringComparison.OrdinalIgnoreCase))
                     {
                         text.FontSize = VersionSize * scale;
                     }
