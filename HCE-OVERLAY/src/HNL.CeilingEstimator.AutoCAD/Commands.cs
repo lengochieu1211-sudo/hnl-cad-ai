@@ -799,12 +799,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                         throw new InvalidOperationException("Invalid HCE Table text height");
                     table.SetRowHeight(Math.Max(55, textHeight * 1.6));
                     table.SetColumnWidth(Math.Max(230, textHeight * 12));
-                    if (textHeight > 0)
-                    {
-                        table.SetTextHeight(textHeight, (int)RowType.TitleRow);
-                        table.SetTextHeight(textHeight, (int)RowType.HeaderRow);
-                        table.SetTextHeight(textHeight, (int)RowType.DataRow);
-                    }
+                    var tableTextStyleId = ObjectId.Null;
                     if (!string.IsNullOrEmpty(profile.TableTextStyle))
                     {
                         var styles = (TextStyleTable)transaction.GetObject(
@@ -812,10 +807,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                         if (!styles.Has(profile.TableTextStyle))
                             throw new InvalidOperationException("HCE Table Text Style is missing from DWG: " +
                                 profile.TableTextStyle);
-                        var textStyleId = styles[profile.TableTextStyle];
-                        table.SetTextStyle(textStyleId, (int)RowType.TitleRow);
-                        table.SetTextStyle(textStyleId, (int)RowType.HeaderRow);
-                        table.SetTextStyle(textStyleId, (int)RowType.DataRow);
+                        tableTextStyleId = styles[profile.TableTextStyle];
                     }
                     table.Position = point;
                     var gridSpec = profile.ToOptions();
@@ -870,6 +862,20 @@ namespace HNL.CeilingEstimator.AutoCAD
                     };
                     for (var i = 0; i < totals.Length; i++)
                         table.Cells[footer, i].TextString = totals[i];
+                    // Modern AutoCAD API: apply display settings to populated
+                    // cells only. Do not touch totals or recalculate material counts.
+                    if (textHeight > 0 || !tableTextStyleId.IsNull)
+                    {
+                        for (var row = 0; row < report.Groups.Count + 3; row++)
+                        {
+                            for (var col = 0; col < 8; col++)
+                            {
+                                var cell = table.Cells[row, col];
+                                if (textHeight > 0) cell.TextHeight = textHeight;
+                                if (!tableTextStyleId.IsNull) cell.TextStyleId = tableTextStyleId;
+                            }
+                        }
+                    }
                     table.GenerateLayout();
                     currentSpace.AppendEntity(table);
                     transaction.AddNewlyCreatedDBObject(table, true);
