@@ -274,6 +274,20 @@ namespace HNL.VXT.AutoCAD
             LayInCadRuntime.PickBlock(true);
         }
 
+        [CommandMethod("HNLCFLAYINDIMH", CommandFlags.Modal)]
+        public void LayInPickHorizontalDim()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            LayInCadRuntime.PickDimensionLocation(true);
+        }
+
+        [CommandMethod("HNLCFLAYINDIMV", CommandFlags.Modal)]
+        public void LayInPickVerticalDim()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            LayInCadRuntime.PickDimensionLocation(false);
+        }
+
         // Explicit Lay-in Hatch/DIM/Ty field QA. All synthetic CAD entities roll back.
         [CommandMethod("HNLCFLAYINQA", CommandFlags.Modal)]
         public void LayInRuntimeQa()
