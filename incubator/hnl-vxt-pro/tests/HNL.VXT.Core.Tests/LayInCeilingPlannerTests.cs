@@ -11,6 +11,46 @@ namespace HNL.VXT.Core.Tests
     public class LayInCeilingPlannerTests
     {
         [TestMethod]
+        public void LayInUiDefaults_UseCurrentDimStyleAndConcealedPreferredTyBlock()
+        {
+            var settings = new LayInCeilingSettings();
+            Assert.AreEqual(string.Empty, settings.DimensionStyle);
+            Assert.AreEqual("AP_DIEM TY 06.2026", settings.HangerBlockName);
+            Assert.AreEqual(LayInCeilingSettings.DefaultHangerBlockName,
+                settings.HangerBlockName);
+            Assert.IsTrue(settings.DrawStartTileBlock);
+            Assert.AreEqual(string.Empty, settings.StartMarkerBlockName);
+        }
+
+        [TestMethod]
+        public void LayInDrawingAppearanceOptions_CloneWithoutTouchingGeometry()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                DimensionStyle = "ICC-250",
+                HangerBlockName = "TY-CUSTOM",
+                StartMarkerBlockName = "*U6",
+                GridSystem = LayInGridSystem.Module610x610
+            };
+            var clone = settings.Clone();
+            Assert.AreEqual("ICC-250", clone.DimensionStyle);
+            Assert.AreEqual("TY-CUSTOM", clone.HangerBlockName);
+            Assert.AreEqual("*U6", clone.StartMarkerBlockName);
+
+            var basePlan = LayInCeilingPlanner.Build(
+                Rect(0, 0, 6100, 4880), null, settings);
+            clone.DimensionStyle = string.Empty;
+            clone.HangerBlockName = LayInCeilingSettings.DefaultHangerBlockName;
+            clone.StartMarkerBlockName = string.Empty;
+            var changedPlan = LayInCeilingPlanner.Build(
+                Rect(0, 0, 6100, 4880), null, clone);
+            Assert.AreEqual(basePlan.TeeSegments.Count, changedPlan.TeeSegments.Count);
+            Assert.AreEqual(basePlan.HangerPoints.Count, changedPlan.HangerPoints.Count);
+            Assert.AreEqual(basePlan.DimensionRuns.Count, changedPlan.DimensionRuns.Count);
+            Assert.AreEqual(basePlan.HatchPatternName, changedPlan.HatchPatternName);
+        }
+
+        [TestMethod]
         public void Module600Square_UsesT3600_T1200_T600()
         {
             var plan = LayInCeilingPlanner.Build(
