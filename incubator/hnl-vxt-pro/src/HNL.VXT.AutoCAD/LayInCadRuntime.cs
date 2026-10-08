@@ -257,7 +257,7 @@ namespace HNL.VXT.AutoCAD
             BlockTableRecord ms, LayInBoundaryRuntimePlan item, ObjectId layerId)
         {
             var ids = new List<ObjectId>();
-            var temporaryBoundaries = new List<Polyline>();
+            var temporaryBoundaries = new List<Autodesk.AutoCAD.DatabaseServices.Polyline>();
             try
             {
                 var allLoops = new List<Boundary2> { item.Boundary };
@@ -266,7 +266,7 @@ namespace HNL.VXT.AutoCAD
                 {
                     var vertices = loop.Vertices;
                     if (vertices.Count < 3) throw new InvalidOperationException("Invalid Lay-in hatch boundary.");
-                    var poly = new Polyline(vertices.Count);
+                    var poly = new Autodesk.AutoCAD.DatabaseServices.Polyline(vertices.Count);
                     poly.SetDatabaseDefaults(db);
                     for (var i = 0; i < vertices.Count; i++)
                         poly.AddVertexAt(i, new Point2d(vertices[i].X, vertices[i].Y), 0, 0, 0);
