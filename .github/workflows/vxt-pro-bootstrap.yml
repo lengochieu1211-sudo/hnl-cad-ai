@@ -1,4 +1,4 @@
-name: HNL VXT Pro v7 Beta CI
+name: HNL Ceiling Framing Pro v7 Beta CI
 
 on:
   push:
@@ -78,8 +78,11 @@ jobs:
           }
 
           $commandSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
+          if (-not $commandSource.Contains('[CommandMethod("HCF"')) {
+            throw "Command namespace gate failed: HCF primary command is missing."
+          }
           if (-not $commandSource.Contains('[CommandMethod("HVX"')) {
-            throw "Command namespace gate failed: HVX command is missing."
+            throw "Command compatibility gate failed: HVX alias is missing."
           }
           if ($commandSource.Contains('[CommandMethod("HNLVXT",')) {
             throw "Command namespace gate failed: obsolete HNLVXT main alias is still exposed."
@@ -97,8 +100,8 @@ jobs:
           if (-not $pluginSource.Contains('CommandClass(typeof(HNL.VXT.AutoCAD.HnlVxtCommands))')) {
             throw "Command namespace gate failed: legacy VXT command class is still registered."
           }
-          if (-not $pluginSource.Contains('Lệnh: HVX')) {
-            throw "Command namespace gate failed: startup prompt does not advertise HVX."
+          if (-not $pluginSource.Contains('Lệnh: HCF')) {
+            throw "Command namespace gate failed: startup prompt does not advertise HCF."
           }
           $bridgeSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtHostBridge.cs" -Raw
           if (-not $bridgeSource.Contains('Send("HNLVXTCREATE ")')) {
@@ -210,10 +213,17 @@ jobs:
           if (-not $iss.Contains('PrivilegesRequired=admin')) {
             throw "Installer gate failed: Program Files setup must request admin privileges."
           }
-          if (-not $iss.Contains('gõ HVX')) {
-            throw "Installer gate failed: post-install guidance does not advertise HVX."
+          if (-not $iss.Contains('gõ HCF')) {
+            throw "Installer gate failed: post-install guidance does not advertise HCF."
           }
-          Write-Host "HNL VXT beta.1 functional/source/branding/multi-polyline/installer gate PASS"
+          $manifest = Get-Content "$env:VXT_ROOT\build\HNL.VXT.bundle\PackageContents.xml" -Raw
+          if (-not $manifest.Contains('Global="HCF" Local="HCF"')) {
+            throw "Package gate failed: HCF is not exposed for lazy command loading."
+          }
+          if (-not $manifest.Contains('Global="HVX" Local="HVX"')) {
+            throw "Package compatibility gate failed: HVX alias is missing."
+          }
+          Write-Host "HNL Ceiling Framing beta.1 functional/source/branding/multi-polyline/installer gate PASS"
       - name: Restore AutoCAD 2023 plugin
         shell: pwsh
         run: dotnet restore "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj"
