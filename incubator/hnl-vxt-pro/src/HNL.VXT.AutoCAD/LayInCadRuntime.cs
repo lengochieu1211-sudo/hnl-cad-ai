@@ -479,6 +479,61 @@ namespace HNL.VXT.AutoCAD
             tr.AddNewlyCreatedDBObject(entity, true);
         }
 
+        // Like the concealed tab's Pick DIM control: choose a point OUTSIDE
+        // the layout to set side + distance in the rotated local grid axes.
+        internal static void PickDimensionLocation(bool horizontal)
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            var session = VxtSession.Current;
+            if (!session.HasBoundary) return;
+            var settings = session.LayInSettings;
+            var plans = LayInRuntimePlanner.Build(session, settings);
+            if (plans.Count == 0) return;
+
+            var first = plans[0];
+            var angle = first.Plan.MainAngleRadians;
+            var bounds = Box2.FromPoints(first.Boundary.Vertices
+                .Select(p => Transform2.ToLocal(p, angle)));
+
+            var options = new PromptPointOptions(horizontal
+                ? "\nHNL Tool - Lay-in: Chon diem dat DIM ngang (phia tren/duoi khung): "
+                : "\nHNL Tool - Lay-in: Chon diem dat DIM doc (ben trai/phai khung): ");
+            var result = doc.Editor.GetPoint(options);
+            if (result.Status != PromptStatus.OK) return;
+
+            var local = Transform2.ToLocal(
+                new HNL.VXT.Core.Geometry.Point2(result.Value.X, result.Value.Y), angle);
+            bool farSide;
+            double distance;
+            if (horizontal)
+            {
+                if (local.Y >= bounds.MinY && local.Y <= bounds.MaxY)
+                {
+                    doc.Editor.WriteMessage("\nHNL Tool - Lay-in: Vi tri DIM phai nam ngoai bien tran.");
+                    return;
+                }
+                farSide = local.Y > bounds.MaxY;
+                distance = farSide ? local.Y - bounds.MaxY : bounds.MinY - local.Y;
+                settings.HorizontalDimSide = farSide ? LayInHorizontalDimSide.Top : LayInHorizontalDimSide.Bottom;
+                settings.HorizontalDimDistance = distance;
+            }
+            else
+            {
+                if (local.X >= bounds.MinX && local.X <= bounds.MaxX)
+                {
+                    doc.Editor.WriteMessage("\nHNL Tool - Lay-in: Vi tri DIM phai nam ngoai bien tran.");
+                    return;
+                }
+                farSide = local.X > bounds.MaxX;
+                distance = farSide ? local.X - bounds.MaxX : bounds.MinX - local.X;
+                settings.VerticalDimSide = farSide ? LayInVerticalDimSide.Right : LayInVerticalDimSide.Left;
+                settings.VerticalDimDistance = distance;
+            }
+            session.ViewModel?.LayIn?.SetPickedDimensionPosition(horizontal, farSide, distance);
+            doc.Editor.WriteMessage("\nHNL Tool - Lay-in: Da cap nhat vi tri DIM.");
+        }
+
         internal static void PickPoint(bool door)
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
