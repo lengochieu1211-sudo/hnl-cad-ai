@@ -278,13 +278,23 @@ jobs:
             if(-not $cmd.Contains($part)) { throw "Missing LISP RC13 cut list parity contract: $part" }
           }
           if($cmd.Contains('engine.PackCutPieces(pieces')){throw 'Cut list must reuse original packed report'}
-          foreach($part in @('HatchLoopTypes.NotClosed', 'DXF 92 flag 0x20', 'repair Hatch boundary before ceiling quantities')) {
-            if(-not $cmd.Contains($part)){throw "Missing NotClosed Hatch fail-closed gate: $part"}
+          foreach($part in @('HatchLoopTypes.NotClosed', 'flaggedNotClosed',
+                 'nearClosedGapMm > 0.01', 'HasNonAdjacentIntersections(segments)',
+                 'last.X1, last.Y1, first.X1, first.Y1',
+                 'input.RecoveredNearClosed = flaggedNotClosed',
+                 'Original DWG Hatch unchanged.')) {
+            if(-not $cmd.Contains($part)){throw "Missing recoverable NotClosed Hatch safety gate: $part"}
           }
-          $before=$cmd.IndexOf('HatchLoopTypes.NotClosed')
-          $fallback=$cmd.IndexOf('stage = "Hatch.Area"')
-          if($before -lt 0 -or $before -ge $fallback){throw 'NotClosed gate must run before native Area fallback'}
-          Write-Host 'HCE NOTCLOSED HATCH INPUT SAFETY GATE PASS'
+          $open=$cmd.IndexOf('var flaggedNotClosed = ')
+          $closure=$cmd.IndexOf('segments[segments.Count - 1] = new Segment2(')
+          $area=$cmd.IndexOf('stage = "Hatch.Area"')
+          if($open -lt 0 -or $closure -lt $open -or $closure -ge $area){
+            throw 'Near-closed seam must be validated and recovered before native Area'
+          }
+          if($cmd.Contains('repair Hatch boundary before ceiling quantities')){
+            throw 'Obsolete blanket NotClosed rejection remains'
+          }
+          Write-Host 'HCE NOTCLOSED NEAR-SEAM RECOVERY SAFETY GATE PASS'
           Write-Host 'HCE RC13 CUT LIST SUMMARY/DETAIL UI + TABLE STATIC GATE PASS'
           Write-Host 'HCE VIETNAMESE TABLE + N/G/L LABEL + PER-DWG HEIGHT STATIC GATE PASS'
           Write-Host 'HCE RC5.4 CAD TABLE STYLE/HEIGHT BINDING STATIC GATE PASS'
