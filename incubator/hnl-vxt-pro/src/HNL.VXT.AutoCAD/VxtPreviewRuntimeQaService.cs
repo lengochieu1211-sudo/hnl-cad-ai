@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using Autodesk.AutoCAD.ApplicationServices.Core;
+using HNL.VXT.Core.Preview;
 
 namespace HNL.VXT.AutoCAD
 {
