@@ -363,8 +363,8 @@ jobs:
               -not $comboChrome.Contains('SystemColors.ControlLightBrushKey') -or
               -not $ceilingUi.Contains('Header="Trần nổi"') -or
               -not $ceilingUi.Contains('<Expander Header="4. Ty treo"') -or
-              -not $layInLabels.Contains('Song song cạnh ngắn') -or
-              -not $layInLabels.Contains('Cân đều hai biên')) {
+              -not $layInLabels.Contains('LayInMainDirectionMode.ParallelShortSide') -or
+              -not $layInLabels.Contains('LayInStartMode.Balanced')) {
             throw 'HNL Ceiling Framing Pro build-date / localized compact palette gate failed.'
           }
           foreach ($brandStage in @('VxtPaletteRuntimePolish.cs',
