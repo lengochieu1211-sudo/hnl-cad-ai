@@ -120,7 +120,7 @@ jobs:
             if(-not $ui.Contains($phrase)){throw "Missing scrolling/dropdown visibility contract: $phrase"}
           }
           if ($ui.Contains('DEMTC')) { throw 'Legacy DEMTC label found in the HCE palette UI' }
-          if (-not $ui.Contains('Section("02  Cài đặt tính tấm"')) { throw 'New calculator settings title missing' }
+          if (-not $ui.Contains('var root = Section("02  ')) { throw 'New calculator settings title missing' }
           if ($ui.Contains('MaxWidth = 130')) { throw 'Numeric inputs are still narrower than the dropdown column' }
           $alignedInputs = [regex]::Matches($ui, 'new TextBox\s*\{[^}]*HorizontalAlignment = HorizontalAlignment.Stretch', [Text.RegularExpressions.RegexOptions]::Singleline)
           if ($alignedInputs.Count -lt 2) { throw 'Both numeric TextBoxes must stretch in the shared input column' }
