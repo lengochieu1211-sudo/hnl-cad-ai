@@ -207,6 +207,27 @@ jobs:
           }
           Get-ChildItem $root -Recurse -File -Filter '*Mixed*' | ForEach-Object { Write-Host "HCE_MIXED_FILE $($_.FullName)" }
 
+      - name: Inspect RC5.5 cut-piece/packing contracts without changing Core
+        shell: powershell
+        run: |
+          $root='incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.Core'
+          $hits=@(Get-ChildItem $root -Recurse -File -Filter '*.cs' | Select-String -Pattern 'class Piece','struct Piece','record Piece','class PackResult','class PackBin','PureFastResult' -List)
+          foreach($hit in $hits) {
+            Write-Host "HCE_RC55_CONTRACT_BEGIN $($hit.Path)"
+            Get-Content $hit.Path | ForEach-Object { Write-Host "HCE_RC55_CODE: $_" }
+            Write-Host 'HCE_RC55_CONTRACT_END'
+          }
+          if($hits.Count -lt 2){throw "RC5.5 contract inspection found only $($hits.Count) source files"}
+
+      - name: Validate RC5.4.1 read-only Area/DXF43-44 diagnostics
+        shell: powershell
+        run: |
+          $cmd=Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/Commands.cs' -Raw
+          foreach($phrase in @('PatternBaseText(hatch)', 'PatternBaseDeltaText(hatch)', 'areaSource=', 'phasePolicy=Hatch.Origin', 'GetPatternDefinitionAt(0)')) {
+            if(-not $cmd.Contains($phrase)){throw "Missing RC5.4.1 diagnostic contract: $phrase"}
+          }
+          Write-Host 'HCE RC5.4.1 READ-ONLY AREA + DXF43/44 DIAGNOSTIC GATE PASS'
+
       - name: Core regression for six DEMTC modules with X/Y and priority S/D
         shell: powershell
         run: dotnet run --project HCE-OVERLAY/tests/LegacyModes/LegacyModes.csproj -c Release

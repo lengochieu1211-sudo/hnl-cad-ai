@@ -76,6 +76,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                             " space=" + spacingText +
                             " double=" + doubleText +
                             " origin=" + Fmt(hatch.Origin.X) + "," + Fmt(hatch.Origin.Y) +
+                            " patternBase43_44=" + PatternBaseText(hatch) +
                             " angleRad=" + Fmt(hatch.PatternAngle) +
                             " area=" + SafeAreaText(hatch) +
                             " normalZ=" + Fmt(hatch.Normal.Z) +
@@ -93,7 +94,10 @@ namespace HNL.CeilingEstimator.AutoCAD
                         HatchInput extracted;
                         string failure;
                         if (TryExtractHatch(hatch, out extracted, out failure))
-                            editor.WriteMessage("\n  bridge=accepted (assumes 610x610 for unverified patterns)");
+                            editor.WriteMessage("\n  bridge=accepted areaSource=" +
+                                (extracted.AreaFromBoundary ? "boundary-fallback" : "native") +
+                                " phasePolicy=Hatch.Origin" +
+                                " originVs43_44=" + PatternBaseDeltaText(hatch));
                         else
                             editor.WriteMessage("\n  bridge=rejected: " + failure);
                     }
@@ -148,6 +152,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                                     " segments=" + input.Segments.Count +
                                     " origin=" + Fmt(input.Frame.Origin.X) + "," +
                                     Fmt(input.Frame.Origin.Y) +
+                                    " patternBase43_44=" + PatternBaseText(hatch) +
+                                    " originVs43_44=" + PatternBaseDeltaText(hatch) +
+                                    " areaSource=" + (input.AreaFromBoundary ? "boundary-fallback" : "native") +
                                     " angleRad=" + Fmt(input.Frame.AngleRadians) +
                                     " gridVerified=" + input.UserGridVerified);
                             }
@@ -203,6 +210,61 @@ namespace HNL.CeilingEstimator.AutoCAD
             }
         }
 
+        // RC5.4.1 diagnostic only. Legacy DEMTC RC18.5B.4C reads the first
+        // pattern-definition base point (DXF 43/44) before falling back to Origin.
+        // Do not feed this into Core until real-DWG phase parity is proven.
+        private static bool TryGetFirstPatternBase(Hatch hatch, out double x, out double y)
+        {
+            x = 0.0;
+            y = 0.0;
+            try
+            {
+                if (hatch.NumberOfPatternDefinitions < 1) return false;
+                object definition = hatch.GetPatternDefinitionAt(0);
+                var type = definition.GetType();
+                var px = type.GetProperty("BaseX");
+                var py = type.GetProperty("BaseY");
+                object? vx = px == null ? null : px.GetValue(definition, null);
+                object? vy = py == null ? null : py.GetValue(definition, null);
+                if (vx == null)
+                {
+                    var fx = type.GetField("BaseX");
+                    vx = fx == null ? null : fx.GetValue(definition);
+                }
+                if (vy == null)
+                {
+                    var fy = type.GetField("BaseY");
+                    vy = fy == null ? null : fy.GetValue(definition);
+                }
+                if (vx == null || vy == null) return false;
+                x = Convert.ToDouble(vx, CultureInfo.InvariantCulture);
+                y = Convert.ToDouble(vy, CultureInfo.InvariantCulture);
+                return !(double.IsNaN(x) || double.IsInfinity(x) ||
+                         double.IsNaN(y) || double.IsInfinity(y));
+            }
+            catch (System.Exception)
+            {
+                return false;
+            }
+        }
+
+        private static string PatternBaseText(Hatch hatch)
+        {
+            double x, y;
+            return TryGetFirstPatternBase(hatch, out x, out y)
+                ? Fmt(x) + "," + Fmt(y)
+                : "n/a";
+        }
+
+        private static string PatternBaseDeltaText(Hatch hatch)
+        {
+            double x, y;
+            if (!TryGetFirstPatternBase(hatch, out x, out y)) return "n/a";
+            var dx = hatch.Origin.X - x;
+            var dy = hatch.Origin.Y - y;
+            return Fmt(Math.Sqrt(dx * dx + dy * dy));
+        }
+
         private static void RunCeilingEstimator()
         {
             var document = Application.DocumentManager.MdiActiveDocument;
@@ -210,7 +272,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var editor = document.Editor;
             var profile = HceLegacyProfiles.For(document.Database).Clone();
             var options = profile.ToOptions();
-            editor.WriteMessage("\nHNL Tool - Ceiling Estimator Pro RC5.3.3 (Hatch Area safe fallback; Runtime Candidate).");
+            editor.WriteMessage("\nHNL Tool - Ceiling Estimator Pro RC5.4.1 (Area/phase diagnostic; Runtime Candidate).");
             editor.WriteMessage("\nHNL Tool - " + profile.Summary());
 
             Point2? chosenGridOrigin = null;
