@@ -1002,7 +1002,7 @@
                         <!-- The three essential stages stay open; advanced sections are compact. -->
                         <Border Style="{StaticResource SectionCard}">
                             <StackPanel>
-                                <TextBlock Text="1. Phạm vi bố trí" Style="{StaticResource SectionTitle}" Margin="0,0,0,7"/>
+                                <TextBlock Text="1. Chọn biên" Style="{StaticResource SectionTitle}" Margin="0,0,0,7"/>
                                 <Grid Margin="0,0,0,6" MinHeight="29">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <Button Content="Chọn Polyline" Command="{Binding SelectBoundaryCommand}" Grid.Column="0" Style="{StaticResource BoundaryPickButton}" Margin="0,0,4,0"/>
@@ -1016,7 +1016,7 @@
                                 <TextBlock Text="2. Hệ khung" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                                 <Grid Margin="0,0,0,7" MinHeight="29">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="Kích thước ô" Style="{StaticResource FieldLabel}"/>
+                                    <TextBlock Text="Khổ tấm (mm)" Style="{StaticResource FieldLabel}"/>
                                     <ComboBox Grid.Column="1" ItemsSource="{Binding GridOptions}" SelectedItem="{Binding SelectedGrid, Mode=TwoWay}"/>
                                 </Grid>
                                 <Grid MinHeight="29">
@@ -1028,7 +1028,7 @@
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
                             <StackPanel>
-                                <TextBlock Text="3. Xuất phát lưới" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
+                                <TextBlock Text="3. Gốc lưới" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                                 <ComboBox ItemsSource="{Binding StartOptions}" SelectedItem="{Binding SelectedStart, Mode=TwoWay}" Margin="0,0,0,7"/>
                                 <Grid Margin="0,0,0,7" MinHeight="29">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1038,13 +1038,13 @@
                                 <CheckBox Content="Chèn Block ô đầu"
                                           IsChecked="{Binding DrawStartTileBlock, Mode=TwoWay}" Margin="0,4,0,6"/>
                                 <StackPanel IsEnabled="{Binding DrawStartTileBlock}">
-                                    <TextBlock Text="Để trống: dùng Block HNL mặc định."
+                                    <TextBlock Text="Trống = Block HNL"
                                                TextWrapping="Wrap" Style="{StaticResource HintText}" Margin="0,0,0,5"/>
                                     <Grid MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="Block ô đầu" Style="{StaticResource FieldLabel}" ToolTip="Để trống: dùng Block HNL."/>
+                                        <TextBlock Text="Block ô đầu" Style="{StaticResource FieldLabel}" ToolTip="Trống = Block HNL"/>
                                         <TextBox Grid.Column="1" Text="{Binding StartMarkerBlockName, UpdateSourceTrigger=LostFocus}"
-                                                 ToolTip="Để trống = Block HNL mặc định"/>
+                                                 ToolTip="Trống = Block HNL"/>
                                         <Button Grid.Column="2" Content="Chọn" Command="{Binding PickStartMarkerBlockCommand}"
                                                 Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
                                     </Grid>
@@ -1054,10 +1054,10 @@
                         <Border Style="{StaticResource SectionCard}">
                             <Expander Header="4. Ty treo" IsExpanded="False" HorizontalContentAlignment="Stretch">
                                 <StackPanel Margin="0,8,0,0">
-                                    <CheckBox Content="Vẽ Ty treo" IsChecked="{Binding DrawHangers, Mode=TwoWay}" Margin="0,0,0,7"/>
+                                    <CheckBox Content="Vẽ Ty" IsChecked="{Binding DrawHangers, Mode=TwoWay}" Margin="0,0,0,7"/>
                                     <Grid Margin="0,0,0,7" IsEnabled="{Binding DrawHangers}" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="Tâm Ty Max (mm)" Style="{StaticResource FieldLabel}"/>
+                                        <TextBlock Text="Bước Ty Max (mm)" Style="{StaticResource FieldLabel}"/>
                                         <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerMaxSpacing, Mode=TwoWay}" Minimum="0" Step="100"/>
                                     </Grid>
                                     <Grid Margin="0,0,0,7" IsEnabled="{Binding DrawHangers}" MinHeight="29">
@@ -1066,12 +1066,12 @@
                                         <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerEdgeTarget, Mode=TwoWay}" Minimum="0" Step="50"/>
                                     </Grid>
                                     <TextBlock Text="0 = mặc định." Style="{StaticResource HintText}" Margin="0,0,0,7"/>
-                                    <TextBlock Text="Thiếu Block Ty: dùng ký hiệu tròn." TextWrapping="Wrap" Style="{StaticResource HintText}" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Thiếu Block: vẽ tròn." TextWrapping="Wrap" Style="{StaticResource HintText}" Margin="0,0,0,6"/>
                                     <Grid MinHeight="29" IsEnabled="{Binding DrawHangers}">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Block Ty" Style="{StaticResource FieldLabel}"/>
                                         <TextBox Grid.Column="1" Text="{Binding HangerBlockName, UpdateSourceTrigger=LostFocus}"
-                                                 ToolTip="Mặc định: AP_DIEM TY 06.2026; thiếu Block: dùng hình tròn."/>
+                                                 ToolTip="Mặc định: AP_DIEM TY 06.2026"/>
                                         <Button Grid.Column="2" Content="Chọn" Command="{Binding PickHangerBlockCommand}"
                                                 Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
                                     </Grid>
@@ -1079,7 +1079,7 @@
                             </Expander>
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
-                            <Expander Header="5. Kích thước" IsExpanded="True" HorizontalContentAlignment="Stretch">
+                            <Expander Header="5. DIM" IsExpanded="True" HorizontalContentAlignment="Stretch">
                                 <StackPanel Margin="0,8,0,0">
                                     <Grid Margin="0,0,0,8" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1091,9 +1091,9 @@
                                         <TextBlock Text="DimStyle" Style="{StaticResource FieldLabel}"/>
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding DimStyleOptions}"
                                                   SelectedItem="{Binding SelectedDimensionStyle, Mode=TwoWay}"
-                                                  ToolTip="DimStyle trong DWG; Hiện hành = kiểu đang dùng."/>
+                                                  ToolTip="Chọn DimStyle trong DWG"/>
                                     </Grid>
-                                    <TextBlock Text="Lưới + tấm cắt: DIM ô nguyên và mép cắt." TextWrapping="Wrap"
+                                    <TextBlock Text="DIM ô nguyên + mép cắt." TextWrapping="Wrap"
                                                Style="{StaticResource HintText}" Margin="0,0,0,8"/>
                                     <Grid Margin="0,0,0,8" IsEnabled="{Binding IsGroupedDimension}" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1109,7 +1109,7 @@
                                         </Grid>
                                         <Grid Margin="0,0,0,8" MinHeight="29">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Text="Cách khung (mm)" Style="{StaticResource FieldLabel}"/>
+                                            <TextBlock Text="Cách biên (mm)" Style="{StaticResource FieldLabel}"/>
                                             <controls:HnlNumericBox Grid.Column="1" Value="{Binding HorizontalDimDistance, Mode=TwoWay}" Minimum="1" Step="50"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,7" MinHeight="29">
@@ -1120,7 +1120,7 @@
                                         </Grid>
                                         <Grid MinHeight="29">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Text="Cách khung (mm)" Style="{StaticResource FieldLabel}"/>
+                                            <TextBlock Text="Cách biên (mm)" Style="{StaticResource FieldLabel}"/>
                                             <controls:HnlNumericBox Grid.Column="1" Value="{Binding VerticalDimDistance, Mode=TwoWay}" Minimum="1" Step="50"/>
                                         </Grid>
                                     </StackPanel>
@@ -1157,7 +1157,7 @@
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <Button Grid.Column="0" Content="Cập nhật" Command="{Binding RefreshPreviewCommand}" Style="{StaticResource RefreshButton}" Margin="0,0,4,0"/>
                                     <Button Grid.Column="1" Content="Ẩn" Command="{Binding ClearPreviewCommand}" Style="{StaticResource HidePreviewButton}" Margin="2,0,2,0"/>
-                                    <Button Grid.Column="2" Content="Mặc định" Command="{Binding ResetCommand}" Style="{StaticResource ResetButton}" Margin="4,0,0,0"/>
+                                    <Button Grid.Column="2" Content="Đặt lại" Command="{Binding ResetCommand}" Style="{StaticResource ResetButton}" Margin="4,0,0,0"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -1180,7 +1180,7 @@
                         </Style>
                     </Button.Style>
                 </Button>
-                <Button Content="Tạo khung trần nổi" Command="{Binding LayIn.CreateCommand}" HorizontalAlignment="Stretch">
+                <Button Content="Tạo trần nổi" Command="{Binding LayIn.CreateCommand}" HorizontalAlignment="Stretch">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
                             <Setter Property="Visibility" Value="Collapsed"/>
