@@ -260,6 +260,13 @@ jobs:
           foreach($v in @('RefreshTableStyles', 'SaveLegacyTableHeight', 'TextStyleTable', 'Grid.SetColumn(_legacyTableHeight, 1)', 'cell.TextHeight', 'cell.TextStyleId')) {
             if(-not (($ui+$cmd).Contains($v))) { throw "Missing RC5.4 UI/adapter table setting: $v" }
           }
+          $profile=Get-Content "$root/HceLegacyProfile.cs" -Raw
+          foreach($part in @('LabelTextHeight', 'BuildLabelSpecs', 'PiecesInLispOrder()', 'BoundaryFullPieces.AddRange', 'LabelPointWcs', 'AddCadLabel(currentSpace, transaction', 'CellRange.Create(table', 'table.SetSize(rows, 4)', 'transaction.Commit();')) {
+            if(-not (($ui+$cmd+$profile).Contains($part))){throw "Missing Vietnamese table or N/G/L label contract: $part"}
+          }
+          if($cmd.Contains('"Material / Hatch group"')){throw 'English CAD table headers not removed'}
+          if(-not $ui.Contains('SaveLegacyLabelHeight')){throw 'N/G/L CAD text height editor missing'}
+          Write-Host 'HCE VIETNAMESE TABLE + N/G/L LABEL + PER-DWG HEIGHT STATIC GATE PASS'
           Write-Host 'HCE RC5.4 CAD TABLE STYLE/HEIGHT BINDING STATIC GATE PASS'
 
       - name: Build Golden + AutoCAD matrix + Setup EXE
