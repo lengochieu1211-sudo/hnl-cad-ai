@@ -1087,7 +1087,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                         table.Cells[8, 3].TextString = "Tấm nguyên + nguồn cắt";
                     }
 
-                    table.Cells[groupHeadingRow, 0].TextString = "THỐNG KÊ THEO NHÓM HATCH";
+                    table.Cells[groupHeadingRow, 0].TextString = "THEO NHÓM HATCH: " + hatches + " Hatch, " + cuts + " mảnh cắt";
                     table.MergeCells(CellRange.Create(table, groupHeadingRow, 0, groupHeadingRow, 3));
                     for (var i = 0; i < report.Groups.Count; i++)
                     {
@@ -1104,6 +1104,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                         for (var row = 0; row < rows; row++)
                             for (var col = 0; col < 4; col++)
                             {
+                                // Avoid styling merged child cells (only the first cell owns content).
+                                if ((row == 0 || row == groupHeadingRow) && col > 0) continue;
                                 var cell = table.Cells[row, col];
                                 if (textHeight > 0) cell.TextHeight = textHeight;
                                 if (!styleId.IsNull) cell.TextStyleId = styleId;
