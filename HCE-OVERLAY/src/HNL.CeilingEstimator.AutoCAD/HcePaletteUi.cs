@@ -354,19 +354,9 @@ namespace HNL.CeilingEstimator.AutoCAD
         {
             // PaletteSet supplies the one and only app name and update time in
             // AutoCAD's native dock title bar. No inner logo, title or footer.
-            var tabs = new TabControl
-            {
-                Margin = new Thickness(0),
-                Background = _background,
-                BorderThickness = new Thickness(0),
-                Foreground = _primary,
-                Style = VxtModuleRailStyle()
-            };
-            var moduleStyle = VxtModuleTabStyle();
-            tabs.Items.Add(new TabItem { Header = "Trần chìm", Style = moduleStyle, Content = BuildFramingModule() });
-            tabs.Items.Add(new TabItem { Header = "Trần nổi", Style = moduleStyle, Content = BuildCalculationTab() });
-            tabs.SelectedIndex = 1;
-            return tabs;
+            // HCE is the ceiling-panel estimator. HCF is a separate plugin;
+            // do not expose its launcher as a misleading HCE mode tab.
+            return BuildCalculationTab();
         }
 
         private UIElement BuildCalculationTab()
@@ -694,7 +684,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             {
                 Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                CanContentScroll = true
+                CanContentScroll = false
             };
         }
 
