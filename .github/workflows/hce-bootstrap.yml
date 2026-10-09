@@ -83,6 +83,7 @@ jobs:
           if ($ui.Contains('pack://application:,,,/HNL.CeilingEstimator.AutoCAD;component/Assets/HNL-Logo-Official.png')) { throw 'Redundant HCE Palette logo still present' }
           if ($ui.Contains('titleStack.Children.Add') -or $ui.Contains('footer.Child')) { throw 'Redundant Palette header/footer still present' }
           if (-not $ui.Contains('new PaletteSet(PaletteCaption, PaletteId)')) { throw 'Caption not wired into native AutoCAD PaletteSet' }
+          if (-not $ui.Contains('palette.AddVisual(PaletteCaption, view)')) { throw 'HCE tab must reuse the build-time caption' }
           $buildTimeVN = [DateTime]::UtcNow.AddHours(7).ToString('dd/MM/yyyy HH:mm', [Globalization.CultureInfo]::InvariantCulture)
           $ui = $ui.Replace('HCE_UPDATED_AT_VN', $buildTimeVN)
           if ($ui.Contains('HCE_UPDATED_AT_VN')) { throw 'Unstamped HCE Palette title marker' }
@@ -118,6 +119,12 @@ jobs:
           foreach($phrase in @('CanContentScroll = false', 'ComboArrowBackground', 'Resources[typeof(ComboBox)]', "Text='{TemplateBinding SelectionBoxItem}'", "Fill='{DynamicResource PrimaryText}'")) {
             if(-not $ui.Contains($phrase)){throw "Missing scrolling/dropdown visibility contract: $phrase"}
           }
+          if ($ui.Contains('DEMTC')) { throw 'Legacy DEMTC label found in the HCE palette UI' }
+          if (-not $ui.Contains('Section("02  Cài đặt tính tấm"')) { throw 'New calculator settings title missing' }
+          if ($ui.Contains('MaxWidth = 130')) { throw 'Numeric inputs are still narrower than the dropdown column' }
+          $alignedInputs = [regex]::Matches($ui, 'new TextBox\s*\{[^}]*HorizontalAlignment = HorizontalAlignment.Stretch', [Text.RegularExpressions.RegexOptions]::Singleline)
+          if ($alignedInputs.Count -lt 2) { throw 'Both numeric TextBoxes must stretch in the shared input column' }
+          if ([regex]::Matches($ui, 'new GridLength\(138\)').Count -lt 5) { throw 'Setting labels must have consistent column width' }
           Write-Host 'HCE SMOOTH SCROLL + COMBOBOX VISIBILITY STATIC GATE PASS'
 
       - name: Verify HCE default palette and calculator route
