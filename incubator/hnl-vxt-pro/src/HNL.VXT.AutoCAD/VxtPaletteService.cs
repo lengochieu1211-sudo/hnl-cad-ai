@@ -48,16 +48,18 @@ namespace HNL.VXT.AutoCAD
                 };
 
                 _palette.AddVisual("Vẽ Xương Trần", _view);
+                _palette.Visible = true;
                 _palette.Name = VxtBuildInfo.PaletteTitle;
-            _palette.Visible = true;
+                TraceUiStartup("Palette caption: " + _palette.Name);
 
                 TraceUiStartup("Palette visible; scheduling UI polish");
                 ScheduleUiPolish(bridge);
                 return;
             }
 
-            _palette.Name = VxtBuildInfo.PaletteTitle;
             _palette.Visible = true;
+            _palette.Name = VxtBuildInfo.PaletteTitle;
+            TraceUiStartup("Palette caption: " + _palette.Name);
 
             // A previous stage exception is fail-open; reopening the palette must never enqueue
             // another copy of the same startup pipeline.
