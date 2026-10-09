@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.Core/HNL.CeilingEstimator.Core.csproj" />
+    <Compile Include="../../src/HNL.CeilingEstimator.AutoCAD/HceLegacyProfile.cs" Link="HceLegacyProfile.cs" />
+  </ItemGroup>
+</Project>

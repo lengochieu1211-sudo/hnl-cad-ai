@@ -1,0 +1,63 @@
+name: HNL VXT Pro Drive Backup Source
+
+on:
+  push:
+    branches:
+      - research/vxt-pro-v7-bootstrap
+    paths:
+      - ".github/workflows/vxt-pro-drive-backup.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-source:
+    name: Package HNL VXT Pro full source for Drive handoff
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage full VXT source and workflow evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'HNL-VXT-Pro-FULL-SOURCE-2026-09-05-beta.1-WIP'
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'incubator\hnl-vxt-pro') (Join-Path $stage 'incubator\hnl-vxt-pro') -Recurse -Force
+
+          $wfDst = Join-Path $stage '.github\workflows'
+          New-Item -ItemType Directory -Force -Path $wfDst | Out-Null
+          Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE '.github\workflows') -Filter 'vxt-pro-*' -File |
+            Copy-Item -Destination $wfDst -Force
+
+          $meta = @(
+            "HNL VXT Pro FULL SOURCE Backup",
+            "UTC: $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))",
+            "Repository: $env:GITHUB_REPOSITORY",
+            "Branch/Ref: $env:GITHUB_REF",
+            "Commit: $env:GITHUB_SHA",
+            "Target: v7.0.0-beta.1 / FileVersion 7.0.0.6",
+            "Main must NOT be merged automatically.",
+            "Read incubator/hnl-vxt-pro/HNL-VXT-CONTINUATION-CHECKPOINT-2026-09-05.md before continuing."
+          ) -join "`r`n"
+          Set-Content -Path (Join-Path $stage 'BACKUP-METADATA.txt') -Value $meta -Encoding UTF8
+
+          $zip = Join-Path $env:GITHUB_WORKSPACE 'HNL-VXT-Pro-FULL-SOURCE-2026-09-05-beta.1-WIP.zip'
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
+          Set-Content -Path "$zip.sha256.txt" -Value "$hash  $(Split-Path $zip -Leaf)" -Encoding ASCII
+          Write-Host "Source backup SHA256: $hash"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HNL-VXT-Pro-FULL-SOURCE-2026-09-05-beta.1-WIP
+          path: |
+            HNL-VXT-Pro-FULL-SOURCE-2026-09-05-beta.1-WIP.zip
+            HNL-VXT-Pro-FULL-SOURCE-2026-09-05-beta.1-WIP.zip.sha256.txt
+          retention-days: 30
+          if-no-files-found: error
