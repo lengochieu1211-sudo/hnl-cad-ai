@@ -944,19 +944,19 @@ namespace HNL.CeilingEstimator.AutoCAD
                 double.IsInfinity(p.X) || double.IsInfinity(p.Y))
                 throw new InvalidOperationException("HCE label has invalid WCS coordinates: " + spec.Code);
             var pt = new Point3d(p.X, p.Y, 0);
-            using (var label = new DBText())
+            var label = new DBText
             {
-                label.TextString = spec.Code;
-                label.Position = pt;
-                label.AlignmentPoint = pt;
-                label.Height = labelHeight;
-                label.HorizontalMode = TextHorizontalMode.TextCenter;
-                label.VerticalMode = TextVerticalMode.TextVerticalMid;
-                label.ColorIndex = spec.ColorIndex;
-                if (!styleId.IsNull) label.TextStyleId = styleId;
-                space.AppendEntity(label);
-                transaction.AddNewlyCreatedDBObject(label, true);
-            }
+                TextString = spec.Code,
+                Position = pt,
+                Height = labelHeight,
+                HorizontalMode = TextHorizontalMode.TextCenter,
+                VerticalMode = TextVerticalMode.TextVerticalMid,
+                AlignmentPoint = pt,
+                ColorIndex = spec.ColorIndex
+            };
+            if (!styleId.IsNull) label.TextStyleId = styleId;
+            space.AppendEntity(label);
+            transaction.AddNewlyCreatedDBObject(label, true);
         }
 
         private static void InsertTable(Database database, CalculationReport report, Point3d point,
