@@ -566,6 +566,16 @@ namespace HNL.CeilingEstimator.AutoCAD
 
             stage = "Hatch.GetLoopAt(0)";
             var boundary = hatch.GetLoopAt(0);
+            // AutoCAD may retain a visually filled HATCH whose boundary is explicitly
+            // flagged NotClosed (DXF 92 bit 0x20). Its native Area may be unavailable,
+            // while implicit polygon closure fabricates a positive area. Reject before
+            // the tolerant 0.01mm join / numeric-area fallback can count that geometry.
+            if ((boundary.LoopType & HatchLoopTypes.NotClosed) != 0)
+            {
+                reason = "loop=0 NotClosed (DXF 92 flag 0x20): " +
+                    "repair Hatch boundary before ceiling quantities";
+                return false;
+            }
             stage = "HatchLoop edges";
             var segments = new List<Segment2>();
             if (boundary.IsPolyline)
