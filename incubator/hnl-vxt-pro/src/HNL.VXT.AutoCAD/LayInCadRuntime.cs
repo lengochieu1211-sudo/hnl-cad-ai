@@ -86,7 +86,7 @@ namespace HNL.VXT.AutoCAD
                 ClearCore();
                 DrainRetired();
                 if (Active.Count > 0)
-                    throw new InvalidOperationException("Cannot safely release previous Lay-in Preview.");
+                    throw new InvalidOperationException("Không thể xóa Preview cũ an toàn.");
                 var session = VxtSession.Current;
                 if (!session.HasBoundary) return;
                 var plans = LayInRuntimePlanner.Build(session, session.LayInSettings);
@@ -100,13 +100,12 @@ namespace HNL.VXT.AutoCAD
                 var total = teeCount + hangerCount + dimensionCount + markerCount;
                 if (teeCount > MaxPreviewDrawables)
                     throw new InvalidOperationException(
-                        "Preview trần nổi có " + teeCount +
-                        " đoạn T, vượt giới hạn an toàn 3500. Hãy xem từng vùng trần; Tạo vẫn dùng đủ dữ liệu.");
+                        "Preview " + teeCount +
+                        " thanh T vượt 3500. Chọn ít vùng; Tạo vẫn đầy đủ.");
                 if (teeCount > ComfortablePreviewDrawables)
                     throw new InvalidOperationException(
-                        "Preview trần nổi có " + teeCount +
-                        " đoạn T; tạm dừng vẽ để tránh đứng AutoCAD trên laptop. " +
-                        "Hãy xem từng vùng trần; Tạo vẫn dùng đủ dữ liệu.");
+                        "Preview quá nặng: " + teeCount +
+                        " thanh T. Chọn ít vùng; Tạo vẫn đầy đủ.");
                 // Reduced Preview hides only decorative overlays; no tee, plan, count or Create is modified.
                 var showDimensions = teeCount + dimensionCount <= ComfortablePreviewDrawables;
                 var showHangersAndMarker = total <= ComfortablePreviewDrawables;
@@ -163,9 +162,9 @@ namespace HNL.VXT.AutoCAD
                 session.ViewModel?.LayIn?.SetPreviewStats(main, longCross, shortCross, hangers, waste);
                 if (!showDimensions || !showHangersAndMarker)
                 {
-                    var message = "Preview nhẹ: đủ thanh T; " +
+                    var message = "Preview nhẹ: đủ T, " +
                         (!showDimensions ? "ẩn DIM/Ty/Block" : "ẩn Ty/Block") +
-                        " để giảm lag. Lệnh Tạo vẫn đầy đủ (" + total + " đối tượng).";
+                        ". Tạo vẫn đầy đủ.";
                     session.ViewModel?.LayIn?.SetPreviewError(message);
                     doc.Editor.WriteMessage("\nHNL Tool - Lay-in Preview: " + message);
                 }
@@ -207,7 +206,7 @@ namespace HNL.VXT.AutoCAD
             var session = VxtSession.Current;
             if (!session.HasBoundary)
             {
-                doc.Editor.WriteMessage("\nHNL Tool - Lay-in: No ceiling boundary selected.");
+                doc.Editor.WriteMessage("\nHNL Tool - Trần nổi: Chưa chọn biên.");
                 return;
             }
 
@@ -297,7 +296,7 @@ namespace HNL.VXT.AutoCAD
                 doc.Editor.WriteMessage("\nHNL Tool - Lay-in Create: " +
                     hatchCount + " Hatch, " + hangerCount + " Ty, " +
                     dimensionCount + " DIM, " + startTileCount +
-                    " Block o tran xuat phat. One Hatch per region.");
+                    " Block ô đầu.");
             }
             catch (Exception ex)
             {
