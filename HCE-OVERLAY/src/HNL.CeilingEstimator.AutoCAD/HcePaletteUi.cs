@@ -103,6 +103,8 @@ namespace HNL.CeilingEstimator.AutoCAD
         private ComboBox? _legacyTableStyle;
         private TextBox? _legacyTableHeight;
         private TextBox? _legacyLabelHeight;
+        private CheckBox? _legacyCutList;
+        private ComboBox? _legacyCutMode;
         private WpfText? _legacyStatus;
         private WpfText? _legacyValidation;
         private bool _loadingLegacyControls;
@@ -486,6 +488,37 @@ namespace HNL.CeilingEstimator.AutoCAD
             Grid.SetColumn(_legacyLabelHeight, 1);
             labelHeightRow.Children.Add(_legacyLabelHeight);
             table.Children.Add(labelHeightRow);
+            var cutListRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            cutListRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
+            cutListRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            cutListRow.Children.Add(Text("Liệt kê mảnh biên", 11, _muted, FontWeights.Normal));
+            _legacyCutList = new CheckBox
+            {
+                Content = "Hiển thị", Foreground = _primary, MinHeight = 27,
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+            _legacyCutList.Checked += (sender, args) => SaveLegacyCutList(true);
+            _legacyCutList.Unchecked += (sender, args) => SaveLegacyCutList(false);
+            Grid.SetColumn(_legacyCutList, 1);
+            cutListRow.Children.Add(_legacyCutList);
+            table.Children.Add(cutListRow);
+            var cutModeRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            cutModeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
+            cutModeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            cutModeRow.Children.Add(Text("Chế độ liệt kê", 11, _muted, FontWeights.Normal));
+            _legacyCutMode = new ComboBox { MinHeight = 27, Foreground = _primary };
+            _legacyCutMode.Items.Add("Tổng hợp");
+            _legacyCutMode.Items.Add("Chi tiết (chậm)");
+            _legacyCutMode.SelectionChanged += (sender, args) =>
+            {
+                if (_loadingLegacyControls || _legacyCutMode.SelectedIndex < 0) return;
+                var profile = ActiveLegacyProfile();
+                if (profile == null) return;
+                profile.CutListMode = _legacyCutMode.SelectedIndex == 1 ? "D" : "S";
+            };
+            Grid.SetColumn(_legacyCutMode, 1);
+            cutModeRow.Children.Add(_legacyCutMode);
+            table.Children.Add(cutModeRow);
             table.Children.Add(Text(
                 "0 = dùng cỡ chữ bảng mặc định.",
                 10, _muted, FontWeights.Normal));
@@ -586,6 +619,15 @@ namespace HNL.CeilingEstimator.AutoCAD
                 _legacyValidation.Text = "HNL Tool: Cao chữ bảng phải từ 0 đến 10000 mm.";
         }
 
+        private void SaveLegacyCutList(bool enabled)
+        {
+            if (_loadingLegacyControls) return;
+            var profile = ActiveLegacyProfile();
+            if (profile == null) return;
+            profile.CutListEnabled = enabled;
+            RefreshLegacyControls();
+        }
+
         private void SaveLegacyLabelHeight()
         {
             if (_loadingLegacyControls || _legacyLabelHeight == null) return;
@@ -665,6 +707,12 @@ namespace HNL.CeilingEstimator.AutoCAD
                     _legacyTableHeight.Text = profile.TableTextHeight.ToString("0.###", CultureInfo.CurrentCulture);
                 if (_legacyLabelHeight != null)
                     _legacyLabelHeight.Text = profile.LabelTextHeight.ToString("0.###", CultureInfo.CurrentCulture);
+                if (_legacyCutList != null) _legacyCutList.IsChecked = profile.CutListEnabled;
+                if (_legacyCutMode != null)
+                {
+                    _legacyCutMode.SelectedIndex = profile.CutListMode == "D" ? 1 : 0;
+                    _legacyCutMode.IsEnabled = profile.CutListEnabled;
+                }
                 if (_legacySelectors.TryGetValue("Priority", out var p))
                     p.IsEnabled = profile.Module == "M";
                 if (_legacySelectors.TryGetValue("Direction", out var d))
