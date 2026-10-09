@@ -27,9 +27,11 @@ namespace HNL.VXT.AutoCAD
             };
             _previewTimer.Tick += PreviewTimer_Tick;
 
+            // Lay-in redraw may create thousands of transient tees and native DIM layouts.
+            // Keep concealed preview responsive while coalescing laptop-heavy lay-in edits.
             _layInPreviewTimer = new DispatcherTimer(DispatcherPriority.Background)
             {
-                Interval = TimeSpan.FromMilliseconds(180)
+                Interval = TimeSpan.FromMilliseconds(650)
             };
             _layInPreviewTimer.Tick += LayInPreviewTimer_Tick;
         }
