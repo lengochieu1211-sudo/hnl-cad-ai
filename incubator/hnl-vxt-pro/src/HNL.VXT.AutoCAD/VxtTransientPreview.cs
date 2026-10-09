@@ -124,6 +124,27 @@ namespace HNL.VXT.AutoCAD
                         renderDecision = VxtPreviewLoadSheddingPolicy.Evaluate(
                             plan, settings, FullPreviewDrawableLimit);
 
+                        // Overlay load shedding cannot reduce XC/XP themselves. A plan with
+                        // more structural drawables than the budget would still create every
+                        // native Line and can stall AutoCAD. Keep the complete Core plan,
+                        // stats, and Create untouched, but skip only this oversized Preview.
+                        if (renderDecision.StructuralDrawableCount > FullPreviewDrawableLimit)
+                        {
+                            var safeMetrics = VxtFinalPlanMetrics.FromPlan(plan);
+                            LastPlanMetrics = safeMetrics;
+                            LastRenderDecision = renderDecision;
+                            session.ViewModel?.SetPreviewActualStats(safeMetrics);
+                            session.ViewModel?.SetConstraintDiagnostics(plan.Diagnostics);
+                            var notice = "Preview quá nặng: " +
+                                renderDecision.StructuralDrawableCount +
+                                " thanh XC/XP. Chọn ít vùng; lệnh Tạo vẫn tính đủ.";
+                            session.ViewModel?.SetPreviewError(notice);
+                            if (!_largePreviewNoticeShown)
+                                doc.Editor.WriteMessage("\nHNL Tool - Trần chìm: " + notice);
+                            _largePreviewNoticeShown = true;
+                            return;
+                        }
+
                         RenderStructuralLines(plan, settings, db, layerTable, linetypeTable);
 
                         // Dim is the highest-priority overlay after XC/XP. Render it before Ty/guides
