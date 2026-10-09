@@ -82,6 +82,13 @@ namespace HNL.VXT.UI.Views
             combo.Resources[SystemColors.WindowBrushKey] = input;
             combo.Resources[SystemColors.ControlBrushKey] = input;
             combo.Resources[SystemColors.ControlTextBrushKey] = primary;
+            combo.Resources[SystemColors.ControlLightBrushKey] = input;
+            combo.Resources[SystemColors.ControlLightLightBrushKey] = input;
+            combo.Resources[SystemColors.ControlDarkBrushKey] = border;
+            combo.Resources[SystemColors.ControlDarkDarkBrushKey] = border;
+            combo.Resources[SystemColors.WindowFrameBrushKey] = border;
+            combo.Resources[SystemColors.MenuBrushKey] = input;
+            combo.Resources[SystemColors.MenuTextBrushKey] = primary;
             combo.Resources[SystemColors.GrayTextBrushKey] = secondary;
             combo.Resources[SystemColors.HighlightBrushKey] = selected;
             combo.Resources[SystemColors.HighlightTextBrushKey] = primary;
@@ -95,6 +102,8 @@ namespace HNL.VXT.UI.Views
 
             combo.ApplyTemplate();
             ApplyEditableTextBoxColors(combo, primary, input, border);
+            if (combo.IsEditable)
+                ApplyStockComboChrome(combo, combo.IsEnabled ? primary : secondary, input, border);
 
             combo.IsEnabledChanged -= ComboIsEnabledChanged;
             combo.IsEnabledChanged += ComboIsEnabledChanged;
@@ -108,6 +117,39 @@ namespace HNL.VXT.UI.Views
             var secondary = FindBrush(combo, "SecondaryText", Brushes.Gray);
             combo.Foreground = combo.IsEnabled ? primary : secondary;
             combo.Opacity = combo.IsEnabled ? 1.0 : 0.82;
+            var input = FindBrush(combo, "InputBackground", Brushes.White);
+            var border = FindBrush(combo, "InputBorder", Brushes.Gray);
+            if (combo.IsEditable)
+            {
+                combo.ApplyTemplate();
+                ApplyStockComboChrome(combo, combo.IsEnabled ? primary : secondary, input, border);
+            }
+        }
+
+        private static void ApplyStockComboChrome(DependencyObject root, Brush glyph, Brush input, Brush border)
+        {
+            if (root == null) return;
+            var count = VisualTreeHelper.GetChildrenCount(root);
+            for (var i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                var toggle = child as System.Windows.Controls.Primitives.ToggleButton;
+                if (toggle != null)
+                {
+                    toggle.Background = input;
+                    toggle.Foreground = glyph;
+                    toggle.BorderBrush = border;
+                }
+
+                var path = child as System.Windows.Shapes.Path;
+                if (path != null)
+                {
+                    path.Fill = glyph;
+                    path.Stroke = glyph;
+                }
+
+                ApplyStockComboChrome(child, glyph, input, border);
+            }
         }
 
         private static ControlTemplate HnlComboTemplate()

@@ -479,7 +479,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- Compact left-hand mode rail, matching AutoCAD vertical tool tabs.
+        <!-- Compact right-hand mode rail, matching AutoCAD vertical tool tabs.
              Keep the real TabControl: SelectedCeilingTabIndex / Preview / Create
              bindings are unchanged. No separate toggle state is introduced. -->
         <Style x:Key="CeilingModeTabControl" TargetType="{x:Type TabControl}">
@@ -490,18 +490,18 @@
                     <ControlTemplate TargetType="{x:Type TabControl}">
                         <Grid Background="{TemplateBinding Background}" SnapsToDevicePixels="True">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="36"/>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="36"/>
                             </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Background="{DynamicResource CardBackground}"
+                            <Border Grid.Column="1" Background="{DynamicResource CardBackground}"
                                     BorderBrush="{DynamicResource CardBorder}"
-                                    BorderThickness="0,0,1,0" Padding="2,5,2,5">
+                                    BorderThickness="1,0,0,0" Padding="2,5,2,5">
                                 <StackPanel Orientation="Vertical" IsItemsHost="True"
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Top"
                                             KeyboardNavigation.TabNavigation="Local"/>
                             </Border>
-                            <ContentPresenter Grid.Column="1"
+                            <ContentPresenter Grid.Column="0"
                                               x:Name="PART_SelectedContentHost"
                                               ContentSource="SelectedContent"
                                               HorizontalAlignment="Stretch"

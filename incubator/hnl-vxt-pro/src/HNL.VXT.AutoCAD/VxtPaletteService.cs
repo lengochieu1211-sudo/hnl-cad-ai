@@ -12,8 +12,8 @@ namespace HNL.VXT.AutoCAD
 {
     internal static class VxtPaletteService
     {
-        // Beta.1 gets a refreshed Palette GUID so AutoCAD does not restore stale alpha titles/layout.
-        private static readonly Guid PaletteGuid = new Guid("8F41C84C-6E27-4E9A-9F1E-1FDC49B1A706");
+        // Refresh the Palette GUID when the product caption changes so AutoCAD cannot restore the old VXT title/layout.
+        private static readonly Guid PaletteGuid = new Guid("B7E5D9C2-3A1F-4D08-9AC8-1DAB6B3F7821");
         private static PaletteSet _palette;
         private static VxtPaletteView _view;
         private static bool _uiPolishScheduled;
@@ -48,13 +48,15 @@ namespace HNL.VXT.AutoCAD
                 };
 
                 _palette.AddVisual("Vẽ Xương Trần", _view);
-                _palette.Visible = true;
+                _palette.Name = VxtBuildInfo.PaletteTitle;
+            _palette.Visible = true;
 
                 TraceUiStartup("Palette visible; scheduling UI polish");
                 ScheduleUiPolish(bridge);
                 return;
             }
 
+            _palette.Name = VxtBuildInfo.PaletteTitle;
             _palette.Visible = true;
 
             // A previous stage exception is fail-open; reopening the palette must never enqueue

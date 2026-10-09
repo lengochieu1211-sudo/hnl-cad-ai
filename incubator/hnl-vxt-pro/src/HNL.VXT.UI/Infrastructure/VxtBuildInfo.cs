@@ -20,7 +20,7 @@ namespace HNL.VXT.UI.Infrastructure
         // AutoCAD's own PaletteSet title is the only product heading.
         // Show the exact embedded build time, without duplicating the version
         // or adding a second logo/title panel inside the palette.
-        public static string PaletteTitle => "Ceiling Framing Pro • " + BuildText;
+        public static string PaletteTitle => "HNL Ceiling Framing Pro • " + BuildText;
 
         private static string ResolveBuildText()
         {

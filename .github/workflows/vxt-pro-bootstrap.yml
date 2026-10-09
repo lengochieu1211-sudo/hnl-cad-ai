@@ -347,12 +347,20 @@ jobs:
           $buildInfo = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Infrastructure\VxtBuildInfo.cs" -Raw
           $buildProps = Get-Content "$env:VXT_ROOT\Directory.Build.props" -Raw
           $ceilingUi = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.xaml" -Raw
+          $paletteService = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtPaletteService.cs" -Raw
+          $comboChrome = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.Beta.cs" -Raw
           $layInLabels = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\LayInCeilingViewModel.cs" -Raw
           if (-not $buildInfo.Contains('MetadataKey = "HNLBuildDateTime"') -or
               -not $buildInfo.Contains('Cập nhật ') -or
-              -not $buildInfo.Contains('public static string PaletteTitle => "Ceiling Framing Pro • " + BuildText;') -or
+              -not $buildInfo.Contains('public static string PaletteTitle => "HNL Ceiling Framing Pro • " + BuildText;') -or
               -not $buildProps.Contains('AssemblyMetadata Include="HNLBuildDateTime"') -or
+              -not $paletteService.Contains('_palette.Name = VxtBuildInfo.PaletteTitle;') -or
+              -not $paletteService.Contains('B7E5D9C2-3A1F-4D08-9AC8-1DAB6B3F7821') -or
               -not $ceilingUi.Contains('MinWidth="0"') -or
+              -not $ceilingUi.Contains('<Border Grid.Column="1" Background="{DynamicResource CardBackground}"') -or
+              -not $ceilingUi.Contains('BorderThickness="1,0,0,0" Padding="2,5,2,5"') -or
+              -not $comboChrome.Contains('ApplyStockComboChrome(combo, combo.IsEnabled ? primary : secondary, input, border);') -or
+              -not $comboChrome.Contains('SystemColors.ControlLightBrushKey') -or
               -not $ceilingUi.Contains('Header="Trần nổi"') -or
               -not $ceilingUi.Contains('<Expander Header="4. Ty treo"') -or
               -not $layInLabels.Contains('Song song cạnh ngắn') -or
