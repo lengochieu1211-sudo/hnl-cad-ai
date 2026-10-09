@@ -18,6 +18,8 @@ namespace HNL.CeilingEstimator.AutoCAD
         // These are presentation settings, not core tile/packing options.
         public string TableTextStyle = string.Empty;
         public double TableTextHeight = 0.0;
+        // Legacy separate height for N/G/L labels placed in the CAD drawing.
+        public double LabelTextHeight = 100.0;
 
         public HceLegacyProfile Clone()
         {
