@@ -32,7 +32,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             {
                 CadApplication.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
                     "\nHNL Tool - HCE palette could not open: " + ex.Message +
-                    ". The original HCE/DTC/DEMTC commands are still available.");
+                    ". Run HCECALC to calculate directly.");
             }
         }
     }
@@ -62,7 +62,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     Size = new DrawingSize(420, 730),
                     KeepFocus = false
                 };
-                palette.AddVisual("T\u00ednh t\u1ea5m tr\u1ea7n", view);
+                palette.AddVisual(PaletteCaption, view);
                 _view = view;
                 _palette = palette;
                 // Apply the settings of the active DWG on every document switch.
@@ -363,32 +363,26 @@ namespace HNL.CeilingEstimator.AutoCAD
         {
             var content = new StackPanel { Margin = new Thickness(0, 9, 0, 10) };
 
-            var selection = Section("01  Ch\u1ecdn m\u1ea3ng tr\u1ea7n", "#2497FF");
-            selection.Children.Add(Text("Ch\u1ecdn m\u1ed9t ho\u1eb7c nhi\u1ec1u Hatch tr\u1ea7n n\u1ed5i tr\u00ean CAD.",
-                11, _muted, FontWeights.Normal));
-            selection.Children.Add(CommandButton("Ch\u1ecdn Hatch v\u00e0 t\u00ednh t\u1ea5m", "HCECALC", true));
-            selection.Children.Add(Text("B\u1ea5m n\u00fat, qu\u00e9t ch\u1ecdn Hatch trong CAD r\u1ed3i Enter.",
+            var selection = Section("01  Chọn Hatch", "#2497FF");
+            selection.Children.Add(CommandButton("Chọn Hatch và tính tấm", "HCECALC", true));
+            selection.Children.Add(Text("Chọn Hatch trên CAD, rồi Enter.",
                 10, _muted, FontWeights.Normal));
             content.Children.Add(Card(selection));
 
             content.Children.Add(Card(BuildLegacySettingsPanel()));
 
-            var result = Section("03  Xem tr\u01b0\u1edbc v\u00e0 b\u1ea3ng", "#F59E0B");
-            result.Children.Add(Text("Sau khi chọn Hatch, kết quả đếm tấm hiển thị trên Command Line. " +
-                "Hatch không chứng minh được bước lưới hoặc đơn vị chưa đúng cần xác nhận riêng.",
+            var result = Section("03  Kết quả và bảng", "#F59E0B");
+            result.Children.Add(Text("Kết quả hiện trên Command Line. Hatch chưa rõ lưới hoặc đơn vị sẽ cần xác nhận.",
                 11, _muted, FontWeights.Normal));
-            result.Children.Add(Text("Ch\u1ecdn Table \u0111\u1ec3 \u0111\u1eb7t b\u1ea3ng, " +
-                "ho\u1eb7c Exit \u0111\u1ec3 kh\u00f4ng ghi g\u00ec v\u00e0o DWG.",
+            result.Children.Add(Text("Table: chèn bảng. Exit: không ghi vào DWG.",
                 11, _muted, FontWeights.Normal));
-            result.Children.Add(Text("Preview h\u00ecnh h\u1ecdc t\u1eebng t\u1ea5m: ch\u01b0a m\u1edf " +
-                "(c\u1ea7n Golden parity).",
+            result.Children.Add(Text("Chưa hỗ trợ xem trước hình học từng tấm.",
                 10, Brush("#E5A84E"), FontWeights.SemiBold));
             content.Children.Add(Card(result));
-            var check = Section("05  Kiểm tra", "#A78BFA");
+            var check = Section("04  Kiểm tra", "#A78BFA");
             check.Children.Add(CommandButton("Kiểm tra Hatch (HCEQA)", "HCEQA", false));
-            check.Children.Add(CommandButton("Quét Golden (HCEGOLDEN)", "HCEGOLDEN", false));
-            check.Children.Add(Text("Đây là công cụ kiểm tra của module Trần nổi, không phải một module thứ ba.",
-                10, _muted, FontWeights.Normal));
+            check.Children.Add(CommandButton("Đối chiếu Golden (HCEGOLDEN)", "HCEGOLDEN", false));
+            check.Children.Add(Text("Chỉ kiểm tra, không sửa DWG.", 10, _muted, FontWeights.Normal));
             content.Children.Add(Card(check));
 
             return Scroll(content);
@@ -397,7 +391,7 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         private StackPanel BuildLegacySettingsPanel()
         {
-            var config = Section("02  Hệ tấm & module", "#22C55E");
+            var config = Section("Hệ tấm", "#22C55E");
             config.Children.Add(Choice("Family", "Hệ trần", new[] { "600 mm", "610 mm" },
                 new[] { "600", "610" }));
             config.Children.Add(Choice("Module", "Loại tấm", new[] {
@@ -410,14 +404,14 @@ namespace HNL.CeilingEstimator.AutoCAD
                 "Theo X", "Theo Y"
             }, new[] { "X", "Y" }));
 
-            var gridSection = Section("03  Căn lưới", "#2497FF");
+            var gridSection = Section("Căn lưới", "#2497FF");
             gridSection.Children.Add(Choice("Grid", "Chế độ lưới", new[] {
                 "Theo Hatch (gốc/hướng)", "Chọn gốc + hướng", "WCS (0,0)"
             }, new[] { "3", "2", "1" }));
             var snapRow = new Grid { Margin = new Thickness(0, 3, 0, 8) };
             snapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             snapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            _legacySnap = new CheckBox { Content = "Bật sai số nhỏ", Foreground = _primary };
+            _legacySnap = new CheckBox { Content = "Bật", Foreground = _primary, MinHeight = 27, VerticalContentAlignment = VerticalAlignment.Center };
             Grid.SetColumn(_legacySnap, 1);
             _legacySnap.Checked += (sender, args) => SaveLegacySnap(true);
             _legacySnap.Unchecked += (sender, args) => SaveLegacySnap(false);
@@ -428,9 +422,10 @@ namespace HNL.CeilingEstimator.AutoCAD
             tol.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             tol.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             tol.Children.Add(Text("Dung sai (0-10 mm)", 11, _muted, FontWeights.Normal));
-            _legacyTolerance = new TextBox { MinWidth = 85, MaxWidth = 130,
-                HorizontalAlignment = HorizontalAlignment.Left, Foreground = _primary,
-                Background = _surface, BorderBrush = _border, Padding = new Thickness(6, 3, 6, 3) };
+            _legacyTolerance = new TextBox { MinHeight = 27,
+                HorizontalAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center,
+                Foreground = _primary, Background = _surface, BorderBrush = _border,
+                Padding = new Thickness(6, 3, 6, 3) };
             _legacyTolerance.LostFocus += (sender, args) => SaveLegacyTolerance();
             Grid.SetColumn(_legacyTolerance, 1);
             tol.Children.Add(_legacyTolerance);
@@ -439,7 +434,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var wrapped = new StackPanel();
             wrapped.Children.Add(Card(config));
             wrapped.Children.Add(Card(gridSection));
-            var table = Section("04  Định dạng bảng CAD", "#A78BFA");
+            var table = Section("Bảng CAD", "#A78BFA");
             var styleRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
             styleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             styleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -463,10 +458,11 @@ namespace HNL.CeilingEstimator.AutoCAD
             var heightRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
             heightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             heightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            heightRow.Children.Add(Text("Cao chữ bảng (mm)", 11, _muted, FontWeights.Normal));
+            heightRow.Children.Add(Text("Cao chữ (mm)", 11, _muted, FontWeights.Normal));
             _legacyTableHeight = new TextBox
             {
-                MinWidth = 85, MaxWidth = 130, HorizontalAlignment = HorizontalAlignment.Left,
+                MinHeight = 27, HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalContentAlignment = VerticalAlignment.Center,
                 Foreground = _primary, Background = _surface, BorderBrush = _border,
                 Padding = new Thickness(6, 3, 6, 3)
             };
@@ -475,19 +471,19 @@ namespace HNL.CeilingEstimator.AutoCAD
             heightRow.Children.Add(_legacyTableHeight);
             table.Children.Add(heightRow);
             table.Children.Add(Text(
-                "0 = giữ kích thước chữ RC5.3.3. Giá trị khác 0 chỉ thay bảng xuất CAD, không đổi phép tính.",
+                "0 = chiều cao chữ mặc định. Không đổi số lượng tính.",
                 10, _muted, FontWeights.Normal));
             wrapped.Children.Add(Card(table));
-            var current = Section("05  Kết quả cấu hình", "#F59E0B");
+            var current = Section("Cấu hình hiện tại", "#F59E0B");
             _legacyStatus = Text("", 11, _primary, FontWeights.SemiBold);
             _legacyValidation = Text("", 10, Brush("#F87171"), FontWeights.SemiBold);
             current.Children.Add(_legacyStatus);
             current.Children.Add(_legacyValidation);
             current.Children.Add(Text(
-                "Mỗi bản vẽ giữ cấu hình riêng. Chế độ 600, tấm dài, G2/G1 và ưu tiên D cần đối chiếu Runtime với LISP trước khi chứng nhận Golden.",
+                "Mỗi DWG lưu cấu hình riêng. Một số chế độ chưa xác nhận Golden trên AutoCAD.",
                 10, _muted, FontWeights.Normal));
             wrapped.Children.Add(Card(current));
-            var root = Section("Cài đặt DEMTC gốc", "#22C55E");
+            var root = Section("02  Cài đặt tính tấm", "#22C55E");
             root.Children.Add(wrapped);
             return root;
         }
@@ -672,7 +668,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             content.Children.Add(Card(golden));
             var legacy = Section("L\u1ec7nh t\u01b0\u01a1ng th\u00edch", "#A78BFA");
             legacy.Children.Add(CommandButton("DTC", "DTC", false));
-            legacy.Children.Add(CommandButton("DEMTC", "DEMTC", false));
+            legacy.Children.Add(CommandButton("Tính tấm", "HCECALC", false));
             content.Children.Add(Card(legacy));
 
             return Scroll(content);
