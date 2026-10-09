@@ -21,6 +21,8 @@ namespace HNL.VXT.AutoCAD
     {
         private const int TransientSubMode = 191;
         private const int MaxPreviewDrawables = 3500;
+        // Laptop-safe native transient target; Core plans and actual Create remain complete.
+        private const int ComfortablePreviewDrawables = 1800;
         private const string DefaultStartTileBlockName = "HNL_CF_FIRST_TILE_V1";
         private static readonly IReadOnlyList<HNL.VXT.Core.Geometry.Point2[]> StartTileStrokes = MakeStartTileStrokes();
 
@@ -88,13 +90,26 @@ namespace HNL.VXT.AutoCAD
                 var session = VxtSession.Current;
                 if (!session.HasBoundary) return;
                 var plans = LayInRuntimePlanner.Build(session, session.LayInSettings);
-                var total = plans.Sum(p => p.Plan.TeeSegments.Count +
-                    p.Plan.HangerPoints.Count + p.Plan.DimensionRuns.Count +
-                    (session.LayInSettings.DrawStartTileBlock && p.Plan.FirstTileOrigin.HasValue
+                var teeCount = plans.Sum(p => p.Plan.TeeSegments.Count);
+                var dimensionCount = plans.Sum(p => p.Plan.DimensionRuns.Count);
+                var hangerCount = plans.Sum(p => p.Plan.HangerPoints.Count);
+                var markerCount = plans.Sum(p =>
+                    session.LayInSettings.DrawStartTileBlock && p.Plan.FirstTileOrigin.HasValue
                         ? (string.IsNullOrWhiteSpace(session.LayInSettings.StartMarkerBlockName)
-                            ? StartTileStrokes.Count : 1) : 0));
-                if (total > MaxPreviewDrawables)
-                    throw new InvalidOperationException("Lay-in Preview exceeds 3500 graphics; Create still uses full Core plan.");
+                            ? StartTileStrokes.Count : 1) : 0);
+                var total = teeCount + hangerCount + dimensionCount + markerCount;
+                if (teeCount > MaxPreviewDrawables)
+                    throw new InvalidOperationException(
+                        "Preview trần nổi có " + teeCount +
+                        " đoạn T, vượt giới hạn an toàn 3500. Hãy xem từng vùng trần; Tạo vẫn dùng đủ dữ liệu.");
+                if (teeCount > ComfortablePreviewDrawables)
+                    throw new InvalidOperationException(
+                        "Preview trần nổi có " + teeCount +
+                        " đoạn T; tạm dừng vẽ để tránh đứng AutoCAD trên laptop. " +
+                        "Hãy xem từng vùng trần; Tạo vẫn dùng đủ dữ liệu.");
+                // Reduced Preview hides only decorative overlays; no tee, plan, count or Create is modified.
+                var showDimensions = teeCount + dimensionCount <= ComfortablePreviewDrawables;
+                var showHangersAndMarker = total <= ComfortablePreviewDrawables;
 
                 var db = doc.Database;
                 var dimStyleId = plans.Any(p => p.Plan.DimensionRuns.Count > 0)
@@ -118,6 +133,7 @@ namespace HNL.VXT.AutoCAD
                             tee.Kind == LayInTeeKind.LongCrossTee ? (short)3 : (short)5;
                         AddTransient(line);
                     }
+                    if (showHangersAndMarker)
                     foreach (var hanger in item.Plan.HangerPoints)
                     {
                         Entity marker = previewHangerBlock.IsNull
@@ -127,6 +143,7 @@ namespace HNL.VXT.AutoCAD
                         marker.ColorIndex = 2;
                         AddTransient(marker);
                     }
+                    if (showDimensions)
                     foreach (var run in item.Plan.DimensionRuns)
                     {
                         var dimension = BuildDimension(db, run, item.Plan.ModuleShort, dimStyleId);
@@ -136,7 +153,7 @@ namespace HNL.VXT.AutoCAD
                         dimension.GenerateLayout();
                         AddTransient(dimension);
                     }
-                    if (session.LayInSettings.DrawStartTileBlock &&
+                    if (showHangersAndMarker && session.LayInSettings.DrawStartTileBlock &&
                         item.Plan.FirstTileOrigin.HasValue)
                         PreviewStartTile(db, item.Plan, session.LayInSettings);
                 }
@@ -144,6 +161,14 @@ namespace HNL.VXT.AutoCAD
                 double waste;
                 LayInRuntimePlanner.Summarize(plans, out main, out longCross, out shortCross, out hangers, out waste);
                 session.ViewModel?.LayIn?.SetPreviewStats(main, longCross, shortCross, hangers, waste);
+                if (!showDimensions || !showHangersAndMarker)
+                {
+                    var message = "Preview nhẹ: đủ thanh T; " +
+                        (!showDimensions ? "ẩn DIM/Ty/Block" : "ẩn Ty/Block") +
+                        " để giảm lag. Lệnh Tạo vẫn đầy đủ (" + total + " đối tượng).";
+                    session.ViewModel?.LayIn?.SetPreviewError(message);
+                    doc.Editor.WriteMessage("\nHNL Tool - Lay-in Preview: " + message);
+                }
             }
             catch (Exception ex)
             {
