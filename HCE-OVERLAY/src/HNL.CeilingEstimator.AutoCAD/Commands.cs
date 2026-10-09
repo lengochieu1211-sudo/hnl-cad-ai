@@ -937,7 +937,7 @@ namespace HNL.CeilingEstimator.AutoCAD
         }
 
         private static void AddCadLabel(BlockTableRecord space, Transaction transaction,
-            LabelSpec spec, ObjectId styleId)
+            LabelSpec spec, ObjectId styleId, double labelHeight)
         {
             var p = spec.Piece.LabelPointWcs;
             if (double.IsNaN(p.X) || double.IsNaN(p.Y) ||
@@ -949,7 +949,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 label.TextString = spec.Code;
                 label.Position = pt;
                 label.AlignmentPoint = pt;
-                label.Height = 100.0; // legacy default label height; independent of Table height
+                label.Height = labelHeight;
                 label.HorizontalMode = TextHorizontalMode.TextCenter;
                 label.VerticalMode = TextVerticalMode.TextVerticalMid;
                 label.ColorIndex = spec.ColorIndex;
@@ -1114,7 +1114,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     transaction.AddNewlyCreatedDBObject(table, true);
                     if (drawLabels)
                         foreach (var spec in labelSpecs)
-                            AddCadLabel(currentSpace, transaction, spec, styleId);
+                            AddCadLabel(currentSpace, transaction, spec, styleId, labelHeight);
                     // Both table and labels commit in one AutoCAD transaction.
                     transaction.Commit();
                 }
