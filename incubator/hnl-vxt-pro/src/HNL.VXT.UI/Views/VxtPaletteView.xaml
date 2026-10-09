@@ -251,6 +251,38 @@
             <Setter Property="CaretBrush" Value="{DynamicResource AccentStrong}"/>
         </Style>
 
+        <!-- Deterministic ComboBox popup: readable text and colors on light/dark CAD. -->
+        <Style x:Key="HnlComboItemStyle" TargetType="{x:Type ComboBoxItem}">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackground}"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBoxItem}">
+                        <Border x:Name="ItemChrome" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}" CornerRadius="3">
+                            <ContentPresenter ContentSource="Content"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemChrome" Property="Background" Value="{DynamicResource HoverBackground}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemChrome" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="ComboBox">
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="12"/>
@@ -412,7 +444,7 @@
         </Style>
         <Style x:Key="PrimaryCreateButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
             <Setter Property="Padding" Value="8,2"/>
-            <Setter Property="Content" Value="Tạo khung xương trần"/>
+            <Setter Property="Content" Value="Tạo trần chìm"/>
             <Setter Property="Command" Value="{Binding CreateCommand}"/>
             <Setter Property="IsEnabled" Value="{Binding CanCreate}"/>
             <Setter Property="ToolTip" Value="Tạo khung xương trần theo đúng kết quả Preview hiện tại."/>
@@ -691,6 +723,20 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                 <TextBlock Text="Bước bù" Style="{StaticResource FieldLabel}"/>
                                 <controls:HnlNumericBox Grid.Column="1" Value="{Binding MainBalanceStep, Mode=TwoWay}" Step="10" Minimum="1"/>
+                            </Grid>
+
+                            <Grid x:Name="LocalMainToggleRow" Tag="HNL_VXT_LOCAL_MAIN_UI" Margin="0,0,0,7">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Thêm XC cạnh khuyết" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
+                                <CheckBox Grid.Column="1" IsChecked="{Binding UseLocalMainAdd, Mode=TwoWay}"
+                                          Style="{StaticResource SecondaryToggleSwitch}" HorizontalAlignment="Right"
+                                          ToolTip="Bật/tắt XC bổ sung tại cạnh khuyết."/>
+                            </Grid>
+                            <Grid Margin="0,0,0,9" IsEnabled="{Binding UseLocalMainAdd}">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="155"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Chiều dài XC tối thiểu" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
+                                <controls:HnlNumericBox Grid.Column="1" Value="{Binding MinLocalMainLength, Mode=TwoWay}"
+                                                        Minimum="0" Step="50"/>
                             </Grid>
 
                             <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="0,9,0,0">
@@ -1166,10 +1212,10 @@
             </TabItem>
         </TabControl>
 
-        <!-- FOOTER: primary action only. Build/version identity lives in the header. -->
-        <Border Grid.Row="2" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="6,4">
+        <!-- Reserve the right tab rail so Create buttons do not overlap tab labels. -->
+        <Border Grid.Row="2" Margin="0,0,36,0" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="6,4">
             <StackPanel>
-                <Button HorizontalAlignment="Stretch">
+                <Button x:Name="ConcealedCreateButton" HorizontalAlignment="Stretch">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource PrimaryCreateButton}">
                             <Style.Triggers>
