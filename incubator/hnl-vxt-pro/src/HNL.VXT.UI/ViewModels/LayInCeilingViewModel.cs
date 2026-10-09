@@ -15,8 +15,8 @@ namespace HNL.VXT.UI.ViewModels
         private readonly IVxtHostBridge _host;
         private LayInCeilingSettings _settings = new LayInCeilingSettings();
         private bool _hasBoundary;
-        private string _boundaryStatus = "Chưa chọn biên trần";
-        private string _previewStatus = "Chọn vùng trần để xem trước.";
+        private string _boundaryStatus = "Chưa chọn biên";
+        private string _previewStatus = "Chọn biên để xem trước.";
         private string _summary = "T chính --  •  T phụ dài --  •  T phụ ngắn --  •  Ty --";
 
         public LayInCeilingViewModel(IVxtHostBridge host)
@@ -62,27 +62,27 @@ namespace HNL.VXT.UI.ViewModels
 
         public string[] DirectionOptions { get; } =
         {
-            "Phương ngang",
-            "Phương dọc",
-            "Song song cạnh ngắn",
-            "Song song cạnh dài",
-            "Tối ưu vật tư"
+            "Ngang",
+            "Dọc",
+            "Theo cạnh ngắn",
+            "Theo cạnh dài",
+            "Tối ưu"
         };
 
         public string[] StartOptions { get; } =
         {
-            "Cân đều hai biên",
-            "Chọn điểm bắt đầu",
-            "Theo vị trí cửa"
+            "Cân biên",
+            "Điểm chọn",
+            "Theo cửa"
         };
 
         public string[] DimensionOptions { get; } =
         {
             "Tắt",
-            "Theo một ô",
-            "Gộp nhiều ô",
-            "Kích thước tổng",
-            "Lưới + tấm cắt biên"
+            "Một ô",
+            "Gộp ô",
+            "Tổng",
+            "Lưới + mép cắt"
         };
 
         public string[] DimStyleOptions
@@ -112,8 +112,8 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        public string[] HorizontalPositionOptions { get; } = { "Tự động", "Phía trên", "Phía dưới" };
-        public string[] VerticalPositionOptions { get; } = { "Tự động", "Bên trái", "Bên phải" };
+        public string[] HorizontalPositionOptions { get; } = { "Tự động", "Trên", "Dưới" };
+        public string[] VerticalPositionOptions { get; } = { "Tự động", "Trái", "Phải" };
 
         public ICommand SelectBoundaryCommand { get; }
         public ICommand PickBoundaryPointCommand { get; }
@@ -289,12 +289,12 @@ namespace HNL.VXT.UI.ViewModels
 
         public string SelectedHorizontalDimPosition
         {
-            get => _settings.HorizontalDimSide == LayInHorizontalDimSide.Top ? "Phía trên" :
-                _settings.HorizontalDimSide == LayInHorizontalDimSide.Bottom ? "Phía dưới" : "Tự động";
+            get => _settings.HorizontalDimSide == LayInHorizontalDimSide.Top ? "Trên" :
+                _settings.HorizontalDimSide == LayInHorizontalDimSide.Bottom ? "Dưới" : "Tự động";
             set
             {
-                var side = value == "Phía trên" ? LayInHorizontalDimSide.Top :
-                    value == "Phía dưới" ? LayInHorizontalDimSide.Bottom : LayInHorizontalDimSide.Auto;
+                var side = value == "Trên" ? LayInHorizontalDimSide.Top :
+                    value == "Dưới" ? LayInHorizontalDimSide.Bottom : LayInHorizontalDimSide.Auto;
                 if (_settings.HorizontalDimSide == side) return;
                 _settings.HorizontalDimSide = side;
                 Changed();
@@ -303,12 +303,12 @@ namespace HNL.VXT.UI.ViewModels
 
         public string SelectedVerticalDimPosition
         {
-            get => _settings.VerticalDimSide == LayInVerticalDimSide.Right ? "Bên phải" :
-                _settings.VerticalDimSide == LayInVerticalDimSide.Left ? "Bên trái" : "Tự động";
+            get => _settings.VerticalDimSide == LayInVerticalDimSide.Right ? "Phải" :
+                _settings.VerticalDimSide == LayInVerticalDimSide.Left ? "Trái" : "Tự động";
             set
             {
-                var side = value == "Bên phải" ? LayInVerticalDimSide.Right :
-                    value == "Bên trái" ? LayInVerticalDimSide.Left : LayInVerticalDimSide.Auto;
+                var side = value == "Phải" ? LayInVerticalDimSide.Right :
+                    value == "Trái" ? LayInVerticalDimSide.Left : LayInVerticalDimSide.Auto;
                 if (_settings.VerticalDimSide == side) return;
                 _settings.VerticalDimSide = side;
                 Changed();
@@ -397,7 +397,7 @@ namespace HNL.VXT.UI.ViewModels
             // DimStyle table belongs to the active DWG, not to the palette.
             OnPropertyChanged(nameof(DimStyleOptions));
             if (!hasBoundary)
-                PreviewStatus = "Chọn vùng trần để xem trước.";
+                PreviewStatus = "Chọn biên để xem trước.";
         }
 
         // Manual and door anchors are DWG coordinates, not application-wide presets.
@@ -465,7 +465,7 @@ namespace HNL.VXT.UI.ViewModels
                 "  •  T phụ ngắn " + shortCross +
                 "  •  Ty " + hangers +
                 "  •  Hao hụt " + Math.Round(wasteLength, 0) + " mm";
-            PreviewStatus = "✓ Xem trước đã cập nhật."; 
+            PreviewStatus = "✓ Đã cập nhật."; 
         }
 
         public void SetPreviewError(string message)
@@ -546,20 +546,20 @@ namespace HNL.VXT.UI.ViewModels
         {
             switch (value)
             {
-                case LayInMainDirectionMode.Horizontal: return "Phương ngang";
-                case LayInMainDirectionMode.Vertical: return "Phương dọc";
-                case LayInMainDirectionMode.ParallelShortSide: return "Song song cạnh ngắn";
-                case LayInMainDirectionMode.ParallelLongSide: return "Song song cạnh dài";
-                default: return "Tối ưu vật tư";
+                case LayInMainDirectionMode.Horizontal: return "Ngang";
+                case LayInMainDirectionMode.Vertical: return "Dọc";
+                case LayInMainDirectionMode.ParallelShortSide: return "Theo cạnh ngắn";
+                case LayInMainDirectionMode.ParallelLongSide: return "Theo cạnh dài";
+                default: return "Tối ưu";
             }
         }
 
         private static LayInMainDirectionMode TextToDirection(string value)
         {
-            if (value == "Phương ngang") return LayInMainDirectionMode.Horizontal;
-            if (value == "Phương dọc") return LayInMainDirectionMode.Vertical;
-            if (value == "Song song cạnh ngắn") return LayInMainDirectionMode.ParallelShortSide;
-            if (value == "Song song cạnh dài") return LayInMainDirectionMode.ParallelLongSide;
+            if (value == "Ngang") return LayInMainDirectionMode.Horizontal;
+            if (value == "Dọc") return LayInMainDirectionMode.Vertical;
+            if (value == "Theo cạnh ngắn") return LayInMainDirectionMode.ParallelShortSide;
+            if (value == "Theo cạnh dài") return LayInMainDirectionMode.ParallelLongSide;
             return LayInMainDirectionMode.AutoOptimize;
         }
 
@@ -567,16 +567,16 @@ namespace HNL.VXT.UI.ViewModels
         {
             switch (value)
             {
-                case LayInStartMode.ManualStart: return "Chọn điểm bắt đầu";
-                case LayInStartMode.FromDoor: return "Theo vị trí cửa";
-                default: return "Cân đều hai biên";
+                case LayInStartMode.ManualStart: return "Điểm chọn";
+                case LayInStartMode.FromDoor: return "Theo cửa";
+                default: return "Cân biên";
             }
         }
 
         private static LayInStartMode TextToStart(string value)
         {
-            if (value == "Chọn điểm bắt đầu") return LayInStartMode.ManualStart;
-            if (value == "Theo vị trí cửa") return LayInStartMode.FromDoor;
+            if (value == "Điểm chọn") return LayInStartMode.ManualStart;
+            if (value == "Theo cửa") return LayInStartMode.FromDoor;
             return LayInStartMode.Balanced;
         }
 
@@ -585,19 +585,19 @@ namespace HNL.VXT.UI.ViewModels
             switch (value)
             {
                 case LayInDimensionMode.Off: return "Tắt";
-                case LayInDimensionMode.Module: return "Theo một ô";
-                case LayInDimensionMode.Overall: return "Kích thước tổng";
-                case LayInDimensionMode.GridAndEdges: return "Lưới + tấm cắt biên";
-                default: return "Gộp nhiều ô";
+                case LayInDimensionMode.Module: return "Một ô";
+                case LayInDimensionMode.Overall: return "Tổng";
+                case LayInDimensionMode.GridAndEdges: return "Lưới + mép cắt";
+                default: return "Gộp ô";
             }
         }
 
         private static LayInDimensionMode TextToDimension(string value)
         {
             if (value == "Tắt") return LayInDimensionMode.Off;
-            if (value == "Theo một ô") return LayInDimensionMode.Module;
-            if (value == "Kích thước tổng") return LayInDimensionMode.Overall;
-            if (value == "Lưới + tấm cắt biên") return LayInDimensionMode.GridAndEdges;
+            if (value == "Một ô") return LayInDimensionMode.Module;
+            if (value == "Tổng") return LayInDimensionMode.Overall;
+            if (value == "Lưới + mép cắt") return LayInDimensionMode.GridAndEdges;
             return LayInDimensionMode.Grouped;
         }
     }
