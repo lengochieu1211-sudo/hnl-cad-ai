@@ -20,6 +20,9 @@ namespace HNL.CeilingEstimator.AutoCAD
         public double TableTextHeight = 0.0;
         // Legacy separate height for N/G/L labels placed in the CAD drawing.
         public double LabelTextHeight = 100.0;
+        // Presentation-only, matching the original LISP cut list toggle/modes.
+        public bool CutListEnabled = false;
+        public string CutListMode = "S"; // S=summary; D=per-piece details
 
         public HceLegacyProfile Clone()
         {
