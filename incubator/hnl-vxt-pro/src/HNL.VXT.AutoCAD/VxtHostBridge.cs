@@ -15,6 +15,7 @@ namespace HNL.VXT.AutoCAD
         private readonly DispatcherTimer _previewTimer;
         private readonly DispatcherTimer _layInPreviewTimer;
         private VxtSettings _pendingPreviewSettings;
+        private Autodesk.AutoCAD.ApplicationServices.Document _pendingPreviewDocument;
         private LayInCeilingSettings _pendingLayInPreviewSettings;
         private Autodesk.AutoCAD.ApplicationServices.Document _pendingLayInPreviewDocument;
 
@@ -171,7 +172,15 @@ namespace HNL.VXT.AutoCAD
 
             // Numeric typing can produce several Value changes per second. Coalesce those changes
             // on the WPF dispatcher, but perform the actual preview inside HNLVXTPREVIEW.
+            var previewDocument = Application.DocumentManager.MdiActiveDocument;
+            if (previewDocument == null)
+            {
+                CancelPendingPreview();
+                return;
+            }
+
             _pendingPreviewSettings = settings.Clone();
+            _pendingPreviewDocument = previewDocument;
             _previewTimer.Stop();
             _previewTimer.Start();
         }
@@ -289,11 +298,17 @@ namespace HNL.VXT.AutoCAD
             // transient redraw is still waiting inside the 180 ms debounce window. Creating at that
             // moment would use the new settings against an older on-screen Preview. Never allow
             // normal Create or manual-override Create to overtake a pending Preview.
+            // An input edit may have been queued in a DWG that has since lost focus.
+            // Never inject its deferred Preview into a newly active AutoCAD document.
+            if (_pendingPreviewSettings != null &&
+                !ReferenceEquals(Application.DocumentManager.MdiActiveDocument, _pendingPreviewDocument))
+                CancelPendingPreview();
+
             if (_pendingPreviewSettings != null)
             {
-                _previewTimer.Stop();
-                session.Settings = _pendingPreviewSettings.Clone();
-                _pendingPreviewSettings = null;
+                var pending = _pendingPreviewSettings.Clone();
+                CancelPendingPreview();
+                session.Settings = pending;
                 Send(session.HasBoundary ? "HNLVXTPREVIEW " : "HNLVXTCLEARPREVIEW ");
                 Write("\nHNL Tool - VXT Pro: Preview vừa có thay đổi chưa kịp vẽ. HNL Tool đã cập nhật Preview trước; hãy kiểm tra rồi bấm Tạo lại để bảo đảm WYSIWYG.");
                 return;
@@ -326,6 +341,11 @@ namespace HNL.VXT.AutoCAD
         {
             _previewTimer.Stop();
             if (_pendingPreviewSettings == null) return;
+            if (!ReferenceEquals(Application.DocumentManager.MdiActiveDocument, _pendingPreviewDocument))
+            {
+                CancelPendingPreview();
+                return;
+            }
 
             // If a native/interactive AutoCAD command is active, do not inject preview work into it.
             // Keep only the latest settings and retry after another quiet interval.
@@ -336,7 +356,7 @@ namespace HNL.VXT.AutoCAD
             }
 
             var settings = _pendingPreviewSettings;
-            _pendingPreviewSettings = null;
+            CancelPendingPreview();
             var session = VxtSession.Current;
             session.Settings = settings.Clone();
             Send(session.HasBoundary ? "HNLVXTPREVIEW " : "HNLVXTCLEARPREVIEW ");
@@ -370,6 +390,7 @@ namespace HNL.VXT.AutoCAD
         {
             _previewTimer.Stop();
             _pendingPreviewSettings = null;
+            _pendingPreviewDocument = null;
         }
 
         private void CancelPendingLayInPreview()
