@@ -76,6 +76,10 @@ namespace HNL.VXT.UI.Views
             combo.Foreground = combo.IsEnabled ? primary : secondary;
             combo.Background = input;
             combo.BorderBrush = border;
+            // Popup items must use HNL foreground/background even under AutoCAD stock themes.
+            var popupItemStyle = combo.TryFindResource("HnlComboItemStyle") as Style;
+            if (popupItemStyle != null)
+                combo.ItemContainerStyle = popupItemStyle;
 
             // Override the Windows/AutoCAD system brushes used by the stock ComboBox chrome.
             // This prevents the white rectangle / white disabled text visible in dark AutoCAD themes.
@@ -163,6 +167,7 @@ namespace HNL.VXT.UI.Views
   <Grid SnapsToDevicePixels='True'>
     <ToggleButton x:Name='DropDownToggle'
                   Focusable='False'
+                  Foreground='{DynamicResource PrimaryText}'
                   ClickMode='Press'
                   IsChecked='{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}'>
       <ToggleButton.Template>
@@ -178,6 +183,7 @@ namespace HNL.VXT.UI.Views
                 <ColumnDefinition Width='28'/>
               </Grid.ColumnDefinitions>
               <ContentPresenter Grid.Column='0'
+                                TextElement.Foreground='{DynamicResource PrimaryText}'
                                 Margin='8,0,4,0'
                                 HorizontalAlignment='Left'
                                 VerticalAlignment='Center'
@@ -217,7 +223,7 @@ namespace HNL.VXT.UI.Views
       <Border Margin='0,2,0,0'
               MinWidth='{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}'
               MaxHeight='{TemplateBinding MaxDropDownHeight}'
-              Background='{DynamicResource CardBackground}'
+              Background='{DynamicResource InputBackground}'
               BorderBrush='{DynamicResource InputBorder}'
               BorderThickness='1'
               CornerRadius='4'>
