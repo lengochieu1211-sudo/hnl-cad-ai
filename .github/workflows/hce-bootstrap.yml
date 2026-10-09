@@ -112,6 +112,15 @@ jobs:
           }
           Write-Host 'HCE/VXT MODULE RAIL + WPF XAML PARSE + HATCH AREA/PROMPT GATES PASS'
 
+      - name: Validate HCE right-side tabs and visible ComboBox chrome
+        shell: powershell
+        run: |
+          $ui=Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs' -Raw
+          foreach($phrase in @("Grid.Column='1' Background='{DynamicResource CardBackground}'", "BorderThickness='1,0,0,0'", 'ComboArrowBackground', 'Resources[typeof(ComboBox)]', "Text='{TemplateBinding SelectionBoxItem}'", "Fill='{DynamicResource PrimaryText}'")) {
+            if(-not $ui.Contains($phrase)){throw "Missing right-tab/dropdown visibility contract: $phrase"}
+          }
+          Write-Host 'HCE RIGHT TAB RAIL + COMBOBOX VISIBILITY STATIC GATE PASS'
+
       - name: Verify HCE default palette and calculator route
         shell: powershell
         run: |

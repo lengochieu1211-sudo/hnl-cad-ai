@@ -144,6 +144,9 @@ namespace HNL.CeilingEstimator.AutoCAD
 
             var inputBackground = Brush(dark ? "#1E2328" : "#FFFFFF");
             var inputBorder = Brush(dark ? "#4A535D" : "#C7D2DC");
+            Resources["InputBackground"] = inputBackground;
+            Resources["InputBorder"] = inputBorder;
+            Resources["ComboArrowBackground"] = Brush(dark ? "#303840" : "#E7EEF5");
             Resources[SystemColors.WindowBrushKey] = inputBackground;
             Resources[SystemColors.WindowTextBrushKey] = _primary;
             Resources[SystemColors.ControlBrushKey] = inputBackground;
@@ -167,6 +170,77 @@ namespace HNL.CeilingEstimator.AutoCAD
             selected.Setters.Add(new Setter(Control.BackgroundProperty, _accentSoft));
             popupStyle.Triggers.Add(selected);
             Resources[typeof(ComboBoxItem)] = popupStyle;
+
+            // AutoCAD can apply host/Windows chrome that leaves a white ComboBox
+            // surface/arrow over light text. Own the non-editable ComboBox visuals.
+            const string comboXaml = @"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
+                                            xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'
+                                            TargetType='{x:Type ComboBox}'>
+                <Setter Property='Foreground' Value='{DynamicResource PrimaryText}'/>
+                <Setter Property='Background' Value='{DynamicResource InputBackground}'/>
+                <Setter Property='BorderBrush' Value='{DynamicResource InputBorder}'/>
+                <Setter Property='BorderThickness' Value='1'/>
+                <Setter Property='Padding' Value='7,3,30,3'/>
+                <Setter Property='MinHeight' Value='27'/>
+                <Setter Property='Template'>
+                    <Setter.Value>
+                        <ControlTemplate TargetType='{x:Type ComboBox}'>
+                            <Grid SnapsToDevicePixels='True'>
+                                <Border x:Name='Chrome'
+                                        Background='{TemplateBinding Background}'
+                                        BorderBrush='{TemplateBinding BorderBrush}'
+                                        BorderThickness='{TemplateBinding BorderThickness}'
+                                        CornerRadius='2'/>
+                                <TextBlock Margin='{TemplateBinding Padding}'
+                                           VerticalAlignment='Center'
+                                           Foreground='{TemplateBinding Foreground}'
+                                           Text='{TemplateBinding SelectionBoxItem}'
+                                           TextTrimming='CharacterEllipsis'/>
+                                <Border Width='27' HorizontalAlignment='Right'
+                                        Background='{DynamicResource ComboArrowBackground}'
+                                        BorderBrush='{TemplateBinding BorderBrush}'
+                                        BorderThickness='1,0,0,0'
+                                        CornerRadius='0,2,2,0'>
+                                    <Path Width='8' Height='5'
+                                          HorizontalAlignment='Center' VerticalAlignment='Center'
+                                          Fill='{DynamicResource PrimaryText}'
+                                          Stretch='Fill'
+                                          Data='M 0 0 L 4 4 L 8 0 Z'/>
+                                </Border>
+                                <ToggleButton Focusable='False' Opacity='0'
+                                              Background='Transparent' BorderThickness='0'
+                                              IsChecked='{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}'/>
+                                <Popup x:Name='PART_Popup'
+                                       Placement='Bottom'
+                                       AllowsTransparency='True'
+                                       IsOpen='{TemplateBinding IsDropDownOpen}'
+                                       PopupAnimation='Fade'>
+                                    <Border Margin='0,2,0,0'
+                                            Background='{DynamicResource InputBackground}'
+                                            BorderBrush='{DynamicResource InputBorder}'
+                                            BorderThickness='1'
+                                            MinWidth='180'
+                                            MaxHeight='320'>
+                                        <ScrollViewer CanContentScroll='True'>
+                                            <ItemsPresenter/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property='IsKeyboardFocusWithin' Value='True'>
+                                    <Setter TargetName='Chrome' Property='BorderBrush'
+                                            Value='{DynamicResource AccentStrong}'/>
+                                </Trigger>
+                                <Trigger Property='IsEnabled' Value='False'>
+                                    <Setter TargetName='Chrome' Property='Opacity' Value='0.55'/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>";
+            Resources[typeof(ComboBox)] = (Style)XamlReader.Parse(comboXaml);
         }
 
         // Copy the proven 36px/30px/106px vertical tab rail from the Framing Pro.
@@ -183,19 +257,19 @@ namespace HNL.CeilingEstimator.AutoCAD
                         <ControlTemplate TargetType='{x:Type TabControl}'>
                             <Grid Background='{TemplateBinding Background}'>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width='36'/>
                                     <ColumnDefinition Width='*'/>
+                                    <ColumnDefinition Width='36'/>
                                 </Grid.ColumnDefinitions>
-                                <Border Grid.Column='0' Background='{DynamicResource CardBackground}'
+                                <ContentPresenter Grid.Column='0' x:Name='PART_SelectedContentHost'
+                                                  ContentSource='SelectedContent'
+                                                  HorizontalAlignment='Stretch' VerticalAlignment='Stretch'/>
+                                <Border Grid.Column='1' Background='{DynamicResource CardBackground}'
                                         BorderBrush='{DynamicResource CardBorder}'
-                                        BorderThickness='0,0,1,0' Padding='2,5,2,5'>
+                                        BorderThickness='1,0,0,0' Padding='2,5,2,5'>
                                     <StackPanel Orientation='Vertical' IsItemsHost='True'
                                                 HorizontalAlignment='Center' VerticalAlignment='Top'
                                                 KeyboardNavigation.TabNavigation='Local'/>
                                 </Border>
-                                <ContentPresenter Grid.Column='1' x:Name='PART_SelectedContentHost'
-                                                  ContentSource='SelectedContent'
-                                                  HorizontalAlignment='Stretch' VerticalAlignment='Stretch'/>
                             </Grid>
                         </ControlTemplate>
                     </Setter.Value>
@@ -382,8 +456,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             styleRow.Children.Add(Text("Kiểu chữ bảng", 11, _muted, FontWeights.Normal));
             _legacyTableStyle = new ComboBox
             {
-                MinHeight = 27, Background = _surface, Foreground = _primary,
-                BorderBrush = _border
+                MinHeight = 27, Foreground = _primary
             };
             _legacyTableStyle.SelectionChanged += (sender, args) =>
             {
@@ -437,8 +510,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             row.Children.Add(Text(label, 11, _muted, FontWeights.Normal));
             var selector = new ComboBox
             {
-                MinHeight = 27, Background = _surface, Foreground = _primary,
-                BorderBrush = _border, Tag = values
+                MinHeight = 27, Foreground = _primary, Tag = values
             };
             foreach (var name in names) selector.Items.Add(name);
             selector.SelectionChanged += (sender, args) =>
