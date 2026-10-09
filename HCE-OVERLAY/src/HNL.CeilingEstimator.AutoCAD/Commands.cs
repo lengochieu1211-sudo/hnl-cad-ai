@@ -443,7 +443,25 @@ namespace HNL.CeilingEstimator.AutoCAD
                     editor.WriteMessage("\nHNL Tool - Table cancelled. No drawing changes.");
                     return;
                 }
-                InsertTable(document.Database, report, location.Value, profile);
+                var labelCount = CountLabelCandidates(report);
+                if (labelCount > 2000)
+                {
+                    var verifyLabels = new PromptKeywordOptions(
+                        "\nHNL Tool - Create " + labelCount +
+                        " N/G/L labels on the DWG? [Yes/No] <Yes>: ") { AllowNone = true };
+                    verifyLabels.Keywords.Add("Yes");
+                    verifyLabels.Keywords.Add("No");
+                    var decision = editor.GetKeywords(verifyLabels);
+                    if (decision.Status == PromptStatus.Cancel) return;
+                    if (decision.Status == PromptStatus.OK &&
+                        string.Equals(decision.StringResult, "No", StringComparison.OrdinalIgnoreCase))
+                    {
+                        InsertTable(document.Database, report, location.Value, profile, false);
+                        editor.WriteMessage("\nHNL Tool - Table created; large text label set was skipped.");
+                        return;
+                    }
+                }
+                InsertTable(document.Database, report, location.Value, profile, true);
                 editor.WriteMessage("\nHNL Tool - Table created from the same calculation report.");
             }
             catch (System.Exception ex)
@@ -805,6 +823,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 group.BoundaryCells += calc.PureResult.BoundaryCandidateCount;
                 group.Slivers += calc.PureResult.SliverCount;
                 group.Cuts.AddRange(calc.PureResult.CutPieces);
+                group.BoundaryFullPieces.AddRange(calc.PureResult.BoundaryFullPieces);
                 if (calc.Path == "general-line-loop") group.GeneralFallbackCount++;
             }
             foreach (var group in report.Groups)
@@ -843,25 +862,146 @@ namespace HNL.CeilingEstimator.AutoCAD
             return count;
         }
 
-        private static void InsertTable(Database database, CalculationReport report, Point3d point,
-            HceLegacyProfile profile)
+        // CAD Table and N/G/L labels use only the already calculated immutable report.
+        // No secondary geometry/packing pass is allowed here.
+        private static int CountLabelCandidates(CalculationReport report)
         {
-            // No transaction is committed until all table cells are ready. AutoCAD UNDO
-            // therefore removes the single table creation in the usual manner.
+            var count = 0;
+            foreach (var group in report.Groups)
+            {
+                count += group.BoundaryFullPieces.Count;
+                foreach (var bin in group.Packing.Bins)
+                    count += bin.PiecesReversed.Count;
+            }
+            return count;
+        }
+
+        // LISP-compatible A..Z, AA..AZ... sequence.
+        private static string AlphaLabel(int number)
+        {
+            var label = string.Empty;
+            while (number > 0)
+            {
+                number--;
+                label = (char)('A' + number % 26) + label;
+                number /= 26;
+            }
+            return label;
+        }
+
+        private sealed class LabelSpec
+        {
+            public Piece Piece = new Piece();
+            public string Code = string.Empty;
+            public short ColorIndex;
+        }
+
+        private static List<LabelSpec> BuildLabelSpecs(CalculationReport report,
+            out int groupedPieces, out int groupedBins, out int lonePieces)
+        {
+            var labels = new List<LabelSpec>();
+            groupedPieces = 0;
+            groupedBins = 0;
+            lonePieces = 0;
+            var nCode = 1;
+            var gCode = 1;
+            var lCode = 1;
+            foreach (var group in report.Groups)
+            {
+                // Pure interior full cells have no coordinates. Like the LISP fast path,
+                // label only the boundary full cells with known real WCS positions.
+                foreach (var piece in group.BoundaryFullPieces)
+                    labels.Add(new LabelSpec { Piece = piece, Code = "N-" + nCode++,
+                        ColorIndex = 3 });
+                foreach (var bin in group.Packing.Bins)
+                {
+                    var pieces = new List<Piece>(bin.PiecesInLispOrder());
+                    if (pieces.Count > 1)
+                    {
+                        for (var j = 0; j < pieces.Count; j++)
+                            labels.Add(new LabelSpec { Piece = pieces[j],
+                                Code = "G" + gCode + "-" + AlphaLabel(j + 1), ColorIndex = 2 });
+                        groupedPieces += pieces.Count;
+                        groupedBins++;
+                        gCode++;
+                    }
+                    else if (pieces.Count == 1)
+                    {
+                        labels.Add(new LabelSpec { Piece = pieces[0],
+                            Code = "L-" + lCode++, ColorIndex = 1 });
+                        lonePieces++;
+                    }
+                }
+            }
+            return labels;
+        }
+
+        private static void AddCadLabel(BlockTableRecord space, Transaction transaction,
+            LabelSpec spec, ObjectId styleId)
+        {
+            var p = spec.Piece.LabelPointWcs;
+            if (double.IsNaN(p.X) || double.IsNaN(p.Y) ||
+                double.IsInfinity(p.X) || double.IsInfinity(p.Y))
+                throw new InvalidOperationException("HCE label has invalid WCS coordinates: " + spec.Code);
+            var pt = new Point3d(p.X, p.Y, 0);
+            using (var label = new DBText())
+            {
+                label.TextString = spec.Code;
+                label.Position = pt;
+                label.AlignmentPoint = pt;
+                label.Height = 100.0; // legacy default label height; independent of Table height
+                label.HorizontalMode = TextHorizontalMode.TextCenter;
+                label.VerticalMode = TextVerticalMode.TextVerticalMid;
+                label.ColorIndex = spec.ColorIndex;
+                if (!styleId.IsNull) label.TextStyleId = styleId;
+                space.AppendEntity(label);
+                transaction.AddNewlyCreatedDBObject(label, true);
+            }
+        }
+
+        private static void InsertTable(Database database, CalculationReport report, Point3d point,
+            HceLegacyProfile profile, bool drawLabels)
+        {
+            var options = profile.ToOptions();
+            var labelSpecs = BuildLabelSpecs(report,
+                out var groupedPieces, out var groupedBins, out var lonePieces);
+            var full = 0;
+            var boundary = 0;
+            var cuts = 0;
+            var hatches = 0;
+            var smallBins = 0;
+            var longBins = 0;
+            var oversize = 0;
+            foreach (var group in report.Groups)
+            {
+                hatches += group.HatchCount;
+                full += group.Full;
+                boundary += group.BoundaryCells;
+                cuts += group.Cuts.Count;
+                smallBins += BinCount(group, "S");
+                longBins += BinCount(group, "D");
+                oversize += group.Packing.Oversize.Count;
+            }
+
+            // Build the legacy 4-column Vietnamese quantity breakdown.
+            var mixed = options.MixedMode;
+            var baseRows = mixed ? 11 : 9;
+            var groupHeadingRow = baseRows;
+            var rows = baseRows + 1 + report.Groups.Count;
             using (var transaction = database.TransactionManager.StartTransaction())
             {
                 var currentSpace = (BlockTableRecord)transaction.GetObject(
                     database.CurrentSpaceId, OpenMode.ForWrite);
                 using (var table = new Table())
                 {
-                    table.SetSize(report.Groups.Count + 3, 8);
+                    table.SetSize(rows, 4);
                     var textHeight = profile.TableTextHeight;
                     if (textHeight < 0 || textHeight > 10000 ||
                         double.IsNaN(textHeight) || double.IsInfinity(textHeight))
                         throw new InvalidOperationException("Invalid HCE Table text height");
                     table.SetRowHeight(Math.Max(55, textHeight * 1.6));
-                    table.SetColumnWidth(Math.Max(230, textHeight * 12));
-                    var tableTextStyleId = ObjectId.Null;
+                    table.SetColumnWidth(Math.Max(450, textHeight * 14));
+                    var styleId = ObjectId.Null;
                     if (!string.IsNullOrEmpty(profile.TableTextStyle))
                     {
                         var styles = (TextStyleTable)transaction.GetObject(
@@ -869,78 +1009,109 @@ namespace HNL.CeilingEstimator.AutoCAD
                         if (!styles.Has(profile.TableTextStyle))
                             throw new InvalidOperationException("HCE Table Text Style is missing from DWG: " +
                                 profile.TableTextStyle);
-                        tableTextStyleId = styles[profile.TableTextStyle];
+                        styleId = styles[profile.TableTextStyle];
                     }
                     table.Position = point;
-                    var gridSpec = profile.ToOptions();
-                    table.Cells[0, 0].TextString = "HNL Tool - Ceiling Estimator Pro (" +
-                        gridSpec.GridWidth.ToString("0", CultureInfo.InvariantCulture) + "x" +
-                        gridSpec.GridHeight.ToString("0", CultureInfo.InvariantCulture) +
-                        " grid, family " + profile.Family + ")";
-                    string[] headers =
+                    table.Cells[0, 0].TextString =
+                        "BẢNG BÓC TÁCH KHỐI LƯỢNG TẤM TRẦN - HNL TOOL";
+                    table.MergeCells(CellRange.Create(table, 0, 0, 0, 3));
+                    string[] headers = { "Hạng mục", "Ký hiệu / Loại", "Số lượng", "Ghi chú" };
+                    for (var i = 0; i < 4; i++) table.Cells[1, i].TextString = headers[i];
+
+                    table.Cells[2, 0].TextString = "Tấm nguyên";
+                    table.Cells[2, 1].TextString = "N-...";
+                    table.Cells[2, 2].TextString = full + " tấm";
+                    table.Cells[2, 3].TextString = options.GridWidth + " x " +
+                        options.GridHeight + " mm (module)";
+
+                    table.Cells[3, 0].TextString = "Ô biên kiểm tra";
+                    table.Cells[3, 1].TextString = "Biên";
+                    table.Cells[3, 2].TextString = boundary + " ô";
+                    table.Cells[3, 3].TextString = "Không phải số mảnh cắt";
+
+                    table.Cells[4, 0].TextString = "Mảnh ghép theo nhóm";
+                    table.Cells[4, 1].TextString = "G1-A, G1-B...";
+                    table.Cells[4, 2].TextString = groupedPieces + " mảnh";
+                    table.Cells[4, 3].TextString = groupedBins + " nguồn";
+
+                    table.Cells[5, 0].TextString = "Mảnh lẻ độc lập";
+                    table.Cells[5, 1].TextString = "L-...";
+                    table.Cells[5, 2].TextString = lonePieces + " mảnh";
+                    table.Cells[5, 3].TextString = "1 mảnh / nguồn";
+
+                    table.Cells[6, 0].TextString = "Mảnh vượt module";
+                    table.Cells[6, 1].TextString = "V-...";
+                    table.Cells[6, 2].TextString = oversize + " mảnh";
+                    table.Cells[6, 3].TextString = oversize > 0 ? "Cần xử lý riêng" : "-";
+
+                    if (mixed)
                     {
-                        "Material / Hatch group", "Hatch", "Full", "Boundary",
-                        "Cuts", "Small " + profile.Family,
-                        "Long " + (profile.Family * 2), "Oversize"
-                    };
-                    for (var i = 0; i < headers.Length; i++)
-                        table.Cells[1, i].TextString = headers[i];
-                    var totalHatches = 0;
-                    var totalFull = 0;
-                    var totalBoundary = 0;
-                    var totalCuts = 0;
-                    var totalSmall = 0;
-                    var totalLong = 0;
-                    var totalOversize = 0;
+                        table.Cells[7, 0].TextString = "Nguồn cắt - tấm nhỏ";
+                        table.Cells[7, 1].TextString = options.SmallStock.DisplayName + " mm";
+                        table.Cells[7, 2].TextString = smallBins + " tấm";
+                        table.Cells[7, 3].TextString = "Từ mảnh cắt";
+
+                        table.Cells[8, 0].TextString = "Nguồn cắt - tấm dài";
+                        table.Cells[8, 1].TextString = options.LargeStock.DisplayName + " mm";
+                        table.Cells[8, 2].TextString = longBins + " tấm";
+                        table.Cells[8, 3].TextString = "Từ mảnh cắt";
+
+                        table.Cells[9, 0].TextString = "TỔNG MUA - TẤM NHỎ";
+                        table.Cells[9, 1].TextString = options.SmallStock.DisplayName + " mm";
+                        table.Cells[9, 2].TextString =
+                            (smallBins + (options.MixedPrimary ==
+                                MixedPrimaryMode.SmallMain ? full : 0)) + " tấm";
+                        table.Cells[9, 3].TextString = "Tấm nguyên + nguồn cắt";
+
+                        table.Cells[10, 0].TextString = "TỔNG MUA - TẤM DÀI";
+                        table.Cells[10, 1].TextString = options.LargeStock.DisplayName + " mm";
+                        table.Cells[10, 2].TextString =
+                            (longBins + (options.MixedPrimary ==
+                                MixedPrimaryMode.LargeMain ? full : 0)) + " tấm";
+                        table.Cells[10, 3].TextString = "Tấm nguyên + nguồn cắt";
+                    }
+                    else
+                    {
+                        table.Cells[7, 0].TextString = "Nguồn cắt - cùng hệ";
+                        table.Cells[7, 1].TextString = options.SmallStock.DisplayName + " mm";
+                        table.Cells[7, 2].TextString = (smallBins + longBins) + " tấm";
+                        table.Cells[7, 3].TextString = "Từ mảnh cắt";
+
+                        table.Cells[8, 0].TextString = "TỔNG MUA";
+                        table.Cells[8, 1].TextString = options.SmallStock.DisplayName + " mm";
+                        table.Cells[8, 2].TextString = (full + smallBins + longBins) + " tấm";
+                        table.Cells[8, 3].TextString = "Tấm nguyên + nguồn cắt";
+                    }
+
+                    table.Cells[groupHeadingRow, 0].TextString = "THỐNG KÊ THEO NHÓM HATCH";
+                    table.MergeCells(CellRange.Create(table, groupHeadingRow, 0, groupHeadingRow, 3));
                     for (var i = 0; i < report.Groups.Count; i++)
                     {
                         var group = report.Groups[i];
-                        var r = i + 2;
-                        var small = BinCount(group, "S");
-                        var large = BinCount(group, "D");
-                        table.Cells[r, 0].TextString = group.Name;
-                        table.Cells[r, 1].TextString = group.HatchCount.ToString();
-                        table.Cells[r, 2].TextString = group.Full.ToString();
-                        table.Cells[r, 3].TextString = group.BoundaryCells.ToString();
-                        table.Cells[r, 4].TextString = group.Cuts.Count.ToString();
-                        table.Cells[r, 5].TextString = small.ToString();
-                        table.Cells[r, 6].TextString = large.ToString();
-                        table.Cells[r, 7].TextString = group.Packing.Oversize.Count.ToString();
-                        totalHatches += group.HatchCount;
-                        totalFull += group.Full;
-                        totalBoundary += group.BoundaryCells;
-                        totalCuts += group.Cuts.Count;
-                        totalSmall += small;
-                        totalLong += large;
-                        totalOversize += group.Packing.Oversize.Count;
+                        var row = groupHeadingRow + 1 + i;
+                        table.Cells[row, 0].TextString = group.Name;
+                        table.Cells[row, 1].TextString = group.HatchCount + " Hatch";
+                        table.Cells[row, 2].TextString = group.Full + " tấm nguyên";
+                        table.Cells[row, 3].TextString = group.Cuts.Count + " mảnh cắt";
                     }
-                    var footer = report.Groups.Count + 2;
-                    string[] totals =
+
+                    if (textHeight > 0 || !styleId.IsNull)
                     {
-                        "TOTAL", totalHatches.ToString(), totalFull.ToString(),
-                        totalBoundary.ToString(), totalCuts.ToString(),
-                        totalSmall.ToString(), totalLong.ToString(),
-                        totalOversize.ToString()
-                    };
-                    for (var i = 0; i < totals.Length; i++)
-                        table.Cells[footer, i].TextString = totals[i];
-                    // Modern AutoCAD API: apply display settings to populated
-                    // cells only. Do not touch totals or recalculate material counts.
-                    if (textHeight > 0 || !tableTextStyleId.IsNull)
-                    {
-                        for (var row = 0; row < report.Groups.Count + 3; row++)
-                        {
-                            for (var col = 0; col < 8; col++)
+                        for (var row = 0; row < rows; row++)
+                            for (var col = 0; col < 4; col++)
                             {
                                 var cell = table.Cells[row, col];
                                 if (textHeight > 0) cell.TextHeight = textHeight;
-                                if (!tableTextStyleId.IsNull) cell.TextStyleId = tableTextStyleId;
+                                if (!styleId.IsNull) cell.TextStyleId = styleId;
                             }
-                        }
                     }
                     table.GenerateLayout();
                     currentSpace.AppendEntity(table);
                     transaction.AddNewlyCreatedDBObject(table, true);
+                    if (drawLabels)
+                        foreach (var spec in labelSpecs)
+                            AddCadLabel(currentSpace, transaction, spec, styleId);
+                    // Both table and labels commit in one AutoCAD transaction.
                     transaction.Commit();
                 }
             }
@@ -972,6 +1143,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             public int BoundaryCells;
             public int Slivers;
             public int GeneralFallbackCount;
+            public List<Piece> BoundaryFullPieces = new List<Piece>();
             public List<Piece> Cuts = new List<Piece>();
             public PackResult Packing = new PackResult();
         }
