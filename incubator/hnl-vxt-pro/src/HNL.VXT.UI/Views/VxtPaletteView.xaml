@@ -619,19 +619,32 @@
             <TabItem Header="Trần chìm" Style="{StaticResource CeilingModeTabItem}">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8">
             <StackPanel>
-                <!-- PRESET -->
-                <Border Style="{StaticResource SectionCard}" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentBorder}">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="118"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="1." Style="{StaticResource SectionNumber}"/>
-                            <TextBlock Text="Cấu hình" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
-                        </StackPanel>
-                        <ComboBox Grid.Column="1" ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}"/>
-                    </Grid>
+                <!-- Preset and optimizer: keep the Core selector visible in the concealed tab.
+                     Stable tag prevents VxtPaletteOptimizerUi from adding a duplicate row. -->
+                <Border Style="{StaticResource SectionCard}" Background="{DynamicResource AccentSoft}"
+                        BorderBrush="{DynamicResource AccentBorder}" Tag="HNL_VXT_OPTIMIZER_SELECTOR">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="118"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="1." Style="{StaticResource SectionNumber}"/>
+                                <TextBlock Text="Cấu hình" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/>
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}"/>
+                        </Grid>
+                        <Grid Margin="0,7,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="118"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Chế độ tối ưu" Style="{StaticResource FieldLabel}"/>
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding OptimizationModeOptions}"
+                                      SelectedItem="{Binding SelectedOptimizationMode, Mode=TwoWay}"/>
+                        </Grid>
+                    </StackPanel>
                 </Border>
 
                 <!-- PHẠM VI -->
