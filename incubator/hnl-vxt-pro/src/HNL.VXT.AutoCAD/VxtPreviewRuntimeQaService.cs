@@ -41,6 +41,17 @@ namespace HNL.VXT.AutoCAD
                     throw new InvalidOperationException(
                         "Preview không tạo được snapshot runtime. Kiểm tra cảnh báo Preview ngay trước dòng này.");
 
+                // Native overload guard intentionally skips the entire transient draw.
+                // An empty 0/0 render must never be certified as a successful field Preview.
+                if (decision.StructuralDrawableCount > VxtPreviewLoadSheddingPolicy.DefaultDrawableLimit)
+                {
+                    var skipped = "SKIP Preview QA: " + decision.StructuralDrawableCount +
+                        " thanh XC/XP vượt giới hạn đồ họa an toàn; chưa thể xác nhận hình Preview.";
+                    WriteLog("SKIP", skipped);
+                    doc.Editor.WriteMessage("\nHNL Tool - Ceiling Framing Pro: " + skipped);
+                    return skipped;
+                }
+
                 if (preview.LastActualDrawableCount != preview.LastExpectedDrawableCount)
                     throw new InvalidOperationException(
                         "Số transient thực tế " + preview.LastActualDrawableCount +
