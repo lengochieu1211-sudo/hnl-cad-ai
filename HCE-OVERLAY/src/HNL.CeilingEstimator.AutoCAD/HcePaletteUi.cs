@@ -102,6 +102,7 @@ namespace HNL.CeilingEstimator.AutoCAD
         private TextBox? _legacyTolerance;
         private ComboBox? _legacyTableStyle;
         private TextBox? _legacyTableHeight;
+        private TextBox? _legacyLabelHeight;
         private WpfText? _legacyStatus;
         private WpfText? _legacyValidation;
         private bool _loadingLegacyControls;
@@ -374,7 +375,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var result = Section("03  Kết quả và bảng", "#F59E0B");
             result.Children.Add(Text("Kết quả hiện trên Command Line. Hatch chưa rõ lưới hoặc đơn vị sẽ cần xác nhận.",
                 11, _muted, FontWeights.Normal));
-            result.Children.Add(Text("Table: chèn bảng. Exit: không ghi vào DWG.",
+            result.Children.Add(Text("Table: chèn bảng và mã ô N/G/L. Exit: không ghi DWG.",
                 11, _muted, FontWeights.Normal));
             result.Children.Add(Text("Chưa hỗ trợ xem trước hình học từng tấm.",
                 10, Brush("#E5A84E"), FontWeights.SemiBold));
@@ -470,8 +471,23 @@ namespace HNL.CeilingEstimator.AutoCAD
             Grid.SetColumn(_legacyTableHeight, 1);
             heightRow.Children.Add(_legacyTableHeight);
             table.Children.Add(heightRow);
+            var labelHeightRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            labelHeightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
+            labelHeightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            labelHeightRow.Children.Add(Text("Cao mã ô (mm)", 11, _muted, FontWeights.Normal));
+            _legacyLabelHeight = new TextBox
+            {
+                MinHeight = 27, HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Foreground = _primary, Background = _surface, BorderBrush = _border,
+                Padding = new Thickness(6, 3, 6, 3)
+            };
+            _legacyLabelHeight.LostFocus += (sender, args) => SaveLegacyLabelHeight();
+            Grid.SetColumn(_legacyLabelHeight, 1);
+            labelHeightRow.Children.Add(_legacyLabelHeight);
+            table.Children.Add(labelHeightRow);
             table.Children.Add(Text(
-                "0 = chiều cao chữ mặc định. Không đổi số lượng tính.",
+                "0 = dùng cỡ chữ bảng mặc định.",
                 10, _muted, FontWeights.Normal));
             wrapped.Children.Add(Card(table));
             var current = Section("Cấu hình hiện tại", "#F59E0B");
@@ -570,6 +586,23 @@ namespace HNL.CeilingEstimator.AutoCAD
                 _legacyValidation.Text = "HNL Tool: Cao chữ bảng phải từ 0 đến 10000 mm.";
         }
 
+        private void SaveLegacyLabelHeight()
+        {
+            if (_loadingLegacyControls || _legacyLabelHeight == null) return;
+            var profile = ActiveLegacyProfile();
+            if (profile == null) return;
+            if (double.TryParse(_legacyLabelHeight.Text, NumberStyles.Float,
+                    CultureInfo.CurrentCulture, out var height) &&
+                height > 0 && height <= 10000 && !double.IsNaN(height) &&
+                !double.IsInfinity(height))
+            {
+                profile.LabelTextHeight = height;
+                if (_legacyValidation != null) _legacyValidation.Text = string.Empty;
+            }
+            else if (_legacyValidation != null)
+                _legacyValidation.Text = "HNL Tool: Cao mã ô phải lớn hơn 0 và không quá 10000 mm.";
+        }
+
         private void RefreshTableStyles(HceLegacyProfile profile)
         {
             if (_legacyTableStyle == null) return;
@@ -630,6 +663,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                 RefreshTableStyles(profile);
                 if (_legacyTableHeight != null)
                     _legacyTableHeight.Text = profile.TableTextHeight.ToString("0.###", CultureInfo.CurrentCulture);
+                if (_legacyLabelHeight != null)
+                    _legacyLabelHeight.Text = profile.LabelTextHeight.ToString("0.###", CultureInfo.CurrentCulture);
                 if (_legacySelectors.TryGetValue("Priority", out var p))
                     p.IsEnabled = profile.Module == "M";
                 if (_legacySelectors.TryGetValue("Direction", out var d))
