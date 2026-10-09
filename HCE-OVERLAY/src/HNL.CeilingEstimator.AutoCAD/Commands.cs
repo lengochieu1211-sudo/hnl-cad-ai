@@ -963,6 +963,10 @@ namespace HNL.CeilingEstimator.AutoCAD
             HceLegacyProfile profile, bool drawLabels)
         {
             var options = profile.ToOptions();
+            var labelHeight = profile.LabelTextHeight;
+            if (labelHeight <= 0 || labelHeight > 10000 ||
+                double.IsNaN(labelHeight) || double.IsInfinity(labelHeight))
+                throw new InvalidOperationException("Invalid HCE label text height");
             var labelSpecs = BuildLabelSpecs(report,
                 out var groupedPieces, out var groupedBins, out var lonePieces);
             var full = 0;
