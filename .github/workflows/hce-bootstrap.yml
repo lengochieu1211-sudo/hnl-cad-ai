@@ -88,17 +88,16 @@ jobs:
           if ($ui.Contains('HCE_UPDATED_AT_VN')) { throw 'Unstamped HCE Palette title marker' }
           [IO.File]::WriteAllText($uiPath, $ui, [Text.UTF8Encoding]::new($false))
           Write-Host "HCE PALETTE NATIVE TITLE PASS: HNL HCE Pro | $buildTimeVN (UTC+07, build time)"
-          Write-Host 'HCE PALETTE HEADER-FOOTER REMOVAL PASS: tabs are first content element'
+          Write-Host 'HCE PALETTE HEADER-FOOTER REMOVAL PASS: calculator is sole content element'
           
-      - name: Validate VXT module rail parity and Hatch Area safeguards
+      - name: Validate HCE WPF templates and Hatch Area safeguards
         shell: powershell
         run: |
           $dir='incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
           $ui=Get-Content "$dir/HcePaletteUi.cs" -Raw
           $adapter=Get-Content "$dir/Commands.cs" -Raw
-          foreach($phrase in @("Width='36'", "Width' Value='30'", "Height' Value='106'", "Angle='-90'", 'Trần chìm', 'Trần nổi', 'HCF', 'VxtModuleRailStyle', 'VxtModuleTabStyle')) {
-            if(-not $ui.Contains($phrase)){throw "Missing VXT module rail contract: $phrase"}
-          }
+          if(-not $ui.Contains('return BuildCalculationTab();')){throw 'HCE must show calculator directly'}
+          if($ui.Contains('tabs.Items.Add(new TabItem')){throw 'Unrelated Framing module tabs must not be attached to HCE layout'}
           foreach($phrase in @('HasNonAdjacentIntersections(segments)','AreaFromBoundary = usedBoundaryArea','native Hatch.Area=NotApplicable','UnitsValue.Millimeters','needsConfirmation = rejected == 0')) {
             if(-not $adapter.Contains($phrase)){throw "Missing safe Hatch.Area or confirmation gate: $phrase"}
           }
@@ -110,16 +109,16 @@ jobs:
             $style=[System.Windows.Markup.XamlReader]::Parse($match.Groups[1].Value)
             if($style -isnot [System.Windows.Style]){throw 'WPF module style parsing returned unexpected type'}
           }
-          Write-Host 'HCE/VXT MODULE RAIL + WPF XAML PARSE + HATCH AREA/PROMPT GATES PASS'
+          Write-Host 'HCE WPF XAML PARSE + HATCH AREA/PROMPT GATES PASS'
 
-      - name: Validate HCE right-side tabs and visible ComboBox chrome
+      - name: Validate HCE pixel scrolling and visible ComboBox chrome
         shell: powershell
         run: |
           $ui=Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs' -Raw
-          foreach($phrase in @("Grid.Column='1' Background='{DynamicResource CardBackground}'", "BorderThickness='1,0,0,0'", 'ComboArrowBackground', 'Resources[typeof(ComboBox)]', "Text='{TemplateBinding SelectionBoxItem}'", "Fill='{DynamicResource PrimaryText}'")) {
-            if(-not $ui.Contains($phrase)){throw "Missing right-tab/dropdown visibility contract: $phrase"}
+          foreach($phrase in @('CanContentScroll = false', 'ComboArrowBackground', 'Resources[typeof(ComboBox)]', "Text='{TemplateBinding SelectionBoxItem}'", "Fill='{DynamicResource PrimaryText}'")) {
+            if(-not $ui.Contains($phrase)){throw "Missing scrolling/dropdown visibility contract: $phrase"}
           }
-          Write-Host 'HCE RIGHT TAB RAIL + COMBOBOX VISIBILITY STATIC GATE PASS'
+          Write-Host 'HCE SMOOTH SCROLL + COMBOBOX VISIBILITY STATIC GATE PASS'
 
       - name: Verify HCE default palette and calculator route
         shell: powershell
