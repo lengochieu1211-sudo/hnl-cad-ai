@@ -80,6 +80,10 @@ namespace HNL.VXT.UI.Views
             var button = root as Button;
             if (button != null)
             {
+                // Stable XAML identity: shortening the visible Create caption must
+                // not break the legacy Ty-only / no-boundary workflow.
+                if (string.Equals(button.Name, "ConcealedCreateButton", StringComparison.Ordinal))
+                    return button;
                 var text = button.Content as string;
                 if (!string.IsNullOrWhiteSpace(text) &&
                     text.IndexOf("TẠO KHUNG XƯƠNG TRẦN", StringComparison.OrdinalIgnoreCase) >= 0)
