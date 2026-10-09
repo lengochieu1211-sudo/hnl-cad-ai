@@ -82,7 +82,7 @@ namespace HNL.VXT.UI.ViewModels
             "Theo một ô",
             "Gộp nhiều ô",
             "Kích thước tổng",
-            "Theo lưới và tấm cắt biên"
+            "Lưới + tấm cắt biên"
         };
 
         public string[] DimStyleOptions
@@ -465,7 +465,7 @@ namespace HNL.VXT.UI.ViewModels
                 "  •  T phụ ngắn " + shortCross +
                 "  •  Ty " + hangers +
                 "  •  Hao hụt " + Math.Round(wasteLength, 0) + " mm";
-            PreviewStatus = "✓ Đã cập nhật xem trước • mỗi mảng trần tạo một Hatch.";
+            PreviewStatus = "✓ Xem trước đã cập nhật."; 
         }
 
         public void SetPreviewError(string message)
@@ -587,7 +587,7 @@ namespace HNL.VXT.UI.ViewModels
                 case LayInDimensionMode.Off: return "Tắt";
                 case LayInDimensionMode.Module: return "Theo một ô";
                 case LayInDimensionMode.Overall: return "Kích thước tổng";
-                case LayInDimensionMode.GridAndEdges: return "Theo lưới và tấm cắt biên";
+                case LayInDimensionMode.GridAndEdges: return "Lưới + tấm cắt biên";
                 default: return "Gộp nhiều ô";
             }
         }
@@ -597,7 +597,7 @@ namespace HNL.VXT.UI.ViewModels
             if (value == "Tắt") return LayInDimensionMode.Off;
             if (value == "Theo một ô") return LayInDimensionMode.Module;
             if (value == "Kích thước tổng") return LayInDimensionMode.Overall;
-            if (value == "Theo lưới và tấm cắt biên") return LayInDimensionMode.GridAndEdges;
+            if (value == "Lưới + tấm cắt biên") return LayInDimensionMode.GridAndEdges;
             return LayInDimensionMode.Grouped;
         }
     }
