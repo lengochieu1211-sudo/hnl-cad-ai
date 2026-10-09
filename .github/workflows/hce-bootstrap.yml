@@ -278,6 +278,13 @@ jobs:
             if(-not $cmd.Contains($part)) { throw "Missing LISP RC13 cut list parity contract: $part" }
           }
           if($cmd.Contains('engine.PackCutPieces(pieces')){throw 'Cut list must reuse original packed report'}
+          foreach($part in @('HatchLoopTypes.NotClosed', 'DXF 92 flag 0x20', 'repair Hatch boundary before ceiling quantities')) {
+            if(-not $cmd.Contains($part)){throw "Missing NotClosed Hatch fail-closed gate: $part"}
+          }
+          $before=$cmd.IndexOf('HatchLoopTypes.NotClosed')
+          $fallback=$cmd.IndexOf('stage = "Hatch.Area"')
+          if($before -lt 0 -or $before -ge $fallback){throw 'NotClosed gate must run before native Area fallback'}
+          Write-Host 'HCE NOTCLOSED HATCH INPUT SAFETY GATE PASS'
           Write-Host 'HCE RC13 CUT LIST SUMMARY/DETAIL UI + TABLE STATIC GATE PASS'
           Write-Host 'HCE VIETNAMESE TABLE + N/G/L LABEL + PER-DWG HEIGHT STATIC GATE PASS'
           Write-Host 'HCE RC5.4 CAD TABLE STYLE/HEIGHT BINDING STATIC GATE PASS'
