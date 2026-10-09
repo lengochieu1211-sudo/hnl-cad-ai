@@ -266,6 +266,19 @@ jobs:
           }
           if($cmd.Contains('"Material / Hatch group"')){throw 'English CAD table headers not removed'}
           if(-not $ui.Contains('SaveLegacyLabelHeight')){throw 'N/G/L CAD text height editor missing'}
+          foreach($part in @('CutListEnabled', 'CutListMode')) {
+            if(-not $profile.Contains($part) -or -not $cmd.Contains($part)) { throw "Missing per-DWG cut list option: $part" }
+          }
+          foreach($part in @('SaveLegacyCutList', '_legacyCutMode', 'profile.CutListMode', '_legacyCutMode.IsEnabled = profile.CutListEnabled')) {
+            if(-not $ui.Contains($part)) { throw "Missing summary/detail selector binding: $part" }
+          }
+          foreach($part in @('BuildCutSizeRows', 'RoundCutDimension', 'MidpointRounding.AwayFromZero', 'cutRows.Count',
+                            'SourceDisplay = sourceName', 'details.Count != expected',
+                            'cutListIsDetailed ? "Mã"', 'detailedCount > 2000', 'table.MergeCells(CellRange.Create(table, cutHeadingRow')) {
+            if(-not $cmd.Contains($part)) { throw "Missing LISP RC13 cut list parity contract: $part" }
+          }
+          if($cmd.Contains('engine.PackCutPieces(pieces')){throw 'Cut list must reuse original packed report'}
+          Write-Host 'HCE RC13 CUT LIST SUMMARY/DETAIL UI + TABLE STATIC GATE PASS'
           Write-Host 'HCE VIETNAMESE TABLE + N/G/L LABEL + PER-DWG HEIGHT STATIC GATE PASS'
           Write-Host 'HCE RC5.4 CAD TABLE STYLE/HEIGHT BINDING STATIC GATE PASS'
 
