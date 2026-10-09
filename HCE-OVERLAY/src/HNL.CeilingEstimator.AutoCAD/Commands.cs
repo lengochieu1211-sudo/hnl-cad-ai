@@ -894,10 +894,11 @@ namespace HNL.CeilingEstimator.AutoCAD
             public Piece Piece = new Piece();
             public string Code = string.Empty;
             public short ColorIndex;
+            public string SourceDisplay = string.Empty;
         }
 
         private static List<LabelSpec> BuildLabelSpecs(CalculationReport report,
-            out int groupedPieces, out int groupedBins, out int lonePieces)
+            DemtcOptions options, out int groupedPieces, out int groupedBins, out int lonePieces)
         {
             var labels = new List<LabelSpec>();
             groupedPieces = 0;
@@ -915,12 +916,15 @@ namespace HNL.CeilingEstimator.AutoCAD
                         ColorIndex = 3 });
                 foreach (var bin in group.Packing.Bins)
                 {
+                    var sourceName = options.MixedMode && bin.Code == "D"
+                        ? options.LargeStock.DisplayName : options.SmallStock.DisplayName;
                     var pieces = new List<Piece>(bin.PiecesInLispOrder());
                     if (pieces.Count > 1)
                     {
                         for (var j = 0; j < pieces.Count; j++)
                             labels.Add(new LabelSpec { Piece = pieces[j],
-                                Code = "G" + gCode + "-" + AlphaLabel(j + 1), ColorIndex = 2 });
+                                Code = "G" + gCode + "-" + AlphaLabel(j + 1), ColorIndex = 2,
+                                SourceDisplay = sourceName });
                         groupedPieces += pieces.Count;
                         groupedBins++;
                         gCode++;
@@ -928,7 +932,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                     else if (pieces.Count == 1)
                     {
                         labels.Add(new LabelSpec { Piece = pieces[0],
-                            Code = "L-" + lCode++, ColorIndex = 1 });
+                            Code = "L-" + lCode++, ColorIndex = 1,
+                            SourceDisplay = sourceName });
                         lonePieces++;
                     }
                 }
@@ -959,6 +964,83 @@ namespace HNL.CeilingEstimator.AutoCAD
             transaction.AddNewlyCreatedDBObject(label, true);
         }
 
+        private sealed class CutSizeRow
+        {
+            public string Code = string.Empty;
+            public int WidthMm;
+            public int HeightMm;
+            public string Source = string.Empty;
+            public int Count = 1;
+        }
+
+        private static int RoundCutDimension(double dimension)
+        {
+            if (dimension < 0 || dimension > 10000000 ||
+                double.IsNaN(dimension) || double.IsInfinity(dimension))
+                throw new InvalidOperationException("Invalid cut piece dimension");
+            return checked((int)Math.Round(dimension, 0, MidpointRounding.AwayFromZero));
+        }
+
+        // Exact LISP RC13 summary key: rounded W(mm) + rounded H(mm) + source.
+        // Preserve source and orientation; do not merge rotated dimensions.
+        private static List<CutSizeRow> BuildCutSizeRows(CalculationReport report,
+            List<LabelSpec> labels, bool detailed)
+        {
+            var details = new List<CutSizeRow>();
+            foreach (var label in labels)
+            {
+                if (label.Code.StartsWith("N-", StringComparison.Ordinal)) continue;
+                details.Add(new CutSizeRow
+                {
+                    Code = label.Code,
+                    WidthMm = RoundCutDimension(label.Piece.Width),
+                    HeightMm = RoundCutDimension(label.Piece.Height),
+                    Source = label.SourceDisplay
+                });
+            }
+            var oversizeIndex = 1;
+            foreach (var group in report.Groups)
+                foreach (var piece in group.Packing.Oversize)
+                    details.Add(new CutSizeRow
+                    {
+                        Code = "V-" + oversizeIndex++,
+                        WidthMm = RoundCutDimension(piece.Width),
+                        HeightMm = RoundCutDimension(piece.Height),
+                        Source = "Vượt module"
+                    });
+
+            var expected = 0;
+            foreach (var group in report.Groups) expected += group.Cuts.Count;
+            if (details.Count != expected)
+                throw new InvalidOperationException("HCE cut-list parity: " +
+                    details.Count + " / " + expected + " pieces");
+            if (detailed) return details;
+
+            var totals = new Dictionary<string, CutSizeRow>(StringComparer.Ordinal);
+            foreach (var row in details)
+            {
+                var key = row.WidthMm.ToString(CultureInfo.InvariantCulture) + "|" +
+                    row.HeightMm.ToString(CultureInfo.InvariantCulture) + "|" + row.Source;
+                if (totals.TryGetValue(key, out var item))
+                    item.Count++;
+                else
+                    totals.Add(key, new CutSizeRow
+                    {
+                        Code = "Mảnh biên", WidthMm = row.WidthMm,
+                        HeightMm = row.HeightMm, Source = row.Source, Count = 1
+                    });
+            }
+            var summary = new List<CutSizeRow>(totals.Values);
+            summary.Sort((a, b) =>
+            {
+                var c = a.WidthMm.CompareTo(b.WidthMm);
+                if (c != 0) return c;
+                c = a.HeightMm.CompareTo(b.HeightMm);
+                return c != 0 ? c : string.CompareOrdinal(a.Source, b.Source);
+            });
+            return summary;
+        }
+
         private static void InsertTable(Database database, CalculationReport report, Point3d point,
             HceLegacyProfile profile, bool drawLabels)
         {
@@ -967,7 +1049,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             if (labelHeight <= 0 || labelHeight > 10000 ||
                 double.IsNaN(labelHeight) || double.IsInfinity(labelHeight))
                 throw new InvalidOperationException("Invalid HCE label text height");
-            var labelSpecs = BuildLabelSpecs(report,
+            var labelSpecs = BuildLabelSpecs(report, options,
                 out var groupedPieces, out var groupedBins, out var lonePieces);
             var full = 0;
             var boundary = 0;
@@ -991,7 +1073,13 @@ namespace HNL.CeilingEstimator.AutoCAD
             var mixed = options.MixedMode;
             var baseRows = mixed ? 11 : 9;
             var groupHeadingRow = baseRows;
-            var rows = baseRows + 1 + report.Groups.Count;
+            var cutDetailsEnabled = profile.CutListEnabled;
+            var cutListIsDetailed = profile.CutListMode == "D";
+            var cutRows = cutDetailsEnabled
+                ? BuildCutSizeRows(report, labelSpecs, cutListIsDetailed)
+                : new List<CutSizeRow>();
+            var cutHeadingRow = groupHeadingRow + 1 + report.Groups.Count;
+            var rows = cutHeadingRow + (cutDetailsEnabled ? 2 + Math.Max(1, cutRows.Count) : 0);
             using (var transaction = database.TransactionManager.StartTransaction())
             {
                 var currentSpace = (BlockTableRecord)transaction.GetObject(
@@ -1099,13 +1187,46 @@ namespace HNL.CeilingEstimator.AutoCAD
                         table.Cells[row, 3].TextString = group.Cuts.Count + " mảnh cắt";
                     }
 
+                    if (cutDetailsEnabled)
+                    {
+                        table.Cells[cutHeadingRow, 0].TextString =
+                            "KÍCH THƯỚC MẢNH BIÊN - THEO MODULE";
+                        table.MergeCells(CellRange.Create(table, cutHeadingRow, 0, cutHeadingRow, 3));
+                        var cutHeaderRow = cutHeadingRow + 1;
+                        table.Cells[cutHeaderRow, 0].TextString = cutListIsDetailed ? "Mã" : "Loại";
+                        table.Cells[cutHeaderRow, 1].TextString = "Kích thước module (mm)";
+                        table.Cells[cutHeaderRow, 2].TextString = "Số lượng";
+                        table.Cells[cutHeaderRow, 3].TextString = "Nguồn cắt";
+                        if (cutRows.Count == 0)
+                        {
+                            var emptyRow = cutHeaderRow + 1;
+                            table.Cells[emptyRow, 0].TextString = "Không có mảnh biên";
+                            table.MergeCells(CellRange.Create(table, emptyRow, 0, emptyRow, 3));
+                        }
+                        else
+                        {
+                            for (var i = 0; i < cutRows.Count; i++)
+                            {
+                                var cut = cutRows[i];
+                                var row = cutHeaderRow + 1 + i;
+                                table.Cells[row, 0].TextString = cut.Code;
+                                table.Cells[row, 1].TextString = cut.WidthMm + " x " + cut.HeightMm;
+                                table.Cells[row, 2].TextString = cut.Count.ToString(CultureInfo.InvariantCulture);
+                                table.Cells[row, 3].TextString = cut.Source;
+                            }
+                        }
+                    }
+
                     if (textHeight > 0 || !styleId.IsNull)
                     {
                         for (var row = 0; row < rows; row++)
                             for (var col = 0; col < 4; col++)
                             {
                                 // Avoid styling merged child cells (only the first cell owns content).
-                                if ((row == 0 || row == groupHeadingRow) && col > 0) continue;
+                                if ((row == 0 || row == groupHeadingRow ||
+                                    (cutDetailsEnabled && (row == cutHeadingRow ||
+                                    (cutRows.Count == 0 && row == cutHeadingRow + 2)))) && col > 0)
+                                    continue;
                                 var cell = table.Cells[row, col];
                                 if (textHeight > 0) cell.TextHeight = textHeight;
                                 if (!styleId.IsNull) cell.TextStyleId = styleId;
