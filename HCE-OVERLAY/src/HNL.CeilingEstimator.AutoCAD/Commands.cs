@@ -437,6 +437,32 @@ namespace HNL.CeilingEstimator.AutoCAD
                     return;
                 }
 
+                // Like the original LISP, detailed cut lists can be slow on large Hatches.
+                // Confirm before allocating thousands of AutoCAD Table rows.
+                if (profile.CutListEnabled && profile.CutListMode == "D")
+                {
+                    var detailedCount = 0;
+                    foreach (var material in report.Groups) detailedCount += material.Cuts.Count;
+                    if (detailedCount > 2000)
+                    {
+                        var verifyDetail = new PromptKeywordOptions(
+                            "\nHNL Tool - Detailed cut table has " + detailedCount +
+                            " rows and may be slow. [Proceed/Cancel] <Cancel>: ")
+                        {
+                            AllowNone = true
+                        };
+                        verifyDetail.Keywords.Add("Proceed");
+                        verifyDetail.Keywords.Add("Cancel");
+                        var consent = editor.GetKeywords(verifyDetail);
+                        if (consent.Status != PromptStatus.OK ||
+                            !string.Equals(consent.StringResult, "Proceed", StringComparison.OrdinalIgnoreCase))
+                        {
+                            editor.WriteMessage("\nHNL Tool - Detailed table cancelled; DWG unchanged.");
+                            return;
+                        }
+                    }
+                }
+
                 var location = editor.GetPoint("\nHNL Tool - Specify result table insertion point: ");
                 if (location.Status != PromptStatus.OK)
                 {
