@@ -156,7 +156,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                                     " originVs43_44=" + PatternBaseDeltaText(hatch) +
                                     " areaSource=" + (input.AreaFromBoundary ? "boundary-fallback" : "native") +
                                     " angleRad=" + Fmt(input.Frame.AngleRadians) +
-                                    " gridVerified=" + input.UserGridVerified);
+                                    " gridVerified=" + input.UserGridVerified +
+                                    " nearClosedRecovered=" + input.RecoveredNearClosed +
+                                    " joinGapMm=" + Fmt(input.NearClosedGapMm));
                             }
                             else
                             {
@@ -330,6 +332,11 @@ namespace HNL.CeilingEstimator.AutoCAD
                                 else if (profile.GridMode == "2" && chosenGridOrigin.HasValue)
                                     input.Frame = new GridFrame(chosenGridOrigin.Value, chosenGridAngle);
                                 inputs.Add(input);
+                                if (input.RecoveredNearClosed)
+                                    editor.WriteMessage("\nHNL Tool - Hatch handle=" + input.Handle +
+                                        " NotClosed gap=" + Fmt(input.NearClosedGapMm) +
+                                        " mm; near-closed loop included after topology checks. " +
+                                        "Original DWG Hatch unchanged.");
                                 if (input.AreaFromBoundary)
                                     editor.WriteMessage("\nHNL Tool - Hatch handle=" + input.Handle +
                                         " native Area=NotApplicable; certified simple-loop boundary area=" +
@@ -566,14 +573,14 @@ namespace HNL.CeilingEstimator.AutoCAD
 
             stage = "Hatch.GetLoopAt(0)";
             var boundary = hatch.GetLoopAt(0);
-            // AutoCAD may retain a visually filled HATCH whose boundary is explicitly
-            // flagged NotClosed (DXF 92 bit 0x20). Its native Area may be unavailable,
-            // while implicit polygon closure fabricates a positive area. Reject before
-            // the tolerant 0.01mm join / numeric-area fallback can count that geometry.
-            if ((boundary.LoopType & HatchLoopTypes.NotClosed) != 0)
+            // NotClosed is a DXF flag, not proof that a tiny seam means the
+            // entire visible Hatch must be omitted. Validate the actual edges
+            // and recover only a single near-zero seam in memory (never edit DWG).
+            var flaggedNotClosed = (boundary.LoopType & HatchLoopTypes.NotClosed) != 0;
+            if ((boundary.LoopType &
+                (HatchLoopTypes.SelfIntersecting | HatchLoopTypes.Duplicate)) != 0)
             {
-                reason = "loop=0 NotClosed (DXF 92 flag 0x20): " +
-                    "repair Hatch boundary before ceiling quantities";
+                reason = "loop=0 self-intersecting/duplicate Hatch boundary";
                 return false;
             }
             stage = "HatchLoop edges";
@@ -659,6 +666,45 @@ namespace HNL.CeilingEstimator.AutoCAD
                     maxGap.ToString("F5", CultureInfo.InvariantCulture) + "mm";
                 return false;
             }
+            var nearClosedGapMm = 0.0;
+            if (flaggedNotClosed)
+            {
+                // A recorded NotClosed flag may be caused by a tiny seam.
+                // Accept only a single terminal gap <=0.01mm, without internal
+                // join gaps or crossings. This includes DEMTAM handle 88 (0.002121mm).
+                if (segments.Count > 512 || HasNonAdjacentIntersections(segments))
+                {
+                    reason = "NotClosed boundary topology cannot be recovered";
+                    return false;
+                }
+                for (var i = 0; i < segments.Count - 1; i++)
+                {
+                    var a = segments[i];
+                    var b = segments[i + 1];
+                    var gap = Math.Sqrt((a.X2 - b.X1) * (a.X2 - b.X1) +
+                        (a.Y2 - b.Y1) * (a.Y2 - b.Y1));
+                    if (gap > 1e-6)
+                    {
+                        reason = "NotClosed internal edge gap: " + Fmt(gap) + "mm";
+                        return false;
+                    }
+                }
+                var last = segments[segments.Count - 1];
+                var first = segments[0];
+                nearClosedGapMm = Math.Sqrt((last.X2 - first.X1) *
+                    (last.X2 - first.X1) + (last.Y2 - first.Y1) *
+                    (last.Y2 - first.Y1));
+                if (nearClosedGapMm > 0.01)
+                {
+                    reason = "NotClosed terminal gap too large: " +
+                        Fmt(nearClosedGapMm) + "mm";
+                    return false;
+                }
+                // Close the seam only in the temporary input segment array.
+                // The real DWG Hatch is left unchanged.
+                segments[segments.Count - 1] = new Segment2(
+                    last.X1, last.Y1, first.X1, first.Y1);
+            }
 
             // Compute a numerically stable signed area from the certified
             // linear one-loop boundary before accessing the native Hatch.Area.
@@ -732,6 +778,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             input.Segments = segments;
             input.Area = area;
             input.AreaFromBoundary = usedBoundaryArea;
+            input.RecoveredNearClosed = flaggedNotClosed;
+            input.NearClosedGapMm = nearClosedGapMm;
             input.PatternScale = patternScale;
             input.PatternName = hatch.PatternName;
             input.UserGridVerified = userGridVerified;
@@ -1288,6 +1336,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             public List<Segment2> Segments = new List<Segment2>();
             public double Area;
             public bool AreaFromBoundary;
+            public bool RecoveredNearClosed;
+            public double NearClosedGapMm;
             public double PatternScale;
             public string PatternName = string.Empty;
             public bool UserGridVerified;
