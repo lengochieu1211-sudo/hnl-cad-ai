@@ -217,7 +217,8 @@ jobs:
               -not $ceilingUi.Contains('BorderThickness="1,0,0,0" Padding="2,5,2,5"') -or
               -not $comboChrome.Contains('ApplyStockComboChrome(combo, combo.IsEnabled ? primary : secondary, input, border);') -or
               -not $comboChrome.Contains('SystemColors.ControlLightBrushKey') -or
-              -not $ceilingUi.Contains('Header="Trần nổi"') -or
+              -not $ceilingUi.Contains('<Run Text="Trần"/><LineBreak/><Run Text="chìm"/>') -or
+              -not $ceilingUi.Contains('<Run Text="Trần"/><LineBreak/><Run Text="nổi"/>') -or
               -not $ceilingUi.Contains('<Expander Header="4. Ty treo"') -or
               -not $layInLabels.Contains('LayInMainDirectionMode.ParallelShortSide') -or
               -not $layInLabels.Contains('LayInStartMode.Balanced')) {
@@ -311,7 +312,7 @@ jobs:
               throw "Lay-in first-tile Block regression absent: $testName"
             }
           }
-          # Mode-tab regression: narrow left vertical rail with two rotated tabs,
+          # Mode-tab regression: narrow RIGHT vertical rail with two horizontal two-line tabs,
           # still bound to the native SelectedCeilingTabIndex; no new state.
           # All Lay-in editor rows use a common 132px label axis and keep
           # Block pick buttons in a dedicated reserved column at narrow docks.
@@ -320,8 +321,10 @@ jobs:
           if (-not $ceilingUi.Contains('x:Key="CeilingModeTabControl"') -or
               -not $ceilingUi.Contains('x:Key="CeilingModeTabItem"') -or
               -not $ceilingUi.Contains('<StackPanel Orientation="Vertical" IsItemsHost="True"') -or
-              -not $ceilingUi.Contains('<ColumnDefinition Width="36"/>') -or
-              -not $ceilingUi.Contains('<RotateTransform Angle="-90"/>') -or
+              -not $ceilingUi.Contains('<ColumnDefinition Width="56"/>') -or
+              $ceilingUi.Contains('<RotateTransform Angle="-90"/>') -or
+              -not $ceilingUi.Contains('x:Name="StopHcfButton"') -or
+              -not $ceilingUi.Contains('Click="StopHcfButton_Click"') -or
               -not $ceilingUi.Contains('x:Name="PART_SelectedContentHost"') -or
               -not $ceilingUi.Contains('SelectedIndex="{Binding SelectedCeilingTabIndex, Mode=TwoWay}"') -or
               -not $ceilingUi.Contains('Style="{StaticResource CeilingModeTabItem}"') -or
