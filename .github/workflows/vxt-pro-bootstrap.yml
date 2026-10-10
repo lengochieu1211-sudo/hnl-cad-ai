@@ -1,0 +1,593 @@
+name: HNL Ceiling Framing Pro v7 Beta CI
+
+on:
+  push:
+    branches:
+      - research/vxt-pro-v7-bootstrap
+    paths:
+      - "incubator/hnl-vxt-pro/**"
+      - ".github/workflows/vxt-pro-bootstrap.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "incubator/hnl-vxt-pro/**"
+      - ".github/workflows/vxt-pro-bootstrap.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-package:
+    name: AutoCAD 2023 Build / Golden Tests / Functional Setup
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
+    steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v4
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Toolchain and functional source gate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          dotnet --info
+          Write-Host "Target: AutoCAD 2023 / .NET Framework 4.8 / AutoCAD.NET 24.2.0"
+          $required = @(
+            "$env:VXT_ROOT\src\HNL.VXT.Core\HNL.VXT.Core.csproj",
+            "$env:VXT_ROOT\src\HNL.VXT.Core\Layout\SmartLayout1D.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.Core\Preview\VxtPreviewPlanBuilder.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.Core\Preview\VxtMultiBoundaryPlanBuilder.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.Core\Utilities\NumericExpressionEvaluator.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.UI\HNL.VXT.UI.csproj",
+            "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj",
+            "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCreateEngine.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtTransientPreview.cs",
+            "$env:VXT_ROOT\src\HNL.VXT.UI\Controls\HnlLogo.xaml",
+            "$env:VXT_ROOT\installer\assets\HNL-VXT-EXE-Logo.png",
+            "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj",
+            "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\NumericExpressionEvaluatorTests.cs",
+            "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\ProductionLayoutTests.cs",
+            "$env:VXT_ROOT\build\HNL.VXT.bundle\PackageContents.xml",
+            "$env:VXT_ROOT\installer\HNL.VXT.Setup.iss",
+            "$env:VXT_ROOT\scripts\generate-installer-branding.ps1",
+            "$env:VXT_ROOT\scripts\verify-installer-icon.ps1",
+            "$env:VXT_ROOT\scripts\build-installer.ps1"
+          )
+          foreach ($file in $required) {
+            if (-not (Test-Path $file)) { throw "Missing required VXT source: $file" }
+          }
+
+          $vmSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\VxtPaletteViewModel.cs" -Raw
+          if ($vmSource.Contains("public bool CanCreate => false")) {
+            throw "Functional gate failed: Create is still hard-locked."
+          }
+          $buildInfoSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Infrastructure\VxtBuildInfo.cs" -Raw
+          if (-not $vmSource.Contains('VxtBuildInfo.VersionLabel')) {
+            throw "Version gate failed: Palette ViewModel is not bound to canonical VxtBuildInfo.VersionLabel."
+          }
+          if (-not $buildInfoSource.Contains('public const string Version = "v7.0.0-beta.1"')) {
+            throw "Version gate failed: canonical VxtBuildInfo is not beta.1."
+          }
+
+          $commandSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
+          if (-not $commandSource.Contains('[CommandMethod("HCF"')) {
+            throw "Command namespace gate failed: HCF primary command is missing."
+          }
+          if (-not $commandSource.Contains('[CommandMethod("HVX"')) {
+            throw "Command compatibility gate failed: HVX alias is missing."
+          }
+          if ($commandSource.Contains('[CommandMethod("HNLVXT",')) {
+            throw "Command namespace gate failed: obsolete HNLVXT main alias is still exposed."
+          }
+          if (-not $commandSource.Contains('[CommandMethod("HNLVXTCREATE"')) {
+            throw "Functional gate failed: HNLVXTCREATE command is missing."
+          }
+          if (-not $commandSource.Contains('[CommandMethod("HNLVXTFOCUSBOUNDARY"')) {
+            throw "Functional gate failed: Mxx focus command is not registered on HnlVxtCommands."
+          }
+          if (-not $commandSource.Contains('[CommandMethod("HNLVXTPICKBOUNDARYPOINT"')) {
+            throw "Functional gate failed: Pick Point command is not registered on HnlVxtCommands."
+          }
+          $pluginSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\PluginEntry.cs" -Raw
+          if (-not $pluginSource.Contains('CommandClass(typeof(HNL.VXT.AutoCAD.HnlVxtCommands))')) {
+            throw "Command namespace gate failed: legacy VXT command class is still registered."
+          }
+          if (-not $pluginSource.Contains('Lệnh: HCF')) {
+            throw "Command namespace gate failed: startup prompt does not advertise HCF."
+          }
+          $bridgeSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtHostBridge.cs" -Raw
+          if (-not $bridgeSource.Contains('Send("HNLVXTCREATE ")')) {
+            throw "Functional gate failed: UI bridge does not invoke HNLVXTCREATE."
+          }
+          if (-not $bridgeSource.Contains('Send("HNLVXTPICKBOUNDARYPOINT ')) {
+            throw "Functional gate failed: UI bridge does not invoke registered HNLVXTPICKBOUNDARYPOINT."
+          }
+          if ($bridgeSource.Contains('Send("VXTPICKBOUNDARYPOINT ')) {
+            throw "Functional gate failed: UI bridge still invokes unregistered legacy VXTPICKBOUNDARYPOINT."
+          }
+          if ($bridgeSource.Contains('HNLVXTBOUNDARY HNLVXTDIRECTION') -or
+              $bridgeSource.Contains('HNLVXTBOUNDARY HNLVXTREGION') -or
+              $bridgeSource.Contains('HNLVXTPICKBOUNDARYPOINT HNLVXTDIRECTION') -or
+              $bridgeSource.Contains('HNLVXTPICKBOUNDARYPOINT HNLVXTREGION')) {
+            throw "Functional gate failed: boundary UI still pre-chains follow-up commands and can leak state after Cancel."
+          }
+          $boundaryAdapterSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtBoundarySelectionAdapter.cs" -Raw
+          if (-not $boundaryAdapterSource.Contains('BoundaryHoleGroups.Clear()')) {
+            throw "Functional gate failed: PickFirst boundary adoption does not clear stale hole groups."
+          }
+
+          $paletteXaml = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.xaml" -Raw
+          $paletteView = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.xaml.cs" -Raw
+          $diagnosticVm = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\VxtPaletteViewModel.Diagnostics.cs" -Raw
+          $enhancerSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteEnhancer.cs" -Raw
+          $visibleUppercase = @(
+            'Text="VẼ XƯƠNG TRẦN"',
+            'Text="LIVE"',
+            'Text = "KIỂM TRA BỐ TRÍ"',
+            '"CHƯA KIỂM TRA"',
+            '"ĐANG KIỂM TRA"',
+            '"CẦN KIỂM TRA"',
+            '"ĐANG CHẠY GOLDEN"',
+            '"RUNTIME PASS"',
+            '"RUNTIME FAIL"',
+            'CreateHeader(view, "LAYER & KIỂU NÉT"',
+            'CreateHeader(view, "GIAO DIỆN"'
+          )
+          $visibleSources = $paletteXaml + [Environment]::NewLine + $paletteView + [Environment]::NewLine + $diagnosticVm + [Environment]::NewLine + $enhancerSource
+          foreach ($token in $visibleUppercase) {
+            if ($visibleSources.Contains($token)) {
+              throw "UI capitalization gate failed: visible all-caps label remains: $token"
+            }
+          }
+
+          $typographySource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteTypography.cs" -Raw
+          $diagnosticServiceSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtDiagnosticService.cs" -Raw
+          if (-not $typographySource.Contains('{ "KIỂM TRA BỐ TRÍ", "Kiểm tra bố trí" }')) {
+            throw "UI capitalization gate failed: Kiểm tra bố trí runtime fallback is missing."
+          }
+          if ($diagnosticServiceSource.Contains('"PASS sơ bộ')) {
+            throw "UI capitalization gate failed: user-facing PASS sơ bộ remains in diagnostics."
+          }
+
+          $commandsImpl = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
+          if (-not $commandsImpl.Contains('GetSelection(options, filter)')) {
+            throw "Parity gate failed: boundary/equipment selection is not multi-select."
+          }
+          if (-not $commandsImpl.Contains('LWPOLYLINE,POLYLINE,CIRCLE,SPLINE,HATCH,LINE')) {
+            throw "Parity gate failed: legacy obstacle object types are missing."
+          }
+          $sessionSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtSession.cs" -Raw
+          if (-not $sessionSource.Contains('List<Boundary2> Boundaries')) {
+            throw "Parity gate failed: multiple ceiling boundaries are not stored."
+          }
+          $createSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCreateEngine.cs" -Raw
+          $previewSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtTransientPreview.cs" -Raw
+          if (-not $createSource.Contains('VxtMultiBoundaryPlanBuilder.Build')) {
+            throw "Parity gate failed: Create is not using multi-boundary planning."
+          }
+          if (-not $previewSource.Contains('VxtMultiBoundaryPlanBuilder.Build')) {
+            throw "Parity gate failed: Preview is not using multi-boundary planning."
+          }
+
+          $diagnosticSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtDiagnosticService.cs" -Raw
+          if (-not $diagnosticSource.Contains('\"boundaries\": [')) {
+            throw "Diagnostic gate failed: full multi-boundary geometry is not captured."
+          }
+          if (-not $diagnosticSource.Contains('AddText(zip, "constraints.json", constraintsJson)')) {
+            throw "Diagnostic gate failed: constraints.json is not included."
+          }
+          if (-not $diagnosticSource.Contains('AddText(zip, "final-plan.json", finalPlanJson)')) {
+            throw "Diagnostic gate failed: final-plan.json is not included."
+          }
+          if (-not $createSource.Contains('"VxtCreateEngine.Execute", diagnosticPlan')) {
+            throw "Diagnostic gate failed: Create does not pass the failed final plan."
+          }
+
+          $masterLogo = "$env:VXT_ROOT\installer\assets\HNL-VXT-EXE-Logo.png"
+          $logoBytes = [IO.File]::ReadAllBytes($masterLogo)
+          if ($logoBytes.Length -lt 1024) { throw "Branding gate failed: canonical HNL VXT logo is unexpectedly small." }
+          if ($logoBytes[0] -ne 0x89 -or $logoBytes[1] -ne 0x50 -or $logoBytes[2] -ne 0x4E -or $logoBytes[3] -ne 0x47) {
+            throw "Branding gate failed: canonical HNL VXT logo is not PNG."
+          }
+          $uiProject = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\HNL.VXT.UI.csproj" -Raw
+          if (-not $uiProject.Contains('..\..\installer\assets\HNL-VXT-EXE-Logo.png')) {
+            throw "Branding gate failed: Palette is not using canonical HNL VXT logo master."
+          }
+          $brandingScript = Get-Content "$env:VXT_ROOT\scripts\generate-installer-branding.ps1" -Raw
+          if (-not $brandingScript.Contains("masterLogoPng = Join-Path")) {
+            throw "Branding gate failed: installer branding is not using canonical HNL VXT logo master."
+          }
+
+          $iss = Get-Content "$env:VXT_ROOT\installer\HNL.VXT.Setup.iss" -Raw
+          if (-not $iss.Contains('DefaultDirName={commonpf}\Autodesk\ApplicationPlugins\HNL.CeilingFramingPro.bundle')) {
+            throw "Installer gate failed: VXT must install to trusted Program Files ApplicationPlugins."
+          }
+          if (-not $iss.Contains('PrivilegesRequired=admin')) {
+            throw "Installer gate failed: Program Files setup must request admin privileges."
+          }
+          if (-not $iss.Contains('gõ HCF')) {
+            throw "Installer gate failed: post-install guidance does not advertise HCF."
+          }
+          $manifest = Get-Content "$env:VXT_ROOT\build\HNL.VXT.bundle\PackageContents.xml" -Raw
+          if (-not $manifest.Contains('Global="HCF" Local="HCF"')) {
+            throw "Package gate failed: HCF is not exposed for lazy command loading."
+          }
+          if (-not $manifest.Contains('Global="HVX" Local="HVX"')) {
+            throw "Package compatibility gate failed: HVX alias is missing."
+          }
+          if (-not $manifest.Contains('SupportPath="./Contents/Resources"')) {
+            throw "Package gate failed: Lay-in hatch SupportPath is missing."
+          }
+          foreach ($pat in @('HNL_CF_600X600','HNL_CF_610X610','HNL_CF_600X1200','HNL_CF_610X1220')) {
+            $patPath = "$env:VXT_ROOT\resources\hatch\$pat.pat"
+            if (-not (Test-Path $patPath)) { throw "Lay-in hatch pattern missing: $pat.pat" }
+            $patText = Get-Content $patPath -Raw
+            if (-not $patText.Contains("*$pat")) { throw "Lay-in hatch pattern/header mismatch: $pat.pat" }
+          }
+          # Lay-in static contract only; AutoCAD runtime still requires field QA.
+          $layInCad = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\LayInCadRuntime.cs" -Raw
+          $layInCommands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
+          $layInSettings = Get-Content "$env:VXT_ROOT\src\HNL.VXT.Core\Models\LayInCeilingSettings.cs" -Raw
+          if (-not $layInSettings.Contains('string HangerBlockName')) { throw 'Lay-in hanger block setting absent.' }
+          $layInPlugin = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\PluginEntry.cs" -Raw
+          $layInSession = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtSession.cs" -Raw
+          $layInBridge = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtHostBridge.cs" -Raw
+          $layInVm = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\LayInCeilingViewModel.cs" -Raw
+          foreach ($guard in @('SynchronizeDocument(doc)', 'ReleaseDocument(doc)')) {
+            $pattern = 'if\s*\(VxtSession\.' + [regex]::Escape($guard) + '\)\s*\{\s*VxtTransientPreview\.Instance\.AbandonForDocumentTransition\(\);\s*LayInCadRuntime\.AbandonForDocumentTransition\(\);'
+            if ($layInPlugin -notmatch $pattern) { throw "Lay-in DWG transition guard missing for $guard" }
+          }
+          if (-not $layInVm.Contains('public void ClearDrawingPoints()') -or
+              -not $layInSession.Contains('ViewModel?.LayIn?.ClearDrawingPoints();') -or
+              -not $layInSession.Contains('LayInSettings.StartMode = LayInStartMode.Balanced;')) {
+            throw 'Lay-in drawing-specific anchor reset is missing.'
+          }
+          if (-not $layInBridge.Contains('if (!ReferenceEquals(Application.DocumentManager.MdiActiveDocument, _pendingLayInPreviewDocument))')) {
+            throw 'Lay-in delayed Preview is not scoped to its originating DWG.'
+          }
+          foreach ($token in @(
+            'LayInRuntimePlanner.Build(session, settings)',
+            'CreateHatch(db, tr, ms, item, hatchLayer)',
+            'HatchPatternType.CustomDefined',
+            'hatch.PatternAngle = item.Plan.MainAngleRadians',
+            'hatch.Origin = new Point2d(item.Plan.HatchOrigin.X, item.Plan.HatchOrigin.Y)',
+            'hatch.AppendLoop(HatchLoopTypes.Outermost',
+            'hatch.EvaluateHatch(true)',
+            'BuildDimension(db, run, item.Plan.ModuleShort, dimStyleId)'
+          )) {
+            if (-not $layInCad.Contains($token)) { throw "Lay-in CAD contract missing: $token" }
+          }
+          # DWG-owned DimStyle and preferred Ty Block: UI, Preview and Create contracts.
+          $layInPalette = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.xaml" -Raw
+          if (-not $layInSettings.Contains('DefaultHangerBlockName = "AP_DIEM TY 06.2026"') -or
+              -not $layInVm.Contains('_host.GetDimStyleNames()') -or
+              -not $layInVm.Contains('public string SelectedDimensionStyle') -or
+              -not $layInPalette.Contains('SelectedItem="{Binding SelectedDimensionStyle, Mode=TwoWay}"') -or
+              -not $layInPalette.Contains('Text="{Binding HangerBlockName, UpdateSourceTrigger=LostFocus}"')) {
+            throw 'Lay-in DimStyle selector / default Ty Block UI gate missing.'
+          }
+          if (-not $layInCad.Contains('ResolveDimensionStyle(db, session.LayInSettings.DimensionStyle)') -or
+              -not $layInCad.Contains('ResolveDimensionStyle(db, tr, settings.DimensionStyle)') -or
+              -not $layInCad.Contains('ResolveHangerBlock(blockTable, session.LayInSettings.HangerBlockName)') -or
+              -not $layInCad.Contains('ResolveHangerBlock(bt, settings.HangerBlockName)') -or
+              -not $layInSession.Contains('LayInSettings.DimensionStyle = string.Empty;') -or
+              -not $layInVm.Contains('_settings.DimensionStyle = string.Empty;')) {
+            throw 'Lay-in named DWG DimStyle / Ty Block Preview-Create or document isolation gate missing.'
+          }
+          foreach ($name in @(
+            'HNLCFLAYINPREVIEW', 'HNLCFLAYINCLEAR', 'HNLCFLAYINCREATE',
+            'HNLCFLAYINSTART', 'HNLCFLAYINDOOR',
+            'HNLCFLAYINHANGERBLOCK', 'HNLCFLAYINSTARTBLOCK', 'HNLCFLAYINQA'
+          )) {
+            if (-not $layInCommands.Contains('CommandMethod("' + $name + '"')) {
+              throw "Lay-in command not registered: $name"
+            }
+          }
+          if (-not $layInCad.Contains('internal static void RunRuntimeQa()') -or
+              -not $layInCad.Contains('hatch.NumberOfLoops != 1 + holes.Count') -or
+              -not $layInCad.Contains('var hatch = CreateHatch(db, tr, ms, item, db.Clayer);')) {
+            throw 'Lay-in AutoCAD runtime QA command must exercise actual Hatch generation and loop inspection.'
+          }
+          foreach ($manifestName in @('build/HNL.VXT.bundle/PackageContents.xml',
+                                        'build/universal/PackageContents.2026-net8.xml',
+                                        'build/universal/PackageContents.2026-net10.xml')) {
+            $manifest = Get-Content (Join-Path $env:VXT_ROOT $manifestName) -Raw
+            if (-not $manifest.Contains('Global="HNLCFLAYINQA" Local="HNLCFLAYINQA"')) {
+              throw "Lay-in Runtime QA command missing from manifest: $manifestName"
+            }
+          }
+          # Deep audit gates: DIM labels must equal measured post-phase lengths.
+          $layInCore = Get-Content "$env:VXT_ROOT\src\HNL.VXT.Core\Preview\LayInCeilingPlanner.cs" -Raw
+          $layInTests = Get-Content "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\LayInCeilingPlannerTests.cs" -Raw
+          if (-not $layInCore.Contains('(bounds.MaxX - xStart) / spec.ModuleShort') -or
+              -not $layInCore.Contains('(bounds.MaxY - yStart) / acrossModule') -or
+              -not $layInTests.Contains('ManualStart_GroupedDimensionsMatchExactMeasuredSpan') -or
+              -not $layInTests.Contains('NarrowBoundary_SkipsFullModuleDimsInsteadOfDrawingFalseLabel')) {
+            throw 'Lay-in measured-DIM regression protections are missing.'
+          }
+          # Selecting boundaries and switching UI tabs must route to the active ceiling renderer.
+          $boundaryCommands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
+          $boundaryAdapter = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtBoundarySelectionAdapter.cs" -Raw
+          $paletteVm = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\VxtPaletteViewModel.cs" -Raw
+          if (-not $boundaryCommands.Contains('RefreshBoundaryPreviewForActiveTab(doc);') -or
+              -not $boundaryCommands.Contains('SelectedCeilingTabIndex == 1') -or
+              -not $boundaryAdapter.Contains('VxtCommands.RefreshBoundaryPreviewForActiveTab(doc);') -or
+              -not $paletteVm.Contains('_host.ClearLayInPreview();') -or
+              -not $paletteVm.Contains('_host.RequestLayInPreview(LayIn.Snapshot());')) {
+            throw 'Lay-in/concealed boundary Preview tab isolation is missing.'
+          }
+          # Existing layer styles belong to the DWG; Lay-in must only style new layers.
+          $layInResources = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCadResources.cs" -Raw
+          if (-not $layInResources.Contains('public static ObjectId EnsureLayInLayer(') -or
+              -not $layInResources.Contains('if (layers.Has(name))') -or
+              -not $layInCad.Contains('VxtCadResources.EnsureLayInLayer(db, tr, settings.HatchLayer') -or
+              -not $layInCad.Contains('existing.LineWeight != lineWeight')) {
+            throw 'Lay-in existing-layer preservation and runtime QA gate absent.'
+          }
+          foreach ($manifestName in @('build/HNL.VXT.bundle/PackageContents.xml',
+                                        'build/universal/PackageContents.2026-net8.xml',
+                                        'build/universal/PackageContents.2026-net10.xml')) {
+            $versioned = Get-Content (Join-Path $env:VXT_ROOT $manifestName) -Raw
+            if (-not $versioned.Contains('AppVersion="7.0.0.7"') -or
+                $versioned.Contains('Version="7.0.0.6"')) {
+              throw "AutoCAD manifest version does not match DLL/installer 7.0.0.7: $manifestName"
+            }
+          }
+          # UI/installer identity audit: build timestamp must come from the compiled
+          # assembly, controls must fit the docked CAD palette, and the old bundle
+          # directory must not become an accidental second AutoCAD plugin load.
+          $buildInfo = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Infrastructure\VxtBuildInfo.cs" -Raw
+          $buildProps = Get-Content "$env:VXT_ROOT\Directory.Build.props" -Raw
+          $ceilingUi = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.xaml" -Raw
+          $paletteService = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtPaletteService.cs" -Raw
+          $comboChrome = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteView.Beta.cs" -Raw
+          $layInLabels = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\ViewModels\LayInCeilingViewModel.cs" -Raw
+          if (-not $buildInfo.Contains('MetadataKey = "HNLBuildDateTime"') -or
+              -not $buildInfo.Contains('Cập nhật ') -or
+              -not $buildInfo.Contains('public static string PaletteTitle => "HNL Ceiling Framing Pro • " + BuildText;') -or
+              -not $buildProps.Contains('AssemblyMetadata Include="HNLBuildDateTime"') -or
+              -not $paletteService.Contains('_palette.Name = VxtBuildInfo.PaletteTitle;') -or
+              -not $paletteService.Contains('B7E5D9C2-3A1F-4D08-9AC8-1DAB6B3F7821') -or
+              -not $ceilingUi.Contains('MinWidth="0"') -or
+              -not $ceilingUi.Contains('<Border Grid.Column="1" Background="{DynamicResource CardBackground}"') -or
+              -not $ceilingUi.Contains('BorderThickness="1,0,0,0" Padding="2,5,2,5"') -or
+              -not $comboChrome.Contains('ApplyStockComboChrome(combo, combo.IsEnabled ? primary : secondary, input, border);') -or
+              -not $comboChrome.Contains('SystemColors.ControlLightBrushKey') -or
+              -not $ceilingUi.Contains('Text="Trần chìm"') -or
+              -not $ceilingUi.Contains('Text="Trần nổi"') -or
+              -not $ceilingUi.Contains('<Expander Header="4. Ty treo"') -or
+              -not $layInLabels.Contains('LayInMainDirectionMode.ParallelShortSide') -or
+              -not $layInLabels.Contains('LayInStartMode.Balanced')) {
+            throw 'HNL Ceiling Framing Pro build-date / localized compact palette gate failed.'
+          }
+          # Guard the formerly hidden concealed optimizer and oversized native Preview.
+          $concealedPreview = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtTransientPreview.cs" -Raw
+          if (-not $ceilingUi.Contains('Tag="HNL_VXT_OPTIMIZER_SELECTOR"') -or
+              -not $ceilingUi.Contains('SelectedItem="{Binding SelectedOptimizationMode, Mode=TwoWay}"') -or
+              -not $ceilingUi.Contains('IsChecked="{Binding UseLocalMainAdd, Mode=TwoWay}"') -or
+              -not $concealedPreview.Contains('renderDecision.StructuralDrawableCount > FullPreviewDrawableLimit') -or
+              -not $concealedPreview.Contains('session.ViewModel?.SetPreviewActualStats(safeMetrics)')) {
+            throw 'Concealed optimizer/notch or native Preview size protection missing.'
+          }
+          foreach ($brandStage in @('VxtPaletteRuntimePolish.cs',
+                                    'VxtPaletteTypography.cs',
+                                    'VxtPaletteCompactTuner.cs')) {
+            $uiPolish = Get-Content (Join-Path "$env:VXT_ROOT\src\HNL.VXT.UI\Views" $brandStage) -Raw
+            if (-not $uiPolish.Contains('StartsWith("v7."') -or
+                -not $uiPolish.Contains('"Ceiling Framing Pro"')) {
+              throw "Runtime polish still hides HNL title/build-date: $brandStage"
+            }
+          }
+          foreach ($installer in @('installer/HNL.VXT.Setup.iss',
+                                   'installer/HNL.VXT.Universal.Setup.iss')) {
+            $scriptText = Get-Content (Join-Path $env:VXT_ROOT $installer) -Raw
+            if (-not $scriptText.Contains('HNL.CeilingFramingPro.bundle') -or
+                -not $scriptText.Contains('UsePreviousAppDir=no') -or
+                -not $scriptText.Contains('RemoveLegacyHnlBundle;')) {
+              throw "Branded bundle path / safe VXT migration missing: $installer"
+            }
+          }
+          # tn.dxf reference DIM: 10,000 = 9,760 + 240 on both axes with
+          # a single 610 mm Hatch, native measured dimensions and editable
+          # outside placement. Both Preview and Create consume the same points.
+          $layInPlanData = Get-Content "$env:VXT_ROOT\src\HNL.VXT.Core\Preview\LayInCeilingPlan.cs" -Raw
+          $layInBridge = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtHostBridge.cs" -Raw
+          $layInPicker = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
+          $hostInterface = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Hosting\IVxtHostBridge.cs" -Raw
+          foreach ($contract in @(
+              'SampleTnDxf_610Grid_Dimensions9760Plus240OnBothAxes',
+              'BalancedGridDims_TwoCutEdgesAreMeasuredSeparately',
+              'SampleGridDims_AllFourSystemsMeasureFullWidthWithoutOverlap',
+              'GridDims_RotatedRegionHasLocalOutsideDimLineAndOriginalTeeGeometry')) {
+            if (-not $layInTests.Contains($contract)) {
+              throw "Sample Lay-in DIM fixture is missing: $contract"
+            }
+          }
+          if (-not $layInCore.Contains('LayInDimensionMode.GridAndEdges') -or
+              -not $layInCore.Contains('AddGridAxisDimensions') -or
+              -not $layInPlanData.Contains('DimensionLinePoint') -or
+              -not $layInCad.Contains('run.DimensionLinePoint.HasValue') -or
+              -not $layInBridge.Contains('PickLayInDimensionPosition') -or
+              -not $hostInterface.Contains('PickLayInDimensionPosition') -or
+              -not $layInPicker.Contains('LayInCadRuntime.PickDimensionLocation(true)') -or
+              -not $ceilingUi.Contains('SelectedHorizontalDimPosition') -or
+              -not $ceilingUi.Contains('SelectedVerticalDimPosition')) {
+            throw 'Sample Lay-in grid/edge DIM and pickable outside location contract missing.'
+          }
+          foreach ($manifestName in @('build/HNL.VXT.bundle/PackageContents.xml',
+                                        'build/universal/PackageContents.2026-net8.xml',
+                                        'build/universal/PackageContents.2026-net10.xml')) {
+            $manifest = Get-Content (Join-Path $env:VXT_ROOT $manifestName) -Raw
+            foreach ($dimCommand in @('HNLCFLAYINDIMH','HNLCFLAYINDIMV')) {
+              if (-not $manifest.Contains('Global="' + $dimCommand + '" Local="' + $dimCommand + '"')) {
+                throw "Sample Lay-in DIM picker registration missing: $manifestName $dimCommand"
+              }
+            }
+          }
+          # First full tile marker from tn.dxf must be a real one-panel Block
+          # (original sample is 305 x 305 with scale 2 = 610 x 610),
+          # anchored inside the region rather than a small phase circle.
+          $layInSettingsText = Get-Content "$env:VXT_ROOT\src\HNL.VXT.Core\Models\LayInCeilingSettings.cs" -Raw
+          if (-not $layInSettingsText.Contains('bool DrawStartTileBlock') -or
+              -not $layInPlanData.Contains('FirstTileOrigin') -or
+              -not $layInPlanData.Contains('FirstTileWidth') -or
+              -not $layInCore.Contains('FindFirstFullTile') -or
+              -not $layInCore.Contains('ContainsCompletePanel') -or
+              -not $layInCad.Contains('EnsureDefaultStartTileBlock(db, tr)') -or
+              -not $layInCad.Contains('DefaultStartTileBlockName') -or
+              -not $layInCad.Contains('PreviewStartTile(db, item.Plan, session.LayInSettings)') -or
+              -not $ceilingUi.Contains('IsChecked="{Binding DrawStartTileBlock, Mode=TwoWay}"')) {
+            throw 'Lay-in one-panel start Block Core/Preview/Create contract missing.'
+          }
+          foreach ($testName in @(
+              'SampleTnDxf_FirstTileBlockCoversExactlyOne610Panel',
+              'FirstTileBlock_UsesEachPanelModuleDimensions',
+              'FirstTileBlock_SkipsHoleAndDoesNotDisturbHatchOrigin',
+              'FirstTileBlock_DoesNotPlaceOutsideTinyRegionOrWhenDisabled')) {
+            if (-not $layInTests.Contains($testName)) {
+              throw "Lay-in first-tile Block regression absent: $testName"
+            }
+          }
+          # Navigation-rail regression: narrow RIGHT 40px rail with vector icons, 90-degree captions and bottom STOP,
+          # still bound to the native SelectedCeilingTabIndex; no new state.
+          # All Lay-in editor rows use a common 132px label axis and keep
+          # Block pick buttons in a dedicated reserved column at narrow docks.
+          $headerTuner = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteCompactTuner.cs" -Raw
+          $headerPolish = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteRuntimePolish.cs" -Raw
+          if (-not $ceilingUi.Contains('x:Key="CeilingModeTabControl"') -or
+              -not $ceilingUi.Contains('x:Key="CeilingModeTabItem"') -or
+              -not $ceilingUi.Contains('<StackPanel Orientation="Vertical" IsItemsHost="True"') -or
+              -not $ceilingUi.Contains('<ColumnDefinition Width="40"/>') -or
+              -not $ceilingUi.Contains('Tag="HCF_RAIL_CONCEALED_ICON"') -or
+              -not $ceilingUi.Contains('Tag="HCF_RAIL_LAYIN_ICON"') -or
+              -not $ceilingUi.Contains('Tag="HCF_RAIL_STOP_ICON"') -or
+              -not $ceilingUi.Contains('Margin="0,0,40,0"') -or
+              -not $ceilingUi.Contains('<RotateTransform Angle="-90"/>') -or
+              -not $ceilingUi.Contains('x:Name="StopHcfButton"') -or
+              -not $ceilingUi.Contains('Click="StopHcfButton_Click"') -or
+              -not $ceilingUi.Contains('x:Name="PART_SelectedContentHost"') -or
+              -not $ceilingUi.Contains('SelectedIndex="{Binding SelectedCeilingTabIndex, Mode=TwoWay}"') -or
+              -not $ceilingUi.Contains('Style="{StaticResource CeilingModeTabItem}"') -or
+              -not $ceilingUi.Contains('SelectedHorizontalDimPosition') -or
+              -not $ceilingUi.Contains('<ColumnDefinition Width="132"/>') -or
+              -not $headerTuner.Contains('private const double LabelWidth = 132.0;') -or
+              -not $headerPolish.Contains('private const double CommonLabelWidth = 132.0;') -or
+              -not $headerTuner.Contains('private const double PickButtonWidth = 74.0;') -or
+              -not $headerPolish.Contains('private const double CommonPickButtonWidth = 74.0;')) {
+            throw 'Ceiling mode segmented tab or aligned form column UI contract is missing.'
+          }
+          [xml]$validatedUi = $ceilingUi
+          if ($validatedUi.DocumentElement.LocalName -ne 'UserControl') {
+            throw 'Ceiling mode XAML must remain a valid WPF UserControl.'
+          }
+          # Runtime field feedback: one title in AutoCAD caption, no duplicate
+          # logo/version card within the palette, and concealed resources must
+          # remain accessible after moving the scroll into the first tab.
+          $uiResourcePolish = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteRuntimePolish.cs" -Raw
+          $uiSectionOrder = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteSectionOrder.cs" -Raw
+          if ($ceilingUi.Contains('<controls:HnlLogo Grid.Column="0"') -or
+              $ceilingUi.Contains('Text="Bật Xương chính"') -or
+              $ceilingUi.Contains('Text="Bật Xương phụ"') -or
+              $ceilingUi.Contains('Text="Bật Ty treo"') -or
+              -not $ceilingUi.Contains('<RowDefinition Height="0"/>') -or
+              -not $uiResourcePolish.Contains('tabs.Items[0] as TabItem') -or
+              -not $uiSectionOrder.Contains('tabs.Items[0] as TabItem') -or
+              -not $uiResourcePolish.Contains('nameof(VxtPaletteViewModel.DimensionLayer)')) {
+            throw 'Concealed tab Layer/DIM restoration, concise caption or redundant-toggle cleanup missing.'
+          }
+          Write-Host 'Lay-in one-Hatch/region static contract and command registrations PASS'
+          Write-Host "HNL Ceiling Framing beta.1 functional/source/branding/multi-polyline/installer gate PASS"
+      - name: Restore AutoCAD 2023 plugin
+        shell: pwsh
+        run: dotnet restore "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj"
+      - name: Restore core tests
+        shell: pwsh
+        run: dotnet restore "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj"
+      - name: Build AutoCAD 2023 plugin
+        shell: pwsh
+        run: dotnet build "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj" -c Release --no-restore
+      - name: Run Core / Golden / DIM / Numeric Expression tests
+        shell: pwsh
+        run: dotnet test "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj" -c Release
+      - name: Package AutoCAD ApplicationPlugins bundle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $artifactRoot = Join-Path $env:VXT_ROOT "artifacts"
+          $bundleRoot = Join-Path $artifactRoot "HNL.VXT.bundle"
+          $windows = Join-Path $bundleRoot "Contents\Windows"
+          if (Test-Path $artifactRoot) { Remove-Item $artifactRoot -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $windows | Out-Null
+          $resources = Join-Path $bundleRoot "Contents\Resources"
+          New-Item -ItemType Directory -Force -Path $resources | Out-Null
+          Copy-Item "$env:VXT_ROOT\build\HNL.VXT.bundle\PackageContents.xml" "$bundleRoot\PackageContents.xml" -Force
+          Copy-Item "$env:VXT_ROOT\resources\hatch\*.pat" $resources -Force
+          $out = "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\bin\Release\net48"
+          if (-not (Test-Path $out)) { throw "Missing AutoCAD Release output: $out" }
+          Get-ChildItem $out -File | Where-Object {
+            $_.Extension -in @('.dll', '.config') -and $_.Name -notmatch '^(Ac|AutoCAD).*\.dll$'
+          } | Copy-Item -Destination $windows -Force
+          $bad = Get-ChildItem $windows -File | Where-Object { $_.Name -match '^(Ac|AutoCAD).*\.dll$' }
+          if ($bad) { throw "Autodesk runtime DLL detected in distributable bundle." }
+          foreach ($requiredDll in @('HNL.VXT.AutoCAD.dll','HNL.VXT.Core.dll','HNL.VXT.UI.dll')) {
+            if (-not (Test-Path (Join-Path $windows $requiredDll))) { throw "Missing bundle DLL: $requiredDll" }
+          }
+          $dll = Join-Path $windows "HNL.VXT.AutoCAD.dll"
+          $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $dll))
+          Write-Host "HNL.VXT.AutoCAD.dll FileVersion: $($info.FileVersion)"
+          if (-not $info.FileVersion.StartsWith("7.0.0.7")) { throw "Unexpected VXT DLL version: $($info.FileVersion)" }
+          $zip = Join-Path $artifactRoot "HNL-Ceiling-Framing-Pro-v7.0.0-beta.1-AutoCAD2023.zip"
+          Compress-Archive -Path $bundleRoot -DestinationPath $zip -CompressionLevel Optimal
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
+          Write-Host "Bundle ZIP SHA256: $hash"
+          Write-Host "HNL VXT beta.1 bundle gate PASS"
+      - name: Install Inno Setup 6
+        shell: pwsh
+        run: choco install innosetup -y --no-progress --limit-output
+      - name: Build one-file HNL VXT Setup EXE
+        shell: pwsh
+        run: '& "$env:VXT_ROOT\scripts\build-installer.ps1" -Root $env:VXT_ROOT'
+      - name: Verify one-file installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $exe = "$env:VXT_ROOT\artifacts\installer\HNL_Ceiling_Framing_Pro_Setup_7.0.0-beta.1.exe"
+          $sha = "$exe.sha256.txt"
+          $ico = "$env:VXT_ROOT\artifacts\installer-assets\HNL-VXT.ico"
+          if (-not (Test-Path $exe)) { throw "Missing Setup EXE: $exe" }
+          if (-not (Test-Path $sha)) { throw "Missing Setup SHA256: $sha" }
+          $size = (Get-Item $exe).Length
+          if ($size -lt 300KB) { throw "Setup EXE too small: $size bytes" }
+          $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $exe))
+          if (-not $info.FileVersion.StartsWith('7.0.0.7')) { throw "Unexpected Setup FileVersion: $($info.FileVersion)" }
+          & "$env:VXT_ROOT\scripts\verify-installer-icon.ps1" -ExePath $exe -IcoPath $ico
+          Write-Host "ONE-FILE SETUP beta.1 PASS"
+          Write-Host "Setup size: $size bytes"
+          Write-Host "Setup FileVersion: $($info.FileVersion)"
+          Get-Content $sha
+      - name: Upload debug bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HNL-Ceiling-Framing-Pro-v7.0.0-beta.1-AutoCAD2023-Bundle
+          path: ${{ env.VXT_ROOT }}/artifacts/HNL-Ceiling-Framing-Pro-v7.0.0-beta.1-AutoCAD2023.zip
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload one-file Setup EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: HNL-Ceiling-Framing-Pro-v7.0.0-beta.1-Setup-AutoCAD2023
+          path: |
+            ${{ env.VXT_ROOT }}/artifacts/installer/HNL_Ceiling_Framing_Pro_Setup_7.0.0-beta.1.exe
+            ${{ env.VXT_ROOT }}/artifacts/installer/HNL_Ceiling_Framing_Pro_Setup_7.0.0-beta.1.exe.sha256.txt
+            ${{ env.VXT_ROOT }}/artifacts/installer-assets/HNL-VXT.ico
+            ${{ env.VXT_ROOT }}/artifacts/installer-assets/HNL-Logo-Official.png
+          if-no-files-found: error
+          retention-days: 14
