@@ -312,7 +312,7 @@ jobs:
               throw "Lay-in first-tile Block regression absent: $testName"
             }
           }
-          # Mode-tab regression: narrow RIGHT vertical rail with two horizontal two-line tabs,
+          # Navigation-rail regression: narrow RIGHT mode rail with distinct vector icons, two-line labels and bottom STOP,
           # still bound to the native SelectedCeilingTabIndex; no new state.
           # All Lay-in editor rows use a common 132px label axis and keep
           # Block pick buttons in a dedicated reserved column at narrow docks.
@@ -321,7 +321,11 @@ jobs:
           if (-not $ceilingUi.Contains('x:Key="CeilingModeTabControl"') -or
               -not $ceilingUi.Contains('x:Key="CeilingModeTabItem"') -or
               -not $ceilingUi.Contains('<StackPanel Orientation="Vertical" IsItemsHost="True"') -or
-              -not $ceilingUi.Contains('<ColumnDefinition Width="56"/>') -or
+              -not $ceilingUi.Contains('<ColumnDefinition Width="68"/>') -or
+              -not $ceilingUi.Contains('Tag="HCF_RAIL_CONCEALED_ICON"') -or
+              -not $ceilingUi.Contains('Tag="HCF_RAIL_LAYIN_ICON"') -or
+              -not $ceilingUi.Contains('Tag="HCF_RAIL_STOP_ICON"') -or
+              -not $ceilingUi.Contains('Margin="0,0,68,0"') -or
               $ceilingUi.Contains('<RotateTransform Angle="-90"/>') -or
               -not $ceilingUi.Contains('x:Name="StopHcfButton"') -or
               -not $ceilingUi.Contains('Click="StopHcfButton_Click"') -or
