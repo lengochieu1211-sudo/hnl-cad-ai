@@ -319,6 +319,23 @@ jobs:
           Write-Host 'HCE NOTCLOSED NEAR-SEAM RECOVERY SAFETY GATE PASS'
           Write-Host 'HCE RC13 CUT LIST SUMMARY/DETAIL UI + TABLE STATIC GATE PASS'
           Write-Host 'HCE VIETNAMESE TABLE + N/G/L LABEL + PER-DWG HEIGHT STATIC GATE PASS'
+          # CAD Table Style and Text Style are independent, both resolved per DWG.
+          foreach($v in @('CadTableStyle', 'TableStyleDictionaryId', 'CTABLESTYLE',
+                 'RefreshCadTableStyles', '_legacyCadTableStyle', 'Table Style (bảng)')) {
+            if(-not (($profile+$ui+$cmd).Contains($v))) { throw "Missing native CAD Table Style: $v" }
+          }
+          foreach($v in @('table.TableStyle = cadTableStyleId',
+                 'FitHceTableToText(table, database, cadTableStyle',
+                 'new MText()', 'probe.ActualWidth', 'probe.ActualHeight',
+                 'table.SetColumnWidth(col, widths[col])',
+                 'table.SetRowHeight(row, Math.Max(8.0, heights[row]))')) {
+            if(-not $cmd.Contains($v)){ throw "Missing MTEXT auto sizing: $v" }
+          }
+          if($cmd.Contains('Result [Table/Exit]') -or $cmd.Contains('choiceOptions.Keywords.Add("Exit")')) {
+            throw 'HCECALC must create directly after result computation (Esc at point still cancels)'
+          }
+          if($ui.Contains('Exit: không ghi DWG.')) { throw 'Obsolete Table/Exit palette hint' }
+          Write-Host 'HCE NATIVE TABLE STYLE + MTEXT AUTOSIZE + DIRECT INSERTION GATE PASS'
           Write-Host 'HCE RC5.4 CAD TABLE STYLE/HEIGHT BINDING STATIC GATE PASS'
 
       - name: Build Golden + AutoCAD matrix + Setup EXE

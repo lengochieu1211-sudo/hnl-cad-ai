@@ -450,21 +450,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                 // full counts, not per-cell positions. That needs a separate Golden gate.
                 WritePreview(editor, report, rejected);
 
-                var choiceOptions = new PromptKeywordOptions(
-                    "\nHNL Tool - Result [Table/Exit] <Exit>: ")
-                {
-                    AllowNone = true
-                };
-                choiceOptions.Keywords.Add("Table");
-                choiceOptions.Keywords.Add("Exit");
-                var choice = editor.GetKeywords(choiceOptions);
-                if (choice.Status != PromptStatus.OK ||
-                    !string.Equals(choice.StringResult, "Table", StringComparison.OrdinalIgnoreCase))
-                {
-                    editor.WriteMessage("\nHNL Tool - Preview only. No drawing changes.");
-                    return;
-                }
-
+                // HCECALC itself requests a new table. GetPoint is the Cancel gate.
+                // Do not insert a redundant Table/Exit keyword stage.
                 // Runtime fallback for disabled/old palette state: never silently omit
                 // cut sizes from a newly requested CAD Table without showing the choice.
                 // The override is local to this Table; calculation/packing is unchanged.
@@ -1185,6 +1172,95 @@ namespace HNL.CeilingEstimator.AutoCAD
             return summary;
         }
 
+        // Measure native MTEXT glyph extents in the selected DWG Table Style.
+        // One transient MText + cached repeated cell values (no new DWG objects).
+        private static void FitHceTableToText(Table table, Database database,
+            TableStyle cadStyle, int rowCount, int groupHeadingRow,
+            bool cutEnabled, int cutHeadingRow, int cutRowsCount)
+        {
+            var widths = new double[4];
+            var heights = new double[rowCount];
+            var mergedWidth = 0.0;
+            var cache = new Dictionary<string, double[]>(StringComparer.Ordinal);
+            using (var probe = new MText())
+            {
+                probe.SetDatabaseDefaults(database);
+                probe.Width = 0.0; // Natural width, no word wrap.
+                for (var row = 0; row < rowCount; row++)
+                {
+                    var merged = row == 0 || row == groupHeadingRow ||
+                        (cutEnabled && (row == cutHeadingRow ||
+                         (cutRowsCount == 0 && row == cutHeadingRow + 2)));
+                    var kind = row == 0 ? RowType.TitleRow :
+                        row == 1 ? RowType.HeaderRow : RowType.DataRow;
+                    var fallbackHeight = cadStyle.TextHeight(kind);
+                    if (!(fallbackHeight > 0) || double.IsNaN(fallbackHeight) ||
+                        double.IsInfinity(fallbackHeight)) fallbackHeight = 2.5;
+                    var fallbackStyle = cadStyle.TextStyle(kind);
+                    for (var col = 0; col < 4; col++)
+                    {
+                        if (merged && col > 0) continue;
+                        var cell = table.Cells[row, col];
+                        var value = cell.TextString ?? string.Empty;
+                        if (value.Length == 0) continue;
+                        double? selectedHeight = cell.TextHeight;
+                        var fontHeight = selectedHeight.HasValue &&
+                            selectedHeight.Value > 0 &&
+                            !double.IsNaN(selectedHeight.Value) &&
+                            !double.IsInfinity(selectedHeight.Value)
+                            ? selectedHeight.Value : fallbackHeight;
+                        ObjectId? selectedFont = cell.TextStyleId;
+                        var fontStyle = selectedFont.HasValue && !selectedFont.Value.IsNull
+                            ? selectedFont.Value : fallbackStyle;
+                        if (fontStyle.IsNull) fontStyle = database.Textstyle;
+                        var key = fontStyle.ToString() + "|" +
+                            fontHeight.ToString("R", CultureInfo.InvariantCulture) +
+                            "|" + value;
+                        double[] size;
+                        if (!cache.TryGetValue(key, out size))
+                        {
+                            probe.TextHeight = fontHeight;
+                            if (!fontStyle.IsNull) probe.TextStyleId = fontStyle;
+                            probe.Contents = value;
+                            size = new[] { probe.ActualWidth, probe.ActualHeight };
+                            if (size[0] < 0 || size[1] < 0 ||
+                                double.IsNaN(size[0]) || double.IsInfinity(size[0]) ||
+                                double.IsNaN(size[1]) || double.IsInfinity(size[1]))
+                                throw new InvalidOperationException(
+                                    "HCE MTEXT measurement returned invalid dimensions");
+                            cache.Add(key, size);
+                        }
+                        var horizontalPadding = Math.Max(4.0, fontHeight * 1.25);
+                        var verticalPadding = Math.Max(3.0, fontHeight * 0.6);
+                        var requiredWidth = size[0] + horizontalPadding * 2.0;
+                        if (merged)
+                            mergedWidth = Math.Max(mergedWidth, requiredWidth);
+                        else
+                            widths[col] = Math.Max(widths[col], requiredWidth);
+                        heights[row] = Math.Max(heights[row],
+                            Math.Max(fontHeight, size[1]) + verticalPadding * 2.0);
+                    }
+                    heights[row] = Math.Max(heights[row], fallbackHeight * 2.0);
+                }
+            }
+            var allWidth = 0.0;
+            for (var col = 0; col < 4; col++)
+            {
+                widths[col] = Math.Max(16.0, widths[col]);
+                allWidth += widths[col];
+            }
+            // Merged headings need the sum of all four widths, not a huge first column.
+            if (mergedWidth > allWidth)
+            {
+                var extra = (mergedWidth - allWidth) / 4.0;
+                for (var col = 0; col < 4; col++) widths[col] += extra;
+            }
+            for (var col = 0; col < 4; col++)
+                table.SetColumnWidth(col, widths[col]);
+            for (var row = 0; row < rowCount; row++)
+                table.SetRowHeight(row, Math.Max(8.0, heights[row]));
+        }
+
         private static void InsertTable(Database database, CalculationReport report, Point3d point,
             HceLegacyProfile profile, bool drawLabels)
         {
@@ -1230,13 +1306,29 @@ namespace HNL.CeilingEstimator.AutoCAD
                     database.CurrentSpaceId, OpenMode.ForWrite);
                 using (var table = new Table())
                 {
+                    var cadTableStyleId = database.Tablestyle;
+                    if (!string.IsNullOrEmpty(profile.CadTableStyle))
+                    {
+                        var tableStyles = (DBDictionary)transaction.GetObject(
+                            database.TableStyleDictionaryId, OpenMode.ForRead);
+                        if (!tableStyles.Contains(profile.CadTableStyle))
+                            throw new InvalidOperationException("HCE CAD Table Style is missing from DWG: " +
+                                profile.CadTableStyle);
+                        cadTableStyleId = tableStyles.GetAt(profile.CadTableStyle);
+                    }
+                    if (cadTableStyleId.IsNull)
+                        throw new InvalidOperationException("HCE DWG has no active CAD Table Style");
+                    table.TableStyle = cadTableStyleId;
+                    var cadTableStyle = (TableStyle)transaction.GetObject(
+                        cadTableStyleId, OpenMode.ForRead);
                     table.SetSize(rows, 4);
                     var textHeight = profile.TableTextHeight;
                     if (textHeight < 0 || textHeight > 10000 ||
                         double.IsNaN(textHeight) || double.IsInfinity(textHeight))
                         throw new InvalidOperationException("Invalid HCE Table text height");
-                    table.SetRowHeight(Math.Max(55, textHeight * 1.6));
-                    table.SetColumnWidth(Math.Max(450, textHeight * 14));
+                    // Initial dimensions are temporary: exact MTEXT fit occurs below.
+                    table.SetRowHeight(12);
+                    table.SetColumnWidth(55);
                     var styleId = ObjectId.Null;
                     if (!string.IsNullOrEmpty(profile.TableTextStyle))
                     {
@@ -1376,6 +1468,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                                 if (!styleId.IsNull) cell.TextStyleId = styleId;
                             }
                     }
+                    FitHceTableToText(table, database, cadTableStyle, rows,
+                        groupHeadingRow, cutDetailsEnabled, cutHeadingRow, cutRows.Count);
                     table.GenerateLayout();
                     currentSpace.AppendEntity(table);
                     transaction.AddNewlyCreatedDBObject(table, true);

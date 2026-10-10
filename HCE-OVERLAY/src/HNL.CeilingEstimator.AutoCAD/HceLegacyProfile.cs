@@ -17,6 +17,8 @@ namespace HNL.CeilingEstimator.AutoCAD
         // 0-height and empty style preserve RC5.3.3 Table formatting unchanged.
         // These are presentation settings, not core tile/packing options.
         public string TableTextStyle = string.Empty;
+        // Independent ACAD_TABLESTYLE selection; blank follows DWG CTABLESTYLE.
+        public string CadTableStyle = string.Empty;
         public double TableTextHeight = 0.0;
         // Legacy separate height for N/G/L labels placed in the CAD drawing.
         public double LabelTextHeight = 100.0;

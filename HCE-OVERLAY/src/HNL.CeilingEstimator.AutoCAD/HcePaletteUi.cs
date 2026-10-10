@@ -101,6 +101,7 @@ namespace HNL.CeilingEstimator.AutoCAD
         private CheckBox? _legacySnap;
         private TextBox? _legacyTolerance;
         private ComboBox? _legacyTableStyle;
+        private ComboBox? _legacyCadTableStyle;
         private TextBox? _legacyTableHeight;
         private TextBox? _legacyLabelHeight;
         private CheckBox? _legacyCutList;
@@ -367,7 +368,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var content = new StackPanel { Margin = new Thickness(0, 9, 0, 10) };
 
             var selection = Section("01  Chọn Hatch", "#2497FF");
-            selection.Children.Add(CommandButton("Chọn Hatch và tính tấm", "HCECALC", true));
+            selection.Children.Add(CommandButton("Chọn Hatch và tạo bảng", "HCECALC", true));
             selection.Children.Add(Text("Chọn Hatch trên CAD, rồi Enter.",
                 10, _muted, FontWeights.Normal));
             content.Children.Add(Card(selection));
@@ -377,7 +378,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var result = Section("03  Kết quả và bảng", "#F59E0B");
             result.Children.Add(Text("Kết quả hiện trên Command Line. Hatch chưa rõ lưới hoặc đơn vị sẽ cần xác nhận.",
                 11, _muted, FontWeights.Normal));
-            result.Children.Add(Text("Table: chèn bảng và mã ô N/G/L. Exit: không ghi DWG.",
+            result.Children.Add(Text("Tính xong chọn vị trí đặt bảng. Nhấn Esc để hủy; mã N/G/L tùy theo quy mô.",
                 11, _muted, FontWeights.Normal));
             result.Children.Add(Text("Chưa hỗ trợ xem trước hình học từng tấm.",
                 10, Brush("#E5A84E"), FontWeights.SemiBold));
@@ -438,10 +439,27 @@ namespace HNL.CeilingEstimator.AutoCAD
             wrapped.Children.Add(Card(config));
             wrapped.Children.Add(Card(gridSection));
             var table = Section("Bảng CAD", "#A78BFA");
+            var cadStyleRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            cadStyleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
+            cadStyleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            cadStyleRow.Children.Add(Text("Table Style (bảng)", 11, _muted, FontWeights.Normal));
+            _legacyCadTableStyle = new ComboBox { MinHeight = 27, Foreground = _primary };
+            _legacyCadTableStyle.SelectionChanged += (sender, args) =>
+            {
+                if (_loadingLegacyControls || _legacyCadTableStyle.SelectedIndex < 0) return;
+                var profile = ActiveLegacyProfile();
+                if (profile == null) return;
+                profile.CadTableStyle = _legacyCadTableStyle.SelectedIndex == 0 ? string.Empty :
+                    _legacyCadTableStyle.SelectedItem?.ToString() ?? string.Empty;
+                RefreshLegacyControls();
+            };
+            Grid.SetColumn(_legacyCadTableStyle, 1);
+            cadStyleRow.Children.Add(_legacyCadTableStyle);
+            table.Children.Add(cadStyleRow);
             var styleRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
             styleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             styleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            styleRow.Children.Add(Text("Kiểu chữ bảng", 11, _muted, FontWeights.Normal));
+            styleRow.Children.Add(Text("Text Style (chữ)", 11, _muted, FontWeights.Normal));
             _legacyTableStyle = new ComboBox
             {
                 MinHeight = 27, Foreground = _primary
@@ -541,7 +559,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             cutModeRow.Children.Add(_legacyCutMode);
             table.Children.Add(cutModeRow);
             table.Children.Add(Text(
-                "0 = dùng cỡ chữ bảng mặc định. Liệt kê mảnh biên chỉ áp dụng cho bảng MỚI khi chọn HCECALC > Table; không sửa bảng đã tạo.",
+                "Cỡ chữ 0 = theo Table Style. Chiều rộng cột và chiều cao hàng tự khớp MTEXT; chỉ áp dụng cho bảng mới.",
                 10, _muted, FontWeights.Normal));
             wrapped.Children.Add(Card(table));
             var current = Section("Cấu hình hiện tại", "#F59E0B");
@@ -666,6 +684,45 @@ namespace HNL.CeilingEstimator.AutoCAD
                 _legacyValidation.Text = "HNL Tool: Cao mã ô phải lớn hơn 0 và không quá 10000 mm.";
         }
 
+        private void RefreshCadTableStyles(HceLegacyProfile profile)
+        {
+            if (_legacyCadTableStyle == null) return;
+            _legacyCadTableStyle.Items.Clear();
+            _legacyCadTableStyle.Items.Add("(Theo CTABLESTYLE hiện hành)");
+            var doc = CadApplication.DocumentManager.MdiActiveDocument;
+            if (doc != null)
+            {
+                try
+                {
+                    using (var tr = doc.Database.TransactionManager.StartTransaction())
+                    {
+                        var styles = (DBDictionary)tr.GetObject(
+                            doc.Database.TableStyleDictionaryId, OpenMode.ForRead);
+                        var names = new System.Collections.Generic.List<string>();
+                        foreach (DBDictionaryEntry entry in styles) names.Add(entry.Key);
+                        names.Sort(StringComparer.OrdinalIgnoreCase);
+                        foreach (var name in names) _legacyCadTableStyle.Items.Add(name);
+                    }
+                }
+                catch (System.Exception)
+                {
+                    // UI refresh never mutates the DWG; creation validates missing styles.
+                }
+            }
+            var selected = 0;
+            for (var i = 1; i < _legacyCadTableStyle.Items.Count; i++)
+                if (string.Equals(_legacyCadTableStyle.Items[i]?.ToString(),
+                    profile.CadTableStyle, StringComparison.OrdinalIgnoreCase))
+                { selected = i; break; }
+            // Preserve a style that was later removed; InsertTable reports it explicitly.
+            if (selected == 0 && !string.IsNullOrEmpty(profile.CadTableStyle))
+            {
+                _legacyCadTableStyle.Items.Add(profile.CadTableStyle);
+                selected = _legacyCadTableStyle.Items.Count - 1;
+            }
+            _legacyCadTableStyle.SelectedIndex = selected;
+        }
+
         private void RefreshTableStyles(HceLegacyProfile profile)
         {
             if (_legacyTableStyle == null) return;
@@ -723,6 +780,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     _legacyTolerance.Text = profile.Tolerance.ToString("0.###", CultureInfo.CurrentCulture);
                     _legacyTolerance.IsEnabled = profile.SnapEnabled;
                 }
+                RefreshCadTableStyles(profile);
                 RefreshTableStyles(profile);
                 if (_legacyTableHeight != null)
                     _legacyTableHeight.Text = profile.TableTextHeight.ToString("0.###", CultureInfo.CurrentCulture);
@@ -741,7 +799,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                     d.IsEnabled = profile.Module != "S";
                 if (_legacyStatus != null)
                     _legacyStatus.Text = profile.Summary() +
-                        "\nLiệt kê mảnh biên: " + (profile.CutListEnabled ? "BẬT" : "TẮT") +
+                        "\nTable Style: " + (string.IsNullOrEmpty(profile.CadTableStyle)
+                            ? "Theo DWG" : profile.CadTableStyle) +
+                        " | Liệt kê: " + (profile.CutListEnabled ? "BẬT" : "TẮT") +
                         " | Chế độ: " + (profile.CutListMode == "D" ? "Chi tiết" : "Tổng hợp");
                 if (_legacyValidation != null) _legacyValidation.Text = "";
             }
