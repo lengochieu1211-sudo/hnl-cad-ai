@@ -294,6 +294,19 @@ jobs:
           if($cmd.Contains('repair Hatch boundary before ceiling quantities')){
             throw 'Obsolete blanket NotClosed rejection remains'
           }
+          foreach($part in @('input.PatternBaseVerified = havePatternBase',
+                 'new Point2(phaseX, phaseY)',
+                 'TryGetFirstPatternBase(hatch, out phaseX, out phaseY)',
+                 'profile.GridMode == "3" && input.UserGridVerified',
+                 '!input.PatternBaseVerified',
+                 'DXF 43/44 phase unavailable',
+                 'phasePolicy=',
+                 'grid anchored to DXF 43/44=')) {
+            if(-not $cmd.Contains($part)) { throw "Missing HCE 43/44 phase safety contract: $part" }
+          }
+          if($cmd.Contains('phasePolicy=Hatch.Origin')) { throw 'Obsolete Hatch.Origin-only phase path' }
+          if(-not $cmd.Contains('new GridFrame(havePatternBase')) { throw 'LISP phase not fed to actual Core GridFrame' }
+          Write-Host 'HCE DXF 43/44 LISP PHASE ADAPTER REGRESSION STATIC GATE PASS'
           Write-Host 'HCE NOTCLOSED NEAR-SEAM RECOVERY SAFETY GATE PASS'
           Write-Host 'HCE RC13 CUT LIST SUMMARY/DETAIL UI + TABLE STATIC GATE PASS'
           Write-Host 'HCE VIETNAMESE TABLE + N/G/L LABEL + PER-DWG HEIGHT STATIC GATE PASS'
