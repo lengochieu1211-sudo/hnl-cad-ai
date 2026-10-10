@@ -273,6 +273,14 @@ jobs:
             if(-not $ui.Contains($part)) { throw "Missing summary/detail selector binding: $part" }
           }
           if($ui.Contains('_legacyCutMode.IsEnabled = profile.CutListEnabled')) { throw 'Cut list mode must not be disabled while checkbox is off' }
+           foreach($part in @('Cut-piece list is OFF. Include in new Table', 'cutListChoice.Keywords.Add("Summary")',
+                             'cutListChoice.Keywords.Add("Detail")', 'cutListChoice.Keywords.Add("NoList")',
+                             'New Table cut-piece list:', 'Existing CAD tables are not modified.')) {
+             if(-not $cmd.Contains($part)){ throw "Missing cut-list runtime fallback: $part" }
+           }
+           foreach($part in @('Liệt kê mảnh biên: ', 'chỉ áp dụng cho bảng MỚI')) {
+             if(-not $ui.Contains($part)){ throw "Missing cut-list UI applied-state indication: $part" }
+           }
            foreach($part in @('BuildCutSizeRows', 'RoundCutDimension', 'MidpointRounding.AwayFromZero', 'cutRows.Count',
                             'SourceDisplay = sourceName', 'details.Count != expected',
                             'cutListIsDetailed ? "Mã"', 'detailedCount > 2000', 'table.MergeCells(CellRange.Create(table, cutHeadingRow')) {

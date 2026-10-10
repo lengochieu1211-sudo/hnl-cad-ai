@@ -534,16 +534,14 @@ namespace HNL.CeilingEstimator.AutoCAD
                 profile.CutListMode = _legacyCutMode.SelectedIndex == 1 ? "D" : "S";
                 // Choosing Summary/Detail should also turn on the cut list.
                 if (!profile.CutListEnabled)
-                {
                     profile.CutListEnabled = true;
-                    RefreshLegacyControls();
-                }
+                RefreshLegacyControls();
             };
             Grid.SetColumn(_legacyCutMode, 1);
             cutModeRow.Children.Add(_legacyCutMode);
             table.Children.Add(cutModeRow);
             table.Children.Add(Text(
-                "0 = dùng cỡ chữ bảng mặc định.",
+                "0 = dùng cỡ chữ bảng mặc định. Liệt kê mảnh biên chỉ áp dụng cho bảng MỚI khi chọn HCECALC > Table; không sửa bảng đã tạo.",
                 10, _muted, FontWeights.Normal));
             wrapped.Children.Add(Card(table));
             var current = Section("Cấu hình hiện tại", "#F59E0B");
@@ -741,7 +739,10 @@ namespace HNL.CeilingEstimator.AutoCAD
                     p.IsEnabled = profile.Module == "M";
                 if (_legacySelectors.TryGetValue("Direction", out var d))
                     d.IsEnabled = profile.Module != "S";
-                if (_legacyStatus != null) _legacyStatus.Text = profile.Summary();
+                if (_legacyStatus != null)
+                    _legacyStatus.Text = profile.Summary() +
+                        "\nLiệt kê mảnh biên: " + (profile.CutListEnabled ? "BẬT" : "TẮT") +
+                        " | Chế độ: " + (profile.CutListMode == "D" ? "Chi tiết" : "Tổng hợp");
                 if (_legacyValidation != null) _legacyValidation.Text = "";
             }
             finally { _loadingLegacyControls = false; }

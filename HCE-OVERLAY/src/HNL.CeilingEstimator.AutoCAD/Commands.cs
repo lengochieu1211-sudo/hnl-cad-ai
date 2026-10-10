@@ -465,6 +465,40 @@ namespace HNL.CeilingEstimator.AutoCAD
                     return;
                 }
 
+                // Runtime fallback for disabled/old palette state: never silently omit
+                // cut sizes from a newly requested CAD Table without showing the choice.
+                // The override is local to this Table; calculation/packing is unchanged.
+                if (!profile.CutListEnabled)
+                {
+                    var cutListChoice = new PromptKeywordOptions(
+                        "\nHNL Tool - Cut-piece list is OFF. Include in new Table [Summary/Detail/NoList] <NoList>: ")
+                    {
+                        AllowNone = true
+                    };
+                    cutListChoice.Keywords.Add("Summary");
+                    cutListChoice.Keywords.Add("Detail");
+                    cutListChoice.Keywords.Add("NoList");
+                    var cutResponse = editor.GetKeywords(cutListChoice);
+                    if (cutResponse.Status != PromptStatus.OK &&
+                        cutResponse.Status != PromptStatus.None)
+                    {
+                        editor.WriteMessage("\nHNL Tool - Cut-list choice cancelled; DWG unchanged.");
+                        return;
+                    }
+                    if (cutResponse.Status == PromptStatus.OK &&
+                        (string.Equals(cutResponse.StringResult, "Summary", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(cutResponse.StringResult, "Detail", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        profile.CutListEnabled = true;
+                        profile.CutListMode = string.Equals(cutResponse.StringResult, "Detail",
+                            StringComparison.OrdinalIgnoreCase) ? "D" : "S";
+                    }
+                }
+                editor.WriteMessage("\nHNL Tool - New Table cut-piece list: " +
+                    (profile.CutListEnabled
+                        ? (profile.CutListMode == "D" ? "DETAIL" : "SUMMARY")
+                        : "OFF") + ". Existing CAD tables are not modified.");
+
                 // Like the original LISP, detailed cut lists can be slow on large Hatches.
                 // Confirm before allocating thousands of AutoCAD Table rows.
                 if (profile.CutListEnabled && profile.CutListMode == "D")
