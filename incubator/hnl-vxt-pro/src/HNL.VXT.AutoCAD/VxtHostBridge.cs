@@ -18,6 +18,7 @@ namespace HNL.VXT.AutoCAD
         private Autodesk.AutoCAD.ApplicationServices.Document _pendingPreviewDocument;
         private LayInCeilingSettings _pendingLayInPreviewSettings;
         private Autodesk.AutoCAD.ApplicationServices.Document _pendingLayInPreviewDocument;
+        private bool _stopRequested;
 
         public VxtHostBridge()
         {
@@ -137,6 +138,7 @@ namespace HNL.VXT.AutoCAD
 
         public void RequestPreview(VxtSettings settings)
         {
+            if (_stopRequested || settings == null) return;
             var session = VxtSession.Current;
             var previousMode = session.Settings?.MainDirection ?? MainDirectionMode.Horizontal;
             session.Settings = settings.Clone();
@@ -230,7 +232,7 @@ namespace HNL.VXT.AutoCAD
 
         public void RequestLayInPreview(LayInCeilingSettings settings)
         {
-            if (settings == null) return;
+            if (_stopRequested || settings == null) return;
             VxtSession.Current.LayInSettings = settings.Clone();
             _pendingLayInPreviewSettings = settings.Clone();
             _pendingLayInPreviewDocument = Application.DocumentManager.MdiActiveDocument;
@@ -342,6 +344,7 @@ namespace HNL.VXT.AutoCAD
         private void PreviewTimer_Tick(object sender, EventArgs e)
         {
             _previewTimer.Stop();
+            if (_stopRequested) return;
             if (_pendingPreviewSettings == null) return;
             if (!ReferenceEquals(Application.DocumentManager.MdiActiveDocument, _pendingPreviewDocument))
             {
@@ -367,6 +370,7 @@ namespace HNL.VXT.AutoCAD
         private void LayInPreviewTimer_Tick(object sender, EventArgs e)
         {
             _layInPreviewTimer.Stop();
+            if (_stopRequested) return;
             if (_pendingLayInPreviewSettings == null) return;
             if (!ReferenceEquals(Application.DocumentManager.MdiActiveDocument, _pendingLayInPreviewDocument))
             {
@@ -386,6 +390,28 @@ namespace HNL.VXT.AutoCAD
             var session = VxtSession.Current;
             session.LayInSettings = settings.Clone();
             Send(session.HasBoundary ? "HNLCFLAYINPREVIEW " : "HNLCFLAYINCLEAR ");
+        }
+
+        public void RequestStopHcf()
+        {
+            // Only cancel pending modeless work here. Native graphics must be cleared later
+            // from the HNLCFSTOP modal command context, never directly from WPF callbacks.
+            PausePreviews();
+            Send("HNLCFSTOP ");
+        }
+
+        internal void PausePreviews()
+        {
+            _stopRequested = true;
+            CancelPendingPreview();
+            CancelPendingLayInPreview();
+        }
+
+        internal void ResumePreviews()
+        {
+            CancelPendingPreview();
+            CancelPendingLayInPreview();
+            _stopRequested = false;
         }
 
         private void CancelPendingPreview()

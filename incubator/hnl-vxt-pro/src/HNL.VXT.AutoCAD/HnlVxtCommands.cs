@@ -197,6 +197,12 @@ namespace HNL.VXT.AutoCAD
         }
 
         // Read-only on-demand stability snapshot; no native Drawable mutation.
+        [CommandMethod("HNLCFSTOP", CommandFlags.Modal)]
+        public void StopHcf()
+        {
+            VxtPaletteService.StopInCommandContext();
+        }
+
         [CommandMethod("HNLCFHEALTH", CommandFlags.Modal)]
         public void StabilitySnapshot()
         {
@@ -217,6 +223,7 @@ namespace HNL.VXT.AutoCAD
         [CommandMethod("HNLVXTPREVIEW", CommandFlags.Modal)]
         public void RefreshPreview()
         {
+            if (!VxtPaletteService.IsActive) return;
             if (!VxtAuthorization.EnsureAuthorized()) return;
             VxtTransientPreview.Instance.Refresh();
         }
@@ -233,6 +240,7 @@ namespace HNL.VXT.AutoCAD
         [CommandMethod("HNLCFLAYINPREVIEW", CommandFlags.Modal)]
         public void LayInPreview()
         {
+            if (!VxtPaletteService.IsActive) return;
             if (!VxtAuthorization.EnsureAuthorized()) return;
             LayInCadRuntime.Preview();
         }

@@ -21,6 +21,7 @@ namespace HNL.VXT.UI.Hosting
         void HighlightBoundary(int boundaryIndex);
         void RequestCreate();
         void RequestCreateWithWarning();
+        void RequestStopHcf();
 
         void RequestLayInPreview(LayInCeilingSettings settings);
         void ClearLayInPreview();

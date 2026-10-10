@@ -10,9 +10,12 @@ namespace HNL.VXT.UI.Views
 {
     public partial class VxtPaletteView : UserControl
     {
+        private readonly IVxtHostBridge _host;
+
         public VxtPaletteView(IVxtHostBridge host)
         {
             InitializeComponent();
+            _host = host;
             ApplyTheme(host.IsDarkTheme);
             ViewModel = new VxtPaletteViewModel(host);
             DataContext = ViewModel;
@@ -22,6 +25,16 @@ namespace HNL.VXT.UI.Views
         }
 
         public VxtPaletteViewModel ViewModel { get; }
+
+        private void StopHcfButton_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "Dừng Preview và tắt HCF? AutoCAD vẫn tiếp tục chạy.",
+                "HNL Tool - Tắt HCF",
+                MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
+            if (result == MessageBoxResult.Yes)
+                _host.RequestStopHcf();
+        }
 
         private void AddDimensionResourceFields()
         {

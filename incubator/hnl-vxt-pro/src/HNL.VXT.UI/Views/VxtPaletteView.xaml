@@ -523,7 +523,7 @@
                         <Grid Background="{TemplateBinding Background}" SnapsToDevicePixels="True">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="36"/>
+                                <ColumnDefinition Width="56"/>
                             </Grid.ColumnDefinitions>
                             <Border Grid.Column="1" Background="{DynamicResource CardBackground}"
                                     BorderBrush="{DynamicResource CardBorder}"
@@ -550,9 +550,9 @@
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Width" Value="30"/>
-            <Setter Property="Height" Value="106"/>
-            <Setter Property="Padding" Value="4,9"/>
+            <Setter Property="Width" Value="48"/>
+            <Setter Property="Height" Value="58"/>
+            <Setter Property="Padding" Value="3,5"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -570,9 +570,6 @@
                                               VerticalAlignment="Center"
                                               Margin="{TemplateBinding Padding}"
                                               RecognizesAccessKey="True">
-                                <ContentPresenter.LayoutTransform>
-                                    <RotateTransform Angle="-90"/>
-                                </ContentPresenter.LayoutTransform>
                             </ContentPresenter>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -616,7 +613,12 @@
         </Grid.RowDefinitions>
 
         <TabControl Grid.Row="1" Style="{StaticResource CeilingModeTabControl}" SelectedIndex="{Binding SelectedCeilingTabIndex, Mode=TwoWay}" Background="{DynamicResource AppBackground}">
-            <TabItem Header="Trần chìm" Style="{StaticResource CeilingModeTabItem}">
+            <TabItem Style="{StaticResource CeilingModeTabItem}">
+                <TabItem.Header>
+                    <TextBlock TextAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type TabItem}}}">
+                        <Run Text="Trần"/><LineBreak/><Run Text="chìm"/>
+                    </TextBlock>
+                </TabItem.Header>
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8">
             <StackPanel>
                 <!-- Preset and optimizer: keep the Core selector visible in the concealed tab.
@@ -1055,7 +1057,12 @@
             </StackPanel>
         </ScrollViewer>
             </TabItem>
-            <TabItem Header="Trần nổi" Style="{StaticResource CeilingModeTabItem}">
+            <TabItem Style="{StaticResource CeilingModeTabItem}">
+                <TabItem.Header>
+                    <TextBlock TextAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type TabItem}}}">
+                        <Run Text="Trần"/><LineBreak/><Run Text="nổi"/>
+                    </TextBlock>
+                </TabItem.Header>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="6">
                     <StackPanel DataContext="{Binding LayIn}">
                         <!-- The three essential stages stay open; advanced sections are compact. -->
@@ -1225,8 +1232,19 @@
             </TabItem>
         </TabControl>
 
+        <!-- Persistent shared STOP action in the narrow right rail, below both tabs. -->
+        <Button x:Name="StopHcfButton" Grid.Row="1" HorizontalAlignment="Right"
+                VerticalAlignment="Bottom" Width="48" Height="56" Margin="0,0,4,8"
+                Style="{StaticResource CompactButton}" Click="StopHcfButton_Click"
+                ToolTip="Tắt HCF và dừng Preview; AutoCAD vẫn mở">
+            <StackPanel HorizontalAlignment="Center">
+                <TextBlock Text="Tắt" TextAlignment="Center" Foreground="#DC2626" FontWeight="SemiBold"/>
+                <TextBlock Text="HCF" TextAlignment="Center" FontWeight="SemiBold"/>
+            </StackPanel>
+        </Button>
+
         <!-- Reserve the right tab rail so Create buttons do not overlap tab labels. -->
-        <Border Grid.Row="2" Margin="0,0,36,0" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="6,4">
+        <Border Grid.Row="2" Margin="0,0,56,0" Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="6,4">
             <StackPanel>
                 <Button x:Name="ConcealedCreateButton" HorizontalAlignment="Stretch">
                     <Button.Style>

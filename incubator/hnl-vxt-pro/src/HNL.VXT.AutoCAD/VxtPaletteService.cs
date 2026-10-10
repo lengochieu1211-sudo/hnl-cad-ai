@@ -16,6 +16,9 @@ namespace HNL.VXT.AutoCAD
         private static readonly Guid PaletteGuid = new Guid("B7E5D9C2-3A1F-4D08-9AC8-1DAB6B3F7821");
         private static PaletteSet _palette;
         private static VxtPaletteView _view;
+        private static VxtHostBridge _bridge;
+        private static bool _active;
+        private static int _uiPolishGeneration;
         private static bool _uiPolishScheduled;
         private static bool _uiPolishCompleted;
 
@@ -24,12 +27,14 @@ namespace HNL.VXT.AutoCAD
             // Explicit user invocation is the first point where runtime document hooks are enabled.
             // AutoCAD startup remains completely free of VXT Session/Transient/WPF work.
             PluginEntry.EnableRuntimeHooks();
+            _active = true;
+            _bridge?.ResumePreviews();
             TraceUiStartup("HCF Show begin");
 
             if (_palette == null)
             {
-                var bridge = new VxtHostBridge();
-                _view = new VxtPaletteView(bridge);
+                _bridge = new VxtHostBridge();
+                _view = new VxtPaletteView(_bridge);
                 VxtSession.Current.ViewModel = _view.ViewModel;
 
                 // Keep first-open work deliberately light. AutoCAD hosts PaletteSet on its main
@@ -53,7 +58,7 @@ namespace HNL.VXT.AutoCAD
                 TraceUiStartup("Palette caption: " + _palette.Name);
 
                 TraceUiStartup("Palette visible; scheduling UI polish");
-                ScheduleUiPolish(bridge);
+                ScheduleUiPolish(_bridge);
                 return;
             }
 
@@ -64,15 +69,46 @@ namespace HNL.VXT.AutoCAD
             // A previous stage exception is fail-open; reopening the palette must never enqueue
             // another copy of the same startup pipeline.
             if (!_uiPolishScheduled && !_uiPolishCompleted && _view != null)
-                ScheduleUiPolish(new VxtHostBridge());
+                ScheduleUiPolish(_bridge);
 
             TraceUiStartup("HCF Show end");
         }
 
+        internal static bool IsActive => _active;
+
+        internal static void StopInCommandContext()
+        {
+            var doc = Autodesk.AutoCAD.ApplicationServices.Core.Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            _bridge?.PausePreviews();
+
+            // Native erase is safe only inside AutoCAD's modal command context.
+            // If any graphic remains attached, leave HCF running and never force-dispose.
+            VxtTransientPreview.Instance.Clear();
+            LayInCadRuntime.ClearPreview();
+            if (VxtTransientPreview.Instance.TrackedDrawableCount > 0 ||
+                LayInCadRuntime.ActiveDrawableCount > 0)
+            {
+                _bridge?.ResumePreviews();
+                doc.Editor.WriteMessage("\nHNL Tool - Không thể tắt HCF: Preview cũ chưa xóa an toàn.");
+                return;
+            }
+
+            _active = false;
+            ++_uiPolishGeneration;
+            _uiPolishScheduled = false;
+            if (_palette != null)
+                _palette.Visible = false;
+            PluginEntry.DisableRuntimeHooks();
+            VxtSession.ReleaseDocument(null);
+            doc.Editor.WriteMessage("\nHNL Tool - Đã tắt HCF; AutoCAD vẫn chạy. Gõ HCF để mở lại.");
+        }
+
         private static void ScheduleUiPolish(VxtHostBridge bridge)
         {
-            if (_view == null || _uiPolishScheduled || _uiPolishCompleted) return;
+            if (!_active || _view == null || _uiPolishScheduled || _uiPolishCompleted) return;
             _uiPolishScheduled = true;
+            var generation = ++_uiPolishGeneration;
 
             var stages = new Queue<KeyValuePair<string, Action>>();
             stages.Enqueue(new KeyValuePair<string, Action>(
@@ -109,11 +145,12 @@ namespace HNL.VXT.AutoCAD
                 "PropertiesLayout",
                 () => VxtPalettePropertiesLayout.Apply(_view)));
 
-            RunNextUiStage(stages);
+            RunNextUiStage(stages, generation);
         }
 
-        private static void RunNextUiStage(Queue<KeyValuePair<string, Action>> stages)
+        private static void RunNextUiStage(Queue<KeyValuePair<string, Action>> stages, int generation)
         {
+            if (!_active || generation != _uiPolishGeneration) return;
             if (_view == null)
             {
                 _uiPolishScheduled = false;
@@ -132,6 +169,7 @@ namespace HNL.VXT.AutoCAD
             _view.Dispatcher.BeginInvoke(
                 new Action(() =>
                 {
+                    if (!_active || generation != _uiPolishGeneration) return;
                     var timer = Stopwatch.StartNew();
                     TraceUiStartup("START " + stage.Key);
                     try
@@ -151,7 +189,7 @@ namespace HNL.VXT.AutoCAD
                     }
                     finally
                     {
-                        RunNextUiStage(stages);
+                        RunNextUiStage(stages, generation);
                     }
                 }),
                 DispatcherPriority.ApplicationIdle);

@@ -22,7 +22,18 @@ namespace HNL.VXT.AutoCAD
         public void Terminate()
         {
             if (!_runtimeHooksEnabled) return;
+            DisableRuntimeHooks();
 
+            // Do not call TransientManager during shutdown. Abandon only releases HNL ownership
+            // of managed wrapper collections and leaves native graphics teardown to AutoCAD.
+            try { VxtTransientPreview.Instance.AbandonForDocumentTransition(); } catch { }
+            try { LayInCadRuntime.AbandonForDocumentTransition(); } catch { }
+            try { VxtSession.ReleaseDocument(null); } catch { }
+        }
+
+        internal static void DisableRuntimeHooks()
+        {
+            if (!_runtimeHooksEnabled) return;
             try
             {
                 var documents = Application.DocumentManager;
@@ -33,14 +44,7 @@ namespace HNL.VXT.AutoCAD
             {
                 // AutoCAD may already be tearing down managed wrappers.
             }
-
             _runtimeHooksEnabled = false;
-
-            // Do not call TransientManager during shutdown. Abandon only releases HNL ownership
-            // of managed wrapper collections and leaves native graphics teardown to AutoCAD.
-            try { VxtTransientPreview.Instance.AbandonForDocumentTransition(); } catch { }
-            try { LayInCadRuntime.AbandonForDocumentTransition(); } catch { }
-            try { VxtSession.ReleaseDocument(null); } catch { }
         }
 
         internal static void EnableRuntimeHooks()
