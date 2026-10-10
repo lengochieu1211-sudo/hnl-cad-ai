@@ -96,7 +96,10 @@ namespace HNL.CeilingEstimator.AutoCAD
                         if (TryExtractHatch(hatch, out extracted, out failure))
                             editor.WriteMessage("\n  bridge=accepted areaSource=" +
                                 (extracted.AreaFromBoundary ? "boundary-fallback" : "native") +
-                                " phasePolicy=Hatch.Origin" +
+                                " phasePolicy=" + (extracted.PatternBaseVerified
+                                    ? "DXF43_44" : "Hatch.Origin-FALLBACK") +
+                                " chosenGridOrigin=" + Fmt(extracted.Frame.Origin.X) + "," +
+                                Fmt(extracted.Frame.Origin.Y) +
                                 " originVs43_44=" + PatternBaseDeltaText(hatch));
                         else
                             editor.WriteMessage("\n  bridge=rejected: " + failure);
@@ -157,6 +160,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                                     " areaSource=" + (input.AreaFromBoundary ? "boundary-fallback" : "native") +
                                     " angleRad=" + Fmt(input.Frame.AngleRadians) +
                                     " gridVerified=" + input.UserGridVerified +
+                                    " phasePolicy=" + (input.PatternBaseVerified
+                                        ? "DXF43_44" : "Hatch.Origin-FALLBACK") +
                                     " nearClosedRecovered=" + input.RecoveredNearClosed +
                                     " joinGapMm=" + Fmt(input.NearClosedGapMm));
                             }
@@ -212,9 +217,9 @@ namespace HNL.CeilingEstimator.AutoCAD
             }
         }
 
-        // RC5.4.1 diagnostic only. Legacy DEMTC RC18.5B.4C reads the first
-        // pattern-definition base point (DXF 43/44) before falling back to Origin.
-        // Do not feed this into Core until real-DWG phase parity is proven.
+        // Match original DEMTC RC18.5B.4C: for USER double-pattern grids the
+        // first pattern-definition line base (DXF 43/44) is the visible phase.
+        // Hatch.Origin alone is not equivalent to this saved pattern-line base.
         private static bool TryGetFirstPatternBase(Hatch hatch, out double x, out double y)
         {
             x = 0.0;
@@ -327,11 +332,27 @@ namespace HNL.CeilingEstimator.AutoCAD
                             string reason;
                             if (TryExtractHatch(hatch, out input, out reason, profile.Family))
                             {
+                                // Grid-by-Hatch must not silently use the wrong phase.
+                                // Modes 1/2 are intentionally independent of Hatch base.
+                                if (profile.GridMode == "3" && input.UserGridVerified &&
+                                    !input.PatternBaseVerified)
+                                {
+                                    rejected++;
+                                    editor.WriteMessage("\nHNL Tool - Rejected Hatch handle=" +
+                                        hatch.Handle + ": DXF 43/44 phase unavailable; " +
+                                        "cannot certify Theo Hatch grid (use HCEQA).");
+                                    continue;
+                                }
                                 if (profile.GridMode == "1")
                                     input.Frame = new GridFrame(new Point2(0, 0), 0);
                                 else if (profile.GridMode == "2" && chosenGridOrigin.HasValue)
                                     input.Frame = new GridFrame(chosenGridOrigin.Value, chosenGridAngle);
                                 inputs.Add(input);
+                                if (profile.GridMode == "3" && input.PatternBaseVerified)
+                                    editor.WriteMessage("\nHNL Tool - Hatch " + input.Handle +
+                                        " grid anchored to DXF 43/44=" +
+                                        Fmt(input.Frame.Origin.X) + "," +
+                                        Fmt(input.Frame.Origin.Y) + " (LISP parity).");
                                 if (input.RecoveredNearClosed)
                                     editor.WriteMessage("\nHNL Tool - Hatch handle=" + input.Handle +
                                         " NotClosed gap=" + Fmt(input.NearClosedGapMm) +
@@ -773,8 +794,13 @@ namespace HNL.CeilingEstimator.AutoCAD
             input.GroupKey = hatch.Layer + " | ACI=" +
                 hatch.Color.ColorIndex.ToString(CultureInfo.InvariantCulture) +
                 " | " + hatch.PatternName;
-            input.Frame = new GridFrame(
-                new Point2(hatch.Origin.X, hatch.Origin.Y), hatch.PatternAngle);
+            double phaseX, phaseY;
+            var havePatternBase = userGridVerified &&
+                TryGetFirstPatternBase(hatch, out phaseX, out phaseY);
+            input.PatternBaseVerified = havePatternBase;
+            input.Frame = new GridFrame(havePatternBase
+                ? new Point2(phaseX, phaseY)
+                : new Point2(hatch.Origin.X, hatch.Origin.Y), hatch.PatternAngle);
             input.Segments = segments;
             input.Area = area;
             input.AreaFromBoundary = usedBoundaryArea;
@@ -1341,6 +1367,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             public double PatternScale;
             public string PatternName = string.Empty;
             public bool UserGridVerified;
+            public bool PatternBaseVerified;
         }
 
         private sealed class CalculationReport
