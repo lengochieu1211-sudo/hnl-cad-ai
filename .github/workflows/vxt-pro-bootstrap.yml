@@ -358,11 +358,11 @@ jobs:
               -not $paletteService.Contains('B7E5D9C2-3A1F-4D08-9AC8-1DAB6B3F7821') -or
               -not $ceilingUi.Contains('MinWidth="0"') -or
               -not $ceilingUi.Contains('<Border Grid.Column="1" Background="{DynamicResource CardBackground}"') -or
-              -not $ceilingUi.Contains('BorderThickness="1,0,0,0" Padding="3,8,3,6"') -or
+              -not $ceilingUi.Contains('BorderThickness="1,0,0,0" Padding="2,5,2,5"') -or
               -not $comboChrome.Contains('ApplyStockComboChrome(combo, combo.IsEnabled ? primary : secondary, input, border);') -or
               -not $comboChrome.Contains('SystemColors.ControlLightBrushKey') -or
-              -not $ceilingUi.Contains('<Run Text="Trần"/><LineBreak/><Run Text="chìm"/>') -or
-              -not $ceilingUi.Contains('<Run Text="Trần"/><LineBreak/><Run Text="nổi"/>') -or
+              -not $ceilingUi.Contains('Text="Trần chìm"') -or
+              -not $ceilingUi.Contains('Text="Trần nổi"') -or
               -not $ceilingUi.Contains('<Expander Header="4. Ty treo"') -or
               -not $layInLabels.Contains('LayInMainDirectionMode.ParallelShortSide') -or
               -not $layInLabels.Contains('LayInStartMode.Balanced')) {
@@ -456,7 +456,7 @@ jobs:
               throw "Lay-in first-tile Block regression absent: $testName"
             }
           }
-          # Navigation-rail regression: narrow RIGHT mode rail with distinct vector icons, two-line labels and bottom STOP,
+          # Navigation-rail regression: narrow RIGHT 40px rail with vector icons, 90-degree captions and bottom STOP,
           # still bound to the native SelectedCeilingTabIndex; no new state.
           # All Lay-in editor rows use a common 132px label axis and keep
           # Block pick buttons in a dedicated reserved column at narrow docks.
@@ -465,12 +465,12 @@ jobs:
           if (-not $ceilingUi.Contains('x:Key="CeilingModeTabControl"') -or
               -not $ceilingUi.Contains('x:Key="CeilingModeTabItem"') -or
               -not $ceilingUi.Contains('<StackPanel Orientation="Vertical" IsItemsHost="True"') -or
-              -not $ceilingUi.Contains('<ColumnDefinition Width="68"/>') -or
+              -not $ceilingUi.Contains('<ColumnDefinition Width="40"/>') -or
               -not $ceilingUi.Contains('Tag="HCF_RAIL_CONCEALED_ICON"') -or
               -not $ceilingUi.Contains('Tag="HCF_RAIL_LAYIN_ICON"') -or
               -not $ceilingUi.Contains('Tag="HCF_RAIL_STOP_ICON"') -or
-              -not $ceilingUi.Contains('Margin="0,0,68,0"') -or
-              $ceilingUi.Contains('<RotateTransform Angle="-90"/>') -or
+              -not $ceilingUi.Contains('Margin="0,0,40,0"') -or
+              -not $ceilingUi.Contains('<RotateTransform Angle="-90"/>') -or
               -not $ceilingUi.Contains('x:Name="StopHcfButton"') -or
               -not $ceilingUi.Contains('Click="StopHcfButton_Click"') -or
               -not $ceilingUi.Contains('x:Name="PART_SelectedContentHost"') -or
