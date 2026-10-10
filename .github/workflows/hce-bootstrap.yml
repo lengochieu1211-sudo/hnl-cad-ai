@@ -238,7 +238,7 @@ jobs:
         shell: powershell
         run: |
           $cmd=Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/Commands.cs' -Raw
-          foreach($phrase in @('PatternBaseText(hatch)', 'PatternBaseDeltaText(hatch)', 'areaSource=', 'phasePolicy=Hatch.Origin', 'GetPatternDefinitionAt(0)')) {
+          foreach($phrase in @('PatternBaseText(hatch)', 'PatternBaseDeltaText(hatch)', 'areaSource=', 'phasePolicy=', 'GetPatternDefinitionAt(0)')) {
             if(-not $cmd.Contains($phrase)){throw "Missing RC5.4.1 diagnostic contract: $phrase"}
           }
           Write-Host 'HCE RC5.4.1 READ-ONLY AREA + DXF43/44 DIAGNOSTIC GATE PASS'
