@@ -196,6 +196,14 @@ namespace HNL.VXT.AutoCAD
             new VxtDiagnosticCommands().Analyze();
         }
 
+        // Read-only on-demand stability snapshot; no native Drawable mutation.
+        [CommandMethod("HNLCFHEALTH", CommandFlags.Modal)]
+        public void StabilitySnapshot()
+        {
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            VxtStabilityDiagnostics.Capture();
+        }
+
         [CommandMethod("HNLVXTDIAG", CommandFlags.Modal)]
         public void ExportZip()
         {

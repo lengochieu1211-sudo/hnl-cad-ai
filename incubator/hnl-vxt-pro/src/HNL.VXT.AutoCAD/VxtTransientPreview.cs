@@ -50,6 +50,7 @@ namespace HNL.VXT.AutoCAD
         internal int TrackedDrawableCount => _drawables.Count;
         internal int RetiredDrawableCount => _retiredDrawables.Count;
         internal int TransitionQuarantineCount => _documentTransitionQuarantine.Count;
+        internal long LastPreviewDurationMs { get; private set; } = -1;
         internal VxtFinalPlanMetrics LastPlanMetrics { get; private set; }
         internal VxtPreviewRenderDecision LastRenderDecision { get; private set; }
         internal int LastExpectedDrawableCount { get; private set; }
@@ -68,6 +69,7 @@ namespace HNL.VXT.AutoCAD
             }
 
             _isMutating = true;
+            var previewWatch = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 LastPlanMetrics = null;
@@ -228,6 +230,8 @@ namespace HNL.VXT.AutoCAD
             }
             finally
             {
+                previewWatch.Stop();
+                LastPreviewDurationMs = previewWatch.ElapsedMilliseconds;
                 _isMutating = false;
                 if (_abandonRequested)
                 {

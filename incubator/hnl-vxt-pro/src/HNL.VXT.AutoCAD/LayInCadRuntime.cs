@@ -31,6 +31,10 @@ namespace HNL.VXT.AutoCAD
         private static readonly List<Tuple<Drawable, DateTime>> Retired = new List<Tuple<Drawable, DateTime>>();
         private static readonly List<Drawable> Quarantine = new List<Drawable>();
         private static bool Mutating;
+        internal static int ActiveDrawableCount => Active.Count;
+        internal static int RetiredDrawableCount => Retired.Count;
+        internal static int TransitionQuarantineCount => Quarantine.Count;
+        internal static long LastPreviewDurationMs { get; private set; } = -1;
 
         internal static void AbandonForDocumentTransition()
         {
@@ -81,6 +85,7 @@ namespace HNL.VXT.AutoCAD
             var doc = Application.DocumentManager.MdiActiveDocument;
             if (doc == null || Mutating) return;
             Mutating = true;
+            var previewWatch = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 ClearCore();
@@ -175,7 +180,12 @@ namespace HNL.VXT.AutoCAD
                 VxtSession.Current.ViewModel?.LayIn?.SetPreviewError(ex.Message);
                 doc.Editor.WriteMessage("\nHNL Tool - Lay-in Preview: " + ex.Message);
             }
-            finally { Mutating = false; }
+            finally
+            {
+                previewWatch.Stop();
+                LastPreviewDurationMs = previewWatch.ElapsedMilliseconds;
+                Mutating = false;
+            }
         }
 
         private static void AddTransient(Drawable drawable)
