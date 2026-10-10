@@ -278,7 +278,7 @@ jobs:
                              'New Table cut-piece list:', 'Existing CAD tables are not modified.')) {
              if(-not $cmd.Contains($part)){ throw "Missing cut-list runtime fallback: $part" }
            }
-           foreach($part in @('Liệt kê mảnh biên: ', 'chỉ áp dụng cho bảng MỚI')) {
+           foreach($part in @(' | Liệt kê: ', 'chỉ áp dụng cho bảng mới.')) {
              if(-not $ui.Contains($part)){ throw "Missing cut-list UI applied-state indication: $part" }
            }
            foreach($part in @('BuildCutSizeRows', 'RoundCutDimension', 'MidpointRounding.AwayFromZero', 'cutRows.Count',
