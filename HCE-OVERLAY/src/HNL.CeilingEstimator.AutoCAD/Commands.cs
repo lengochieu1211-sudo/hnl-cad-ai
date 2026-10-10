@@ -794,7 +794,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             input.GroupKey = hatch.Layer + " | ACI=" +
                 hatch.Color.ColorIndex.ToString(CultureInfo.InvariantCulture) +
                 " | " + hatch.PatternName;
-            double phaseX, phaseY;
+            double phaseX = 0.0, phaseY = 0.0;
             var havePatternBase = userGridVerified &&
                 TryGetFirstPatternBase(hatch, out phaseX, out phaseY);
             input.PatternBaseVerified = havePatternBase;
