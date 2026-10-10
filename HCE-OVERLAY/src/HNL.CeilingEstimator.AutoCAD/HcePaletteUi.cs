@@ -491,7 +491,14 @@ namespace HNL.CeilingEstimator.AutoCAD
             var cutListRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
             cutListRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             cutListRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            cutListRow.Children.Add(Text("Liệt kê mảnh biên", 11, _muted, FontWeights.Normal));
+            var cutListLabel = Text("Liệt kê mảnh biên", 11, _muted, FontWeights.Normal);
+            cutListLabel.Cursor = System.Windows.Input.Cursors.Hand;
+            cutListLabel.MouseLeftButtonUp += (sender, args) =>
+            {
+                if (_legacyCutList != null)
+                    _legacyCutList.IsChecked = _legacyCutList.IsChecked != true;
+            };
+            cutListRow.Children.Add(cutListLabel);
             _legacyCutList = new CheckBox
             {
                 Content = "Hiển thị", Foreground = _primary, MinHeight = 27,
@@ -505,7 +512,17 @@ namespace HNL.CeilingEstimator.AutoCAD
             var cutModeRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
             cutModeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             cutModeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            cutModeRow.Children.Add(Text("Chế độ liệt kê", 11, _muted, FontWeights.Normal));
+            var cutModeLabel = Text("Chế độ liệt kê", 11, _muted, FontWeights.Normal);
+            cutModeLabel.Cursor = System.Windows.Input.Cursors.Hand;
+            cutModeLabel.MouseLeftButtonUp += (sender, args) =>
+            {
+                if (_legacyCutMode != null)
+                {
+                    _legacyCutMode.Focus();
+                    _legacyCutMode.IsDropDownOpen = true;
+                }
+            };
+            cutModeRow.Children.Add(cutModeLabel);
             _legacyCutMode = new ComboBox { MinHeight = 27, Foreground = _primary };
             _legacyCutMode.Items.Add("Tổng hợp");
             _legacyCutMode.Items.Add("Chi tiết (chậm)");
@@ -515,6 +532,12 @@ namespace HNL.CeilingEstimator.AutoCAD
                 var profile = ActiveLegacyProfile();
                 if (profile == null) return;
                 profile.CutListMode = _legacyCutMode.SelectedIndex == 1 ? "D" : "S";
+                // Choosing Summary/Detail should also turn on the cut list.
+                if (!profile.CutListEnabled)
+                {
+                    profile.CutListEnabled = true;
+                    RefreshLegacyControls();
+                }
             };
             Grid.SetColumn(_legacyCutMode, 1);
             cutModeRow.Children.Add(_legacyCutMode);
@@ -711,7 +734,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                 if (_legacyCutMode != null)
                 {
                     _legacyCutMode.SelectedIndex = profile.CutListMode == "D" ? 1 : 0;
-                    _legacyCutMode.IsEnabled = profile.CutListEnabled;
+                    // Keep the mode selectable even when the cut list has not yet been enabled.
+                    _legacyCutMode.IsEnabled = true;
                 }
                 if (_legacySelectors.TryGetValue("Priority", out var p))
                     p.IsEnabled = profile.Module == "M";

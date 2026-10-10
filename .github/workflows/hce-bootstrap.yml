@@ -269,10 +269,11 @@ jobs:
           foreach($part in @('CutListEnabled', 'CutListMode')) {
             if(-not $profile.Contains($part) -or -not $cmd.Contains($part)) { throw "Missing per-DWG cut list option: $part" }
           }
-          foreach($part in @('SaveLegacyCutList', '_legacyCutMode', 'profile.CutListMode', '_legacyCutMode.IsEnabled = profile.CutListEnabled')) {
+          foreach($part in @('SaveLegacyCutList', '_legacyCutMode', 'profile.CutListMode', '_legacyCutMode.IsEnabled = true', 'cutListLabel.MouseLeftButtonUp', 'cutModeLabel.MouseLeftButtonUp', 'profile.CutListEnabled = true;')) {
             if(-not $ui.Contains($part)) { throw "Missing summary/detail selector binding: $part" }
           }
-          foreach($part in @('BuildCutSizeRows', 'RoundCutDimension', 'MidpointRounding.AwayFromZero', 'cutRows.Count',
+          if($ui.Contains('_legacyCutMode.IsEnabled = profile.CutListEnabled')) { throw 'Cut list mode must not be disabled while checkbox is off' }
+           foreach($part in @('BuildCutSizeRows', 'RoundCutDimension', 'MidpointRounding.AwayFromZero', 'cutRows.Count',
                             'SourceDisplay = sourceName', 'details.Count != expected',
                             'cutListIsDetailed ? "Mã"', 'detailedCount > 2000', 'table.MergeCells(CellRange.Create(table, cutHeadingRow')) {
             if(-not $cmd.Contains($part)) { throw "Missing LISP RC13 cut list parity contract: $part" }
