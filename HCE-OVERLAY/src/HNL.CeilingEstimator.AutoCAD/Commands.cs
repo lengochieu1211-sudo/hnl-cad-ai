@@ -1216,8 +1216,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                         var key = fontStyle.ToString() + "|" +
                             fontHeight.ToString("R", CultureInfo.InvariantCulture) +
                             "|" + value;
-                        double[] size;
-                        if (!cache.TryGetValue(key, out size))
+                        if (!cache.TryGetValue(key, out var size))
                         {
                             probe.TextHeight = fontHeight;
                             if (!fontStyle.IsNull) probe.TextStyleId = fontStyle;
@@ -1256,9 +1255,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                 for (var col = 0; col < 4; col++) widths[col] += extra;
             }
             for (var col = 0; col < 4; col++)
-                table.SetColumnWidth(col, widths[col]);
+                table.Columns[col].Width = widths[col];
             for (var row = 0; row < rowCount; row++)
-                table.SetRowHeight(row, Math.Max(8.0, heights[row]));
+                table.Rows[row].Height = Math.Max(8.0, heights[row]);
         }
 
         private static void InsertTable(Database database, CalculationReport report, Point3d point,

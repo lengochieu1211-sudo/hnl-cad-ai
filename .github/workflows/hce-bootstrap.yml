@@ -327,9 +327,12 @@ jobs:
           foreach($v in @('table.TableStyle = cadTableStyleId',
                  'FitHceTableToText(table, database, cadTableStyle',
                  'new MText()', 'probe.ActualWidth', 'probe.ActualHeight',
-                 'table.SetColumnWidth(col, widths[col])',
-                 'table.SetRowHeight(row, Math.Max(8.0, heights[row]))')) {
+                 'table.Columns[col].Width = widths[col]',
+                 'table.Rows[row].Height = Math.Max(8.0, heights[row])')) {
             if(-not $cmd.Contains($v)){ throw "Missing MTEXT auto sizing: $v" }
+          }
+          if($cmd.Contains('table.SetColumnWidth(col,') -or $cmd.Contains('table.SetRowHeight(row,')) {
+            throw 'Do not use deprecated AutoCAD Table per-column/per-row methods'
           }
           if($cmd.Contains('Result [Table/Exit]') -or $cmd.Contains('choiceOptions.Keywords.Add("Exit")')) {
             throw 'HCECALC must create directly after result computation (Esc at point still cancels)'
