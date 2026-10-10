@@ -214,7 +214,7 @@ jobs:
               -not $paletteService.Contains('B7E5D9C2-3A1F-4D08-9AC8-1DAB6B3F7821') -or
               -not $ceilingUi.Contains('MinWidth="0"') -or
               -not $ceilingUi.Contains('<Border Grid.Column="1" Background="{DynamicResource CardBackground}"') -or
-              -not $ceilingUi.Contains('BorderThickness="1,0,0,0" Padding="2,5,2,5"') -or
+              -not $ceilingUi.Contains('BorderThickness="1,0,0,0" Padding="3,8,3,6"') -or
               -not $comboChrome.Contains('ApplyStockComboChrome(combo, combo.IsEnabled ? primary : secondary, input, border);') -or
               -not $comboChrome.Contains('SystemColors.ControlLightBrushKey') -or
               -not $ceilingUi.Contains('<Run Text="Trần"/><LineBreak/><Run Text="chìm"/>') -or
