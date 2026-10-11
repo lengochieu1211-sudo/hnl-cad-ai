@@ -264,6 +264,13 @@ jobs:
           }
           Write-Host 'HCE RC5.4.1 READ-ONLY AREA + DXF43/44 DIAGNOSTIC GATE PASS'
 
+      - name: Validate nominal mixed-stock cutter research (no Core mutations)
+        shell: powershell
+        run: |
+          python -X utf8 HCE-OVERLAY/tests/test_mixed_cut_plan.py
+          if ($LASTEXITCODE -ne 0) { throw 'HCE mixed-stock verifier regression failed' }
+          Write-Host 'HCE RESEARCH MIXED SOURCE VALIDATOR PASS - not manufacturing certified'
+
       - name: Core regression for six DEMTC modules with X/Y and priority S/D
         shell: powershell
         run: dotnet run --project HCE-OVERLAY/tests/LegacyModes/LegacyModes.csproj -c Release
