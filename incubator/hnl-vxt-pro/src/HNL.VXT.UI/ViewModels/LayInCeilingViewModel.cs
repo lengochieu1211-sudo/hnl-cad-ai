@@ -164,6 +164,9 @@ namespace HNL.VXT.UI.ViewModels
                 var next = TextToGrid(value);
                 if (_settings.GridSystem == next) return;
                 _settings.GridSystem = next;
+                OnPropertyChanged(nameof(HangerMaxSpacing));
+                OnPropertyChanged(nameof(HangerMinEdgeOffset));
+                OnPropertyChanged(nameof(HangerMaxEdgeOffset));
                 Changed();
             }
         }
@@ -212,13 +215,68 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        public double HangerMaxSpacing
+        private double SystemHangerMax => _settings.GridSystem == LayInGridSystem.Module610x610 ||
+            _settings.GridSystem == LayInGridSystem.Module610x1220 ? 1220.0 : 1200.0;
+        private double SystemHangerEdge => SystemHangerMax == 1220.0 ? 305.0 : 300.0;
+
+        public double HangerMinSpacing
         {
-            get => _settings.HangerMaxSpacing;
+            get => _settings.HangerMinSpacing;
             set
             {
-                if (Near(_settings.HangerMaxSpacing, value)) return;
-                _settings.HangerMaxSpacing = Math.Max(0.0, value);
+                var next = Math.Max(1.0, value);
+                if (Near(_settings.HangerMinSpacing, next)) return;
+                _settings.HangerMinSpacing = next;
+                Changed();
+            }
+        }
+
+        public double HangerMaxSpacing
+        {
+            get => _settings.HangerMaxSpacing > 0 ? _settings.HangerMaxSpacing : SystemHangerMax;
+            set
+            {
+                var next = Math.Max(1.0, value);
+                if (Near(HangerMaxSpacing, next)) return;
+                _settings.HangerMaxSpacing = next;
+                Changed();
+            }
+        }
+
+        public double HangerMinEdgeOffset
+        {
+            get => _settings.HangerMinEdgeOffset > 0 ? _settings.HangerMinEdgeOffset :
+                _settings.HangerEdgeTarget > 0 ? _settings.HangerEdgeTarget : SystemHangerEdge;
+            set
+            {
+                var next = Math.Max(0.0, value);
+                if (Near(HangerMinEdgeOffset, next)) return;
+                _settings.HangerMinEdgeOffset = next;
+                Changed();
+            }
+        }
+
+        public double HangerMaxEdgeOffset
+        {
+            get => _settings.HangerMaxEdgeOffset > 0 ? _settings.HangerMaxEdgeOffset :
+                Math.Max(HangerMinEdgeOffset, SystemHangerEdge + 100.0);
+            set
+            {
+                var next = Math.Max(0.0, value);
+                if (Near(HangerMaxEdgeOffset, next)) return;
+                _settings.HangerMaxEdgeOffset = next;
+                Changed();
+            }
+        }
+
+        public double HangerBalanceStep
+        {
+            get => _settings.HangerBalanceStep;
+            set
+            {
+                var next = Math.Max(1.0, value);
+                if (Near(_settings.HangerBalanceStep, next)) return;
+                _settings.HangerBalanceStep = next;
                 Changed();
             }
         }

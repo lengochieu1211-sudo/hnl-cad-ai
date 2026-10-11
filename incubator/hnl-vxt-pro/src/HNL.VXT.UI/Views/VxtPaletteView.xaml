@@ -1141,13 +1141,28 @@
                                     <CheckBox Content="Vẽ Ty" IsChecked="{Binding DrawHangers, Mode=TwoWay}" Margin="0,0,0,7"/>
                                     <Grid Margin="0,0,0,7" IsEnabled="{Binding DrawHangers}" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="Bước Ty Max (mm)" Style="{StaticResource FieldLabel}"/>
-                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerMaxSpacing, Mode=TwoWay}" Minimum="0" Step="100" ToolTip="Nhập 0 để dùng bước Ty chuẩn của hệ khung."/>
+                                        <TextBlock Text="Tâm Min (mm)" Style="{StaticResource FieldLabel}"/>
+                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerMinSpacing, Mode=TwoWay}" Minimum="1" Step="50" ToolTip="Ưu tiên Min; có thể giảm nếu cần. Max và bước bù phải được giữ."/>
                                     </Grid>
                                     <Grid Margin="0,0,0,7" IsEnabled="{Binding DrawHangers}" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="Ty đến biên (mm)" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
-                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerEdgeTarget, Mode=TwoWay}" Minimum="0" Step="50" ToolTip="Nhập 0 để dùng khoảng Ty đến biên chuẩn của hệ khung."/>
+                                        <TextBlock Text="Tâm Max (mm)" Style="{StaticResource FieldLabel}"/>
+                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerMaxSpacing, Mode=TwoWay}" Minimum="1" Step="50" ToolTip="Giới hạn cứng khoảng cách giữa các Ty."/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,7" IsEnabled="{Binding DrawHangers}" MinHeight="29">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Biên Min (mm)" Style="{StaticResource FieldLabel}"/>
+                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerMinEdgeOffset, Mode=TwoWay}" Minimum="0" Step="50" ToolTip="Ưu tiên Min tại đầu và cuối mỗi đoạn T chính."/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,7" IsEnabled="{Binding DrawHangers}" MinHeight="29">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Biên Max (mm)" Style="{StaticResource FieldLabel}"/>
+                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerMaxEdgeOffset, Mode=TwoWay}" Minimum="0" Step="50" ToolTip="Giới hạn cứng khoảng cách từ Ty đến hai đầu đoạn T chính."/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,7" IsEnabled="{Binding DrawHangers}" MinHeight="29">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Bước bù (mm)" Style="{StaticResource FieldLabel}"/>
+                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerBalanceStep, Mode=TwoWay}" Minimum="1" Step="10" ToolTip="Khoảng cách tâm Ty là bội số của bước bù."/>
                                     </Grid>
                                     <Grid MinHeight="29" IsEnabled="{Binding DrawHangers}">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
@@ -1181,8 +1196,9 @@
                                     <Grid Margin="0,0,0,8" IsEnabled="{Binding IsGroupedDimension}" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Số ô gộp" Style="{StaticResource FieldLabel}"/>
-                                        <TextBox Grid.Column="1" Text="{Binding GroupedDimensionCount, UpdateSourceTrigger=LostFocus}"
-                                                 ToolTip="Ví dụ gộp 12 ô: 12 × 600 (hoặc 610); nhóm còn dư và mép cắt có DIM riêng."/>
+                                        <TextBlock Grid.Column="1" Text="Tự tính theo lưới và ô nguyên"
+                                                   Style="{StaticResource FieldLabel}" TextWrapping="Wrap"
+                                                   ToolTip="Tự đếm số ô nguyên ở từng phương để ghi DIM N × module; mép cắt được DIM riêng, không cần nhập N."/>
                                     </Grid>
                                     <StackPanel IsEnabled="{Binding IsDimensionEnabled}">
                                         <Grid Margin="0,0,0,7" MinHeight="29">

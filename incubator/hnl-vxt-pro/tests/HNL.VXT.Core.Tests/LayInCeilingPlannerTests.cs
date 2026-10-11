@@ -263,6 +263,109 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void GroupedDimension_AutoCountsWholeModulesOnEachAxis()
+        {
+            foreach (var grid in new[]
+            {
+                Tuple.Create(LayInGridSystem.Module600x600, 600.0),
+                Tuple.Create(LayInGridSystem.Module610x610, 610.0)
+            })
+            {
+                var module = grid.Item2;
+                var settings = new LayInCeilingSettings
+                {
+                    GridSystem = grid.Item1,
+                    MainDirection = LayInMainDirectionMode.Horizontal,
+                    StartMode = LayInStartMode.ManualStart,
+                    ManualStartPoint = new Point2(0, 0),
+                    DimensionMode = LayInDimensionMode.Grouped
+                };
+                Assert.AreEqual(0, settings.GroupedDimensionCount);
+                var plan = LayInCeilingPlanner.Build(
+                    Rect(0, 0, module * 10, module * 8), null, settings);
+                Assert.AreEqual(2, plan.DimensionRuns.Count);
+                CollectionAssert.AreEquivalent(new[] { 10, 8 },
+                    plan.DimensionRuns.Select(d => d.ModuleCount).ToArray());
+                Assert.IsTrue(plan.DimensionRuns.Any(d =>
+                    d.Label == "10 × " + module.ToString("0") +
+                    " = " + (10 * module).ToString("0")));
+                Assert.IsTrue(plan.DimensionRuns.Any(d =>
+                    d.Label == "8 × " + module.ToString("0") +
+                    " = " + (8 * module).ToString("0")));
+            }
+        }
+
+        [TestMethod]
+        public void LayInTy_UsesConcealedMinMaxEdgeAndStepLattice()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                GridSystem = LayInGridSystem.Module600x600,
+                MainDirection = LayInMainDirectionMode.Horizontal,
+                StartMode = LayInStartMode.ManualStart,
+                ManualStartPoint = new Point2(0, 0),
+                HangerMinSpacing = 700,
+                HangerMaxSpacing = 1000,
+                HangerMinEdgeOffset = 300,
+                HangerMaxEdgeOffset = 400,
+                HangerBalanceStep = 50
+            };
+            var plan = LayInCeilingPlanner.Build(Rect(0, 0, 6000, 4800), null, settings);
+            var mainRows = plan.TeeSegments
+                .Where(t => t.Kind == LayInTeeKind.MainTee)
+                .Select(t => Math.Round(t.A.Y, 3)).Distinct().ToArray();
+            Assert.IsTrue(mainRows.Length > 0);
+            foreach (var y in mainRows)
+            {
+                var positions = plan.HangerPoints
+                    .Where(p => Math.Abs(p.Y - y) < 0.001)
+                    .Select(p => p.X).OrderBy(x => x).ToArray();
+                Assert.IsTrue(positions.Length > 1);
+                Assert.IsTrue(positions[0] <= 400.1 && 6000 - positions[positions.Length - 1] <= 400.1);
+                for (var i = 1; i < positions.Length; i++)
+                {
+                    var gap = positions[i] - positions[i - 1];
+                    Assert.IsTrue(gap <= 1000.1);
+                    Assert.AreEqual(0, gap / 50.0 - Math.Round(gap / 50.0), 0.001);
+                }
+            }
+        }
+
+        [TestMethod]
+        public void LayInTy_SoftMinimumDoesNotBreakHardEdgeForShortRun()
+        {
+            var plan = LayInCeilingPlanner.Build(Rect(0, 0, 950, 2400), null,
+                new LayInCeilingSettings
+                {
+                    GridSystem = LayInGridSystem.Module600x600,
+                    MainDirection = LayInMainDirectionMode.Horizontal,
+                    StartMode = LayInStartMode.ManualStart,
+                    ManualStartPoint = new Point2(0, 0),
+                    HangerMinSpacing = 700,
+                    HangerMaxSpacing = 1000,
+                    HangerMinEdgeOffset = 300,
+                    HangerMaxEdgeOffset = 400,
+                    HangerBalanceStep = 50
+                });
+            Assert.IsTrue(plan.HangerPoints.Count >= 2);
+            var stations = plan.HangerPoints
+                .GroupBy(p => Math.Round(p.Y, 3))
+                .Select(g => g.Select(p => p.X).OrderBy(x => x).ToArray())
+                .Where(xs => xs.Length > 0).ToArray();
+            Assert.IsTrue(stations.Length > 0);
+            foreach (var xs in stations)
+            {
+                Assert.IsTrue(xs[0] <= 400.1 && 950 - xs[xs.Length - 1] <= 400.1);
+                for (var i = 1; i < xs.Length; i++)
+                {
+                    var gap = xs[i] - xs[i - 1];
+                    Assert.IsTrue(gap <= 1000.1);
+                    Assert.AreEqual(0, gap / 50.0 - Math.Round(gap / 50.0), 0.001);
+                }
+            }
+        }
+
+        [TestMethod]
         public void GroupedDimension_FormatsTwelveModules()
         {
             var plan600 = LayInCeilingPlanner.Build(

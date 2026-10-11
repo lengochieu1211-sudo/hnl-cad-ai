@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HNL.VXT.Core.Geometry;
+using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
 
 namespace HNL.VXT.Core.Preview
@@ -147,15 +148,26 @@ namespace HNL.VXT.Core.Preview
 
             if (settings.DrawHangers)
             {
+                var minSpacing = settings.HangerMinSpacing > Eps
+                    ? settings.HangerMinSpacing : 700.0;
                 var maxSpacing = settings.HangerMaxSpacing > Eps
-                    ? settings.HangerMaxSpacing
-                    : spec.DefaultHangerMax;
-                var edgeTarget = settings.HangerEdgeTarget > Eps
-                    ? settings.HangerEdgeTarget
-                    : spec.DefaultHangerEdge;
+                    ? settings.HangerMaxSpacing : spec.DefaultHangerMax;
+                var minEdge = settings.HangerMinEdgeOffset > Eps
+                    ? settings.HangerMinEdgeOffset
+                    : settings.HangerEdgeTarget > Eps
+                        ? settings.HangerEdgeTarget : spec.DefaultHangerEdge;
+                var maxEdge = settings.HangerMaxEdgeOffset > Eps
+                    ? settings.HangerMaxEdgeOffset
+                    : Math.Max(minEdge, spec.DefaultHangerEdge + 100.0);
+                var balanceStep = settings.HangerBalanceStep;
+                if (minSpacing > maxSpacing || minEdge > maxEdge ||
+                    balanceStep <= Eps || balanceStep > maxSpacing)
+                    throw new InvalidOperationException(
+                        "HNL Tool - HCF: Thông số Ty treo Min/Max/Bước bù không hợp lệ.");
 
                 foreach (var segment in localMainSegments)
-                    AddHangers(plan, segment, angle, maxSpacing, edgeTarget);
+                    AddHangers(plan, segment, angle, minSpacing,
+                        maxSpacing, minEdge, maxEdge, balanceStep);
             }
 
             AddDimensions(plan, settings, spec, bounds, angle, phaseX, phaseY);
@@ -361,34 +373,31 @@ namespace HNL.VXT.Core.Preview
             LayInCeilingPlan plan,
             Segment2 mainSegment,
             double angle,
+            double minSpacing,
             double maxSpacing,
-            double edgeTarget)
+            double minEdge,
+            double maxEdge,
+            double balanceStep)
         {
             var x1 = Math.Min(mainSegment.A.X, mainSegment.B.X);
             var x2 = Math.Max(mainSegment.A.X, mainSegment.B.X);
             var length = x2 - x1;
-            if (length <= Eps || maxSpacing <= Eps) return;
+            if (length <= Eps) return;
 
-            var edge = Math.Min(Math.Max(0.0, edgeTarget), length * 0.5);
-            var first = x1 + edge;
-            var last = x2 - edge;
+            // Reuse the concealed-ceiling lattice solver: HARD Max for Ty and
+            // boundary, SOFT Min, and exact multiples for all center gaps.
+            // The clipped T-main segment is the true Ty constraint interval.
+            var layout = SmartLayout1D.Calculate(
+                length, maxSpacing, minSpacing, maxEdge, minEdge,
+                balanceStep, MainLayoutMode.BalancedTwoEnds);
+            if (layout == null)
+                throw new InvalidOperationException(
+                    "HNL Tool - HCF: Không thể bố trí Ty hợp lệ trên thanh T chính dài " +
+                    length.ToString("0.###") + " mm với Min/Max/Bước bù đã chọn.");
 
-            if (last - first <= Eps)
-            {
-                plan.HangerPoints.Add(
-                    Transform2.ToWorld(new Point2((x1 + x2) * 0.5, mainSegment.A.Y), angle));
-                return;
-            }
-
-            var intervals = Math.Max(1, (int)Math.Ceiling((last - first) / maxSpacing));
-            var step = (last - first) / intervals;
-
-            for (var i = 0; i <= intervals; i++)
-            {
-                var x = first + step * i;
+            foreach (var x in layout.Positions(x1))
                 plan.HangerPoints.Add(
                     Transform2.ToWorld(new Point2(x, mainSegment.A.Y), angle));
-            }
         }
 
         private static void AddDimensions(
@@ -428,7 +437,7 @@ namespace HNL.VXT.Core.Preview
             // "Gộp ô" chains groups of N complete panels across the whole grid.
             // In both modes, partial cuts at either boundary are measured separately.
             var groupSize = settings.DimensionMode == LayInDimensionMode.Grouped
-                ? Math.Max(1, settings.GroupedDimensionCount)
+                ? settings.GroupedDimensionCount // <= 0 auto: all whole modules per axis
                 : 1;
             AddPanelAxisDimensions(plan, settings, bounds, angle,
                 bounds.MinX, bounds.MaxX, spec.ModuleShort, phaseX, true, groupSize);
@@ -456,9 +465,10 @@ namespace HNL.VXT.Core.Preview
             // Do not count the cut edge as a full panel. Group remaining full
             // modules in lattice multiples and emit the final shorter group.
             var fullCount = Math.Max(0, (int)Math.Floor((max - first) / module + Eps));
-            for (var i = 0; i < fullCount; i += groupSize)
+            var actualGroupSize = groupSize <= 0 ? Math.Max(1, fullCount) : groupSize;
+            for (var i = 0; i < fullCount; i += actualGroupSize)
             {
-                var count = Math.Min(groupSize, fullCount - i);
+                var count = Math.Min(actualGroupSize, fullCount - i);
                 var start = first + i * module;
                 var end = first + (i + count) * module;
                 if (count == 1)

@@ -55,11 +55,20 @@ namespace HNL.VXT.Core.Models
         public Point2? DoorPoint { get; set; }
 
         public bool DrawHangers { get; set; } = true;
+        // Keep zero Max/edge values as system defaults (1200/1220 and 300/305).
+        // Ty minimums are SOFT; maximums are HARD, exactly like concealed ceiling.
+        public double HangerMinSpacing { get; set; } = 700.0;
         public double HangerMaxSpacing { get; set; }
+        public double HangerMinEdgeOffset { get; set; }
+        public double HangerMaxEdgeOffset { get; set; }
+        public double HangerBalanceStep { get; set; } = 50.0;
+        // Historic setting retained for older sessions; new UI uses Min/Max edge.
         public double HangerEdgeTarget { get; set; }
 
         public LayInDimensionMode DimensionMode { get; set; } = LayInDimensionMode.GridAndEdges;
-        public int GroupedDimensionCount { get; set; } = 12;
+        // 0 = auto: dimension all consecutive whole modules on each axis.
+        // Positive values remain supported for legacy/test compatibility.
+        public int GroupedDimensionCount { get; set; } = 0;
         public LayInHorizontalDimSide HorizontalDimSide { get; set; } = LayInHorizontalDimSide.Auto;
         public LayInVerticalDimSide VerticalDimSide { get; set; } = LayInVerticalDimSide.Auto;
         public double HorizontalDimDistance { get; set; } = 1200.0;
