@@ -436,7 +436,7 @@ jobs:
           Write-Host 'HCE VIETNAMESE TABLE + N/G/L LABEL + PER-DWG HEIGHT STATIC GATE PASS'
           # CAD Table Style and Text Style are independent, both resolved per DWG.
           foreach($v in @('CadTableStyle', 'TableStyleDictionaryId', 'CTABLESTYLE',
-                 'RefreshCadTableStyles', '_legacyCadTableStyle', 'Table Style (bảng)')) {
+                 'RefreshCadTableStyles', '_legacyCadTableStyle', 'Kiểu bảng CAD')) {
             if(-not (($profile+$ui+$cmd).Contains($v))) { throw "Missing native CAD Table Style: $v" }
           }
           foreach($v in @('table.TableStyle = cadTableStyleId',
