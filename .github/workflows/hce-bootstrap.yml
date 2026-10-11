@@ -116,6 +116,41 @@ jobs:
           if($comboStyle -isnot [System.Windows.Style]) {throw 'HCE dropdown XAML template did not parse'}
           Write-Host 'HCE WPF COMBOBOX + RAIL XAML PARSE + HATCH AREA/PROMPT GATES PASS'
 
+      - name: Smoke HCF ComboBox binding and selection without AutoCAD
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName PresentationFramework
+          $ui = Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs' -Raw
+          $m = [regex]::Match($ui, 'const string comboXaml = @"(.*?)";', [Text.RegularExpressions.RegexOptions]::Singleline)
+          if (-not $m.Success) { throw 'HCE ComboBox XAML missing for behavioral smoke' }
+          $style = [System.Windows.Markup.XamlReader]::Parse($m.Groups[1].Value)
+          $combo = New-Object System.Windows.Controls.ComboBox
+          foreach($key in @('PrimaryText','InputBackground','InputBorder','HoverBackground','AccentStrong','AccentSoft')) {
+            $combo.Resources[$key] = [System.Windows.Media.Brushes]::White
+          }
+          $combo.Style = $style
+          $null = $combo.Items.Add('Tổng hợp')
+          $null = $combo.Items.Add('Chi tiết')
+          $combo.SelectedIndex = 0
+          $combo.ApplyTemplate()
+          $toggle = $combo.Template.FindName('DropDownToggle', $combo)
+          $popup = $combo.Template.FindName('PART_Popup', $combo)
+          if ($null -eq $toggle -or $null -eq $popup) {
+            throw 'Functional HCF ComboBox template elements not found'
+          }
+          $binding = [System.Windows.Data.BindingOperations]::GetBindingExpression(
+            $toggle, [System.Windows.Controls.Primitives.ToggleButton]::IsCheckedProperty)
+          if ($null -eq $binding) { throw 'DropDownToggle has no IsDropDownOpen binding' }
+          $combo.IsDropDownOpen = $true
+          $binding.UpdateTarget()
+          if ($toggle.IsChecked -ne $true) { throw 'ComboBox open status does not reach toggle' }
+          $combo.SelectedIndex = 1
+          if ($combo.SelectedItem -ne 'Chi tiết') { throw 'ComboBox cannot select second item' }
+          $combo.IsDropDownOpen = $false
+          $binding.UpdateTarget()
+          if ($toggle.IsChecked -eq $true) { throw 'ComboBox open status cannot reset toggle' }
+          Write-Host 'HCE HCF COMBOBOX INTERACTION SMOKE PASS: template + open state + selection'
+
       - name: Validate HCE pixel scrolling and visible ComboBox chrome
         shell: powershell
         run: |
