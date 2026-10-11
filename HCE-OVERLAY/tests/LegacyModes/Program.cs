@@ -14,7 +14,10 @@ internal static class Program
     static void Main()
     {
         int n = 0;
+        int pureRuns = 0;
+        int exercisedPureStockBins = 0;
         var engine = new DemtcEngine();
+        var pureTotals = new Dictionary<string, (int Full, int Pieces, int Bins, int Oversize, int Purchase)>();
         var rect = new List<Segment2> {
             new Segment2(0, 0, 2400, 0),
             new Segment2(2400, 0, 2400, 2400),
@@ -49,12 +52,42 @@ internal static class Program
             Assert(calc.Success && calc.PureResult!=null, "calc "+pitch+"/"+mode+"/"+direction+"/"+priority+" "+calc.FailureReason);
             var bins=engine.PackCutPieces(calc.PureResult.CutPieces,o);
             Assert(bins!=null,"pack null");
+            int full = calc.PureResult.TotalFullCount;
+            int cuts = calc.PureResult.CutPieces.Count;
+            int packedPieces = bins.Oversize.Count;
+            foreach(var bin in bins.Bins) packedPieces += bin.PiecesReversed.Count;
+            Assert(packedPieces==cuts,
+                "Unaccounted/duplicated cut pieces: "+packedPieces+"/"+cuts+" "+pitch+"/"+mode);
             if(mode=="S" || mode=="D")
             {
+                pureRuns++;
+                Assert(cuts>0 || pitch==600, "Cut-piece case unexpectedly empty: "+pitch+"/"+mode);
                 var expectedStockCode=mode;
                 foreach(var bin in bins.Bins)
+                {
                     Assert(bin.Code==expectedStockCode,
                         "Unexpected source stock "+bin.Code+" in "+mode+"-only / "+pitch);
+                    exercisedPureStockBins++;
+                }
+                var purchase = checked(full + bins.Bins.Count);
+                Assert(purchase>=full, "Negative pure material purchase");
+                if (pitch==600)
+                {
+                    // 2400-square with exact grid phase: 16 short cells
+                    // versus 8 long cells. Area/2 must not be disguised
+                    // as the same full-panel quantity for both modes.
+                    Assert(full==(mode=="S"?16:8),
+                        "Pure 600 full count differs from geometric cells: "+
+                        full+"/"+mode+"/"+direction);
+                }
+                var key = pitch+"/"+mode+"/"+direction;
+                if (pureTotals.TryGetValue(key, out var previous))
+                    Assert(previous==(full,cuts,bins.Bins.Count,bins.Oversize.Count,purchase),
+                        "Pure material result changed with unused Mixed Priority: "+key);
+                else pureTotals.Add(key,(full,cuts,bins.Bins.Count,bins.Oversize.Count,purchase));
+                if(pitch==610)
+                    Assert(bins.Bins.Count>0,
+                        "Pure stock packing not exercised with 610 cut-cell geometry: "+key);
             }
             n++;
             Console.WriteLine("HCE MODE PASS "+n+" "+pitch+"/"+mode+"/"+direction+"/"+priority);
@@ -63,6 +96,22 @@ internal static class Program
         Assert(defaultProfile.GridWidth==610 && defaultProfile.GridHeight==610 &&
           defaultProfile.MixedMode && defaultProfile.MixedPrimary==MixedPrimaryMode.SmallMain &&
           defaultProfile.SnapEnabled && defaultProfile.SnapTolerance==3,"Golden defaults");
+        Assert(pureRuns==16, "Expected 16 pure S/D executions");
+        Assert(exercisedPureStockBins>0, "Pure stock bins were never exercised");
+        foreach (var pitch in new[] { 600, 610 })
+        foreach (var direction in new[] { "X", "Y" })
+        {
+            var small = pureTotals[pitch+"/S/"+direction];
+            var large = pureTotals[pitch+"/D/"+direction];
+            Assert(small.Full>large.Full,
+                "S/D full panel quantities unexpectedly identical at "+pitch+"/"+direction);
+            Assert(small.Purchase==small.Full+small.Bins &&
+                   large.Purchase==large.Full+large.Bins,
+                "Pure total purchase must be full plus same-family cut stock");
+        }
+        Console.WriteLine("HCE LISP PURE STOCK MATERIAL PARITY PASS "+
+            pureRuns+"/16; packed bins="+exercisedPureStockBins+
+            "; no opposite source, lost pieces, or mixed-priority leakage");
         Console.WriteLine("HCE SIX-MODE CORE GATES PASS "+n+"/24; Golden defaults preserved");
     }
 }
