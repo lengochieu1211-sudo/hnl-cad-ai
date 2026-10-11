@@ -137,7 +137,7 @@ jobs:
           $root = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
           $ui = Get-Content "$root/HcePaletteUi.cs" -Raw
           $commands = Get-Content "$root/Commands.cs" -Raw
-          foreach ($required in @('MinWidth={Binding ActualWidth', 'DropDownToggle', "ClickMode='Press'", 'ProgressBar', 'UpdateWorkProgress', 'CommandMethod("HCESTOP"', 'StopInCommandContext', 'MessageBoxButton.YesNo', 'Tắt HCE', 'if (!_active || _palette == null || !_palette.Visible)')) {
+          foreach ($required in @("MinWidth='{Binding ActualWidth", 'DropDownToggle', "ClickMode='Press'", 'ProgressBar', 'UpdateWorkProgress', 'CommandMethod("HCESTOP"', 'StopInCommandContext', 'MessageBoxButton.YesNo', 'Tắt HCE', 'if (!_active || _palette == null || !_palette.Visible)')) {
             if(-not $ui.Contains($required)) { throw "HCE HCF-compatible UI contract missing: $required" }
           }
           foreach ($required in @('HceCommandProgress', 'ProgressMeter', 'MeterProgress()', 'onHatchProgress?.Invoke', 'onPackingProgress?.Invoke', 'onMeasuredRow?.Invoke', 'progress.Complete();')) {
