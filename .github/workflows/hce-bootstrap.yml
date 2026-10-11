@@ -120,7 +120,7 @@ jobs:
         shell: powershell
         run: |
           $ui=Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs' -Raw
-          foreach($phrase in @('CanContentScroll = false', 'ComboArrowBackground', 'Resources[typeof(ComboBox)]', "Text='{TemplateBinding SelectionBoxItem}'", "Fill='{DynamicResource PrimaryText}'")) {
+          foreach($phrase in @('CanContentScroll = false', 'ComboArrowBackground', 'Resources[typeof(ComboBox)]', "Content='{Binding SelectionBoxItem", "Fill='{DynamicResource PrimaryText}'")) {
             if(-not $ui.Contains($phrase)){throw "Missing scrolling/dropdown visibility contract: $phrase"}
           }
           if ($ui.Contains('DEMTC')) { throw 'Legacy DEMTC label found in the HCE palette UI' }
@@ -137,7 +137,7 @@ jobs:
           $root = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
           $ui = Get-Content "$root/HcePaletteUi.cs" -Raw
           $commands = Get-Content "$root/Commands.cs" -Raw
-          foreach ($required in @('PlacementTarget.ActualWidth', 'ElementName=PART_Popup', 'ProgressBar', 'UpdateWorkProgress', 'CommandMethod("HCESTOP"', 'StopInCommandContext', 'MessageBoxButton.YesNo', 'Tắt HCE', 'if (!_active || _palette == null || !_palette.Visible)')) {
+          foreach ($required in @('MinWidth={Binding ActualWidth', 'DropDownToggle', "ClickMode='Press'", 'ProgressBar', 'UpdateWorkProgress', 'CommandMethod("HCESTOP"', 'StopInCommandContext', 'MessageBoxButton.YesNo', 'Tắt HCE', 'if (!_active || _palette == null || !_palette.Visible)')) {
             if(-not $ui.Contains($required)) { throw "HCE HCF-compatible UI contract missing: $required" }
           }
           foreach ($required in @('HceCommandProgress', 'ProgressMeter', 'MeterProgress()', 'onHatchProgress?.Invoke', 'onPackingProgress?.Invoke', 'onMeasuredRow?.Invoke', 'progress.Complete();')) {
@@ -147,6 +147,37 @@ jobs:
             throw 'HCE progress must not re-enter AutoCAD modal command loop'
           }
           Write-Host 'HCE HCF-ALIGNED CONTROLS + PROGRESS + STOP STATIC GATE PASS'
+
+      - name: Verify HCE Vietnamese keywords, usable dropdown, compact status bar
+        shell: powershell
+        run: |
+          $root = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
+          $ui = Get-Content "$root/HcePaletteUi.cs" -Raw
+          $commands = Get-Content "$root/Commands.cs" -Raw
+          foreach($phrase in @("ClickMode='Press'", 'x:Name=''DropDownToggle''', 'IsDropDownOpen', 'PART_Popup',
+                                'MaxDropDownHeight', 'new Thickness(0, 1, 0, 0)', 'Visibility.Collapsed',
+                                'MinHeight = 24', 'Sẵn sàng tính tấm.', 'Tắt HCE')) {
+            if(-not $ui.Contains($phrase)) { throw "HCE compact bar or HCF dropdown behavior missing: $phrase" }
+          }
+          if ($ui.Contains("Opacity='0'") -or $ui.Contains('var footerCard = Card(')) {
+            throw 'Legacy invisible overlay or large footer card must not return'
+          }
+          foreach($phrase in @('Keywords.Add("Summary", "TongHop", "Tổng hợp")',
+                                'Keywords.Add("Detail", "ChiTiet", "Chi tiết")',
+                                'Keywords.Add("NoList", "Khong", "Không liệt kê")',
+                                'Keywords.Add("Proceed", "TiepTuc", "Tiếp tục")',
+                                'Keywords.Add("Cancel", "Huy", "Hủy")',
+                                'Keywords.Add("Yes", "Co", "Có")',
+                                'Keywords.Add("No", "Khong", "Không")',
+                                'ChoiceIs(cutResponse, "Detail", "ChiTiet")')) {
+            if(-not $commands.Contains($phrase)) { throw "Vietnamese CAD keyword mapping missing: $phrase" }
+          }
+          if ($commands.Contains('[Summary/Detail/NoList]') -or
+              $commands.Contains('[Proceed/Cancel]') -or
+              $commands.Contains('[Yes/No]')) {
+            throw 'English selection labels still visible'
+          }
+          Write-Host 'HCE COMPACT STATUS / HCF WORKING COMBO / VIETNAMESE COMMAND CONTRACT PASS'
 
       - name: Verify HCE default palette and calculator route
         shell: powershell
