@@ -84,7 +84,11 @@ namespace HNL.CeilingEstimator.AutoCAD
         private static readonly Guid PaletteId = new Guid("3214F7D5-9F11-4DB9-8369-6D40F07C2A8E");
         // CI stamps this once, at build time in Vietnam local time (UTC+07).
         // Never use DateTime.Now here: opening the palette is not a software update.
-        internal const string PaletteCaption = "HNL HCE Pro | HCE_UPDATED_AT_VN";
+        // Native AutoCAD title can be clipped by dock/auto-hide chrome.
+        // Keep it short; render the full, immutable build timestamp in one
+        // thin row directly beneath the native title as a visible fallback.
+        internal const string PaletteCaption = "HNL HCE | HCE_UPDATED_AT_SHORT_VN";
+        internal const string BuildInfo = "v0.3.0  ·  Cập nhật HCE_UPDATED_AT_VN";
         private static PaletteSet? _palette;
         private static HcePaletteView? _view;
 
@@ -105,7 +109,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                     Size = new DrawingSize(420, 730),
                     KeepFocus = false
                 };
-                palette.AddVisual(PaletteCaption, view);
+                // Short tab name leaves room for Autodesk's native palette buttons.
+                palette.AddVisual("HCE", view);
                 _view = view;
                 _palette = palette;
                 // Apply the settings of the active DWG on every document switch.
@@ -431,10 +436,22 @@ namespace HNL.CeilingEstimator.AutoCAD
             // Compact HCF-like status rail. Idle = one short row; progress
             // appears only when the calculation is active or has completed.
             var root = new Grid();
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            // One compact line shows full year/time even when AutoCAD's docked
+            // native caption is truncated. This is build time, not DateTime.Now.
+            var buildInfo = Text(HcePaletteService.BuildInfo, 10, _muted, FontWeights.SemiBold);
+            buildInfo.Margin = new Thickness(8, 3, 8, 3);
+            buildInfo.TextWrapping = TextWrapping.NoWrap;
+            buildInfo.TextTrimming = TextTrimming.CharacterEllipsis;
+            buildInfo.ToolTip = HcePaletteService.BuildInfo;
+            Grid.SetRow(buildInfo, 0);
+            root.Children.Add(buildInfo);
+
             var body = BuildCalculationTab();
-            Grid.SetRow(body, 0);
+            Grid.SetRow(body, 1);
             root.Children.Add(body);
 
             var strip = new Grid();
@@ -490,7 +507,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 Padding = new Thickness(8, 4, 8, 4),
                 Child = strip
             };
-            Grid.SetRow(rail, 1);
+            Grid.SetRow(rail, 2);
             root.Children.Add(rail);
             return root;
         }
