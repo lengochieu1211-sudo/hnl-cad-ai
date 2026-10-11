@@ -408,7 +408,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             Grid.SetRow(body, 0);
             root.Children.Add(body);
 
-            var footer = new StackPanel { Margin = new Thickness(9, 4, 9, 9) };
+            var statusPanel = new StackPanel { Margin = new Thickness(9, 4, 9, 9) };
             var status = new Grid { Margin = new Thickness(0, 0, 0, 5) };
             status.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             status.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -418,7 +418,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             _workPercent = Text("", 10, _primary, FontWeights.SemiBold);
             Grid.SetColumn(_workPercent, 1);
             status.Children.Add(_workPercent);
-            footer.Children.Add(status);
+            statusPanel.Children.Add(status);
             _workProgress = new ProgressBar
             {
                 Minimum = 0, Maximum = 100, Value = 0, Height = 7,
@@ -426,7 +426,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 Foreground = _accent, Background = _border,
                 Margin = new Thickness(0, 0, 0, 7)
             };
-            footer.Children.Add(_workProgress);
+            statusPanel.Children.Add(_workProgress);
             _stopHceButton = new WpfButton
             {
                 Content = "Tắt HCE",
@@ -440,8 +440,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                 ToolTip = "Tắt HCE; giữ AutoCAD và dữ liệu bản vẽ đang mở."
             };
             _stopHceButton.Click += (sender, args) => RequestStopHce();
-            footer.Children.Add(_stopHceButton);
-            var footerCard = Card(footer);
+            statusPanel.Children.Add(_stopHceButton);
+            var footerCard = Card(statusPanel);
             Grid.SetRow(footerCard, 1);
             root.Children.Add(footerCard);
             return root;
