@@ -81,8 +81,9 @@ jobs:
           $ui = [IO.File]::ReadAllText($uiPath)
           # Windows PowerShell 5 may decode GitHub workflow script literals
           # without a UTF-8 BOM. Test ASCII wiring/tokens, not accented text.
-          if (-not $ui.Contains('HNL TOOL - CEILING ESTIMATOR PRO | HCE_UPDATED_AT_SHORT_VN') -or
+          if (-not $ui.Contains('HNL HCE | HCE_UPDATED_AT_SHORT_VN') -or
               -not $ui.Contains('internal const string BuildInfo = "v0.3.0') -or
+              -not $ui.Contains('internal const string VisibleTitle = "HNL Tool - HCE') -or
               -not $ui.Contains('HCE_UPDATED_AT_VN')) {
             throw 'Missing compact native title and full-year one-line update stamp'
           }
@@ -98,17 +99,21 @@ jobs:
           if ($ui.Contains('HCE_UPDATED_AT_VN') -or $ui.Contains('HCE_UPDATED_AT_SHORT_VN')) {
             throw 'Unstamped HCE Palette update/build-time marker'
           }
-          $expectedNative = "HNL TOOL - CEILING ESTIMATOR PRO | $shortTimeVN"
+          $expectedNative = "HNL HCE | $shortTimeVN"
           $stampLine = ($ui -split "`n" | Where-Object { $_.Contains('internal const string BuildInfo = ') } | Select-Object -First 1)
+          $visibleLine = ($ui -split "`n" | Where-Object { $_.Contains('internal const string VisibleTitle = ') } | Select-Object -First 1)
           if (-not $ui.Contains($expectedNative) -or
               -not $stampLine.Contains($buildTimeVN) -or
+              -not $visibleLine.Contains($buildTimeVN) -or
+              -not $ui.Contains('root.Children.Add(visibleTitle);') -or
+              -not $ui.Contains('Grid.SetRow(visibleTitle, 0)') -or
               $ui.Contains('Grid.SetRow(buildInfo, 0)') -or
               $ui.Contains('root.Children.Add(buildInfo);')) {
-            throw 'HCE update timestamp must be wired to native title and slim visible WPF line'
+            throw 'HCE build date must be visible in title and native caption, no extra version row'
           }
           [IO.File]::WriteAllText($uiPath, $ui, [Text.UTF8Encoding]::new($false))
           Write-Host "HCE PALETTE TITLE PASS: $expectedNative (UTC+07, build time)"
-          Write-Host "HCE PALETTE VISIBLE STAMP PASS: $stampLine"
+          Write-Host "HCE PALETTE VISIBLE STAMP PASS: $visibleLine"
           Write-Host 'HCE PALETTE COMPACT FRAME PASS: no duplicate bulky header; one slim visible update line'
           
       - name: Validate HCE WPF templates and Hatch Area safeguards
@@ -374,34 +379,45 @@ jobs:
               throw "Internal UI calculation/QA/stop route must remain operational: $needed"
             }
           }
-          foreach ($required in @('[CommandMethod("HCESELECT", CommandFlags.Modal)]',
-              'ConditionalWeakTable<Database, HatchSelectionState>',
-              'state.Ids = Array.Empty<ObjectId>();',
-              'selectedIds = picked.Value.GetObjectIds();',
-              'foreach (ObjectId selectedId in selectedIds)',
-              'transaction.GetObject(selectedId, OpenMode.ForRead, false)',
+          # LISP RC18.5: S/D use exactly one source size, M may combine.
+          # Test the adapter's actual Core-bin safety gate and mode mapping.
+          foreach ($required in @(
+              'var expectedCode = profile.Module == "D" ? "D" : "S";',
+              '!options.MixedMode',
+              'foreach (var bin in group.Packing.Bins)',
+              'string.Equals(bin.Code, expectedCode, StringComparison.Ordinal)',
+              'Không tạo bảng CAD để tránh sai vật tư',
               'WritePreview(editor, report, rejected, profile.Module);',
               'module == "S"', 'module == "D"',
-              'Nguồn cắt tấm ngắn=', 'Nguồn cắt tấm dài=')) {
+              'Nguồn cắt tấm ngắn=', 'Nguồn cắt tấm dài=',
+              'foreach (SelectedObject selected in picked.Value)',
+              'var picked = editor.GetSelection(selectionOptions, filter);')) {
             if (-not $commands.Contains($required)) {
-              throw "HCE selection / current DWG / pure source report gate missing: $required"
+              throw "Pure S/D stock-source guard / original single-action Hatch path missing: $required"
             }
           }
-          foreach ($required in @('CommandButton("Chọn Hatch", "HCESELECT", true)',
-              'CommandButton("Tạo bảng", "HCECALC", true)',
-              'Grid.SetColumn(rightRail, 1);', 'Grid.SetRowSpan(rightRail, 3);',
+          if ($commands.Contains('[CommandMethod("HCESELECT", CommandFlags.Modal)]') -or
+              $commands.Contains('SelectedHatches.GetValue(')) {
+            throw 'Obsolete two-button staged selection must not remain'
+          }
+          foreach ($required in @('CommandButton("Chọn Hatch và tạo bảng", "HCECALC", true)',
+              'root.Children.Add(visibleTitle);',
+              'Grid.SetColumn(rightRail, 1);',
               'Width = 40, Background = _surface',
-              'internal const string PaletteCaption = "HNL TOOL - CEILING ESTIMATOR PRO | ')) {
+              "CornerRadius='8'",
+              '_stopHceButton.Template = (ControlTemplate)XamlReader.Parse(stopTemplateXaml);',
+              'internal const string PaletteCaption = "HNL HCE | ',
+              'internal const string VisibleTitle = "HNL Tool - HCE')) {
             if (-not $ui.Contains($required)) {
-              throw "HCE HCF-style layout / title contract missing: $required"
+              throw "Single button / build date / rounded HCF stop gate missing: $required"
             }
           }
-          if ($ui.Contains('Chọn Hatch và tạo bảng') -or
-              $ui.Contains('Grid.SetRow(buildInfo, 0)') -or
-              $ui.Contains('Content = "Tắt HCE"')) {
-            throw 'Old combined Create / duplicate build label / footer stop remains'
+          if ($ui.Contains('CommandButton("Tạo bảng", "HCECALC", true)') -or
+              $ui.Contains('CommandButton("Chọn Hatch", "HCESELECT", true)') -or
+              $ui.Contains('createFooter') -or $ui.Contains('Content = "Tắt HCE"')) {
+            throw 'Duplicate Create or unrounded old footer stop remains'
           }
-          Write-Host 'HCE STAGED HATCH + MODE-SPECIFIC PREVIEW + HCF RIGHT-RAIL GATE PASS'
+          Write-Host 'HCE SINGLE-ACTION UI / VISIBLE DATE / ROUNDED STOP / PURE S-D STOCK-GUARD STATIC PASS'
           Write-Host 'HCE ONE-LAUNCHER COMMAND CONTRACT PASS: HCE only; removed DTC/DEMTC/HCEUI, internal buttons intact.'
 
       - name: Validate DCL options restored in WPF UI
