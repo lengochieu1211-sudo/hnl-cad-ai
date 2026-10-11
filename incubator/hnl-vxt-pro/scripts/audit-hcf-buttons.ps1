@@ -146,6 +146,15 @@ if ($layInUi.Contains('Content="Vẽ Ty"') -or
     throw 'HCF audit: duplicate legacy Lay-in toggles were reintroduced.'
 }
 
+# A selected Lay-in Hatch is never a concealed Polyline boundary.
+$paletteVm = Source 'src/HNL.VXT.UI/ViewModels/VxtPaletteViewModel.cs'
+$layInVm = Source 'src/HNL.VXT.UI/ViewModels/LayInCeilingViewModel.cs'
+if (-not $paletteVm.Contains('if (LayIn.HasExistingHatchSource)') -or
+    -not $layInVm.Contains('public bool HasExistingHatchSource => _usingExistingHatch;') -or
+    -not $registeredSource.Contains('if (RejectLayInHatchSourceForConcealed()) return;')) {
+    throw 'HCF audit: a Lay-in Hatch source can leak into concealed Preview/Create.'
+}
+
 # Lay-in Create MUST first materialize its debounced Preview and require another
 # click rather than produce unpreviewed changes in the drawing.
 if (-not $hostBridgeSource.Contains('if (_pendingLayInPreviewSettings != null)') -or

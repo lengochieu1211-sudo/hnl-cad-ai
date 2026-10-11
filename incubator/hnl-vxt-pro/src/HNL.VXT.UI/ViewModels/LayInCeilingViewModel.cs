@@ -225,6 +225,8 @@ namespace HNL.VXT.UI.ViewModels
         }
 
         public bool IsUsingExistingHatch => !_settings.DrawHatch;
+        // Hatch OFF by itself does not mean a valid Hatch source was picked.
+        public bool HasExistingHatchSource => _usingExistingHatch;
 
         public bool DrawHangers
         {
@@ -589,6 +591,7 @@ namespace HNL.VXT.UI.ViewModels
             _settings.ExistingHatchAngleRadians = null;
             OnPropertyChanged(nameof(DrawHatch));
             OnPropertyChanged(nameof(IsUsingExistingHatch));
+            OnPropertyChanged(nameof(HasExistingHatchSource));
             OnPropertyChanged(nameof(SelectedGrid));
             OnPropertyChanged(nameof(IsManualStart));
             OnPropertyChanged(nameof(IsDoorStart));
@@ -605,6 +608,7 @@ namespace HNL.VXT.UI.ViewModels
             _settings.ExistingHatchAngleRadians = null;
             OnPropertyChanged(nameof(DrawHatch));
             OnPropertyChanged(nameof(IsUsingExistingHatch));
+            OnPropertyChanged(nameof(HasExistingHatchSource));
             OnPropertyChanged(nameof(IsManualStart));
             OnPropertyChanged(nameof(IsDoorStart));
             (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();
@@ -633,6 +637,7 @@ namespace HNL.VXT.UI.ViewModels
             _settings.ExistingHatchAngleRadians = null;
             OnPropertyChanged(nameof(DrawHatch));
             OnPropertyChanged(nameof(IsUsingExistingHatch));
+            OnPropertyChanged(nameof(HasExistingHatchSource));
             OnPropertyChanged(nameof(IsManualStart));
             OnPropertyChanged(nameof(IsDoorStart));
             (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();

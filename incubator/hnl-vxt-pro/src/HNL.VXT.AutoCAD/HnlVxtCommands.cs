@@ -23,10 +23,21 @@ namespace HNL.VXT.AutoCAD
             new VxtCommands().ShowPalette();
         }
 
+        private static bool RejectLayInHatchSourceForConcealed()
+        {
+            if (VxtSession.Current.LayInExistingHatches.Count == 0) return false;
+            var doc = Autodesk.AutoCAD.ApplicationServices.Core.Application
+                .DocumentManager.MdiActiveDocument;
+            doc?.Editor.WriteMessage(
+                "\nHNL Tool - Trần chìm: Đang dùng nguồn Hatch của Trần nổi. Hãy chọn Polyline biên trước khi tạo.");
+            return true;
+        }
+
         [CommandMethod("HNLVXTCREATE", CommandFlags.Modal | CommandFlags.UsePickSet)]
         public void Create()
         {
             if (!VxtAuthorization.EnsureAuthorized()) return;
+            if (RejectLayInHatchSourceForConcealed()) return;
             // PickFirst parity: if the user already selected closed ceiling polylines in AutoCAD,
             // consume them as boundaries instead of reporting "Chưa chọn biên trần".
             if (!VxtSession.Current.HasBoundary)
@@ -39,6 +50,7 @@ namespace HNL.VXT.AutoCAD
         public void CreateWithWarning()
         {
             if (!VxtAuthorization.EnsureAuthorized()) return;
+            if (RejectLayInHatchSourceForConcealed()) return;
             if (!VxtSession.Current.HasBoundary)
                 VxtBoundarySelectionAdapter.TryAdoptImpliedSelection(refreshPreview: true, writeMessage: true);
 
@@ -219,6 +231,7 @@ namespace HNL.VXT.AutoCAD
         {
             if (!VxtPaletteService.IsActive) return;
             if (!VxtAuthorization.EnsureAuthorized()) return;
+            if (RejectLayInHatchSourceForConcealed()) return;
             VxtTransientPreview.Instance.Refresh();
         }
 

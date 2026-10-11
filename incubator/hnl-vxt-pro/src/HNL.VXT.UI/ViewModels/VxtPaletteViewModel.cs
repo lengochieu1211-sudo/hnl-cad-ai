@@ -82,7 +82,12 @@ namespace HNL.VXT.UI.ViewModels
                 else
                 {
                     _host.ClearLayInPreview();
-                    if (HasBoundary)
+                    if (LayIn.HasExistingHatchSource)
+                    {
+                        // Lay-in Hatch source ObjectIds are not concealed Polyline inputs.
+                        SetPreviewError("Hatch nguồn chỉ dùng cho Trần nổi. Chọn Polyline trước khi vẽ Trần chìm.");
+                    }
+                    else if (HasBoundary)
                         _host.RequestPreview(Snapshot());
                 }
             }
@@ -457,6 +462,11 @@ namespace HNL.VXT.UI.ViewModels
         private void RequestPreview()
         {
             if (!HasBoundary) return;
+            if (SelectedCeilingTabIndex == 0 && LayIn.HasExistingHatchSource)
+            {
+                SetPreviewError("Hatch nguồn chỉ dùng Trần nổi. Chọn Polyline trước khi xem trước Trần chìm.");
+                return;
+            }
             if (!_settings.IsValid(out var error))
             {
                 SetPreviewError(error);
