@@ -253,6 +253,9 @@ jobs:
                                  'RefreshSelectionState(profile);', 'direction.IsEnabled = profile.Module != "S"',
                                  'priority.IsEnabled = profile.Module == "M"',
                                  '_legacyTolerance.IsEnabled = profile.SnapEnabled',
+                                 'ToolTipService.SetShowOnDisabled(priority, true)',
+                                 'ToolTipService.SetShowOnDisabled(direction, true)',
+                                 'ToolTipService.SetShowOnDisabled(_legacyTolerance, true)',
                                  'SaveLegacyCutList(bool enabled)', 'SaveLegacySnap(bool enabled)',
                                  'RefreshCadTableStyles(profile);', 'RefreshTableStyles(profile);')) {
             if(-not $ui.Contains($required)) {throw "Option persistence / dependency gate missing: $required"}
