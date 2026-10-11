@@ -472,7 +472,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             _workProgress = new ProgressBar
             {
                 Minimum = 0, Maximum = 100, Value = 0, Height = 4,
-                IsIndeterminate = false, Visibility = Visibility.Collapsed,
+                IsIndeterminate = false, Visibility = System.Windows.Visibility.Collapsed,
                 Foreground = _accent, Background = _border,
                 Margin = new Thickness(0, 4, 0, 0)
             };
@@ -512,7 +512,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 stage == "Sẵn sàng tính tấm.";
             _workPercent.Text = idle ? string.Empty :
                 (indeterminate ? "Đang xử lý" : percent + "%");
-            _workProgress.Visibility = idle ? Visibility.Collapsed : Visibility.Visible;
+            _workProgress.Visibility = idle ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
             if (_stopHceButton != null)
                 _stopHceButton.IsEnabled = !HcePaletteService.IsCalculating;
         }
