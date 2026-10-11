@@ -42,6 +42,7 @@ namespace HNL.CeilingEstimator.AutoCAD
 
     internal static class HcePaletteService
     {
+        private static bool _active;
         private static bool _calculationRunning;
         internal static bool IsCalculating => _calculationRunning;
 
@@ -73,7 +74,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                 doc?.Editor.WriteMessage("\nHNL Tool - HCE đang tính; không thể đóng giữa phép tính.");
                 return;
             }
+            _active = false;
             if (_palette != null) _palette.Visible = false;
+            // No longer refresh the hidden UI when another DWG activates.
             doc?.Editor.WriteMessage("\nHNL Tool - Đã tắt HCE; AutoCAD vẫn chạy. Gõ HCE để mở lại.");
         }
 
@@ -86,6 +89,7 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         public static void Show()
         {
+            _active = true;
             if (_palette == null)
             {
                 // Lazy UI initialization: no WPF work on AutoCAD startup.
@@ -106,6 +110,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 // Apply the settings of the active DWG on every document switch.
                 CadApplication.DocumentManager.DocumentActivated += (sender, args) =>
                 {
+                    if (!_active || _palette == null || !_palette.Visible) return;
                     var currentView = _view;
                     if (currentView == null) return;
                     try
@@ -121,6 +126,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 };
             }
             _view?.RefreshLegacyControls();
+            _view?.UpdateWorkProgress(0, "Sẵn sàng tính tấm.", false);
             _palette.Visible = true;
         }
     }
@@ -227,7 +233,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 <Setter Property='BorderBrush' Value='{DynamicResource InputBorder}'/>
                 <Setter Property='BorderThickness' Value='1'/>
                 <Setter Property='Padding' Value='7,3,30,3'/>
-                <Setter Property='MinHeight' Value='27'/>
+                <Setter Property='MinHeight' Value='30'/>
                 <Setter Property='Template'>
                     <Setter.Value>
                         <ControlTemplate TargetType='{x:Type ComboBox}'>
@@ -537,7 +543,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var snapRow = new Grid { Margin = new Thickness(0, 3, 0, 8) };
             snapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             snapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            _legacySnap = new CheckBox { Content = "Bật", Foreground = _primary, MinHeight = 27, VerticalContentAlignment = VerticalAlignment.Center };
+            _legacySnap = new CheckBox { Content = "Bật", Foreground = _primary, MinHeight = 30, VerticalContentAlignment = VerticalAlignment.Center };
             Grid.SetColumn(_legacySnap, 1);
             _legacySnap.Checked += (sender, args) => SaveLegacySnap(true);
             _legacySnap.Unchecked += (sender, args) => SaveLegacySnap(false);
@@ -548,9 +554,10 @@ namespace HNL.CeilingEstimator.AutoCAD
             tol.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             tol.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             tol.Children.Add(Text("Dung sai (0-10 mm)", 11, _muted, FontWeights.Normal));
-            _legacyTolerance = new TextBox { MinHeight = 27,
+            _legacyTolerance = new TextBox { MinHeight = 30,
                 HorizontalAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center,
-                Foreground = _primary, Background = _surface, BorderBrush = _border,
+                Foreground = _primary, Background = (Brush)Resources["InputBackground"],
+                BorderBrush = (Brush)Resources["InputBorder"],
                 Padding = new Thickness(6, 3, 6, 3) };
             _legacyTolerance.LostFocus += (sender, args) => SaveLegacyTolerance();
             Grid.SetColumn(_legacyTolerance, 1);
@@ -565,7 +572,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             cadStyleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             cadStyleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             cadStyleRow.Children.Add(Text("Table Style (bảng)", 11, _muted, FontWeights.Normal));
-            _legacyCadTableStyle = new ComboBox { MinHeight = 27, Foreground = _primary };
+            _legacyCadTableStyle = new ComboBox { MinHeight = 30, Foreground = _primary };
             _legacyCadTableStyle.SelectionChanged += (sender, args) =>
             {
                 if (_loadingLegacyControls || _legacyCadTableStyle.SelectedIndex < 0) return;
@@ -584,7 +591,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             styleRow.Children.Add(Text("Text Style (chữ)", 11, _muted, FontWeights.Normal));
             _legacyTableStyle = new ComboBox
             {
-                MinHeight = 27, Foreground = _primary
+                MinHeight = 30, Foreground = _primary
             };
             _legacyTableStyle.SelectionChanged += (sender, args) =>
             {
@@ -604,9 +611,10 @@ namespace HNL.CeilingEstimator.AutoCAD
             heightRow.Children.Add(Text("Cao chữ (mm)", 11, _muted, FontWeights.Normal));
             _legacyTableHeight = new TextBox
             {
-                MinHeight = 27, HorizontalAlignment = HorizontalAlignment.Stretch,
+                MinHeight = 30, HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalContentAlignment = VerticalAlignment.Center,
-                Foreground = _primary, Background = _surface, BorderBrush = _border,
+                Foreground = _primary, Background = (Brush)Resources["InputBackground"],
+                BorderBrush = (Brush)Resources["InputBorder"],
                 Padding = new Thickness(6, 3, 6, 3)
             };
             _legacyTableHeight.LostFocus += (sender, args) => SaveLegacyTableHeight();
@@ -619,9 +627,10 @@ namespace HNL.CeilingEstimator.AutoCAD
             labelHeightRow.Children.Add(Text("Cao mã ô (mm)", 11, _muted, FontWeights.Normal));
             _legacyLabelHeight = new TextBox
             {
-                MinHeight = 27, HorizontalAlignment = HorizontalAlignment.Stretch,
+                MinHeight = 30, HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalContentAlignment = VerticalAlignment.Center,
-                Foreground = _primary, Background = _surface, BorderBrush = _border,
+                Foreground = _primary, Background = (Brush)Resources["InputBackground"],
+                BorderBrush = (Brush)Resources["InputBorder"],
                 Padding = new Thickness(6, 3, 6, 3)
             };
             _legacyLabelHeight.LostFocus += (sender, args) => SaveLegacyLabelHeight();
@@ -641,7 +650,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             cutListRow.Children.Add(cutListLabel);
             _legacyCutList = new CheckBox
             {
-                Content = "Hiển thị", Foreground = _primary, MinHeight = 27,
+                Content = "Hiển thị", Foreground = _primary, MinHeight = 30,
                 VerticalContentAlignment = VerticalAlignment.Center
             };
             _legacyCutList.Checked += (sender, args) => SaveLegacyCutList(true);
@@ -663,7 +672,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 }
             };
             cutModeRow.Children.Add(cutModeLabel);
-            _legacyCutMode = new ComboBox { MinHeight = 27, Foreground = _primary };
+            _legacyCutMode = new ComboBox { MinHeight = 30, Foreground = _primary };
             _legacyCutMode.Items.Add("Tổng hợp");
             _legacyCutMode.Items.Add("Chi tiết (chậm)");
             _legacyCutMode.SelectionChanged += (sender, args) =>
@@ -706,7 +715,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             row.Children.Add(Text(label, 11, _muted, FontWeights.Normal));
             var selector = new ComboBox
             {
-                MinHeight = 27, Foreground = _primary, Tag = values
+                MinHeight = 30, Foreground = _primary, Tag = values
             };
             foreach (var name in names) selector.Items.Add(name);
             selector.SelectionChanged += (sender, args) =>
