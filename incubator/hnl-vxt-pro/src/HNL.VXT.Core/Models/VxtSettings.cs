@@ -16,7 +16,7 @@ namespace HNL.VXT.Core.Models
         public double MainBalanceStep { get; set; } = 50.0;
         // SOFT Min-edge tolerance only. It must never extend MainMaxEdgeOffset.
         public double MainEdgeTolerance { get; set; } = 25.0;
-        public bool UseLocalMainAdd { get; set; } = true;
+        public bool UseLocalMainAdd { get; set; } = false;
         public double MinLocalMainLength { get; set; } = 500.0;
         public double MainSkipLimit { get; set; } = 500.0;
         public MainDirectionMode MainDirection { get; set; } = MainDirectionMode.Horizontal;
