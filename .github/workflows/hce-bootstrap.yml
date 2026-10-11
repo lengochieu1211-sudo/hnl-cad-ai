@@ -79,8 +79,11 @@ jobs:
         run: |
           $uiPath = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs'
           $ui = [IO.File]::ReadAllText($uiPath)
+          # Windows PowerShell 5 may decode GitHub workflow script literals
+          # without a UTF-8 BOM. Test ASCII wiring/tokens, not accented text.
           if (-not $ui.Contains('HNL HCE | HCE_UPDATED_AT_SHORT_VN') -or
-              -not $ui.Contains('v0.3.0  ·  Cập nhật HCE_UPDATED_AT_VN')) {
+              -not $ui.Contains('internal const string BuildInfo = "v0.3.0') -or
+              -not $ui.Contains('HCE_UPDATED_AT_VN')) {
             throw 'Missing compact native title and full-year one-line update stamp'
           }
           if ($ui.Contains('pack://application:,,,/HNL.CeilingEstimator.AutoCAD;component/Assets/HNL-Logo-Official.png')) { throw 'Redundant HCE Palette logo still present' }
@@ -96,14 +99,15 @@ jobs:
             throw 'Unstamped HCE Palette update/build-time marker'
           }
           $expectedNative = "HNL HCE | $shortTimeVN"
-          $expectedFull = "v0.3.0  ·  Cập nhật $buildTimeVN"
-          if (-not $ui.Contains($expectedNative) -or -not $ui.Contains($expectedFull) -or
+          $stampLine = ($ui -split "`n" | Where-Object { $_.Contains('internal const string BuildInfo = ') } | Select-Object -First 1)
+          if (-not $ui.Contains($expectedNative) -or
+              -not $stampLine.Contains($buildTimeVN) -or
               -not $ui.Contains('Grid.SetRow(buildInfo, 0)')) {
             throw 'HCE update timestamp must be wired to native title and slim visible WPF line'
           }
           [IO.File]::WriteAllText($uiPath, $ui, [Text.UTF8Encoding]::new($false))
           Write-Host "HCE PALETTE TITLE PASS: $expectedNative (UTC+07, build time)"
-          Write-Host "HCE PALETTE VISIBLE STAMP PASS: $expectedFull"
+          Write-Host "HCE PALETTE VISIBLE STAMP PASS: $stampLine"
           Write-Host 'HCE PALETTE COMPACT FRAME PASS: no duplicate bulky header; one slim visible update line'
           
       - name: Validate HCE WPF templates and Hatch Area safeguards
