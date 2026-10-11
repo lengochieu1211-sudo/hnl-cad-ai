@@ -173,6 +173,62 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void FromDoor_BlockFamilyAssignsEachPolylineItsNearestDoor()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                GridSystem = LayInGridSystem.Module600x600,
+                MainDirection = LayInMainDirectionMode.Horizontal,
+                StartMode = LayInStartMode.FromDoor,
+                DoorCandidates = new[] { new Point2(40, 80), new Point2(18480, 4970) }
+            };
+            var first = LayInCeilingPlanner.Build(Rect(0, 0, 6500, 5000), null, settings);
+            var second = LayInCeilingPlanner.Build(Rect(12000, 0, 18500, 5000), null, settings);
+            var distant = LayInCeilingPlanner.Build(Rect(25000, 0, 31500, 5000), null, settings);
+            Assert.AreEqual(0, first.HatchOrigin.X, 0.001);
+            Assert.AreEqual(0, first.HatchOrigin.Y, 0.001);
+            Assert.AreEqual(18500, second.HatchOrigin.X, 0.001);
+            Assert.AreEqual(5000, second.HatchOrigin.Y, 0.001);
+            Assert.AreEqual(25250, distant.HatchOrigin.X, 0.001);
+            Assert.AreEqual(100, distant.HatchOrigin.Y, 0.001);
+            Assert.IsTrue(first.FirstTileOrigin.HasValue && second.FirstTileOrigin.HasValue);
+            Assert.IsTrue(first.FirstTileOrigin.Value.X < 1200 &&
+                          second.FirstTileOrigin.Value.X > 17000);
+        }
+
+        [TestMethod]
+        public void FromDoor_ClonedDoorLocationsDoNotShareMutableState()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                DoorCandidates = new[] { new Point2(40, 80) },
+                StartMode = LayInStartMode.FromDoor,
+                MainDirection = LayInMainDirectionMode.Horizontal
+            };
+            var clone = settings.Clone();
+            ((Point2[])settings.DoorCandidates)[0] = new Point2(6000, 4000);
+            Assert.AreEqual(40, clone.DoorCandidates[0].X, 0.001);
+            var plan = LayInCeilingPlanner.Build(Rect(0, 0, 6500, 5000), null, clone);
+            Assert.AreEqual(0, plan.HatchOrigin.X, 0.001);
+            clone.StartMode = LayInStartMode.Balanced;
+            plan = LayInCeilingPlanner.Build(Rect(0, 0, 6500, 5000), null, clone);
+            Assert.AreEqual(250, plan.HatchOrigin.X, 0.001);
+        }
+
+        [TestMethod]
+        public void FromDoor_WithoutSelectedDoorFallsBackToBalanced()
+        {
+            var plan = LayInCeilingPlanner.Build(Rect(0, 0, 6500, 5000), null,
+                new LayInCeilingSettings
+                {
+                    StartMode = LayInStartMode.FromDoor,
+                    MainDirection = LayInMainDirectionMode.Horizontal
+                });
+            Assert.AreEqual(250, plan.HatchOrigin.X, 0.001);
+            Assert.AreEqual(100, plan.HatchOrigin.Y, 0.001);
+        }
+
+        [TestMethod]
         public void FromDoor_UsesNearestBoundaryCornerAsHatchOriginReference()
         {
             var boundary = Rect(0, 0, 6000, 4800);

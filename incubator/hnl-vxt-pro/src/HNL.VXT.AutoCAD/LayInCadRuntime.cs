@@ -845,6 +845,69 @@ namespace HNL.VXT.AutoCAD
             }
         }
 
+        internal static void PickDoorBlock()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+
+            var options = new PromptEntityOptions(
+                "\nHNL Tool - Trần nổi: Chọn block cửa mẫu (tự tìm các cửa cùng tên): ");
+            options.SetRejectMessage("\nHNL Tool - Hãy chọn một BlockReference.");
+            options.AddAllowedClass(typeof(BlockReference), true);
+            var selected = doc.Editor.GetEntity(options);
+            if (selected.Status != PromptStatus.OK) return;
+
+            var locations = new List<HNL.VXT.Core.Geometry.Point2>();
+            string name;
+            using (var tr = doc.Database.TransactionManager.StartTransaction())
+            {
+                var chosen = tr.GetObject(selected.ObjectId, OpenMode.ForRead) as BlockReference;
+                if (chosen == null) return;
+                name = EffectiveDoorBlockName(tr, chosen);
+                if (string.IsNullOrWhiteSpace(name)) return;
+
+                var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+                var model = (BlockTableRecord)tr.GetObject(
+                    bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                foreach (ObjectId id in model)
+                {
+                    if (!string.Equals(id.ObjectClass?.DxfName, "INSERT",
+                            StringComparison.OrdinalIgnoreCase)) continue;
+                    var block = tr.GetObject(id, OpenMode.ForRead) as BlockReference;
+                    if (block == null ||
+                        !string.Equals(EffectiveDoorBlockName(tr, block), name,
+                            StringComparison.OrdinalIgnoreCase)) continue;
+                    locations.Add(new HNL.VXT.Core.Geometry.Point2(
+                        block.Position.X, block.Position.Y));
+                }
+                tr.Commit();
+            }
+
+            if (locations.Count == 0)
+            {
+                doc.Editor.WriteMessage(
+                    "\nHNL Tool - Trần nổi: Không có block cửa cùng tên trong Model Space.");
+                return;
+            }
+            var session = VxtSession.Current;
+            session.LayInSettings.DoorPoint = null;
+            session.LayInSettings.DoorCandidates = locations.ToArray();
+            session.LayInSettings.DoorBlockName = name;
+            session.LayInSettings.StartMode = LayInStartMode.FromDoor;
+            session.ViewModel?.LayIn?.SetDoorBlocks(name, locations);
+            doc.Editor.WriteMessage("\nHNL Tool - Trần nổi: Tìm thấy " +
+                locations.Count + " block cửa '" + name +
+                "'. Mỗi polyline tự chọn cửa gần nhất; vùng không gần cửa được cân biên.");
+        }
+
+        private static string EffectiveDoorBlockName(Transaction tr, BlockReference block)
+        {
+            var recordId = block.IsDynamicBlock
+                ? block.DynamicBlockTableRecord : block.BlockTableRecord;
+            var definition = tr.GetObject(recordId, OpenMode.ForRead) as BlockTableRecord;
+            return definition?.Name ?? string.Empty;
+        }
+
         internal static void PickBlock(bool startMarker)
         {
             var doc = Application.DocumentManager.MdiActiveDocument;

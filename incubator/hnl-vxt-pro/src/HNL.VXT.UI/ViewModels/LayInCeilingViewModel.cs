@@ -538,7 +538,10 @@ namespace HNL.VXT.UI.ViewModels
         {
             _settings.ManualStartPoint = null;
             _settings.DoorPoint = null;
+            _settings.DoorCandidates = Array.Empty<HNL.VXT.Core.Geometry.Point2>();
+            _settings.DoorBlockName = string.Empty;
             _settings.DimensionStyle = string.Empty;
+            OnPropertyChanged(nameof(DoorBlockSummary));
             OnPropertyChanged(nameof(SelectedDimensionStyle));
             OnPropertyChanged(nameof(DimStyleOptions));
             if (_settings.StartMode != LayInStartMode.Balanced)
@@ -560,13 +563,37 @@ namespace HNL.VXT.UI.ViewModels
             RequestPreview();
         }
 
+        public string DoorBlockSummary => _settings.DoorCandidates?.Count > 0
+            ? "Cửa mẫu: " + _settings.DoorBlockName + " (" +
+              _settings.DoorCandidates.Count + " block cùng tên)"
+            : "Chọn một block cửa mẫu để tự tìm các cửa cùng tên trong DWG.";
+
+        public void SetDoorBlocks(string blockName,
+            IReadOnlyList<HNL.VXT.Core.Geometry.Point2> points)
+        {
+            if (points == null || points.Count == 0) return;
+            _settings.DoorPoint = null;
+            _settings.DoorBlockName = blockName ?? string.Empty;
+            _settings.DoorCandidates = points.ToArray();
+            _settings.StartMode = LayInStartMode.FromDoor;
+            OnPropertyChanged(nameof(SelectedStart));
+            OnPropertyChanged(nameof(IsManualStart));
+            OnPropertyChanged(nameof(IsDoorStart));
+            OnPropertyChanged(nameof(DoorBlockSummary));
+            RequestPreview();
+        }
+
+        // Retain compatibility with the prior single-point API.
         public void SetDoorPoint(HNL.VXT.Core.Geometry.Point2 point)
         {
+            _settings.DoorCandidates = Array.Empty<HNL.VXT.Core.Geometry.Point2>();
+            _settings.DoorBlockName = string.Empty;
             _settings.DoorPoint = point;
             _settings.StartMode = LayInStartMode.FromDoor;
             OnPropertyChanged(nameof(SelectedStart));
             OnPropertyChanged(nameof(IsManualStart));
             OnPropertyChanged(nameof(IsDoorStart));
+            OnPropertyChanged(nameof(DoorBlockSummary));
             RequestPreview();
         }
 

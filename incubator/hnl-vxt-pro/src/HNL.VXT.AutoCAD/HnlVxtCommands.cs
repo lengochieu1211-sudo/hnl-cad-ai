@@ -267,7 +267,7 @@ namespace HNL.VXT.AutoCAD
         public void LayInPickDoor()
         {
             if (!VxtAuthorization.EnsureAuthorized()) return;
-            LayInCadRuntime.PickPoint(true);
+            LayInCadRuntime.PickDoorBlock();
         }
 
         [CommandMethod("HNLCFLAYINHANGERBLOCK", CommandFlags.Modal)]

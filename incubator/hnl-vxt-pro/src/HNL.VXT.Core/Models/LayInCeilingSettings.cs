@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using HNL.VXT.Core.Geometry;
 
 namespace HNL.VXT.Core.Models
@@ -53,6 +56,9 @@ namespace HNL.VXT.Core.Models
 
         public Point2? ManualStartPoint { get; set; }
         public Point2? DoorPoint { get; set; }
+        // The selected door family is resolved into model-space positions for this DWG only.
+        public IReadOnlyList<Point2> DoorCandidates { get; set; } = Array.Empty<Point2>();
+        public string DoorBlockName { get; set; } = string.Empty;
 
         public bool DrawHangers { get; set; } = true;
         // Keep zero Max/edge values as system defaults (1200/1220 and 300/305).
@@ -97,7 +103,10 @@ namespace HNL.VXT.Core.Models
 
         public LayInCeilingSettings Clone()
         {
-            return (LayInCeilingSettings)MemberwiseClone();
+            var copy = (LayInCeilingSettings)MemberwiseClone();
+            copy.DoorCandidates = DoorCandidates == null
+                ? Array.Empty<Point2>() : DoorCandidates.ToArray();
+            return copy;
         }
     }
 }

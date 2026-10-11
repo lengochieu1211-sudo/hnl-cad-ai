@@ -262,12 +262,34 @@ namespace HNL.VXT.Core.Preview
             }
 
             Point2 reference;
-            if (settings.StartMode == LayInStartMode.FromDoor && settings.DoorPoint.HasValue)
+            if (settings.StartMode == LayInStartMode.FromDoor)
             {
-                var door = settings.DoorPoint.Value;
-                reference = boundary.Vertices
-                    .OrderBy(p => p.DistanceTo(door))
-                    .First();
+                if (settings.DoorCandidates != null && settings.DoorCandidates.Count > 0)
+                {
+                    // Each room selects its own closest door along its actual boundary.
+                    var corner = ResolveDoorCorner(boundary, settings.DoorCandidates,
+                        Math.Max(2000.0, 2.0 * spec.MainSpacing));
+                    if (!corner.HasValue)
+                    {
+                        // No matching door nearby: never apply a distant room's grid phase.
+                        phaseX = BalancedPhase(bounds.MinX, bounds.MaxX, spec.ModuleShort);
+                        phaseY = BalancedPhase(bounds.MinY, bounds.MaxY, spec.MainSpacing);
+                        return;
+                    }
+                    reference = corner.Value;
+                }
+                else if (settings.DoorPoint.HasValue)
+                {
+                    // Backward compatibility for legacy single-point test/presets.
+                    reference = boundary.Vertices
+                        .OrderBy(p => p.DistanceTo(settings.DoorPoint.Value)).First();
+                }
+                else
+                {
+                    phaseX = BalancedPhase(bounds.MinX, bounds.MaxX, spec.ModuleShort);
+                    phaseY = BalancedPhase(bounds.MinY, bounds.MaxY, spec.MainSpacing);
+                    return;
+                }
             }
             else if (settings.ManualStartPoint.HasValue)
             {
@@ -281,6 +303,56 @@ namespace HNL.VXT.Core.Preview
             var local = Transform2.ToLocal(reference, angle);
             phaseX = local.X;
             phaseY = local.Y;
+        }
+
+        private static Point2? ResolveDoorCorner(
+            Boundary2 boundary, IReadOnlyList<Point2> doors, double searchRadius)
+        {
+            if (boundary == null || doors == null || doors.Count == 0) return null;
+            var bestEdgeDistance = double.PositiveInfinity;
+            var bestCornerDistance = double.PositiveInfinity;
+            var limit = searchRadius * searchRadius;
+            Point2? result = null;
+            foreach (var door in doors)
+            {
+                var edgeDistance = DistanceToBoundarySquared(door, boundary.Vertices);
+                if (edgeDistance > limit + Eps) continue;
+                var corner = boundary.Vertices
+                    .OrderBy(p => p.DistanceTo(door)).First();
+                var dx = door.X - corner.X;
+                var dy = door.Y - corner.Y;
+                var cornerDistance = dx * dx + dy * dy;
+                if (edgeDistance < bestEdgeDistance - Eps ||
+                    (Math.Abs(edgeDistance - bestEdgeDistance) <= Eps &&
+                     cornerDistance < bestCornerDistance - Eps))
+                {
+                    result = corner;
+                    bestEdgeDistance = edgeDistance;
+                    bestCornerDistance = cornerDistance;
+                }
+            }
+            return result;
+        }
+
+        private static double DistanceToBoundarySquared(
+            Point2 point, IReadOnlyList<Point2> vertices)
+        {
+            var best = double.PositiveInfinity;
+            for (var i = 0; i < vertices.Count; i++)
+            {
+                var a = vertices[i];
+                var b = vertices[(i + 1) % vertices.Count];
+                var dx = b.X - a.X;
+                var dy = b.Y - a.Y;
+                var len2 = dx * dx + dy * dy;
+                var t = len2 <= Eps ? 0.0 :
+                    ((point.X - a.X) * dx + (point.Y - a.Y) * dy) / len2;
+                t = Math.Max(0.0, Math.Min(1.0, t));
+                var rx = a.X + t * dx - point.X;
+                var ry = a.Y + t * dy - point.Y;
+                best = Math.Min(best, rx * rx + ry * ry);
+            }
+            return best;
         }
 
         private static double BalancedPhase(double min, double max, double spacing)

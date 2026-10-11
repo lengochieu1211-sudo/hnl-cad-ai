@@ -75,6 +75,17 @@ if (-not $xaml.Contains('x:Name="ConcealedCreateButton"') -or
     throw 'HCF audit: concealed Create button loses its handler on Palette reopen.'
 }
 
+# Guard the redundant Lay-in DIM captions and the point-based door picker from returning.
+# This catches source/UI regressions but not an old AutoCAD DLL already in memory.
+if ($xaml.Contains('Text="DIM ô nguyên + mép cắt."') -or
+    $xaml.Contains('Text="Số ô gộp"') -or
+    $xaml.Contains('Text="Tự tính theo lưới và ô nguyên"') -or
+    -not $xaml.Contains('Content="Chọn block cửa"') -or
+    $xaml.Contains('Content="Chọn điểm cửa"') -or
+    -not $registeredSource.Contains('LayInCadRuntime.PickDoorBlock();')) {
+    throw 'HCF audit: old Lay-in DIM captions or door point UI were restored.'
+}
+
 # Lay-in Create MUST first materialize its debounced Preview and require another
 # click rather than produce unpreviewed changes in the drawing.
 if (-not $hostBridgeSource.Contains('if (_pendingLayInPreviewSettings != null)') -or

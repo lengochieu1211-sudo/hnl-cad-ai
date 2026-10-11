@@ -76,6 +76,8 @@ namespace HNL.VXT.AutoCAD
             // to one DWG coordinate system and must never leak across document switches.
             LayInSettings.ManualStartPoint = null;
             LayInSettings.DoorPoint = null;
+            LayInSettings.DoorCandidates = new Point2[0];
+            LayInSettings.DoorBlockName = string.Empty;
             // Explicit DimStyle is a DWG symbol-table reference, not a global preset.
             LayInSettings.DimensionStyle = string.Empty;
             LayInSettings.StartMode = LayInStartMode.Balanced;
