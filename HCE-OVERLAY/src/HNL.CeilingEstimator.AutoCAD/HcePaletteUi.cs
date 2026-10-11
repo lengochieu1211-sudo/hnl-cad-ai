@@ -161,6 +161,7 @@ namespace HNL.CeilingEstimator.AutoCAD
         private WpfText? _legacyValidation;
         private WpfText? _workStage;
         private WpfText? _workPercent;
+        private WpfBorder? _workIndicator;
         private ProgressBar? _workProgress;
         private WpfButton? _stopHceButton;
         private bool _loadingLegacyControls;
@@ -455,30 +456,61 @@ namespace HNL.CeilingEstimator.AutoCAD
             Grid.SetRow(body, 1);
             root.Children.Add(body);
 
+            // One stable compact rail: status + clearly visible percent +
+            // separate stop action above a six-pixel progress track.
+            // No timer, DispatcherFrame or fake increments in this view.
             var strip = new Grid();
             strip.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             strip.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var top = new Grid();
+            var top = new Grid { MinHeight = 26 };
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            _workStage = Text("Sẵn sàng tính tấm.", 10, _muted, FontWeights.Normal);
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var stageRow = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            stageRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            stageRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            _workIndicator = new WpfBorder
+            {
+                Width = 7, Height = 7, CornerRadius = new CornerRadius(4),
+                Background = _muted, Margin = new Thickness(0, 0, 7, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            stageRow.Children.Add(_workIndicator);
+            _workStage = Text("Sẵn sàng tính tấm.", 11, _primary, FontWeights.SemiBold);
             _workStage.TextWrapping = TextWrapping.NoWrap;
             _workStage.TextTrimming = TextTrimming.CharacterEllipsis;
-            var statusText = new Grid();
-            statusText.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            statusText.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            statusText.Children.Add(_workStage);
-            _workPercent = Text("", 10, _primary, FontWeights.SemiBold);
-            _workPercent.Margin = new Thickness(5, 0, 0, 0);
-            Grid.SetColumn(_workPercent, 1);
-            statusText.Children.Add(_workPercent);
-            top.Children.Add(statusText);
+            _workStage.VerticalAlignment = VerticalAlignment.Center;
+            _workStage.ToolTip = "Sẵn sàng tính tấm.";
+            Grid.SetColumn(_workStage, 1);
+            stageRow.Children.Add(_workStage);
+            top.Children.Add(stageRow);
+
+            _workPercent = Text("—", 14, _accent, FontWeights.Bold);
+            _workPercent.HorizontalAlignment = HorizontalAlignment.Center;
+            _workPercent.VerticalAlignment = VerticalAlignment.Center;
+            _workPercent.TextAlignment = TextAlignment.Center;
+            _workPercent.MinWidth = 40;
+            var percentBadge = new WpfBorder
+            {
+                Child = _workPercent,
+                MinWidth = 58, MinHeight = 26,
+                Background = _accentSoft, BorderBrush = _border,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(5),
+                Padding = new Thickness(5, 1, 5, 1),
+                Margin = new Thickness(7, 0, 0, 0),
+                ToolTip = "Tiến độ theo công đoạn HCE. Khi Core đang bận, AutoCAD có thể chờ cập nhật."
+            };
+            Grid.SetColumn(percentBadge, 1);
+            top.Children.Add(percentBadge);
+
             _stopHceButton = new WpfButton
             {
                 Content = "Tắt HCE", MinWidth = 78, MinHeight = 24,
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Padding = new Thickness(8, 2, 8, 2),
-                Margin = new Thickness(9, 0, 0, 0),
+                Margin = new Thickness(8, 0, 0, 0),
                 Foreground = Brush("#DC2626"),
                 Background = _surface, BorderBrush = _border,
                 BorderThickness = new Thickness(1),
@@ -486,16 +518,18 @@ namespace HNL.CeilingEstimator.AutoCAD
                 ToolTip = "Tắt HCE; AutoCAD và bản vẽ vẫn mở."
             };
             _stopHceButton.Click += (sender, args) => RequestStopHce();
-            Grid.SetColumn(_stopHceButton, 1);
+            Grid.SetColumn(_stopHceButton, 2);
             top.Children.Add(_stopHceButton);
-            Grid.SetRow(top, 0);
             strip.Children.Add(top);
+
             _workProgress = new ProgressBar
             {
-                Minimum = 0, Maximum = 100, Value = 0, Height = 4,
-                IsIndeterminate = false, Visibility = System.Windows.Visibility.Collapsed,
+                Minimum = 0, Maximum = 100, Value = 0, Height = 6,
+                IsIndeterminate = false,
                 Foreground = _accent, Background = _border,
-                Margin = new Thickness(0, 4, 0, 0)
+                BorderThickness = new Thickness(0),
+                Margin = new Thickness(0, 6, 0, 0),
+                ToolTip = "Phần trăm HCE theo từng giai đoạn: đọc Hatch, phân tích, ghép tấm, lập bảng."
             };
             Grid.SetRow(_workProgress, 1);
             strip.Children.Add(_workProgress);
@@ -505,7 +539,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 Background = _surface,
                 BorderBrush = _border,
                 BorderThickness = new Thickness(0, 1, 0, 0),
-                Padding = new Thickness(8, 4, 8, 4),
+                Padding = new Thickness(10, 5, 10, 7),
                 Child = strip
             };
             Grid.SetRow(rail, 2);
@@ -515,8 +549,9 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         internal void UpdateWorkProgress(int percent, string stage, bool indeterminate)
         {
-            // No DoEvents / DispatcherFrame: avoid re-entering CAD commands
-            // during a transaction. AutoCAD's native meter provides the live cue.
+            // AutoCAD remains in charge of the real modal progress meter.
+            // This Palette mirrors supplied stage percentages; never fake
+            // a smooth percentage with timers or re-enter CAD transactions.
             if (!Dispatcher.CheckAccess())
             {
                 Dispatcher.BeginInvoke(new Action(
@@ -525,15 +560,26 @@ namespace HNL.CeilingEstimator.AutoCAD
             }
             if (_workProgress == null || _workStage == null || _workPercent == null)
                 return;
-            _workStage.Text = stage;
+
+            var stageText = string.IsNullOrWhiteSpace(stage) ? "Đang xử lý..." : stage;
+            var value = Math.Max(0, Math.Min(100, percent));
+            var idle = !indeterminate && value == 0 && stageText == "Sẵn sàng tính tấm.";
+            var canceled = !indeterminate && value == 0 &&
+                stageText == "Đã dừng hoặc hủy thao tác.";
+            var completed = !indeterminate && value == 100 &&
+                !HcePaletteService.IsCalculating;
+
+            _workStage.Text = stageText;
+            _workStage.ToolTip = stageText;
             _workProgress.IsIndeterminate = indeterminate;
             if (!indeterminate)
-                _workProgress.Value = Math.Max(0, Math.Min(100, percent));
-            var idle = percent == 0 && !indeterminate &&
-                stage == "Sẵn sàng tính tấm.";
-            _workPercent.Text = idle ? string.Empty :
-                (indeterminate ? "Đang xử lý" : percent + "%");
-            _workProgress.Visibility = idle ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+                _workProgress.Value = idle || canceled ? 0 : value;
+            _workPercent.Text = idle || canceled ? "—" :
+                (indeterminate ? "···" : value.ToString(CultureInfo.InvariantCulture) + "%");
+            if (_workIndicator != null)
+                _workIndicator.Background = completed ? Brush("#22C55E") :
+                    canceled ? Brush("#F59E0B") :
+                    idle ? _muted : _accent;
             if (_stopHceButton != null)
                 _stopHceButton.IsEnabled = !HcePaletteService.IsCalculating;
         }
