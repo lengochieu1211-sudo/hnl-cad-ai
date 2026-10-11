@@ -81,7 +81,7 @@ jobs:
           $ui = [IO.File]::ReadAllText($uiPath)
           if (-not $ui.Contains('HNL HCE Pro | HCE_UPDATED_AT_VN')) { throw 'Missing HCE build-time caption marker' }
           if ($ui.Contains('pack://application:,,,/HNL.CeilingEstimator.AutoCAD;component/Assets/HNL-Logo-Official.png')) { throw 'Redundant HCE Palette logo still present' }
-          if ($ui.Contains('titleStack.Children.Add') -or $ui.Contains('footer.Child')) { throw 'Redundant Palette header/footer still present' }
+          if ($ui.Contains('titleStack.Children.Add') -or $ui.Contains('footer.Child =')) { throw 'Redundant Palette header/footer still present' }
           if (-not $ui.Contains('new PaletteSet(PaletteCaption, PaletteId)')) { throw 'Caption not wired into native AutoCAD PaletteSet' }
           if (-not $ui.Contains('palette.AddVisual(PaletteCaption, view)')) { throw 'HCE tab must reuse the build-time caption' }
           $buildTimeVN = [DateTime]::UtcNow.AddHours(7).ToString('dd/MM/yyyy HH:mm', [Globalization.CultureInfo]::InvariantCulture)
@@ -89,7 +89,7 @@ jobs:
           if ($ui.Contains('HCE_UPDATED_AT_VN')) { throw 'Unstamped HCE Palette title marker' }
           [IO.File]::WriteAllText($uiPath, $ui, [Text.UTF8Encoding]::new($false))
           Write-Host "HCE PALETTE NATIVE TITLE PASS: HNL HCE Pro | $buildTimeVN (UTC+07, build time)"
-          Write-Host 'HCE PALETTE HEADER-FOOTER REMOVAL PASS: calculator is sole content element'
+          Write-Host 'HCE PALETTE HEADER-FOOTER REMOVAL PASS: native caption only, calculator plus progress/stop strip'
           
       - name: Validate HCE WPF templates and Hatch Area safeguards
         shell: powershell
@@ -97,7 +97,7 @@ jobs:
           $dir='incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
           $ui=Get-Content "$dir/HcePaletteUi.cs" -Raw
           $adapter=Get-Content "$dir/Commands.cs" -Raw
-          if(-not $ui.Contains('return BuildCalculationTab();')){throw 'HCE must show calculator directly'}
+          if(-not $ui.Contains('var body = BuildCalculationTab();') -or -not $ui.Contains('root.Children.Add(body);')){throw 'HCE calculator must remain the sole mode, with a fixed progress/stop strip'}
           if($ui.Contains('tabs.Items.Add(new TabItem')){throw 'Unrelated Framing module tabs must not be attached to HCE layout'}
           foreach($phrase in @('HasNonAdjacentIntersections(segments)','AreaFromBoundary = usedBoundaryArea','native Hatch.Area=NotApplicable','UnitsValue.Millimeters','needsConfirmation = rejected == 0')) {
             if(-not $adapter.Contains($phrase)){throw "Missing safe Hatch.Area or confirmation gate: $phrase"}
@@ -126,6 +126,23 @@ jobs:
           if ($alignedInputs.Count -lt 2) { throw 'Both numeric TextBoxes must stretch in the shared input column' }
           if ([regex]::Matches($ui, 'new GridLength\(138\)').Count -lt 5) { throw 'Setting labels must have consistent column width' }
           Write-Host 'HCE SMOOTH SCROLL + COMBOBOX VISIBILITY STATIC GATE PASS'
+
+      - name: Verify HCE progress, safe stop and aligned dropdown
+        shell: powershell
+        run: |
+          $root = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
+          $ui = Get-Content "$root/HcePaletteUi.cs" -Raw
+          $commands = Get-Content "$root/Commands.cs" -Raw
+          foreach ($required in @('PlacementTarget.ActualWidth', 'ElementName=PART_Popup', 'ProgressBar', 'UpdateWorkProgress', 'CommandMethod("HCESTOP"', 'StopInCommandContext', 'MessageBoxButton.YesNo', 'Tắt HCE')) {
+            if(-not $ui.Contains($required)) { throw "HCE HCF-compatible UI contract missing: $required" }
+          }
+          foreach ($required in @('HceCommandProgress', 'ProgressMeter', 'MeterProgress()', 'onHatchProgress?.Invoke', 'onPackingProgress?.Invoke', 'onMeasuredRow?.Invoke', 'progress.Complete();')) {
+            if(-not $commands.Contains($required)) { throw "HCE real-stage progress gate missing: $required" }
+          }
+          if ($commands.Contains('DoEvents()') -or $commands.Contains('Dispatcher.PushFrame')) {
+            throw 'HCE progress must not re-enter AutoCAD modal command loop'
+          }
+          Write-Host 'HCE HCF-ALIGNED CONTROLS + PROGRESS + STOP STATIC GATE PASS'
 
       - name: Verify HCE default palette and calculator route
         shell: powershell
