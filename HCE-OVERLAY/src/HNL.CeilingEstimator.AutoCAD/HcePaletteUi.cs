@@ -87,7 +87,7 @@ namespace HNL.CeilingEstimator.AutoCAD
         // Native AutoCAD title can be clipped by dock/auto-hide chrome.
         // Keep it short; render the full, immutable build timestamp in one
         // thin row directly beneath the native title as a visible fallback.
-        internal const string PaletteCaption = "HNL HCE | HCE_UPDATED_AT_SHORT_VN";
+        internal const string PaletteCaption = "HNL TOOL - CEILING ESTIMATOR PRO | HCE_UPDATED_AT_SHORT_VN";
         internal const string BuildInfo = "v0.3.0  ·  Cập nhật HCE_UPDATED_AT_VN";
         private static PaletteSet? _palette;
         private static HcePaletteView? _view;
@@ -437,36 +437,39 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         private UIElement BuildLayout()
         {
-            // Compact HCF-like status rail. Idle = one short row; progress
-            // appears only when the calculation is active or has completed.
+            // The native Palette caption owns the build stamp. HCF has no
+            // duplicate version header consuming content height.
             var root = new Grid();
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            // One compact line shows full year/time even when AutoCAD's docked
-            // native caption is truncated. This is build time, not DateTime.Now.
-            var buildInfo = Text(HcePaletteService.BuildInfo, 10, _muted, FontWeights.SemiBold);
-            buildInfo.Margin = new Thickness(8, 3, 8, 3);
-            buildInfo.TextWrapping = TextWrapping.NoWrap;
-            buildInfo.TextTrimming = TextTrimming.CharacterEllipsis;
-            buildInfo.ToolTip = HcePaletteService.BuildInfo;
-            Grid.SetRow(buildInfo, 0);
-            root.Children.Add(buildInfo);
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var body = BuildCalculationTab();
-            Grid.SetRow(body, 1);
+            Grid.SetRow(body, 0);
             root.Children.Add(body);
 
-            // One stable compact rail: status + clearly visible percent +
-            // separate stop action above a six-pixel progress track.
-            // No timer, DispatcherFrame or fake increments in this view.
+            // Like HCF, the create action is fixed below the scrolling
+            // configuration. It executes HCECALC on AutoCAD's command stack.
+            var create = CommandButton("Tạo bảng", "HCECALC", true);
+            create.HorizontalAlignment = HorizontalAlignment.Stretch;
+            create.Margin = new Thickness(0);
+            var createFooter = new WpfBorder
+            {
+                Background = _surface, BorderBrush = _border,
+                BorderThickness = new Thickness(0, 1, 0, 0),
+                Padding = new Thickness(9, 6, 9, 6), Child = create
+            };
+            Grid.SetRow(createFooter, 1);
+            root.Children.Add(createFooter);
+
+            // Compact data-driven progress; height remains fixed on every stage.
             var strip = new Grid();
             strip.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             strip.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var top = new Grid { MinHeight = 26 };
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var stageRow = new Grid { VerticalAlignment = VerticalAlignment.Center };
@@ -506,22 +509,6 @@ namespace HNL.CeilingEstimator.AutoCAD
             };
             Grid.SetColumn(percentBadge, 1);
             top.Children.Add(percentBadge);
-
-            _stopHceButton = new WpfButton
-            {
-                Content = "Tắt HCE", MinWidth = 78, MinHeight = 24,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Padding = new Thickness(8, 2, 8, 2),
-                Margin = new Thickness(8, 0, 0, 0),
-                Foreground = Brush("#DC2626"),
-                Background = _surface, BorderBrush = _border,
-                BorderThickness = new Thickness(1),
-                Cursor = System.Windows.Input.Cursors.Hand,
-                ToolTip = "Tắt HCE; AutoCAD và bản vẽ vẫn mở."
-            };
-            _stopHceButton.Click += (sender, args) => RequestStopHce();
-            Grid.SetColumn(_stopHceButton, 2);
-            top.Children.Add(_stopHceButton);
             strip.Children.Add(top);
 
             _workProgress = new ProgressBar
@@ -536,16 +523,64 @@ namespace HNL.CeilingEstimator.AutoCAD
             Grid.SetRow(_workProgress, 1);
             strip.Children.Add(_workProgress);
 
-            var rail = new WpfBorder
+            var progressFooter = new WpfBorder
             {
-                Background = _surface,
-                BorderBrush = _border,
+                Background = _surface, BorderBrush = _border,
                 BorderThickness = new Thickness(0, 1, 0, 0),
-                Padding = new Thickness(10, 5, 10, 7),
-                Child = strip
+                Padding = new Thickness(10, 5, 10, 7), Child = strip
             };
-            Grid.SetRow(rail, 2);
-            root.Children.Add(rail);
+            Grid.SetRow(progressFooter, 2);
+            root.Children.Add(progressFooter);
+
+            // Match HCF's independent right-hand 40px navigation rail.
+            // STOP is not a calculation-mode tab and never cancels Core mid-run.
+            var rightRail = new Grid
+            {
+                Width = 40, Background = _surface,
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+            rightRail.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            rightRail.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var hceTab = Text("HCE", 11, _primary, FontWeights.SemiBold);
+            hceTab.LayoutTransform = new RotateTransform(-90);
+            hceTab.HorizontalAlignment = HorizontalAlignment.Center;
+            hceTab.VerticalAlignment = VerticalAlignment.Top;
+            hceTab.Margin = new Thickness(0, 26, 0, 0);
+            hceTab.ToolTip = "HNL Tool - Ceiling Estimator Pro";
+            rightRail.Children.Add(hceTab);
+
+            var stopContent = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            stopContent.Children.Add(new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse("M10,2 L10,10 M5,5 A8,8 0 1 0 15,5"),
+                Width = 19, Height = 19, Stretch = Stretch.Uniform,
+                Stroke = Brush("#DC2626"), StrokeThickness = 2.3
+            });
+            var stopLabel = Text("Tắt", 11, Brush("#B91C1C"), FontWeights.SemiBold);
+            stopLabel.HorizontalAlignment = HorizontalAlignment.Center;
+            stopLabel.Margin = new Thickness(0, 5, 0, 0);
+            stopContent.Children.Add(stopLabel);
+            _stopHceButton = new WpfButton
+            {
+                Content = stopContent, Width = 34, Height = 64,
+                Padding = new Thickness(2, 3, 2, 3),
+                Margin = new Thickness(2, 5, 2, 5),
+                Background = Brush("#FFF1F2"), BorderBrush = Brush("#FECACA"),
+                BorderThickness = new Thickness(1),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                ToolTip = "Tắt HCE; AutoCAD và bản vẽ vẫn mở."
+            };
+            _stopHceButton.Click += (sender, args) => RequestStopHce();
+            Grid.SetRow(_stopHceButton, 1);
+            rightRail.Children.Add(_stopHceButton);
+            Grid.SetColumn(rightRail, 1);
+            Grid.SetRowSpan(rightRail, 3);
+            root.Children.Add(rightRail);
             return root;
         }
 
@@ -607,17 +642,17 @@ namespace HNL.CeilingEstimator.AutoCAD
             var content = new StackPanel { Margin = new Thickness(0, 9, 0, 10) };
 
             var selection = Section("01  Chọn Hatch", "#2497FF");
-            selection.Children.Add(CommandButton("Chọn Hatch và tạo bảng", "HCECALC", true));
-            selection.Children.Add(Text("Chọn Hatch trên CAD, rồi Enter.",
+            selection.Children.Add(CommandButton("Chọn Hatch", "HCESELECT", true));
+            selection.Children.Add(Text("Chọn Hatch trên CAD, nhấn Enter; sau đó bấm Tạo bảng ở thanh dưới.",
                 10, _muted, FontWeights.Normal));
             content.Children.Add(Card(selection));
 
             content.Children.Add(Card(BuildLegacySettingsPanel()));
 
-            var result = Section("03  Kết quả và bảng", "#F59E0B");
+            var result = Section("03  Kết quả", "#F59E0B");
             result.Children.Add(Text("Kết quả hiển thị trên dòng lệnh. Hatch chưa rõ lưới hoặc đơn vị cần xác nhận.",
                 11, _muted, FontWeights.Normal));
-            result.Children.Add(Text("Tính xong chọn vị trí đặt bảng. Nhấn Esc để hủy; mã N/G/L tùy theo quy mô.",
+            result.Children.Add(Text("Nhấn Tạo bảng bên dưới để tính từ Hatch vừa chọn, rồi chỉ vị trí đặt bảng. Esc để hủy.",
                 11, _muted, FontWeights.Normal));
             result.Children.Add(Text("Chưa hỗ trợ xem trước hình học từng tấm.",
                 10, Brush("#E5A84E"), FontWeights.SemiBold));
