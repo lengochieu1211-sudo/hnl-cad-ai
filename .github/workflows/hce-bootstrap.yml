@@ -83,13 +83,17 @@ jobs:
           # without a UTF-8 BOM. Test ASCII wiring/tokens, not accented text.
           if (-not $ui.Contains('HNL HCE | HCE_UPDATED_AT_SHORT_VN') -or
               -not $ui.Contains('internal const string BuildInfo = "v0.3.0') -or
-              -not $ui.Contains('internal const string VisibleTitle = "HNL Tool - HCE') -or
+              -not $ui.Contains('internal const string PaletteCaption = "HNL HCE | HCE_UPDATED_AT_SHORT_VN";') -or
               -not $ui.Contains('HCE_UPDATED_AT_VN')) {
-            throw 'Missing compact native title and full-year one-line update stamp'
+            throw 'Missing native HCE caption and build metadata stamp'
           }
           if ($ui.Contains('pack://application:,,,/HNL.CeilingEstimator.AutoCAD;component/Assets/HNL-Logo-Official.png')) { throw 'Redundant HCE Palette logo still present' }
           if ($ui.Contains('titleStack.Children.Add') -or $ui.Contains('footer.Child =')) { throw 'Redundant Palette header/footer still present' }
-          if (-not $ui.Contains('new PaletteSet(PaletteCaption, PaletteId)')) { throw 'Caption not wired into native AutoCAD PaletteSet' }
+          if (-not $ui.Contains('new PaletteSet("HCE", PaletteId)') -or
+              -not $ui.Contains('Name = PaletteCaption,') -or
+              -not $ui.Contains('_palette.Name = PaletteCaption;')) {
+            throw 'AutoCAD PaletteSet.Name must be set on create and every show; no GUID change'
+          }
           if (-not $ui.Contains('palette.AddVisual("HCE", view)')) { throw 'Short AutoCAD palette tab name must be HCE' }
           $nowVN = [DateTime]::UtcNow.AddHours(7)
           $buildTimeVN = $nowVN.ToString('dd/MM/yyyy HH:mm', [Globalization.CultureInfo]::InvariantCulture)
@@ -101,20 +105,19 @@ jobs:
           }
           $expectedNative = "HNL HCE | $shortTimeVN"
           $stampLine = ($ui -split "`n" | Where-Object { $_.Contains('internal const string BuildInfo = ') } | Select-Object -First 1)
-          $visibleLine = ($ui -split "`n" | Where-Object { $_.Contains('internal const string VisibleTitle = ') } | Select-Object -First 1)
           if (-not $ui.Contains($expectedNative) -or
               -not $stampLine.Contains($buildTimeVN) -or
-              -not $visibleLine.Contains($buildTimeVN) -or
-              -not $ui.Contains('root.Children.Add(visibleTitle);') -or
-              -not $ui.Contains('Grid.SetRow(visibleTitle, 0)') -or
+              -not $ui.Contains('Name = PaletteCaption,') -or
+              -not $ui.Contains('_palette.Name = PaletteCaption;') -or
+              $ui.Contains('VisibleTitle') -or $ui.Contains('visibleTitle') -or
               $ui.Contains('Grid.SetRow(buildInfo, 0)') -or
               $ui.Contains('root.Children.Add(buildInfo);')) {
-            throw 'HCE build date must be visible in title and native caption, no extra version row'
+            throw 'Native AutoCAD title must show timestamp; no fake WPF title row'
           }
           [IO.File]::WriteAllText($uiPath, $ui, [Text.UTF8Encoding]::new($false))
           Write-Host "HCE PALETTE TITLE PASS: $expectedNative (UTC+07, build time)"
-          Write-Host "HCE PALETTE VISIBLE STAMP PASS: $visibleLine"
-          Write-Host 'HCE PALETTE COMPACT FRAME PASS: no duplicate bulky header; one slim visible update line'
+          Write-Host "HCE PALETTE NATIVE NAME PASS: $expectedNative (no WPF header)"
+          Write-Host 'HCE PALETTE COMPACT FRAME PASS: only native title; GUID and docking preserved'
           
       - name: Validate HCE WPF templates and Hatch Area safeguards
         shell: powershell
@@ -401,23 +404,38 @@ jobs:
             throw 'Obsolete two-button staged selection must not remain'
           }
           foreach ($required in @('CommandButton("Chọn Hatch và tạo bảng", "HCECALC", true)',
-              'root.Children.Add(visibleTitle);',
+              'Name = PaletteCaption,',
+              '_palette.Name = PaletteCaption;',
+              'Grid.SetRow(body, 0);',
+              'Grid.SetRow(progressFooter, 1);',
+              'Grid.SetRowSpan(rightRail, 2);',
               'Grid.SetColumn(rightRail, 1);',
               'Width = 40, Background = _surface',
               "CornerRadius='8'",
               '_stopHceButton.Template = (ControlTemplate)XamlReader.Parse(stopTemplateXaml);',
-              'internal const string PaletteCaption = "HNL HCE | ',
-              'internal const string VisibleTitle = "HNL Tool - HCE')) {
+              'internal const string PaletteCaption = "HNL HCE | ')) {
             if (-not $ui.Contains($required)) {
               throw "Single button / build date / rounded HCF stop gate missing: $required"
             }
           }
           if ($ui.Contains('CommandButton("Tạo bảng", "HCECALC", true)') -or
+              $ui.Contains('VisibleTitle') -or $ui.Contains('visibleTitle') -or
               $ui.Contains('CommandButton("Chọn Hatch", "HCESELECT", true)') -or
               $ui.Contains('createFooter') -or $ui.Contains('Content = "Tắt HCE"')) {
             throw 'Duplicate Create or unrounded old footer stop remains'
           }
-          Write-Host 'HCE SINGLE-ACTION UI / VISIBLE DATE / ROUNDED STOP / PURE S-D STOCK-GUARD STATIC PASS'
+          foreach ($required in @('var pureBins = profile.Module == "D" ? longBins : smallBins;',
+              'table.Cells[7, 2].TextString = pureBins + " tấm";',
+              'table.Cells[8, 2].TextString = (full + pureBins) + " tấm";')) {
+            if (-not $commands.Contains($required)) {
+              throw "HCE pure stock CAD material count regression: $required"
+            }
+          }
+          if ($commands.Contains('(smallBins + longBins) + " tấm"') -or
+              $commands.Contains('(full + smallBins + longBins) + " tấm"')) {
+            throw 'Mixed stock totals leaked into pure CAD Table'
+          }
+          Write-Host 'HCE ONE-BUTTON + NATIVE TITLE + PURE-S/D TABLE TOTALS + ROUNDED STOP STATIC PASS'
           Write-Host 'HCE ONE-LAUNCHER COMMAND CONTRACT PASS: HCE only; removed DTC/DEMTC/HCEUI, internal buttons intact.'
 
       - name: Validate DCL options restored in WPF UI
