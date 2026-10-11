@@ -210,7 +210,7 @@ jobs:
           Write-Host 'HCE HCF-ALIGNED CONTROLS + PROGRESS + STOP STATIC GATE PASS'
 
       - name: Verify HCE Vietnamese keywords, usable dropdown, compact status bar
-        shell: powershell
+        shell: pwsh
         run: |
           $root = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
           $ui = Get-Content "$root/HcePaletteUi.cs" -Raw
@@ -371,7 +371,7 @@ jobs:
         run: dotnet run --project HCE-OVERLAY/tests/LegacyModes/LegacyModes.csproj -c Release
 
       - name: Verify RC5.4 real per-DWG CAD Table display options
-        shell: powershell
+        shell: pwsh
         run: |
           $root='incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
           $profile=Get-Content "$root/HceLegacyProfile.cs" -Raw
