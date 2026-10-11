@@ -255,6 +255,46 @@ jobs:
           }
           Write-Host 'HCE COMPACT STATUS / HCF WORKING COMBO / VIETNAMESE COMMAND CONTRACT PASS'
 
+      - name: Verify HCE compact percentage rail and real progress semantics
+        shell: pwsh
+        run: |
+          $root = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
+          $ui = Get-Content "$root/HcePaletteUi.cs" -Raw -Encoding utf8
+          $commands = Get-Content "$root/Commands.cs" -Raw -Encoding utf8
+          foreach ($required in @(
+            'var top = new Grid { MinHeight = 26 }',
+            'Text("—", 14, _accent, FontWeights.Bold)',
+            'CornerRadius = new CornerRadius(5)',
+            'Minimum = 0, Maximum = 100, Value = 0, Height = 6',
+            'private readonly SolidColorBrush _workSuccess',
+            'private readonly SolidColorBrush _workCanceled',
+            'Math.Max(0, Math.Min(100, percent))',
+            'idle || canceled ? "—"',
+            'indeterminate ? "···"',
+            'value.ToString(CultureInfo.InvariantCulture) + "%"',
+            '_workProgress.IsIndeterminate = indeterminate',
+            '_workStage.ToolTip = stageText',
+            'Background = _surface',
+            '_stopHceButton.IsEnabled = !HcePaletteService.IsCalculating'
+          )) {
+            if (-not $ui.Contains($required)) {throw "HCE honest compact progress contract missing: $required"}
+          }
+          $a = $ui.IndexOf('internal void UpdateWorkProgress(int percent, string stage, bool indeterminate)')
+          $b = $ui.IndexOf('private void RequestStopHce()', $a)
+          if ($a -lt 0 -or $b -le $a) {throw 'Cannot isolate HCE progress presentation'}
+          $update = $ui.Substring($a, $b - $a)
+          if ($update.Contains('DispatcherFrame') -or $update.Contains('DoEvents') -or
+              $update.Contains('_workProgress.Visibility =') -or
+              $update.Contains('DispatcherTimer') -or $update.Contains('Task.Delay')) {
+            throw 'HCE progress must not use fake timers, nested message loops, or jump footer height'
+          }
+          foreach ($source in @('ProgressMeter', 'MeterProgress()', 'HcePaletteService.ReportCalculation',
+                                '20 + (int)(55.0 * done', '75 + (int)(13.0 * done',
+                                '94 + (int)(4.0 * done', 'progress.Complete()')) {
+            if (-not $commands.Contains($source)) {throw "Original CAD progress phases missing: $source"}
+          }
+          Write-Host 'HCE COMPACT PROGRESS RAIL PASS: stage + percent badge + stable track; no fake progress'
+
       - name: Verify HCE option selection never clears an open list
         shell: pwsh
         run: |
