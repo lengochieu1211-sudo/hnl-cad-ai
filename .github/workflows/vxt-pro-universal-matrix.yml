@@ -176,6 +176,19 @@ jobs:
               -not $layInTests.Contains('TyDimensions_UseActualHangerPositionsAndDoNotAffectGridOrTy')) {
             throw 'Lay-in individual/grouped/cut-edge/Ty measured-DIM regression protections are missing.'
           }
+          # Regression contract: the Auto DIM centre must be chosen from a
+          # real polygon slice, and color selection must be a direct ComboBox
+          # rather than a lazy ACI numeric-to-dropdown replacement.
+          $layerDimUi = Get-Content "$env:VXT_ROOT\src\HNL.VXT.UI\Views\VxtPaletteRuntimePolish.cs" -Raw
+          if (-not $layInCore.Contains('FindInteriorDimensionCentre') -or
+              -not $layInCore.Contains('PlaceAutoDimensions') -or
+              -not $layInCore.Contains('SeparateAutoRow') -or
+              -not $layInTests.Contains('AutomaticDims_UseInteriorCentralRowsWithNonoverlappingOverallSpacing') -or
+              -not $layInTests.Contains('AutomaticDims_ChooseValidInteriorCentreWhenBoundingCentreIsInHole') -or
+              -not $layerDimUi.Contains('nameof(VxtPaletteViewModel.SelectedDimensionColor)') -or
+              -not $layerDimUi.Contains('combo.SetBinding(ComboBox.SelectedItemProperty, new Binding(selectedPath)')) {
+            throw 'Lay-in interior Auto DIM placement or direct Layer/DIM color dropdown regression missing.'
+          }
           # Selecting boundaries and switching UI tabs must route to the active ceiling renderer.
           $boundaryCommands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
           $boundaryAdapter = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtBoundarySelectionAdapter.cs" -Raw

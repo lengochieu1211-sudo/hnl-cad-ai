@@ -1189,7 +1189,7 @@
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/><ColumnDefinition Width="73"/></Grid.ColumnDefinitions>
                                             <TextBlock Text="DIM ngang" Style="{StaticResource FieldLabel}"/>
                                             <ComboBox Grid.Column="1" ItemsSource="{Binding HorizontalPositionOptions}" SelectedItem="{Binding SelectedHorizontalDimPosition, Mode=TwoWay}"
-                                                      ToolTip="Tự động hiện đặt DIM phía dưới biên trần, không nằm trên mặt tấm."/>
+                                                      ToolTip="Tự động đặt DIM theo vùng giữa Polyline trần; các hàng DIM được tách để tránh chồng nhau."/>
                                             <Button Grid.Column="2" Content="Chọn" Command="{Binding PickHorizontalDimensionCommand}" Style="{StaticResource PickButton}" Margin="5,0,0,0"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,8" MinHeight="29">
@@ -1201,7 +1201,7 @@
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/><ColumnDefinition Width="73"/></Grid.ColumnDefinitions>
                                             <TextBlock Text="DIM dọc" Style="{StaticResource FieldLabel}"/>
                                             <ComboBox Grid.Column="1" ItemsSource="{Binding VerticalPositionOptions}" SelectedItem="{Binding SelectedVerticalDimPosition, Mode=TwoWay}"
-                                                      ToolTip="Tự động hiện đặt DIM bên trái biên trần, không nằm trên mặt tấm."/>
+                                                      ToolTip="Tự động đặt DIM theo vùng giữa Polyline trần, tránh các lỗ và cạnh lõm khi chọn điểm neo."/>
                                             <Button Grid.Column="2" Content="Chọn" Command="{Binding PickVerticalDimensionCommand}" Style="{StaticResource PickButton}" Margin="5,0,0,0"/>
                                         </Grid>
                                         <Grid MinHeight="29">

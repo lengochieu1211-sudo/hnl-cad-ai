@@ -159,9 +159,14 @@ namespace HNL.VXT.Core.Preview
             }
 
             AddDimensions(plan, settings, spec, bounds, angle, phaseX, phaseY);
+            var gridDimensionCount = plan.DimensionRuns.Count;
             if (settings.DimensionMode != LayInDimensionMode.Off &&
                 settings.DrawHangers && settings.DimensionHangers)
                 AddHangerDimensions(plan, localMainSegments, settings, angle);
+            // Keep both Preview and Create on the same final, collision-checked
+            // dimension plan. Manual side choices preserve their exact positions.
+            PlaceAutoDimensions(plan, settings, localOuter, localHoles,
+                bounds, angle, gridDimensionCount);
             TallyMaterials(plan, spec);
             return plan;
         }
@@ -617,6 +622,196 @@ namespace HNL.VXT.Core.Preview
                 count,
                 label,
                 Transform2.ToWorld(linePoint, angle)));
+        }
+
+        // Auto DIM uses an actual INTERIOR point of the selected ceiling region.
+        // Its centre can otherwise lie in a notch or a polygon hole. Keep the
+        // dimension geometry and measured labels unchanged; relocate DIM lines only.
+        private static void PlaceAutoDimensions(
+            LayInCeilingPlan plan, LayInCeilingSettings settings,
+            IReadOnlyList<Point2> outer, IReadOnlyList<IReadOnlyList<Point2>> holes,
+            Box2 bounds, double angle, int gridCount)
+        {
+            if (plan.DimensionRuns.Count == 0) return;
+            var autoHorizontal = settings.HorizontalDimSide == LayInHorizontalDimSide.Auto;
+            var autoVertical = settings.VerticalDimSide == LayInVerticalDimSide.Auto;
+            var autoHanger = settings.HangerDimSide == LayInHorizontalDimSide.Auto;
+            if (!autoHorizontal && !autoVertical && !(settings.DimensionHangers && autoHanger))
+                return;
+
+            var centre = FindInteriorDimensionCentre(outer, holes, bounds);
+            var verticalIntervals = PolygonScanline.ClipVertical(outer, holes, centre.X);
+            var horizontalIntervals = PolygonScanline.ClipHorizontal(outer, holes, centre.Y);
+            var verticalClear = verticalIntervals.FirstOrDefault(s =>
+                centre.Y >= Math.Min(s.A.Y, s.B.Y) - Eps &&
+                centre.Y <= Math.Max(s.A.Y, s.B.Y) + Eps);
+            var horizontalClear = horizontalIntervals.FirstOrDefault(s =>
+                centre.X >= Math.Min(s.A.X, s.B.X) - Eps &&
+                centre.X <= Math.Max(s.A.X, s.B.X) + Eps);
+            var hBounds = new Tuple<double, double>(
+                Math.Min(verticalClear.A.Y, verticalClear.B.Y),
+                Math.Max(verticalClear.A.Y, verticalClear.B.Y));
+            var vBounds = new Tuple<double, double>(
+                Math.Min(horizontalClear.A.X, horizontalClear.B.X),
+                Math.Max(horizontalClear.A.X, horizontalClear.B.X));
+            var yLane = AutoLane(centre.Y, hBounds.Item1, hBounds.Item2,
+                settings.HorizontalDimDistance);
+            var xLane = AutoLane(centre.X, vBounds.Item1, vBounds.Item2,
+                settings.VerticalDimDistance);
+
+            // The optional overall row is reserved at the configured FULL spacing.
+            // If too little interior space remains, retain a separate outside row
+            // instead of colliding with the central DIM chain.
+            var overall = settings.AddOverallDimension &&
+                settings.DimensionMode != LayInDimensionMode.Overall;
+            var yOverall = SeparateAutoRow(yLane, centre.Y, hBounds.Item1, hBounds.Item2,
+                bounds.MinY, bounds.MaxY, settings.DimensionRowSpacing);
+            var xOverall = SeparateAutoRow(xLane, centre.X, vBounds.Item1, vBounds.Item2,
+                bounds.MinX, bounds.MaxX, settings.DimensionRowSpacing);
+            for (var i = 0; i < gridCount; i++)
+            {
+                var run = plan.DimensionRuns[i];
+                var a = Transform2.ToLocal(run.A, angle);
+                var b = Transform2.ToLocal(run.B, angle);
+                var line = Transform2.ToLocal(run.DimensionLinePoint.Value, angle);
+                var isOverall = overall && i >= gridCount - 2;
+                if (Math.Abs(a.Y - b.Y) <= Eps && autoHorizontal)
+                    line = new Point2(line.X, isOverall ? yOverall : yLane);
+                else if (Math.Abs(a.X - b.X) <= Eps && autoVertical)
+                    line = new Point2(isOverall ? xOverall : xLane, line.Y);
+                else
+                    continue;
+                plan.DimensionRuns[i] = WithDimensionLine(run,
+                    Transform2.ToWorld(line, angle));
+            }
+
+            // Keep Ty DIM on its actual physical T rows, but when "Tự động"
+            // is selected, shift conflicting parallel rows by DIM spacing.
+            // Explicit Top/Bottom Ty positions are never silently overridden.
+            if (!settings.DimensionHangers || !autoHanger || gridCount == plan.DimensionRuns.Count)
+                return;
+            var minimum = Math.Max(1.0, settings.DimensionRowSpacing);
+            var rows = new Dictionary<double, double>();
+            for (var i = gridCount; i < plan.DimensionRuns.Count; i++)
+            {
+                var run = plan.DimensionRuns[i];
+                var a = Transform2.ToLocal(run.A, angle);
+                var b = Transform2.ToLocal(run.B, angle);
+                var key = Math.Round(a.Y, 3);
+                double chosen;
+                if (!rows.TryGetValue(key, out chosen))
+                {
+                    var baseDistance = Math.Max(1.0, settings.HangerDimDistance);
+                    chosen = a.Y - baseDistance;
+                    var bestScore = double.PositiveInfinity;
+                    // Search both sides of the T row, expanding only if needed.
+                    for (var level = 0; level < 12; level++)
+                    {
+                        foreach (var sign in new[] { -1.0, 1.0 })
+                        {
+                            var candidate = a.Y + sign * (baseDistance + level * minimum);
+                            if (candidate < bounds.MinY + Eps || candidate > bounds.MaxY - Eps)
+                                continue;
+                            var collides = false;
+                            for (var j = 0; j < i; j++)
+                            {
+                                var prev = plan.DimensionRuns[j];
+                                var pa = Transform2.ToLocal(prev.A, angle);
+                                var pb = Transform2.ToLocal(prev.B, angle);
+                                if (Math.Abs(pa.Y - pb.Y) > Eps) continue;
+                                var pp = Transform2.ToLocal(prev.DimensionLinePoint.Value, angle);
+                                if (Math.Abs(candidate - pp.Y) >= minimum - Eps) continue;
+                                if (Math.Min(b.X, a.X) < Math.Max(pa.X, pb.X) - Eps &&
+                                    Math.Max(b.X, a.X) > Math.Min(pa.X, pb.X) + Eps)
+                                {
+                                    collides = true;
+                                    break;
+                                }
+                            }
+                            if (!collides)
+                            {
+                                var score = Math.Abs(candidate - a.Y) +
+                                    (sign > 0 ? 0.1 : 0.0);
+                                if (score < bestScore)
+                                {
+                                    chosen = candidate;
+                                    bestScore = score;
+                                }
+                            }
+                        }
+                        if (bestScore < double.PositiveInfinity) break;
+                    }
+                    rows[key] = chosen;
+                }
+                plan.DimensionRuns[i] = WithDimensionLine(run,
+                    Transform2.ToWorld(
+                        new Point2((a.X + b.X) * 0.5, chosen), angle));
+            }
+        }
+
+        private static LayInDimensionRun WithDimensionLine(
+            LayInDimensionRun run, Point2 newPoint)
+            => new LayInDimensionRun(run.A, run.B, run.Module,
+                run.ModuleCount, run.Label, newPoint);
+
+        private static double AutoLane(double centre, double min, double max, double distance)
+        {
+            if (max - min <= Eps) return centre;
+            var margin = Math.Min(60.0, (max - min) * 0.08);
+            var above = Math.Max(0.0, max - margin - centre);
+            var below = Math.Max(0.0, centre - min - margin);
+            var sign = above >= below ? 1.0 : -1.0;
+            return centre + sign * Math.Min(
+                Math.Max(1.0, distance), Math.Max(above, below) * 0.8);
+        }
+
+        private static double SeparateAutoRow(double lane, double centre,
+            double min, double max, double outerMin, double outerMax,
+            double rowSpacing)
+        {
+            var step = Math.Max(1.0, rowSpacing);
+            var sign = lane >= centre ? 1.0 : -1.0;
+            if (lane + sign * step < max - Eps &&
+                lane + sign * step > min + Eps)
+                return lane + sign * step;
+            if (lane - sign * step < max - Eps &&
+                lane - sign * step > min + Eps)
+                return lane - sign * step;
+            return sign > 0 ? outerMax + step : outerMin - step;
+        }
+
+        private static Point2 FindInteriorDimensionCentre(
+            IReadOnlyList<Point2> outer, IReadOnlyList<IReadOnlyList<Point2>> holes,
+            Box2 bounds)
+        {
+            var centre = bounds.Center;
+            var best = centre;
+            var bestScore = double.PositiveInfinity;
+            // Sample near the geometric centre first, then look for an actual
+            // open slice when the bounding-box centre is cut out or holed.
+            for (var i = 0; i <= 16; i++)
+            {
+                var offset = i == 0 ? 0.0 :
+                    (i % 2 == 1 ? 1.0 : -1.0) * ((i + 1) / 2) * 0.055;
+                var y = centre.Y + offset * bounds.Height;
+                if (y <= bounds.MinY + Eps || y >= bounds.MaxY - Eps) continue;
+                foreach (var segment in PolygonScanline.ClipHorizontal(outer, holes, y))
+                {
+                    var left = Math.Min(segment.A.X, segment.B.X);
+                    var right = Math.Max(segment.A.X, segment.B.X);
+                    if (right - left <= Eps) continue;
+                    var inset = Math.Min(80.0, (right - left) * 0.15);
+                    var x = Math.Max(left + inset, Math.Min(right - inset, centre.X));
+                    var score = Math.Pow((x - centre.X) / Math.Max(1, bounds.Width), 2) +
+                        Math.Pow((y - centre.Y) / Math.Max(1, bounds.Height), 2);
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        best = new Point2(x, y);
+                    }
+                }
+            }
+            return best;
         }
 
         private static double FirstStationAtOrAfter(double min, double spacing, double phase)

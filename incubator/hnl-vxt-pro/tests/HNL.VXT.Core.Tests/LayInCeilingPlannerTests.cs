@@ -484,6 +484,9 @@ namespace HNL.VXT.Core.Tests
                     StartMode = LayInStartMode.ManualStart,
                     ManualStartPoint = new Point2(0, 0),
                     DimensionMode = LayInDimensionMode.GridAndEdges,
+                    // The tn.dxf baseline intentionally requests OUTSIDE positions.
+                    HorizontalDimSide = LayInHorizontalDimSide.Bottom,
+                    VerticalDimSide = LayInVerticalDimSide.Left,
                     HorizontalDimDistance = 1190,
                     VerticalDimDistance = 1293
                 });
@@ -584,6 +587,117 @@ namespace HNL.VXT.Core.Tests
             var plan = LayInCeilingPlanner.Build(Rect(0, 0, 6000, 4800), null, settings);
             Assert.AreEqual(2, plan.DimensionRuns.Count);
         }
+        [TestMethod]
+        public void AutomaticDims_UseInteriorCentralRowsWithNonoverlappingOverallSpacing()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                GridSystem = LayInGridSystem.Module610x610,
+                MainDirection = LayInMainDirectionMode.Horizontal,
+                DimensionMode = LayInDimensionMode.GridAndEdges,
+                HorizontalDimSide = LayInHorizontalDimSide.Auto,
+                VerticalDimSide = LayInVerticalDimSide.Auto,
+                HorizontalDimDistance = 1200,
+                VerticalDimDistance = 1200,
+                DimensionRowSpacing = 350,
+                AddOverallDimension = true
+            };
+            var result = LayInCeilingPlanner.Build(Rect(0, 0, 10000, 8000), null, settings);
+            var horizontal = result.DimensionRuns.Where(d =>
+                Math.Abs(d.A.Y - d.B.Y) < 0.001).ToList();
+            var vertical = result.DimensionRuns.Where(d =>
+                Math.Abs(d.A.X - d.B.X) < 0.001).ToList();
+            Assert.IsTrue(horizontal.Count >= 3 && vertical.Count >= 3);
+            var baseH = horizontal[0].DimensionLinePoint.Value.Y;
+            var baseV = vertical[0].DimensionLinePoint.Value.X;
+            Assert.IsTrue(baseH > 0 && baseH < 8000);
+            Assert.IsTrue(baseV > 0 && baseV < 10000);
+            Assert.IsTrue(horizontal.Take(horizontal.Count - 1).All(d =>
+                Math.Abs(d.DimensionLinePoint.Value.Y - baseH) < 0.001));
+            Assert.IsTrue(vertical.Take(vertical.Count - 1).All(d =>
+                Math.Abs(d.DimensionLinePoint.Value.X - baseV) < 0.001));
+            Assert.AreEqual(350, Math.Abs(horizontal.Last().DimensionLinePoint.Value.Y - baseH), 0.001);
+            Assert.AreEqual(350, Math.Abs(vertical.Last().DimensionLinePoint.Value.X - baseV), 0.001);
+        }
+
+        [TestMethod]
+        public void AutomaticDims_ChooseValidInteriorCentreWhenBoundingCentreIsInHole()
+        {
+            var hole = Rect(4000, 4000, 6000, 6000);
+            var settings = new LayInCeilingSettings
+            {
+                MainDirection = LayInMainDirectionMode.Horizontal,
+                DimensionMode = LayInDimensionMode.Overall,
+                HorizontalDimSide = LayInHorizontalDimSide.Auto,
+                VerticalDimSide = LayInVerticalDimSide.Auto,
+                HorizontalDimDistance = 500,
+                VerticalDimDistance = 500
+            };
+            var plan = LayInCeilingPlanner.Build(Rect(0, 0, 10000, 10000),
+                new[] { hole }, settings);
+            var h = plan.DimensionRuns.Single(d => Math.Abs(d.A.Y - d.B.Y) < 0.001);
+            var v = plan.DimensionRuns.Single(d => Math.Abs(d.A.X - d.B.X) < 0.001);
+            Assert.IsTrue(h.DimensionLinePoint.Value.Y > 0 && h.DimensionLinePoint.Value.Y < 10000);
+            Assert.IsTrue(v.DimensionLinePoint.Value.X > 0 && v.DimensionLinePoint.Value.X < 10000);
+            // At least one coordinate must avoid the 4000..6000 centre hole.
+            Assert.IsTrue(v.DimensionLinePoint.Value.X < 4000 ||
+                v.DimensionLinePoint.Value.X > 6000 ||
+                h.DimensionLinePoint.Value.Y < 4000 ||
+                h.DimensionLinePoint.Value.Y > 6000);
+        }
+
+        [TestMethod]
+        public void AutomaticDims_RotatedPolygonKeepDimLinesInLocalRegion()
+        {
+            var angle = Math.PI / 6.0;
+            var region = new Boundary2(Rect(0, 0, 6000, 4800).Vertices
+                .Select(p => Transform2.ToWorld(p, angle)));
+            var plan = LayInCeilingPlanner.Build(region, null,
+                new LayInCeilingSettings
+                {
+                    MainDirection = LayInMainDirectionMode.ParallelLongSide,
+                    DimensionMode = LayInDimensionMode.Overall
+                });
+            foreach (var d in plan.DimensionRuns)
+            {
+                var line = Transform2.ToLocal(d.DimensionLinePoint.Value,
+                    plan.MainAngleRadians);
+                Assert.IsTrue(line.X > -1 && line.X < 6001);
+                Assert.IsTrue(line.Y > -1 && line.Y < 4801);
+            }
+        }
+
+        [TestMethod]
+        public void AutomaticTyDimensions_KeepParallelChainsAtConfiguredSeparation()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                GridSystem = LayInGridSystem.Module610x610,
+                MainDirection = LayInMainDirectionMode.Horizontal,
+                StartMode = LayInStartMode.ManualStart,
+                ManualStartPoint = new Point2(0, 0),
+                DimensionMode = LayInDimensionMode.Overall,
+                DimensionHangers = true,
+                DrawHangers = true,
+                HangerDimSide = LayInHorizontalDimSide.Auto,
+                DimensionRowSpacing = 350,
+                HorizontalDimDistance = 1200
+            };
+            var result = LayInCeilingPlanner.Build(Rect(0, 0, 6100, 4880), null, settings);
+            var grid = result.DimensionRuns.First(d => Math.Abs(d.A.Y - d.B.Y) < 0.001);
+            var ty = result.DimensionRuns.Skip(2).ToArray();
+            Assert.IsTrue(ty.Length > 0);
+            foreach (var d in ty)
+            {
+                var projectedOverlap = Math.Min(d.B.X, grid.B.X) -
+                    Math.Max(d.A.X, grid.A.X);
+                if (projectedOverlap > 1)
+                    Assert.IsTrue(Math.Abs(d.DimensionLinePoint.Value.Y -
+                        grid.DimensionLinePoint.Value.Y) >= 350 - 0.001,
+                        "Auto Ty DIM must not overlap the primary horizontal DIM chain.");
+            }
+        }
+
         [TestMethod]
         public void SampleGridDims_AllFourSystemsMeasureFullWidthWithoutOverlap()
         {

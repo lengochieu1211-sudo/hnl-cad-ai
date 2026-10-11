@@ -281,7 +281,7 @@ namespace HNL.VXT.UI.Views
 
             var panel = new StackPanel { Margin = new Thickness(0, 5, 0, 3) };
             panel.Children.Add(CreateTextRow(view, "Layer", layerPath));
-            panel.Children.Add(CreateColorRow(view, "Màu ACI", colorPath));
+            panel.Children.Add(CreateColorRow(view, "Màu", colorPath));
             panel.Children.Add(CreateEditableComboRow(view, "Linetype", linetypePath, view.ViewModel.LinetypeOptions));
             panel.Children.Add(CreateEditableComboRow(view, "Lineweight", lineweightPath, view.ViewModel.LineweightOptions));
 
@@ -330,19 +330,46 @@ namespace HNL.VXT.UI.Views
 
         private static Grid CreateColorRow(VxtPaletteView view, string label, string bindingPath)
         {
-            var row = CreateBaseRow(view, label);
-            var input = new HnlNumericBox
+            // Build the selectable color control directly. A later replacement of
+            // an ACI numeric box could miss lazy TabItem content in AutoCAD palettes.
+            string selectedPath;
+            switch (bindingPath)
+            {
+                case nameof(VxtPaletteViewModel.MainColorIndex):
+                    selectedPath = nameof(VxtPaletteViewModel.SelectedMainColor); break;
+                case nameof(VxtPaletteViewModel.FurringColorIndex):
+                    selectedPath = nameof(VxtPaletteViewModel.SelectedFurringColor); break;
+                case nameof(VxtPaletteViewModel.HangerColorIndex):
+                    selectedPath = nameof(VxtPaletteViewModel.SelectedHangerColor); break;
+                case nameof(VxtPaletteViewModel.DimensionColorIndex):
+                    selectedPath = nameof(VxtPaletteViewModel.SelectedDimensionColor); break;
+                default:
+                    throw new ArgumentException("Unknown HNL color property.", nameof(bindingPath));
+            }
+
+            var row = CreateBaseRow(view, "Màu");
+            var selected = typeof(VxtPaletteViewModel).GetProperty(selectedPath)
+                ?.GetValue(view.ViewModel, null) as string;
+            var values = view.ViewModel.QuickColorOptions.ToList();
+            // Retain a nonstandard ACI without silently converting the DWG setting.
+            if (!string.IsNullOrWhiteSpace(selected) &&
+                !values.Any(x => string.Equals(x, selected, StringComparison.OrdinalIgnoreCase)))
+                values.Insert(0, selected);
+            var combo = new ComboBox
             {
                 Height = 27.0,
+                IsEditable = false,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Minimum = 0,
-                Maximum = 256,
-                Step = 1,
-                Unit = "ACI"
+                ItemsSource = values.ToArray(),
+                ToolTip = "Chọn màu theo tên; giữ nguyên giá trị ACI hiện tại nếu không đổi."
             };
-            input.SetBinding(HnlNumericBox.ValueProperty, new Binding(bindingPath) { Mode = BindingMode.TwoWay });
-            Grid.SetColumn(input, 1);
-            row.Children.Add(input);
+            combo.SetBinding(ComboBox.SelectedItemProperty, new Binding(selectedPath)
+            {
+                Mode = BindingMode.TwoWay,
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+            });
+            Grid.SetColumn(combo, 1);
+            row.Children.Add(combo);
             return row;
         }
 
