@@ -303,8 +303,10 @@ namespace HNL.CeilingEstimator.AutoCAD
               BorderBrush='{DynamicResource InputBorder}'
               BorderThickness='1'
               CornerRadius='4'>
-        <ScrollViewer Margin='1' SnapsToDevicePixels='True' VerticalScrollBarVisibility='Auto'>
-          <ItemsPresenter/>
+        <ScrollViewer Margin='1' SnapsToDevicePixels='True' VerticalScrollBarVisibility='Auto'
+                      ScrollViewer.CanContentScroll='True'
+                      KeyboardNavigation.DirectionalNavigation='Contained'>
+          <ItemsPresenter KeyboardNavigation.DirectionalNavigation='Contained'/>
         </ScrollViewer>
       </Border>
     </Popup>
@@ -623,7 +625,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 if (profile == null) return;
                 profile.CadTableStyle = _legacyCadTableStyle.SelectedIndex == 0 ? string.Empty :
                     _legacyCadTableStyle.SelectedItem?.ToString() ?? string.Empty;
-                RefreshLegacyControls();
+                RefreshSelectionState(profile);
             };
             Grid.SetColumn(_legacyCadTableStyle, 1);
             cadStyleRow.Children.Add(_legacyCadTableStyle);
@@ -727,7 +729,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 // Choosing Summary/Detail should also turn on the cut list.
                 if (!profile.CutListEnabled)
                     profile.CutListEnabled = true;
-                RefreshLegacyControls();
+                RefreshSelectionState(profile);
             };
             Grid.SetColumn(_legacyCutMode, 1);
             cutModeRow.Children.Add(_legacyCutMode);
@@ -775,7 +777,10 @@ namespace HNL.CeilingEstimator.AutoCAD
                     case "Direction": profile.Direction = value; break;
                     case "Grid": profile.GridMode = value; break;
                 }
-                RefreshLegacyControls();
+                // Keep the user's open ComboBox and focused row intact:
+                // reloading every CAD TableStyle during SelectionChanged closes
+                // the WPF popup and can discard its newly selected item.
+                RefreshSelectionState(profile);
             };
             _legacySelectors[key] = selector;
             Grid.SetColumn(selector, 1);
@@ -795,7 +800,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var profile = ActiveLegacyProfile();
             if (profile == null) return;
             profile.SnapEnabled = enabled;
-            RefreshLegacyControls();
+            RefreshSelectionState(profile);
         }
 
         private void SaveLegacyTolerance()
@@ -838,7 +843,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var profile = ActiveLegacyProfile();
             if (profile == null) return;
             profile.CutListEnabled = enabled;
-            RefreshLegacyControls();
+            RefreshSelectionState(profile);
         }
 
         private void SaveLegacyLabelHeight()
@@ -936,6 +941,47 @@ namespace HNL.CeilingEstimator.AutoCAD
             _legacyTableStyle.SelectedIndex = selected;
         }
 
+        // Lightweight UI state only. Never clear or repopulate a ComboBox
+        // while its SelectionChanged event is running, and never overwrite a
+        // partially typed numeric value on an unrelated option change.
+        private void RefreshSelectionState(HceLegacyProfile profile)
+        {
+            if (_legacySelectors.TryGetValue("Priority", out var priority))
+            {
+                priority.IsEnabled = profile.Module == "M";
+                priority.ToolTip = "Chỉ dùng khi Loại tấm là Kết hợp.";
+            }
+            if (_legacySelectors.TryGetValue("Direction", out var direction))
+            {
+                direction.IsEnabled = profile.Module != "S";
+                direction.ToolTip = "Chỉ dùng với Tấm dài hoặc Kết hợp.";
+            }
+            if (_legacyTolerance != null)
+            {
+                _legacyTolerance.IsEnabled = profile.SnapEnabled;
+                _legacyTolerance.ToolTip = profile.SnapEnabled
+                    ? "Nhập dung sai lưới từ 0 đến 10 mm."
+                    : "Bật Sai số lưới để nhập dung sai.";
+            }
+            if (_legacyCutList != null &&
+                _legacyCutList.IsChecked != profile.CutListEnabled)
+            {
+                // Prevent a programmatic checkbox synchronization from
+                // raising another user-originated configuration event.
+                var wasLoading = _loadingLegacyControls;
+                _loadingLegacyControls = true;
+                try { _legacyCutList.IsChecked = profile.CutListEnabled; }
+                finally { _loadingLegacyControls = wasLoading; }
+            }
+            if (_legacyCutMode != null) _legacyCutMode.IsEnabled = true;
+            if (_legacyStatus != null)
+                _legacyStatus.Text = profile.Summary() +
+                    "\nKiểu bảng: " + (string.IsNullOrEmpty(profile.CadTableStyle)
+                        ? "Theo DWG" : profile.CadTableStyle) +
+                    " | Liệt kê: " + (profile.CutListEnabled ? "BẬT" : "TẮT") +
+                    " | Chế độ: " + (profile.CutListMode == "D" ? "Chi tiết" : "Tổng hợp");
+        }
+
         internal void RefreshLegacyControls()
         {
             var profile = ActiveLegacyProfile();
@@ -962,27 +1008,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                     _legacyLabelHeight.Text = profile.LabelTextHeight.ToString("0.###", CultureInfo.CurrentCulture);
                 if (_legacyCutList != null) _legacyCutList.IsChecked = profile.CutListEnabled;
                 if (_legacyCutMode != null)
-                {
                     _legacyCutMode.SelectedIndex = profile.CutListMode == "D" ? 1 : 0;
-                    // Keep the mode selectable even when the cut list has not yet been enabled.
-                    _legacyCutMode.IsEnabled = true;
-                }
-                if (_legacySelectors.TryGetValue("Priority", out var p))
-                {
-                    p.IsEnabled = profile.Module == "M";
-                    p.ToolTip = "Chỉ sử dụng khi chọn loại tấm Kết hợp.";
-                }
-                if (_legacySelectors.TryGetValue("Direction", out var d))
-                {
-                    d.IsEnabled = profile.Module != "S";
-                    d.ToolTip = "Chỉ sử dụng khi có tấm dài (Tấm dài hoặc Kết hợp).";
-                }
-                if (_legacyStatus != null)
-                    _legacyStatus.Text = profile.Summary() +
-                        "\nKiểu bảng: " + (string.IsNullOrEmpty(profile.CadTableStyle)
-                            ? "Theo DWG" : profile.CadTableStyle) +
-                        " | Liệt kê: " + (profile.CutListEnabled ? "BẬT" : "TẮT") +
-                        " | Chế độ: " + (profile.CutListMode == "D" ? "Chi tiết" : "Tổng hợp");
+                RefreshSelectionState(profile);
                 if (_legacyValidation != null) _legacyValidation.Text = "";
             }
             finally { _loadingLegacyControls = false; }
