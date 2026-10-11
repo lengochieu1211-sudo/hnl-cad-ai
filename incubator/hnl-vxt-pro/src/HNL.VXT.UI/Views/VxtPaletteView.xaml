@@ -1182,7 +1182,7 @@
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Kiểu DIM" Style="{StaticResource FieldLabel}"/>
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding DimensionOptions}" SelectedItem="{Binding SelectedDimensionMode, Mode=TwoWay}"
-                                                  ToolTip="Một ô: DIM từng ô nguyên; Gộp ô: chia nhóm theo số ô và DIM riêng phần dư; mép cắt DIM theo số đo thực."/>
+                                                  ToolTip="Một ô: DIM từng ô nguyên, mép cắt theo số đo thực. Gộp ô: tự tính số ô nguyên theo từng phương và DIM riêng mép cắt. Lưới + mép cắt: DIM dải lưới và mép cắt. Tổng: DIM tổng thể. Tắt: không tạo DIM."/>
                                     </Grid>
                                     <Grid Margin="0,0,0,8" MinHeight="29" IsEnabled="{Binding IsDimensionEnabled}">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1190,15 +1190,6 @@
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding DimStyleOptions}"
                                                   SelectedItem="{Binding SelectedDimensionStyle, Mode=TwoWay}"
                                                   ToolTip="Chọn DimStyle trong DWG"/>
-                                    </Grid>
-                                    <TextBlock Text="DIM ô nguyên + mép cắt." TextWrapping="Wrap"
-                                               Style="{StaticResource HintText}" Margin="0,0,0,8"/>
-                                    <Grid Margin="0,0,0,8" IsEnabled="{Binding IsGroupedDimension}" MinHeight="29">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="Số ô gộp" Style="{StaticResource FieldLabel}"/>
-                                        <TextBlock Grid.Column="1" Text="Tự tính theo lưới và ô nguyên"
-                                                   Style="{StaticResource FieldLabel}" TextWrapping="Wrap"
-                                                   ToolTip="Tự đếm số ô nguyên ở từng phương để ghi DIM N × module; mép cắt được DIM riêng, không cần nhập N."/>
                                     </Grid>
                                     <StackPanel IsEnabled="{Binding IsDimensionEnabled}">
                                         <Grid Margin="0,0,0,7" MinHeight="29">
