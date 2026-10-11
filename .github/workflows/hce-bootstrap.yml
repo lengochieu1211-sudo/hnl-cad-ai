@@ -165,6 +165,14 @@ jobs:
             $combo.IsDropDownOpen = $false
             $binding.UpdateTarget()
             if ($toggle.IsChecked -eq $true) { throw 'ComboBox open status cannot reset toggle' }
+            # A real click toggles IsChecked, which must open the ComboBox.
+            $toggle.IsChecked = $true
+            $binding.UpdateSource()
+            if ($combo.IsDropDownOpen -ne $true) {
+              throw 'HCF dropdown click path does not open ComboBox'
+            }
+            $combo.IsDropDownOpen = $false
+            $binding.UpdateTarget()
             Write-Host 'HCE HCF COMBOBOX INTERACTION SMOKE PASS: loaded template + open state + selection'
           }
           finally { $window.Close() }
