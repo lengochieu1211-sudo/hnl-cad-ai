@@ -84,11 +84,9 @@ namespace HNL.CeilingEstimator.AutoCAD
         private static readonly Guid PaletteId = new Guid("3214F7D5-9F11-4DB9-8369-6D40F07C2A8E");
         // CI stamps this once, at build time in Vietnam local time (UTC+07).
         // Never use DateTime.Now here: opening the palette is not a software update.
-        // Native AutoCAD title can be clipped by dock/auto-hide chrome.
-        // Keep it short; render the full, immutable build timestamp in one
-        // thin row directly beneath the native title as a visible fallback.
+        // Update the native AutoCAD PaletteSet.Name, NOT an extra WPF line.
+        // Keep the caption short enough for docked panels; preserve the GUID.
         internal const string PaletteCaption = "HNL HCE | HCE_UPDATED_AT_SHORT_VN";
-        internal const string VisibleTitle = "HNL Tool - HCE  ·  HCE_UPDATED_AT_VN";
         internal const string BuildInfo = "v0.3.0  ·  Cập nhật HCE_UPDATED_AT_VN";
         private static PaletteSet? _palette;
         private static HcePaletteView? _view;
@@ -100,8 +98,12 @@ namespace HNL.CeilingEstimator.AutoCAD
             {
                 // Lazy UI initialization: no WPF work on AutoCAD startup.
                 var view = new HcePaletteView();
-                var palette = new PaletteSet(PaletteCaption, PaletteId)
+                var palette = new PaletteSet("HCE", PaletteId)
                 {
+                    // Constructor's first argument doubles as an AutoCAD
+                    // restore command with a GUID. Name is the native window
+                    // caption, so set it separately without changing the GUID.
+                    Name = PaletteCaption,
                     Style = PaletteSetStyles.ShowAutoHideButton |
                             PaletteSetStyles.ShowCloseButton |
                             PaletteSetStyles.ShowPropertiesMenu,
@@ -134,6 +136,9 @@ namespace HNL.CeilingEstimator.AutoCAD
             }
             _view?.RefreshLegacyControls();
             _view?.UpdateWorkProgress(0, "Sẵn sàng tính tấm.", false);
+            // AutoCAD can restore an older caption from profile persistence.
+            // Reapply on every show; do not reset dock/size/position settings.
+            _palette.Name = PaletteCaption;
             _palette.Visible = true;
         }
     }
@@ -438,26 +443,15 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         private UIElement BuildLayout()
         {
-            // AutoCAD truncates long native captions when docked. Use a short
-            // date-stamped native caption plus one visible, version-free title.
+            // Caption belongs exclusively to PaletteSet.Name above the UI.
             var root = new Grid();
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            var visibleTitle = Text(HcePaletteService.VisibleTitle, 11, _primary,
-                FontWeights.SemiBold);
-            visibleTitle.Margin = new Thickness(9, 5, 7, 4);
-            visibleTitle.TextWrapping = TextWrapping.NoWrap;
-            visibleTitle.TextTrimming = TextTrimming.CharacterEllipsis;
-            visibleTitle.ToolTip = HcePaletteService.VisibleTitle;
-            Grid.SetRow(visibleTitle, 0);
-            root.Children.Add(visibleTitle);
-
             var body = BuildCalculationTab();
-            Grid.SetRow(body, 1);
+            Grid.SetRow(body, 0);
             root.Children.Add(body);
 
             // Compact data-driven progress; height remains fixed on every stage.
@@ -525,7 +519,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 BorderThickness = new Thickness(0, 1, 0, 0),
                 Padding = new Thickness(10, 5, 10, 7), Child = strip
             };
-            Grid.SetRow(progressFooter, 2);
+            Grid.SetRow(progressFooter, 1);
             root.Children.Add(progressFooter);
 
             // Match HCF's independent right-hand 40px navigation rail.
@@ -602,7 +596,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             Grid.SetRow(_stopHceButton, 1);
             rightRail.Children.Add(_stopHceButton);
             Grid.SetColumn(rightRail, 1);
-            Grid.SetRowSpan(rightRail, 3);
+            Grid.SetRowSpan(rightRail, 2);
             root.Children.Add(rightRail);
             return root;
         }
