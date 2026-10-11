@@ -29,8 +29,8 @@ namespace HNL.VXT.UI.Views
         private void StopHcfButton_Click(object sender, RoutedEventArgs e)
         {
             var result = MessageBox.Show(
-                "Dừng Preview và tắt HCF? AutoCAD vẫn tiếp tục chạy.",
-                "HNL Tool - Tắt HCF",
+                "Tắt công cụ vẽ trần và dừng xem trước? AutoCAD vẫn tiếp tục chạy.",
+                "HNL Tool - Tắt công cụ vẽ trần",
                 MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
             if (result == MessageBoxResult.Yes)
                 _host.RequestStopHcf();
