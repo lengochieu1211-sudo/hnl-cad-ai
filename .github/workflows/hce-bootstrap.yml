@@ -296,7 +296,25 @@ jobs:
           if ($commands -notmatch '\[CommandMethod\("HCECALC", CommandFlags.Modal\)\]') { throw 'HCECALC command missing' }
           if ($commands -notmatch 'public void HceCalculate\(\) \{ RunCeilingEstimator\(\); \}') { throw 'HCECALC must use original engine' }
           if ($ui -notmatch 'CommandButton\([^\r\n]+, "HCECALC", true\)') { throw 'HCE button must calculate, not reopen the palette' }
-          Write-Host 'HCE command routing contract PASS: HCE => Palette; HCECALC => existing Core; UI => HCECALC.'
+          $oldAliases = @('DTC', 'DEMTC', 'HCEUI')
+          foreach ($alias in $oldAliases) {
+            $escaped = [regex]::Escape($alias)
+            if ($commands -match ('\[CommandMethod\("' + $escaped + '"') -or
+                $ui -match ('\[CommandMethod\("' + $escaped + '"')) {
+              throw "Obsolete HCE launch command must not be registered: $alias"
+            }
+          }
+          if ($ui.Contains('CommandButton("DTC"')) {
+            throw 'HCE auxiliary palette must not show removed DTC alias'
+          }
+          $launchCount = [regex]::Matches($commands, '\[CommandMethod\("HCE", CommandFlags\.Modal\)\]').Count
+          if ($launchCount -ne 1) { throw "Exactly one user launcher HCE required, found $launchCount" }
+          foreach ($needed in @('"HCECALC"', '"HCEQA"', '"HCEGOLDEN"', '"HCESTOP"')) {
+            if (-not (($commands + $ui).Contains($needed))) {
+              throw "Internal UI calculation/QA/stop route must remain operational: $needed"
+            }
+          }
+          Write-Host 'HCE ONE-LAUNCHER COMMAND CONTRACT PASS: HCE only; removed DTC/DEMTC/HCEUI, internal buttons intact.'
 
       - name: Validate DCL options restored in WPF UI
         shell: powershell
