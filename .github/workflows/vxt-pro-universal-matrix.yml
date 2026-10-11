@@ -388,6 +388,9 @@ jobs:
           }
           Write-Host 'Lay-in one-Hatch/region static contract and command registrations PASS'
           Write-Host 'HNL Ceiling Framing beta.1 source/branding/multi-polyline gate PASS'
+      - name: Audit HCF buttons and command wiring
+        shell: pwsh
+        run: '& "$env:VXT_ROOT\scripts\audit-hcf-buttons.ps1"'
       - name: Run golden core tests
         shell: pwsh
         run: dotnet test "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\HNL.VXT.Core.Tests.csproj" -c Release

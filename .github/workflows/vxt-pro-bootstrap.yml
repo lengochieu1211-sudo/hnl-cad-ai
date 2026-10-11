@@ -532,6 +532,9 @@ jobs:
           }
           Write-Host 'Lay-in one-Hatch/region static contract and command registrations PASS'
           Write-Host "HNL Ceiling Framing beta.1 functional/source/branding/multi-polyline/installer gate PASS"
+      - name: Audit HCF buttons and command wiring
+        shell: pwsh
+        run: '& "$env:VXT_ROOT\scripts\audit-hcf-buttons.ps1"'
       - name: Restore AutoCAD 2023 plugin
         shell: pwsh
         run: dotnet restore "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HNL.VXT.AutoCAD.csproj"

@@ -60,9 +60,18 @@ namespace HNL.VXT.UI.ViewModels
         {
             get
             {
+                // Use the ACTIVE DWG's choices. Preserve any selected value from
+                // the previous DWG in the list rather than clearing user settings
+                // just because that linetype is not yet loaded in this drawing.
                 var names = _host.GetLinetypeNames() ?? Array.Empty<string>();
-                if (names.Length == 0) return new[] { "Continuous" };
-                return names.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToArray();
+                return names.Concat(new[]
+                    {
+                        "Continuous", _settings.MainLinetype, _settings.FurringLinetype,
+                        _settings.HangerLinetype, _settings.DimensionLinetype
+                    })
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x).ToArray();
             }
         }
 

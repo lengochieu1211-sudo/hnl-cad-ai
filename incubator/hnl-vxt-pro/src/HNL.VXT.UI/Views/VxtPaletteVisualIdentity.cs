@@ -96,16 +96,21 @@ namespace HNL.VXT.UI.Views
                 var expander = child as Expander;
                 if (expander == null) continue;
 
+                // Loaded runs again on Palette hide/show. Replacing the header
+                // and allocating a new lambda each time accumulates event handlers:
+                // removing a freshly allocated delegate never removes the old one.
+                if (expander.Resources.Contains("HNL.LayerDimIdentityAttached"))
+                    continue;
+
                 var title = HeaderText(expander.Header);
                 var identity = FindIdentity(title);
                 if (identity == null) continue;
 
                 var header = CreateIdentityHeader(view, identity);
                 expander.Header = header;
+                expander.Resources["HNL.LayerDimIdentityAttached"] = true;
 
                 RoutedEventHandler refresh = (sender, args) => UpdateHeaderState(view, header, expander.IsExpanded);
-                expander.Expanded -= refresh;
-                expander.Collapsed -= refresh;
                 expander.Expanded += refresh;
                 expander.Collapsed += refresh;
 

@@ -248,8 +248,27 @@ namespace HNL.VXT.AutoCAD
 
         public void RequestLayInCreate(LayInCeilingSettings settings)
         {
-            if (settings == null) return;
-            CancelPendingLayInPreview();
+            if (_stopRequested || settings == null) return;
+
+            // Match concealed Create's WYSIWYG gate: a debounced Preview can still
+            // display old dimensions, hatch or Ty when Create is pressed immediately
+            // after an input change. Never silently discard that pending update.
+            if (_pendingLayInPreviewSettings != null &&
+                !ReferenceEquals(Application.DocumentManager.MdiActiveDocument,
+                    _pendingLayInPreviewDocument))
+                CancelPendingLayInPreview();
+
+            if (_pendingLayInPreviewSettings != null)
+            {
+                var pending = _pendingLayInPreviewSettings.Clone();
+                CancelPendingLayInPreview();
+                var session = VxtSession.Current;
+                session.LayInSettings = pending;
+                Send(session.HasBoundary ? "HNLCFLAYINPREVIEW " : "HNLCFLAYINCLEAR ");
+                Write("\nHNL Tool - Trần nổi: Preview vừa thay đổi. Đã cập nhật xem trước; hãy kiểm tra rồi bấm Tạo lại.");
+                return;
+            }
+
             VxtSession.Current.LayInSettings = settings.Clone();
             Send("HNLCFLAYINCREATE ");
         }

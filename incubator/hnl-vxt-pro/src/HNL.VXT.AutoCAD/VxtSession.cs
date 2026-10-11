@@ -83,6 +83,10 @@ namespace HNL.VXT.AutoCAD
 
             // Keep the palette instance and all user settings, but clear drawing-specific UI facts.
             ViewModel?.SetBoundaryStatus("Chưa chọn biên trần.", false);
+            // Refresh resource dropdowns AFTER clearing the old DWG boundary.
+            // The concealed DimStyle becomes "Hiện hành" for the new drawing;
+            // the stale style must not be passed to Preview/Create.
+            ViewModel?.RefreshDrawingResourceChoices();
             ViewModel?.SetPreviewStats(0, 0, 0, 0);
             ViewModel?.SetConstraintDiagnostics(null);
         }

@@ -289,6 +289,21 @@ namespace HNL.VXT.UI.ViewModels
                 : "Chọn Polyline hoặc Chọn điểm để bắt đầu xem trước.";
         }
 
+        // DWG-specific DimStyles must not leak to a different drawing. Other
+        // user-selected presets/layers/blocks remain in the current AutoCAD
+        // session and can be validated against the new DWG when actually used.
+        public void RefreshDrawingResourceChoices()
+        {
+            if (!string.IsNullOrWhiteSpace(_settings.DimensionStyle))
+            {
+                _settings.DimensionStyle = string.Empty;
+                OnPropertyChanged(nameof(DimensionStyle));
+                OnPropertyChanged(nameof(SelectedDimensionStyle));
+            }
+            OnPropertyChanged(nameof(DimStyleOptions));
+            OnPropertyChanged(nameof(LinetypeOptions));
+        }
+
         public void SetDirection(double degrees, MainDirectionMode mode = MainDirectionMode.TwoPoints)
         {
             _settings.MainDirection = mode == MainDirectionMode.PolylinePath

@@ -395,6 +395,10 @@ namespace HNL.VXT.UI.Views
                 IsEditable = false,
                 ItemsSource = values.ToArray()
             };
+            if (string.Equals(label, "Linetype", StringComparison.Ordinal))
+                combo.SetBinding(ItemsControl.ItemsSourceProperty,
+                    new Binding(nameof(VxtPaletteViewModel.LinetypeOptions))
+                    { Mode = BindingMode.OneWay });
             combo.SetBinding(ComboBox.SelectedItemProperty, new Binding(selectedPath)
             {
                 Mode = BindingMode.TwoWay,
@@ -411,9 +415,11 @@ namespace HNL.VXT.UI.Views
             var combo = new ComboBox
             {
                 Height = 27.0,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                ItemsSource = view.ViewModel.DimStyleOptions
+                HorizontalAlignment = HorizontalAlignment.Stretch
             };
+            combo.SetBinding(ItemsControl.ItemsSourceProperty,
+                new Binding(nameof(VxtPaletteViewModel.DimStyleOptions))
+                { Mode = BindingMode.OneWay });
             combo.SetBinding(ComboBox.SelectedItemProperty, new Binding(nameof(VxtPaletteViewModel.SelectedDimensionStyle))
             {
                 Mode = BindingMode.TwoWay

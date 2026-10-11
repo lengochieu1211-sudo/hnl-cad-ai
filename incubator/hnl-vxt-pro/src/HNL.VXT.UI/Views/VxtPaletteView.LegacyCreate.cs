@@ -40,9 +40,12 @@ namespace HNL.VXT.UI.Views
             if (vm != null)
             {
                 UpdateLegacyCreateEnabled(button, vm);
+                // PaletteSet hides/reloads the SAME view instance. Do not unsubscribe
+                // on Unloaded while the one-time "LegacyCreatePatched" flag survives:
+                // reopening would otherwise leave Create stuck in its old enabled state.
+                // The ViewModel and button share the same palette lifetime.
                 PropertyChangedEventHandler handler = (s, args) => UpdateLegacyCreateEnabled(button, vm);
                 vm.PropertyChanged += handler;
-                button.Unloaded += (s, args) => vm.PropertyChanged -= handler;
             }
         }
 
