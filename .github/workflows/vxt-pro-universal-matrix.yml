@@ -163,11 +163,18 @@ jobs:
           # Deep audit gates: DIM labels must equal measured post-phase lengths.
           $layInCore = Get-Content "$env:VXT_ROOT\src\HNL.VXT.Core\Preview\LayInCeilingPlanner.cs" -Raw
           $layInTests = Get-Content "$env:VXT_ROOT\tests\HNL.VXT.Core.Tests\LayInCeilingPlannerTests.cs" -Raw
-          if (-not $layInCore.Contains('(bounds.MaxX - xStart) / spec.ModuleShort') -or
-              -not $layInCore.Contains('(bounds.MaxY - yStart) / acrossModule') -or
+          # New DIM contract: iterate ALL complete panels / groups along the lattice;
+          # partial cut edges and short residual groups must remain separately measured.
+          if (-not $layInCore.Contains('AddPanelAxisDimensions') -or
+              -not $layInCore.Contains('Math.Floor((max - first) / module + Eps)') -or
+              -not $layInCore.Contains('AddMeasuredDimension(plan, settings, bounds, angle, last, max, horizontal)') -or
+              -not $layInCore.Contains('AddHangerDimensions') -or
               -not $layInTests.Contains('ManualStart_GroupedDimensionsMatchExactMeasuredSpan') -or
-              -not $layInTests.Contains('NarrowBoundary_SkipsFullModuleDimsInsteadOfDrawingFalseLabel')) {
-            throw 'Lay-in measured-DIM regression protections are missing.'
+              -not $layInTests.Contains('NarrowBoundary_MeasuresCutEdgesButNeverManufacturesFullModule') -or
+              -not $layInTests.Contains('ModuleMode_DimensionsEveryWholePanelForAllFourGridSystems') -or
+              -not $layInTests.Contains('GroupedMode_MeasuresAllGroupsShortGroupAndCutSeparately') -or
+              -not $layInTests.Contains('TyDimensions_UseActualHangerPositionsAndDoNotAffectGridOrTy')) {
+            throw 'Lay-in individual/grouped/cut-edge/Ty measured-DIM regression protections are missing.'
           }
           # Selecting boundaries and switching UI tabs must route to the active ceiling renderer.
           $boundaryCommands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtCommands.cs" -Raw
