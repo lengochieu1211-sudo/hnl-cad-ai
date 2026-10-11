@@ -13,7 +13,7 @@ $xaml = Source 'src/HNL.VXT.UI/Views/VxtPaletteView.xaml'
 $concealed = Source 'src/HNL.VXT.UI/ViewModels/VxtPaletteViewModel.cs'
 $layin = Source 'src/HNL.VXT.UI/ViewModels/LayInCeilingViewModel.cs'
 $registeredSource = Source 'src/HNL.VXT.AutoCAD/HnlVxtCommands.cs'
-$host = Source 'src/HNL.VXT.AutoCAD/VxtHostBridge.cs'
+$hostBridgeSource = Source 'src/HNL.VXT.AutoCAD/VxtHostBridge.cs'
 $legacy = Source 'src/HNL.VXT.UI/Views/VxtPaletteView.LegacyCreate.cs'
 $visual = Source 'src/HNL.VXT.UI/Views/VxtPaletteVisualIdentity.cs'
 $resources = Source 'src/HNL.VXT.UI/Views/VxtPaletteRuntimePolish.cs'
@@ -32,7 +32,7 @@ if (-not $plugin.Contains('CommandClass(typeof(HNL.VXT.AutoCAD.HnlVxtCommands))'
     throw 'HCF audit: actual AutoCAD CommandClass registration changed.'
 }
 
-$called = @([regex]::Matches($host, '"(?<cmd>(?:HNLVXT|HNLCF)[A-Z0-9]+)\s') |
+$called = @([regex]::Matches($hostBridgeSource, '"(?<cmd>(?:HNLVXT|HNLCF)[A-Z0-9]+)\s') |
     ForEach-Object { $_.Groups['cmd'].Value } | Sort-Object -Unique)
 foreach ($command in $called) {
     if ($registered -notcontains $command) {
@@ -77,13 +77,13 @@ if (-not $xaml.Contains('x:Name="ConcealedCreateButton"') -or
 
 # Lay-in Create MUST first materialize its debounced Preview and require another
 # click rather than produce unpreviewed changes in the drawing.
-if (-not $host.Contains('if (_pendingLayInPreviewSettings != null)') -or
-    -not $host.Contains('Send(session.HasBoundary ? "HNLCFLAYINPREVIEW " : "HNLCFLAYINCLEAR ");') -or
-    -not $host.Contains('Send("HNLCFLAYINCREATE ");')) {
+if (-not $hostBridgeSource.Contains('if (_pendingLayInPreviewSettings != null)') -or
+    -not $hostBridgeSource.Contains('Send(session.HasBoundary ? "HNLCFLAYINPREVIEW " : "HNLCFLAYINCLEAR ");') -or
+    -not $hostBridgeSource.Contains('Send("HNLCFLAYINCREATE ");')) {
     throw 'HCF audit: Lay-in Preview/Create WYSIWYG gate missing.'
 }
 if (-not $xaml.Contains('Click="StopHcfButton_Click"') -or
-    -not $host.Contains('Send("HNLCFSTOP ");') -or
+    -not $hostBridgeSource.Contains('Send("HNLCFSTOP ");') -or
     $registered -notcontains 'HNLCFSTOP') {
     throw 'HCF audit: Stop button cannot safely reach command context.'
 }
