@@ -38,11 +38,24 @@ internal static class Program
             Assert(o.MixedMode==(mode=="M"), "mixed flag "+mode);
             Assert(o.MixedPrimary==(longMain?MixedPrimaryMode.LargeMain:MixedPrimaryMode.SmallMain), "priority "+mode);
             Assert(mode!="D" || ReferenceEquals(o.SmallStock,o.LargeStock), "long stock when D-only");
+            // Single-stock variants must remain a single physical stock family,
+            // even if the persisted mixed-priority preference has another value.
+            Assert(mode!="S" || o.SmallStock.DisplayName==
+                (pitch==600?"595x595":"605x605"), "short-only stock "+pitch+"/"+priority);
+            Assert(mode!="D" || o.SmallStock.DisplayName==
+                (pitch==600?"595x1190":"605x1210"), "long-only stock "+pitch+"/"+priority);
             Assert(!o.SnapEnabled && o.SnapTolerance==0, "Snap OFF");
             var calc=engine.CalculateLineHatch(rect,new GridFrame(new Point2(0,0),0),2400d*2400d,o);
             Assert(calc.Success && calc.PureResult!=null, "calc "+pitch+"/"+mode+"/"+direction+"/"+priority+" "+calc.FailureReason);
             var bins=engine.PackCutPieces(calc.PureResult.CutPieces,o);
             Assert(bins!=null,"pack null");
+            if(mode=="S" || mode=="D")
+            {
+                var expectedStockCode=mode;
+                foreach(var bin in bins.Bins)
+                    Assert(bin.Code==expectedStockCode,
+                        "Unexpected source stock "+bin.Code+" in "+mode+"-only / "+pitch);
+            }
             n++;
             Console.WriteLine("HCE MODE PASS "+n+" "+pitch+"/"+mode+"/"+direction+"/"+priority);
         }
