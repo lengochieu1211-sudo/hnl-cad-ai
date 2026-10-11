@@ -596,7 +596,7 @@ jobs:
                  'TryGetFirstPatternBase(hatch, out phaseX, out phaseY)',
                  'profile.GridMode == "3" && input.UserGridVerified',
                  '!input.PatternBaseVerified',
-                 'DXF 43/44 phase unavailable',
+                 'không đọc được gốc lưới DXF 43/44',
                  'phasePolicy=',
                  'gốc lưới theo DXF 43/44=')) {
             if(-not $cmd.Contains($part)) { throw "Missing HCE 43/44 phase safety contract: $part" }
