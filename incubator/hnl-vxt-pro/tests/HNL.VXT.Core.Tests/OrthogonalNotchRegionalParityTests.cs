@@ -18,6 +18,8 @@ namespace HNL.VXT.Core.Tests
             var settings = new VxtSettings
             {
                 OptimizationMode = VxtOptimizationMode.Legacy,
+                // This regression exercises the explicitly enabled local-notch XC path.
+                UseLocalMainAdd = true,
                 MainDirection = MainDirectionMode.Horizontal,
                 DrawMain = true,
                 DrawFurring = true,
