@@ -269,6 +269,15 @@ jobs:
              $cmd.Contains('editor.GetKeywords(cutListChoice)')) {
             throw 'After calculation do not repeat cut-list mode question configured in the Palette'
           }
+          foreach($mmInput in @('_legacyTolerance.Text', '_legacyTableHeight.Text', '_legacyLabelHeight.Text')) {
+            if(-not $ui.Contains("TryParseUiMm($mmInput")) {
+              throw "HCE numeric input must accept comma/dot decimal: $mmInput"
+            }
+          }
+          if(-not $ui.Contains("Replace(',', '.')") -or
+             -not $ui.Contains('NumberStyles.Float, CultureInfo.InvariantCulture')) {
+            throw 'HCE numeric input must parse both Vietnamese comma and international dot decimals'
+          }
           if(-not $cmd.Contains('if (detailedCount > 2000)')) {
             throw 'Keep separate safety confirmation for very large detailed CAD tables'
           }
