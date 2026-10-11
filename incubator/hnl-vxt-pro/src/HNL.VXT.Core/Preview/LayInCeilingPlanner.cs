@@ -404,6 +404,7 @@ namespace HNL.VXT.Core.Preview
                     bounds.MinX, bounds.MaxX, spec.ModuleShort, phaseX, true);
                 AddGridAxisDimensions(plan, settings, bounds, angle,
                     bounds.MinY, bounds.MaxY, acrossModule, phaseY, false);
+                AddAdditionalOverallDimensionRuns(plan, settings, bounds, angle);
                 return;
             }
             if (settings.DimensionMode == LayInDimensionMode.Overall)
@@ -447,6 +448,18 @@ namespace HNL.VXT.Core.Preview
                     acrossModule, yCount,
                     BuildModuleLabel(yCount, acrossModule), angle, bounds, settings);
             }
+            AddAdditionalOverallDimensionRuns(plan, settings, bounds, angle);
+        }
+
+        // Add a measured overall DIM outside the original grid/cut row only on opt-in.
+        private static void AddAdditionalOverallDimensionRuns(
+            LayInCeilingPlan plan, LayInCeilingSettings settings, Box2 bounds, double angle)
+        {
+            if (!settings.AddOverallDimension) return;
+            AddDimensionRun(plan, bounds.MinX, bounds.MinY, bounds.MaxX, bounds.MinY,
+                bounds.Width, 1, string.Empty, angle, bounds, settings, 1);
+            AddDimensionRun(plan, bounds.MinX, bounds.MinY, bounds.MinX, bounds.MaxY,
+                bounds.Height, 1, string.Empty, angle, bounds, settings, 1);
         }
 
         private static void AddGridAxisDimensions(
@@ -505,12 +518,14 @@ namespace HNL.VXT.Core.Preview
             string label,
             double angle,
             Box2 bounds,
-            LayInCeilingSettings settings)
+            LayInCeilingSettings settings,
+            int rowIndex = 0)
         {
             var horizontal = Math.Abs(y2 - y1) < Eps;
-            var distance = horizontal
+            var distance = (horizontal
                 ? Math.Max(1.0, settings.HorizontalDimDistance)
-                : Math.Max(1.0, settings.VerticalDimDistance);
+                : Math.Max(1.0, settings.VerticalDimDistance))
+                + Math.Max(0, rowIndex) * Math.Max(1.0, settings.DimensionRowSpacing);
             var linePoint = horizontal
                 ? new Point2((x1 + x2) * 0.5,
                     settings.HorizontalDimSide == LayInHorizontalDimSide.Top

@@ -1124,13 +1124,11 @@
                                 <CheckBox Content="Chèn Block ô đầu"
                                           IsChecked="{Binding DrawStartTileBlock, Mode=TwoWay}" Margin="0,4,0,6"/>
                                 <StackPanel IsEnabled="{Binding DrawStartTileBlock}">
-                                    <TextBlock Text="Trống = Block HNL"
-                                               TextWrapping="Wrap" Style="{StaticResource HintText}" Margin="0,0,0,5"/>
                                     <Grid MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="Block ô đầu" Style="{StaticResource FieldLabel}" ToolTip="Trống = Block HNL"/>
+                                        <TextBlock Text="Block ô đầu" Style="{StaticResource FieldLabel}" ToolTip="Để trống để dùng ký hiệu ô đầu HNL."/>
                                         <TextBox Grid.Column="1" Text="{Binding StartMarkerBlockName, UpdateSourceTrigger=LostFocus}"
-                                                 ToolTip="Trống = Block HNL"/>
+                                                 ToolTip="Để trống để dùng ký hiệu ô đầu HNL."/>
                                         <Button Grid.Column="2" Content="Chọn" Command="{Binding PickStartMarkerBlockCommand}"
                                                 Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
                                     </Grid>
@@ -1144,20 +1142,18 @@
                                     <Grid Margin="0,0,0,7" IsEnabled="{Binding DrawHangers}" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Bước Ty Max (mm)" Style="{StaticResource FieldLabel}"/>
-                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerMaxSpacing, Mode=TwoWay}" Minimum="0" Step="100"/>
+                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerMaxSpacing, Mode=TwoWay}" Minimum="0" Step="100" ToolTip="Nhập 0 để dùng bước Ty chuẩn của hệ khung."/>
                                     </Grid>
                                     <Grid Margin="0,0,0,7" IsEnabled="{Binding DrawHangers}" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Ty đến biên (mm)" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
-                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerEdgeTarget, Mode=TwoWay}" Minimum="0" Step="50"/>
+                                        <controls:HnlNumericBox Grid.Column="1" Value="{Binding HangerEdgeTarget, Mode=TwoWay}" Minimum="0" Step="50" ToolTip="Nhập 0 để dùng khoảng Ty đến biên chuẩn của hệ khung."/>
                                     </Grid>
-                                    <TextBlock Text="0 = mặc định." Style="{StaticResource HintText}" Margin="0,0,0,7"/>
-                                    <TextBlock Text="Thiếu Block: vẽ tròn." TextWrapping="Wrap" Style="{StaticResource HintText}" Margin="0,0,0,6"/>
                                     <Grid MinHeight="29" IsEnabled="{Binding DrawHangers}">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Block Ty" Style="{StaticResource FieldLabel}"/>
                                         <TextBox Grid.Column="1" Text="{Binding HangerBlockName, UpdateSourceTrigger=LostFocus}"
-                                                 ToolTip="Mặc định: AP_DIEM TY 06.2026"/>
+                                                 ToolTip="Mặc định: AP_DIEM TY 06.2026. Thiếu Block trong DWG thì vẽ tròn."/>
                                         <Button Grid.Column="2" Content="Chọn" Command="{Binding PickHangerBlockCommand}"
                                                 Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
                                     </Grid>
@@ -1195,7 +1191,7 @@
                                         </Grid>
                                         <Grid Margin="0,0,0,8" MinHeight="29">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Text="Cách biên (mm)" Style="{StaticResource FieldLabel}"/>
+                                            <TextBlock Text="Khoảng DIM ngang" Style="{StaticResource FieldLabel}"/>
                                             <controls:HnlNumericBox Grid.Column="1" Value="{Binding HorizontalDimDistance, Mode=TwoWay}" Minimum="1" Step="50"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,7" MinHeight="29">
@@ -1206,8 +1202,18 @@
                                         </Grid>
                                         <Grid MinHeight="29">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Text="Cách biên (mm)" Style="{StaticResource FieldLabel}"/>
+                                            <TextBlock Text="Khoảng DIM dọc" Style="{StaticResource FieldLabel}"/>
                                             <controls:HnlNumericBox Grid.Column="1" Value="{Binding VerticalDimDistance, Mode=TwoWay}" Minimum="1" Step="50"/>
+                                        </Grid>
+                                        <CheckBox Content="Thêm DIM tổng (hàng ngoài)"
+                                                  IsEnabled="{Binding CanAddOverallDimension}"
+                                                  IsChecked="{Binding AddOverallDimension, Mode=TwoWay}"
+                                                  ToolTip="Thêm hàng DIM tổng bên ngoài hàng DIM chính, không làm thay đổi các DIM mép cắt."
+                                                  Margin="0,9,0,7"/>
+                                        <Grid MinHeight="29" IsEnabled="{Binding IsAdditionalOverallDimensionEnabled}">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Cách hàng DIM" Style="{StaticResource FieldLabel}"/>
+                                            <controls:HnlNumericBox Grid.Column="1" Value="{Binding DimensionRowSpacing, Mode=TwoWay}" Minimum="1" Step="50"/>
                                         </Grid>
                                     </StackPanel>
                                 </StackPanel>
@@ -1258,14 +1264,14 @@
                 BorderThickness="0,1,0,0" Padding="2,5,2,5">
             <Button x:Name="StopHcfButton" Width="34" Height="108"
                     Style="{StaticResource CompactButton}" Click="StopHcfButton_Click"
-                    Background="Transparent" BorderBrush="Transparent"
-                    ToolTip="Tắt HCF và dừng Preview; AutoCAD vẫn mở">
+                    Background="#FFF1F2" BorderBrush="#FECACA" BorderThickness="1"
+                    ToolTip="Tắt công cụ vẽ trần và dừng Preview; AutoCAD vẫn mở">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Path Tag="HCF_RAIL_STOP_ICON" Data="M10,2 L10,10 M5,5 A8,8 0 1 0 15,5"
-                          Width="17" Height="17" Stretch="Uniform" Stroke="#DC2626"
-                          StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                    <TextBlock Text="Tắt HCF" TextAlignment="Center" Margin="0,4,0,0"
-                               Foreground="{DynamicResource PrimaryText}" FontSize="10.5" FontWeight="SemiBold">
+                          Width="19" Height="19" Stretch="Uniform" Stroke="#DC2626"
+                          StrokeThickness="2.3" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                    <TextBlock Text="Tắt" TextAlignment="Center" Margin="0,5,0,0"
+                               Foreground="#B91C1C" FontSize="11" FontWeight="SemiBold">
                         <TextBlock.LayoutTransform><RotateTransform Angle="-90"/></TextBlock.LayoutTransform>
                     </TextBlock>
                 </StackPanel>

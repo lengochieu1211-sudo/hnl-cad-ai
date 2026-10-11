@@ -64,6 +64,9 @@ namespace HNL.VXT.Core.Models
         public LayInVerticalDimSide VerticalDimSide { get; set; } = LayInVerticalDimSide.Auto;
         public double HorizontalDimDistance { get; set; } = 1200.0;
         public double VerticalDimDistance { get; set; } = 1200.0;
+        // Opt-in outer overall DIM row; default preserves the existing dimension chains.
+        public bool AddOverallDimension { get; set; } = false;
+        public double DimensionRowSpacing { get; set; } = 350.0;
 
         public string HatchLayer { get; set; } = "HNL-CF-LAYIN";
         public string HangerLayer { get; set; } = "HNL-CF-HANGER";

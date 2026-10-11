@@ -20,6 +20,8 @@ namespace HNL.VXT.Core.Tests
                 settings.HangerBlockName);
             Assert.IsTrue(settings.DrawStartTileBlock);
             Assert.AreEqual(string.Empty, settings.StartMarkerBlockName);
+            Assert.IsFalse(settings.AddOverallDimension, "Default DIM chains must remain unchanged.");
+            Assert.AreEqual(350.0, settings.DimensionRowSpacing, 0.001);
         }
 
         [TestMethod]
@@ -400,6 +402,58 @@ namespace HNL.VXT.Core.Tests
             Assert.IsTrue(vertical.All(d => Math.Abs(d.DimensionLinePoint.Value.X - 10700) < 0.001));
         }
 
+        [TestMethod]
+        public void OptionalOverallDim_UsesOuterRowWithoutChangingExistingDimensionsOrTees()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                GridSystem = LayInGridSystem.Module610x610,
+                MainDirection = LayInMainDirectionMode.Horizontal,
+                StartMode = LayInStartMode.Balanced,
+                DimensionMode = LayInDimensionMode.GridAndEdges,
+                HorizontalDimSide = LayInHorizontalDimSide.Top,
+                VerticalDimSide = LayInVerticalDimSide.Right,
+                HorizontalDimDistance = 600,
+                VerticalDimDistance = 700,
+                DimensionRowSpacing = 350
+            };
+            var original = LayInCeilingPlanner.Build(Rect(0, 0, 10000, 10000), null, settings);
+            var addedSettings = settings.Clone();
+            addedSettings.AddOverallDimension = true;
+            var added = LayInCeilingPlanner.Build(Rect(0, 0, 10000, 10000), null, addedSettings);
+            Assert.AreEqual(original.DimensionRuns.Count + 2, added.DimensionRuns.Count);
+            Assert.AreEqual(original.TeeSegments.Count, added.TeeSegments.Count);
+            Assert.AreEqual(original.HangerPoints.Count, added.HangerPoints.Count);
+            for (var i = 0; i < original.DimensionRuns.Count; i++)
+            {
+                Assert.AreEqual(original.DimensionRuns[i].A.X, added.DimensionRuns[i].A.X, 0.001);
+                Assert.AreEqual(original.DimensionRuns[i].B.Y, added.DimensionRuns[i].B.Y, 0.001);
+                Assert.AreEqual(original.DimensionRuns[i].DimensionLinePoint.Value.X,
+                    added.DimensionRuns[i].DimensionLinePoint.Value.X, 0.001);
+                Assert.AreEqual(original.DimensionRuns[i].DimensionLinePoint.Value.Y,
+                    added.DimensionRuns[i].DimensionLinePoint.Value.Y, 0.001);
+            }
+            var h = added.DimensionRuns.Single(d =>
+                Math.Abs(d.A.Y - d.B.Y) < 0.001 && Math.Abs(d.A.DistanceTo(d.B) - 10000) < 0.001);
+            var v = added.DimensionRuns.Single(d =>
+                Math.Abs(d.A.X - d.B.X) < 0.001 && Math.Abs(d.A.DistanceTo(d.B) - 10000) < 0.001);
+            Assert.AreEqual(10950, h.DimensionLinePoint.Value.Y, 0.001);
+            Assert.AreEqual(11050, v.DimensionLinePoint.Value.X, 0.001);
+            Assert.AreEqual(string.Empty, h.Label);
+            Assert.AreEqual(string.Empty, v.Label);
+        }
+
+        [TestMethod]
+        public void OverallMode_DoesNotDuplicateDimensionsWhenExtraOverallIsOn()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                DimensionMode = LayInDimensionMode.Overall,
+                AddOverallDimension = true
+            };
+            var plan = LayInCeilingPlanner.Build(Rect(0, 0, 6000, 4800), null, settings);
+            Assert.AreEqual(2, plan.DimensionRuns.Count);
+        }
         [TestMethod]
         public void SampleGridDims_AllFourSystemsMeasureFullWidthWithoutOverlap()
         {

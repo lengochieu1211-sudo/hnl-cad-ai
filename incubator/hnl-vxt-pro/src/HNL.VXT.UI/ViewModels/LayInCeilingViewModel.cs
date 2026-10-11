@@ -112,8 +112,8 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        public string[] HorizontalPositionOptions { get; } = { "Tự động", "Trên", "Dưới" };
-        public string[] VerticalPositionOptions { get; } = { "Tự động", "Trái", "Phải" };
+        public string[] HorizontalPositionOptions { get; } = { "Tự động", "Phía trên", "Phía dưới" };
+        public string[] VerticalPositionOptions { get; } = { "Tự động", "Bên trái", "Bên phải" };
 
         public ICommand SelectBoundaryCommand { get; }
         public ICommand PickBoundaryPointCommand { get; }
@@ -280,21 +280,50 @@ namespace HNL.VXT.UI.ViewModels
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsGroupedDimension));
                 OnPropertyChanged(nameof(IsDimensionEnabled));
+                OnPropertyChanged(nameof(CanAddOverallDimension));
+                OnPropertyChanged(nameof(IsAdditionalOverallDimensionEnabled));
                 RequestPreview();
             }
         }
 
         public bool IsGroupedDimension => _settings.DimensionMode == LayInDimensionMode.Grouped;
         public bool IsDimensionEnabled => _settings.DimensionMode != LayInDimensionMode.Off;
+        public bool CanAddOverallDimension => IsDimensionEnabled && _settings.DimensionMode != LayInDimensionMode.Overall;
+        public bool IsAdditionalOverallDimensionEnabled => CanAddOverallDimension && AddOverallDimension;
+
+        public bool AddOverallDimension
+        {
+            get => _settings.AddOverallDimension;
+            set
+            {
+                if (_settings.AddOverallDimension == value) return;
+                _settings.AddOverallDimension = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsAdditionalOverallDimensionEnabled));
+                RequestPreview();
+            }
+        }
+
+        public double DimensionRowSpacing
+        {
+            get => _settings.DimensionRowSpacing;
+            set
+            {
+                var spacing = Math.Max(1.0, value);
+                if (Near(_settings.DimensionRowSpacing, spacing)) return;
+                _settings.DimensionRowSpacing = spacing;
+                Changed();
+            }
+        }
 
         public string SelectedHorizontalDimPosition
         {
-            get => _settings.HorizontalDimSide == LayInHorizontalDimSide.Top ? "Trên" :
-                _settings.HorizontalDimSide == LayInHorizontalDimSide.Bottom ? "Dưới" : "Tự động";
+            get => _settings.HorizontalDimSide == LayInHorizontalDimSide.Top ? "Phía trên" :
+                _settings.HorizontalDimSide == LayInHorizontalDimSide.Bottom ? "Phía dưới" : "Tự động";
             set
             {
-                var side = value == "Trên" ? LayInHorizontalDimSide.Top :
-                    value == "Dưới" ? LayInHorizontalDimSide.Bottom : LayInHorizontalDimSide.Auto;
+                var side = (value == "Phía trên" || value == "Trên") ? LayInHorizontalDimSide.Top :
+                    (value == "Phía dưới" || value == "Dưới") ? LayInHorizontalDimSide.Bottom : LayInHorizontalDimSide.Auto;
                 if (_settings.HorizontalDimSide == side) return;
                 _settings.HorizontalDimSide = side;
                 Changed();
@@ -303,12 +332,12 @@ namespace HNL.VXT.UI.ViewModels
 
         public string SelectedVerticalDimPosition
         {
-            get => _settings.VerticalDimSide == LayInVerticalDimSide.Right ? "Phải" :
-                _settings.VerticalDimSide == LayInVerticalDimSide.Left ? "Trái" : "Tự động";
+            get => _settings.VerticalDimSide == LayInVerticalDimSide.Right ? "Bên phải" :
+                _settings.VerticalDimSide == LayInVerticalDimSide.Left ? "Bên trái" : "Tự động";
             set
             {
-                var side = value == "Phải" ? LayInVerticalDimSide.Right :
-                    value == "Trái" ? LayInVerticalDimSide.Left : LayInVerticalDimSide.Auto;
+                var side = (value == "Bên phải" || value == "Phải") ? LayInVerticalDimSide.Right :
+                    (value == "Bên trái" || value == "Trái") ? LayInVerticalDimSide.Left : LayInVerticalDimSide.Auto;
                 if (_settings.VerticalDimSide == side) return;
                 _settings.VerticalDimSide = side;
                 Changed();
