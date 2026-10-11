@@ -61,7 +61,7 @@ namespace HNL.VXT.AutoCAD
                 VxtSession.SynchronizeDocument(doc);
 
             doc?.Editor.WriteMessage(
-                "\nHNL Tool - Ceiling Framing Pro | " + VxtBuildInfo.VersionLabel + " | Lệnh: HCF (HVX tương thích)");
+                "\nHNL Tool - Ceiling Framing Pro | " + VxtBuildInfo.VersionLabel + " | Lệnh mở: HCF");
         }
 
         private static void OnDocumentActivated(object sender, DocumentCollectionEventArgs e)

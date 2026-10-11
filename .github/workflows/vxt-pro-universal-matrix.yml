@@ -47,7 +47,12 @@ jobs:
           if (-not $buildInfo.Contains('public const string Version = "v7.0.0-beta.1"')) { throw 'Canonical beta.1 version label missing.' }
           $registeredCommands = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\HnlVxtCommands.cs" -Raw
           if (-not $registeredCommands.Contains('[CommandMethod("HCF"')) { throw 'HCF primary command missing.' }
-          if (-not $registeredCommands.Contains('[CommandMethod("HVX"')) { throw 'HVX compatibility alias missing.' }
+          if ([regex]::Matches($registeredCommands, '\[CommandMethod\("HCF"').Count -ne 1 -or
+              $registeredCommands.Contains('[CommandMethod("HVX"') -or
+              $registeredCommands.Contains('[CommandMethod("VXT"') -or
+              $registeredCommands.Contains('[CommandMethod("CFP"')) {
+            throw 'HCF must be the only publicly named launcher.'
+          }
           if (-not $registeredCommands.Contains('[CommandMethod("HNLVXTCREATE"')) { throw 'HNLVXTCREATE command missing.' }
           if (-not $registeredCommands.Contains('[CommandMethod("HNLVXTFOCUSBOUNDARY"')) { throw 'Mxx focus command is not registered on HnlVxtCommands.' }
           if (-not $registeredCommands.Contains('[CommandMethod("HNLVXTPICKBOUNDARYPOINT"')) { throw 'Pick Point command is not registered on HnlVxtCommands.' }
@@ -79,7 +84,9 @@ jobs:
           foreach ($manifestName in @('PackageContents.2026-net8.xml','PackageContents.2026-net10.xml')) {
             $manifest = Get-Content "$env:VXT_ROOT\build\universal\$manifestName" -Raw
             if (-not $manifest.Contains('Global="HCF" Local="HCF"')) { throw "$manifestName does not expose HCF." }
-            if (-not $manifest.Contains('Global="HVX" Local="HVX"')) { throw "$manifestName lost HVX compatibility alias." }
+            if ($manifest -match '<Command Global="(HVX|VXT[^"]*|CFP)"') {
+              throw "$manifestName exposes an obsolete public command. HCF is the only launcher."
+            }
             if (-not $manifest.Contains('SupportPath="./Contents/Resources"')) { throw "$manifestName lost Lay-in hatch SupportPath." }
           }
           foreach ($pat in @('HNL_CF_600X600','HNL_CF_610X610','HNL_CF_600X1200','HNL_CF_610X1220')) {

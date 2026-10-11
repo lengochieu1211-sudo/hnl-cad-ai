@@ -13,7 +13,7 @@ namespace HNL.VXT.AutoCAD
 {
     public sealed class VxtCommands
     {
-        [CommandMethod("VXT", CommandFlags.Modal)]
+        // Called only by the HCF entry point; intentionally not a separate AutoCAD command.
         public void ShowPalette() => VxtPaletteService.Show();
 
         [CommandMethod("HNLVXTFOCUSBOUNDARY", CommandFlags.Modal)]

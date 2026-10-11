@@ -8,7 +8,7 @@ namespace HNL.VXT.AutoCAD
     /// <summary>
     /// The only registered AutoCAD command surface for HNL Ceiling Framing Pro.
     /// Primary user-facing command: HCF (HNL Ceiling Framing).
-    /// HVX remains a compatibility alias for existing users/scripts.
+    /// All other registered names are internal palette/QA command-context operations.
     /// Technical commands keep the longer HNLVXT
     /// namespace to minimize collision risk with AutoCAD and other Lisp tools.
     /// VxtCommands remains the implementation class but is intentionally not
@@ -21,12 +21,6 @@ namespace HNL.VXT.AutoCAD
         {
             if (!VxtAuthorization.EnsureAuthorized()) return;
             new VxtCommands().ShowPalette();
-        }
-
-        [CommandMethod("HVX", CommandFlags.Modal)]
-        public void ShowPaletteLegacyAlias()
-        {
-            ShowPalette();
         }
 
         [CommandMethod("HNLVXTCREATE", CommandFlags.Modal | CommandFlags.UsePickSet)]

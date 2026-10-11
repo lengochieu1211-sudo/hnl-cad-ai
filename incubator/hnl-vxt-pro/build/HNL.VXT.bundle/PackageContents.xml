@@ -14,7 +14,7 @@
                     AppDescription="HNL Ceiling Framing Pro"
                     LoadOnCommandInvocation="True">
       <Commands GroupName="HNL.VXT.Commands">
-        <Command Global="HCF" Local="HCF" /><Command Global="HVX" Local="HVX" />
+        <Command Global="HCF" Local="HCF" />
         <Command Global="HNLVXTCREATE" Local="HNLVXTCREATE" /><Command Global="HNLVXTCREATEWARN" Local="HNLVXTCREATEWARN" />
         <Command Global="HNLVXTBOUNDARY" Local="HNLVXTBOUNDARY" />
         <Command Global="HNLVXTAUTOSETUP" Local="HNLVXTAUTOSETUP" />

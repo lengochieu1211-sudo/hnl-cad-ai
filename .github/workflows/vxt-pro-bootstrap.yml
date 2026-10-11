@@ -81,8 +81,13 @@ jobs:
           if (-not $commandSource.Contains('[CommandMethod("HCF"')) {
             throw "Command namespace gate failed: HCF primary command is missing."
           }
-          if (-not $commandSource.Contains('[CommandMethod("HVX"')) {
-            throw "Command compatibility gate failed: HVX alias is missing."
+          # HCF is the ONLY public entry command. Palette callbacks retain their
+          # HNLVXT*/HNLCF* technical names for safe AutoCAD command-context routing.
+          if ([regex]::Matches($commandSource, '\[CommandMethod\("HCF"').Count -ne 1 -or
+              $commandSource.Contains('[CommandMethod("HVX"') -or
+              $commandSource.Contains('[CommandMethod("CFP"') -or
+              $commandSource.Contains('[CommandMethod("VXT"')) {
+            throw "HCF command gate failed: duplicate or obsolete public launcher."
           }
           if ($commandSource.Contains('[CommandMethod("HNLVXT",')) {
             throw "Command namespace gate failed: obsolete HNLVXT main alias is still exposed."
@@ -100,8 +105,10 @@ jobs:
           if (-not $pluginSource.Contains('CommandClass(typeof(HNL.VXT.AutoCAD.HnlVxtCommands))')) {
             throw "Command namespace gate failed: legacy VXT command class is still registered."
           }
-          if (-not $pluginSource.Contains('Lệnh: HCF')) {
-            throw "Command namespace gate failed: startup prompt does not advertise HCF."
+          if (-not $pluginSource.Contains('Lệnh mở: HCF') -or
+              $pluginSource.Contains('HVX tương thích') -or
+              $pluginSource.Contains('CommandClass(typeof(HNL.VXT.AutoCAD.VxtCommands))')) {
+            throw "Command gate failed: startup still advertises another launcher or legacy class is registered."
           }
           $bridgeSource = Get-Content "$env:VXT_ROOT\src\HNL.VXT.AutoCAD\VxtHostBridge.cs" -Raw
           if (-not $bridgeSource.Contains('Send("HNLVXTCREATE ")')) {
@@ -220,8 +227,8 @@ jobs:
           if (-not $manifest.Contains('Global="HCF" Local="HCF"')) {
             throw "Package gate failed: HCF is not exposed for lazy command loading."
           }
-          if (-not $manifest.Contains('Global="HVX" Local="HVX"')) {
-            throw "Package compatibility gate failed: HVX alias is missing."
+          if ($manifest -match '<Command Global="(HVX|VXT[^"]*|CFP)"') {
+            throw "Package gate failed: HCF must be the only public launcher."
           }
           if (-not $manifest.Contains('SupportPath="./Contents/Resources"')) {
             throw "Package gate failed: Lay-in hatch SupportPath is missing."
