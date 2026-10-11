@@ -146,6 +146,8 @@ namespace HNL.CeilingEstimator.AutoCAD
         private readonly SolidColorBrush _muted;
         private readonly SolidColorBrush _accent;
         private readonly SolidColorBrush _accentSoft;
+        private readonly SolidColorBrush _workSuccess = Brush("#22C55E");
+        private readonly SolidColorBrush _workCanceled = Brush("#F59E0B");
         private readonly System.Collections.Generic.Dictionary<string, ComboBox> _legacySelectors =
             new System.Collections.Generic.Dictionary<string, ComboBox>();
         private Grid? _legacyPriorityRow;
@@ -577,9 +579,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             _workPercent.Text = idle || canceled ? "—" :
                 (indeterminate ? "···" : value.ToString(CultureInfo.InvariantCulture) + "%");
             if (_workIndicator != null)
-                _workIndicator.Background = completed ? Brush("#22C55E") :
-                    canceled ? Brush("#F59E0B") :
-                    idle ? _muted : _accent;
+                _workIndicator.Background = completed ? _workSuccess :
+                    canceled ? _workCanceled : idle ? _muted : _accent;
             if (_stopHceButton != null)
                 _stopHceButton.IsEnabled = !HcePaletteService.IsCalculating;
         }
