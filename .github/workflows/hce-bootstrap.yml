@@ -110,7 +110,11 @@ jobs:
             $style=[System.Windows.Markup.XamlReader]::Parse($match.Groups[1].Value)
             if($style -isnot [System.Windows.Style]){throw 'WPF module style parsing returned unexpected type'}
           }
-          Write-Host 'HCE WPF XAML PARSE + HATCH AREA/PROMPT GATES PASS'
+          $comboXaml = [regex]::Match($ui,'const string comboXaml = @"(.*?)";',[Text.RegularExpressions.RegexOptions]::Singleline)
+          if(-not $comboXaml.Success) {throw 'Missing HCE themed dropdown XAML template'}
+          $comboStyle = [System.Windows.Markup.XamlReader]::Parse($comboXaml.Groups[1].Value)
+          if($comboStyle -isnot [System.Windows.Style]) {throw 'HCE dropdown XAML template did not parse'}
+          Write-Host 'HCE WPF COMBOBOX + RAIL XAML PARSE + HATCH AREA/PROMPT GATES PASS'
 
       - name: Validate HCE pixel scrolling and visible ComboBox chrome
         shell: powershell
@@ -133,7 +137,7 @@ jobs:
           $root = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
           $ui = Get-Content "$root/HcePaletteUi.cs" -Raw
           $commands = Get-Content "$root/Commands.cs" -Raw
-          foreach ($required in @('PlacementTarget.ActualWidth', 'ElementName=PART_Popup', 'ProgressBar', 'UpdateWorkProgress', 'CommandMethod("HCESTOP"', 'StopInCommandContext', 'MessageBoxButton.YesNo', 'Tắt HCE')) {
+          foreach ($required in @('PlacementTarget.ActualWidth', 'ElementName=PART_Popup', 'ProgressBar', 'UpdateWorkProgress', 'CommandMethod("HCESTOP"', 'StopInCommandContext', 'MessageBoxButton.YesNo', 'Tắt HCE', 'if (!_active || _palette == null || !_palette.Visible)')) {
             if(-not $ui.Contains($required)) { throw "HCE HCF-compatible UI contract missing: $required" }
           }
           foreach ($required in @('HceCommandProgress', 'ProgressMeter', 'MeterProgress()', 'onHatchProgress?.Invoke', 'onPackingProgress?.Invoke', 'onMeasuredRow?.Invoke', 'progress.Complete();')) {
