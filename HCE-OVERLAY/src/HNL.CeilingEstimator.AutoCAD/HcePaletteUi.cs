@@ -27,7 +27,8 @@ namespace HNL.CeilingEstimator.AutoCAD
         [CommandMethod("HCESTOP", CommandFlags.Modal)]
         public void Stop() { HcePaletteService.StopInCommandContext(); }
 
-        [CommandMethod("HCEUI", CommandFlags.Modal)]
+        // Called only from the public HCE launcher; do not register a second
+        // user-facing command for this same Palette.
         public void Open()
         {
             try { HcePaletteService.Show(); }
@@ -1052,10 +1053,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             golden.Children.Add(Text("Ki\u1ec3m th\u1eed tr\u00ean b\u1ea3n sao DWG/DXF tr\u01b0\u1edbc khi \u0111\u01b0a v\u00e0o thi c\u00f4ng.",
                 10, _muted, FontWeights.Normal));
             content.Children.Add(Card(golden));
-            var legacy = Section("L\u1ec7nh t\u01b0\u01a1ng th\u00edch", "#A78BFA");
-            legacy.Children.Add(CommandButton("DTC", "DTC", false));
-            legacy.Children.Add(CommandButton("Tính tấm", "HCECALC", false));
-            content.Children.Add(Card(legacy));
+            // The active HCE panel already contains the Calculate button.
+            // Do not revive the obsolete DTC alias in auxiliary views.
 
             return Scroll(content);
         }
