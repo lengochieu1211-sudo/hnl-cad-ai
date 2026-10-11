@@ -33,17 +33,17 @@ namespace HNL.CeilingEstimator.AutoCAD
             var selection = editor.GetSelection(
                 new PromptSelectionOptions
                 {
-                    MessageForAdding = "\nHNL Tool - HCEQA select Hatches to inspect: "
+                    MessageForAdding = "\nHNL Tool - HCEQA: Chọn các Hatch cần kiểm tra: "
                 },
                 new SelectionFilter(new[] { new TypedValue((int)DxfCode.Start, "HATCH") }));
             if (selection.Status != PromptStatus.OK || selection.Value == null)
             {
-                editor.WriteMessage("\nHNL Tool - HCEQA cancelled; read-only.");
+                editor.WriteMessage("\nHNL Tool - HCEQA đã hủy; không thay đổi bản vẽ.");
                 return;
             }
             using (var tr = document.Database.TransactionManager.StartTransaction())
             {
-                editor.WriteMessage("\nHNL Tool - HCEQA drawing units=" +
+                editor.WriteMessage("\nHNL Tool - HCEQA đơn vị bản vẽ=" +
                     document.Database.Insunits.ToString());
                 foreach (SelectedObject selected in selection.Value)
                 {
@@ -56,7 +56,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                         {
                             editor.WriteMessage("\nHCEQA handle=" + hatch.Handle +
                                 " layer=" + hatch.Layer +
-                                " rejected: gradient fill is not a ceiling tile grid.");
+                                " bị loại: Hatch tô chuyển màu không phải lưới tấm trần.");
                             continue;
                         }
                         var userPattern = hatch.PatternType == HatchPatternType.UserDefined;
@@ -102,11 +102,11 @@ namespace HNL.CeilingEstimator.AutoCAD
                     catch (System.Exception ex)
                     {
                         editor.WriteMessage("\nHCEQA id=" + selected.ObjectId.ToString() +
-                            " read failure: " + ex.Message);
+                            " lỗi đọc đối tượng: " + ex.Message);
                     }
                 }
             }
-            editor.WriteMessage("\nHNL Tool - HCEQA finished; no drawing changes.");
+            editor.WriteMessage("\nHNL Tool - HCEQA hoàn tất; bản vẽ không thay đổi.");
         }
 
         // Read-only complete current-space audit. Intended for AutoCAD 2023
@@ -121,9 +121,9 @@ namespace HNL.CeilingEstimator.AutoCAD
             var inputs = new List<HatchInput>();
             var total = 0;
             var rejected = 0;
-            editor.WriteMessage("\nHNL Tool - HCEGOLDEN read-only current-space Hatch audit.");
-            editor.WriteMessage("\nHNL Tool - Drawing units=" + database.Insunits +
-                "; assumed tile pitch=610mm; verify actual Hatch definition.");
+            editor.WriteMessage("\nHNL Tool - HCEGOLDEN kiểm tra Hatch trong không gian hiện hành (chỉ đọc).");
+            editor.WriteMessage("\nHNL Tool - Đơn vị bản vẽ=" + database.Insunits +
+                "; tạm giả định bước lưới 610 mm; cần kiểm tra thông số Hatch thực tế.");
             try
             {
                 using (var transaction = database.TransactionManager.StartTransaction())
@@ -180,21 +180,21 @@ namespace HNL.CeilingEstimator.AutoCAD
                     " accepted=" + inputs.Count + " rejected=" + rejected);
                 if (inputs.Count == 0)
                 {
-                    editor.WriteMessage("\nHCEGOLDEN STATUS=NO_SUPPORTED_HATCH; no DWG changes.");
+                    editor.WriteMessage("\nHCEGOLDEN STATUS=NO_SUPPORTED_HATCH; không thay đổi DWG.");
                     return;
                 }
                 var report = CalculateOnce(inputs, editor, ref rejected, true);
                 WritePreview(editor, report, rejected);
                 editor.WriteMessage("\nHCEGOLDEN STATUS=" +
                     (rejected == 0 && report.Groups.Count > 0 ? "COMPLETE" : "INCOMPLETE") +
-                    "; calculated using assumed 610mm policy.");
-                editor.WriteMessage("\nHCEGOLDEN Runtime Golden certification is PENDING real AutoCAD evidence.");
-                editor.WriteMessage("\nHNL Tool - Audit finished. No DWG changes.");
+                    "; đã tính theo giả định bước lưới 610 mm.");
+                editor.WriteMessage("\nHCEGOLDEN chưa được chứng nhận Runtime Golden; cần bằng chứng AutoCAD thực tế.");
+                editor.WriteMessage("\nHNL Tool - Đã kiểm tra xong; không thay đổi DWG.");
             }
             catch (System.Exception ex)
             {
                 editor.WriteMessage("\nHCEGOLDEN ADAPTER ERROR=" + ex.Message +
-                    "; no DWG changes.");
+                    "; không thay đổi DWG.");
             }
         }
 
@@ -355,7 +355,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var editor = document.Editor;
             var profile = HceLegacyProfiles.For(document.Database).Clone();
             var options = profile.ToOptions();
-            editor.WriteMessage("\nHNL Tool - Ceiling Estimator Pro RC5.4.1 (Area/phase diagnostic; Runtime Candidate).");
+            editor.WriteMessage("\nHNL Tool - HCE Pro v0.3.0: kiểm tra diện tích và gốc lưới (chưa chứng nhận Runtime Golden).");
             editor.WriteMessage("\nHNL Tool - " + profile.Summary());
 
             Point2? chosenGridOrigin = null;
@@ -422,7 +422,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                                 {
                                     rejected++;
                                     editor.WriteMessage("\nHNL Tool - Loại Hatch handle=" +
-                                        hatch.Handle + ": DXF 43/44 phase unavailable; " +
+                                        hatch.Handle + ": không đọc được gốc lưới DXF 43/44; " +
                                         "không thể kiểm chứng lưới theo Hatch (dùng HCEQA).");
                                     continue;
                                 }
@@ -435,7 +435,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                                     editor.WriteMessage("\nHNL Tool - Hatch " + input.Handle +
                                         " gốc lưới theo DXF 43/44=" +
                                         Fmt(input.Frame.Origin.X) + "," +
-                                        Fmt(input.Frame.Origin.Y) + " (LISP parity).");
+                                        Fmt(input.Frame.Origin.Y) + " (đối chiếu với LISP).");
                                 if (input.RecoveredNearClosed)
                                     editor.WriteMessage("\nHNL Tool - Hatch handle=" + input.Handle +
                                         " khe hở chưa khép kín=" + Fmt(input.NearClosedGapMm) +
@@ -483,7 +483,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                         editor.WriteMessage("\nHNL Tool - Hatch " + input.Handle +
                             " kiểu hatch=" + input.PatternName +
                             " tỉ lệ=" + Fmt(input.PatternScale) +
-                            " has no certified " + profile.Family +
+                            " chưa xác minh bước lưới " + profile.Family +
                             "mm; kiểm tra trước khi tiếp tục.");
                 }
                 var acceptKey = profile.Family == 610 ? "Use610" : "Use600";
@@ -640,7 +640,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             // eNotApplicable on gradients. Reject before accessing their properties.
             if (hatch.IsGradient)
             {
-                reason = "gradient fill is not a ceiling tile grid";
+                reason = "Hatch tô chuyển màu không phải lưới tấm trần";
                 return false;
             }
             stage = "Hatch.Normal";
@@ -650,13 +650,13 @@ namespace HNL.CeilingEstimator.AutoCAD
                 Math.Abs(hatch.Normal.Y) > 1e-8 ||
                 hatch.Normal.Z < 1.0 - 1e-8)
             {
-                reason = "unsupported OCS normal; +Z WCS Hatch required";
+                reason = "hệ tọa độ OCS chưa hỗ trợ; cần Hatch WCS có pháp tuyến +Z";
                 return false;
             }
             stage = "Hatch.IsSolidFill";
             if (hatch.IsSolidFill)
             {
-                reason = "solid fill has no reliable 610 mm pattern grid";
+                reason = "Hatch tô đặc không có lưới tấm trần xác định";
                 return false;
             }
             stage = "Hatch.PatternType";
@@ -669,7 +669,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             if (double.IsNaN(patternScale) ||
                 double.IsInfinity(patternScale) || !(patternScale > 0))
             {
-                reason = "invalid Hatch.PatternScale";
+                reason = "Hatch.PatternScale không hợp lệ";
                 return false;
             }
             var userGridVerified = false;
@@ -680,8 +680,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                 if (!doublePattern || double.IsNaN(spacing) ||
                     Math.Abs(spacing - expectedPitch) > 0.01)
                 {
-                    reason = "user-defined grid is not " + Fmt(expectedPitch) +
-                        "x" + Fmt(expectedPitch) + " double pattern (space=" +
+                    reason = "lưới Hatch tự định nghĩa không khớp " + Fmt(expectedPitch) +
+                        "x" + Fmt(expectedPitch) + " lưới hai phương (bước=" +
                         Fmt(spacing) + ", double=" + doublePattern + ")";
                     return false;
                 }
@@ -691,7 +691,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             if (hatch.NumberOfLoops != 1)
             {
                 reason = "loopCount=" + hatch.NumberOfLoops +
-                    "; multi-loop/hole geometry pending parity validation";
+                    "; đường bao nhiều vòng/có lỗ chưa được kiểm chứng tương đương";
                 return false;
             }
 
@@ -704,7 +704,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             if ((boundary.LoopType &
                 (HatchLoopTypes.SelfIntersecting | HatchLoopTypes.Duplicate)) != 0)
             {
-                reason = "loop=0 self-intersecting/duplicate Hatch boundary";
+                reason = "loop=0 đường bao Hatch tự cắt hoặc trùng lặp";
                 return false;
             }
             stage = "HatchLoop edges";
@@ -714,7 +714,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 var polyline = boundary.Polyline;
                 if (polyline == null || polyline.Count < 3)
                 {
-                    reason = "loop=0 polyline has fewer than 3 vertices";
+                    reason = "loop=0 Polyline có dưới 3 đỉnh";
                     return false;
                 }
                 // Some Hatch polylines repeat the first vertex as the last.
@@ -728,7 +728,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 {
                     if (Math.Abs(polyline[vertexCount - 1].Bulge) > 1e-10)
                     {
-                        reason = "loop=0 duplicated terminal vertex has arc bulge";
+                        reason = "loop=0 đỉnh cuối trùng nhưng có thông số cung cong";
                         return false;
                     }
                     vertexCount--;
@@ -739,7 +739,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     var next = polyline[(i + 1) % vertexCount];
                     if (Math.Abs(vertex.Bulge) > 1e-10)
                     {
-                        reason = "loop=0 edge=" + i + " bulge/arc requires curve parity validation";
+                        reason = "loop=0 edge=" + i + " đoạn cung cong chưa được kiểm chứng tương đương";
                         return false;
                     }
                     if (!AddLine(segments, vertex.Vertex, next.Vertex, out reason))
@@ -758,7 +758,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     if (line == null)
                     {
                         reason = "loop=0 edge=" + edge + " type=" +
-                            curve.GetType().Name + " requires curve parity validation";
+                            curve.GetType().Name + " chưa được kiểm chứng tương đương với cạnh cong";
                         return false;
                     }
                     if (!AddLine(segments, line.StartPoint, line.EndPoint, out reason))
@@ -772,7 +772,7 @@ namespace HNL.CeilingEstimator.AutoCAD
 
             if (segments.Count < 3)
             {
-                reason = "loop=0 has too few non-degenerate edges";
+                reason = "loop=0 có quá ít cạnh hợp lệ";
                 return false;
             }
             var maxGap = 0.0;
@@ -798,7 +798,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 // join gaps or crossings. This includes DEMTAM handle 88 (0.002121mm).
                 if (segments.Count > 512 || HasNonAdjacentIntersections(segments))
                 {
-                    reason = "NotClosed boundary topology cannot be recovered";
+                    reason = "NotClosed: không thể khôi phục cấu trúc đường bao";
                     return false;
                 }
                 for (var i = 0; i < segments.Count - 1; i++)
@@ -809,7 +809,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                         (a.Y2 - b.Y1) * (a.Y2 - b.Y1));
                     if (gap > 1e-6)
                     {
-                        reason = "NotClosed internal edge gap: " + Fmt(gap) + "mm";
+                        reason = "NotClosed: khe hở giữa các cạnh: " + Fmt(gap) + "mm";
                         return false;
                     }
                 }
@@ -820,7 +820,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     (last.Y2 - first.Y1));
                 if (nearClosedGapMm > 0.01)
                 {
-                    reason = "NotClosed terminal gap too large: " +
+                    reason = "NotClosed: khe hở nối đầu-cuối quá lớn: " +
                         Fmt(nearClosedGapMm) + "mm";
                     return false;
                 }
@@ -845,7 +845,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             if (!(boundaryArea > 0) || double.IsNaN(boundaryArea) ||
                 double.IsInfinity(boundaryArea))
             {
-                reason = "invalid closed-loop polygon area";
+                reason = "diện tích đa giác khép kín không hợp lệ";
                 return false;
             }
 
@@ -864,8 +864,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                 // unchecked giant paths. Do not silently under-count material.
                 if (segments.Count > 512 || HasNonAdjacentIntersections(segments))
                 {
-                    reason = "native Hatch.Area=NotApplicable, boundary topology not " +
-                        "certified for mathematical area fallback";
+                    reason = "native Hatch.Area=NotApplicable, đường bao chưa " +
+                        "được kiểm chứng để thay bằng diện tích hình học";
                     return false;
                 }
                 usedBoundaryArea = true;
@@ -874,7 +874,7 @@ namespace HNL.CeilingEstimator.AutoCAD
 
             if (!(area > 0) || double.IsNaN(area) || double.IsInfinity(area))
             {
-                reason = "invalid Hatch.Area";
+                reason = "Hatch.Area không hợp lệ";
                 return false;
             }
             var areaTolerance = Math.Max(0.01, area * 0.00001);
@@ -888,7 +888,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             if (double.IsNaN(hatch.Origin.X) || double.IsNaN(hatch.Origin.Y) ||
                 double.IsNaN(hatch.PatternAngle) || double.IsInfinity(hatch.PatternAngle))
             {
-                reason = "non-finite pattern origin/angle";
+                reason = "gốc lưới hoặc góc xoay không phải số hữu hạn";
                 return false;
             }
 
@@ -966,14 +966,14 @@ namespace HNL.CeilingEstimator.AutoCAD
             if (double.IsNaN(start.X) || double.IsNaN(start.Y) ||
                 double.IsNaN(end.X) || double.IsNaN(end.Y))
             {
-                reason = "non-finite edge coordinate";
+                reason = "tọa độ cạnh không phải số hữu hạn";
                 return false;
             }
             var dx = end.X - start.X;
             var dy = end.Y - start.Y;
             if (dx * dx + dy * dy < 1e-12)
             {
-                reason = "degenerate zero-length edge";
+                reason = "cạnh suy biến có chiều dài bằng 0";
                 return false;
             }
             segments.Add(new Segment2(start.X, start.Y, end.X, end.Y));
@@ -1004,15 +1004,15 @@ namespace HNL.CeilingEstimator.AutoCAD
                 catch (System.Exception ex)
                 {
                     rejected++;
-                    editor.WriteMessage("\nHNL Tool - Rejected Hatch " + input.Handle +
-                        " engine exception: " + ex.Message);
+                    editor.WriteMessage("\nHNL Tool - Hatch bị loại " + input.Handle +
+                        " do lỗi bộ tính: " + ex.Message);
                     continue;
                 }
                 if (!calc.Success || calc.PureResult == null)
                 {
                     rejected++;
-                    editor.WriteMessage("\nHNL Tool - Rejected Hatch " + input.Handle +
-                        " calculation: " + calc.FailureReason);
+                    editor.WriteMessage("\nHNL Tool - Hatch bị loại " + input.Handle +
+                        " do lỗi tính toán: " + calc.FailureReason);
                     continue;
                 }
 
@@ -1057,7 +1057,7 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         private static void WritePreview(Editor editor, CalculationReport report, int rejected)
         {
-            editor.WriteMessage("\nHNL Tool - READ-ONLY PREVIEW (counts only, no geometry created).");
+            editor.WriteMessage("\nHNL Tool - XEM TRƯỚC CHỈ ĐỌC (chỉ thống kê số lượng, không tạo hình học).");
             foreach (var group in report.Groups)
             {
                 editor.WriteMessage("\n  " + group.Name +
@@ -1071,8 +1071,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                     " | Oversize=" + group.Packing.Oversize.Count +
                     " | General=" + group.GeneralFallbackCount);
             }
-            editor.WriteMessage("\nHNL Tool - Rejected Hatch count=" + rejected +
-                ". Preview and Table share exactly one report.");
+            editor.WriteMessage("\nHNL Tool - Số Hatch bị loại=" + rejected +
+                ". Xem trước và bảng CAD dùng chung một kết quả tính.");
         }
 
         private static int BinCount(MaterialGroup group, string code)
