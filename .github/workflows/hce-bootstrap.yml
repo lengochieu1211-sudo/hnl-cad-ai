@@ -370,9 +370,9 @@ jobs:
             if(-not $ui.Contains($part)) { throw "Missing summary/detail selector binding: $part" }
           }
           if($ui.Contains('_legacyCutMode.IsEnabled = profile.CutListEnabled')) { throw 'Cut list mode must not be disabled while checkbox is off' }
-           foreach($part in @('Cut-piece list is OFF. Include in new Table', 'cutListChoice.Keywords.Add("Summary")',
-                             'cutListChoice.Keywords.Add("Detail")', 'cutListChoice.Keywords.Add("NoList")',
-                             'New Table cut-piece list:', 'Existing CAD tables are not modified.')) {
+           foreach($part in @('Chưa bật danh sách mảnh cắt trong bảng.', 'cutListChoice.Keywords.Add("Summary", "TongHop", "Tổng hợp")',
+                             'cutListChoice.Keywords.Add("Detail", "ChiTiet", "Chi tiết")', 'cutListChoice.Keywords.Add("NoList", "Khong", "Không liệt kê")',
+                             'Danh sách mảnh cắt trong bảng mới:, 'Không sửa các bảng CAD đã có.')) {
              if(-not $cmd.Contains($part)){ throw "Missing cut-list runtime fallback: $part" }
            }
            foreach($part in @(' | Liệt kê: ', 'chỉ áp dụng cho bảng mới.')) {
@@ -388,7 +388,7 @@ jobs:
                  'nearClosedGapMm > 0.01', 'HasNonAdjacentIntersections(segments)',
                  'last.X1, last.Y1, first.X1, first.Y1',
                  'input.RecoveredNearClosed = flaggedNotClosed',
-                 'Original DWG Hatch unchanged.')) {
+                 'Không sửa Hatch gốc.')) {
             if(-not $cmd.Contains($part)){throw "Missing recoverable NotClosed Hatch safety gate: $part"}
           }
           $open=$cmd.IndexOf('var flaggedNotClosed = ')
@@ -407,7 +407,7 @@ jobs:
                  '!input.PatternBaseVerified',
                  'DXF 43/44 phase unavailable',
                  'phasePolicy=',
-                 'grid anchored to DXF 43/44=')) {
+                 'gốc lưới theo DXF 43/44=')) {
             if(-not $cmd.Contains($part)) { throw "Missing HCE 43/44 phase safety contract: $part" }
           }
           if($cmd.Contains('phasePolicy=Hatch.Origin')) { throw 'Obsolete Hatch.Origin-only phase path' }
