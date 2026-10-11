@@ -803,13 +803,23 @@ namespace HNL.CeilingEstimator.AutoCAD
             RefreshSelectionState(profile);
         }
 
+        // Accept either comma or dot decimal entry in AutoCAD's Vietnamese/
+        // international Windows locale. This does not change numeric limits,
+        // quantity calculations or the user's saved units (always millimeters).
+        private static bool TryParseUiMm(string text, out double value)
+        {
+            return double.TryParse(text.Trim().Replace(',', '.'),
+                       NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
+                   !double.IsInfinity(value) && !double.IsNaN(value);
+        }
+
         private void SaveLegacyTolerance()
         {
             if (_loadingLegacyControls || _legacyTolerance == null) return;
             var profile = ActiveLegacyProfile();
             if (profile == null) return;
-            if (double.TryParse(_legacyTolerance.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
-                value >= 0 && value <= 10 && !double.IsInfinity(value) && !double.IsNaN(value))
+            if (TryParseUiMm(_legacyTolerance.Text, out var value) &&
+                value >= 0 && value <= 10)
             {
                 profile.Tolerance = value;
                 if (_legacyValidation != null) _legacyValidation.Text = "";
@@ -827,8 +837,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             if (_loadingLegacyControls || _legacyTableHeight == null) return;
             var profile = ActiveLegacyProfile();
             if (profile == null) return;
-            if (double.TryParse(_legacyTableHeight.Text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) &&
-                value >= 0 && value <= 10000 && !double.IsNaN(value) && !double.IsInfinity(value))
+            if (TryParseUiMm(_legacyTableHeight.Text, out var value) &&
+                value >= 0 && value <= 10000)
             {
                 profile.TableTextHeight = value;
                 if (_legacyValidation != null) _legacyValidation.Text = string.Empty;
@@ -851,10 +861,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             if (_loadingLegacyControls || _legacyLabelHeight == null) return;
             var profile = ActiveLegacyProfile();
             if (profile == null) return;
-            if (double.TryParse(_legacyLabelHeight.Text, NumberStyles.Float,
-                    CultureInfo.CurrentCulture, out var height) &&
-                height > 0 && height <= 10000 && !double.IsNaN(height) &&
-                !double.IsInfinity(height))
+            if (TryParseUiMm(_legacyLabelHeight.Text, out var height) &&
+                height > 0 && height <= 10000)
             {
                 profile.LabelTextHeight = height;
                 if (_legacyValidation != null) _legacyValidation.Text = string.Empty;
