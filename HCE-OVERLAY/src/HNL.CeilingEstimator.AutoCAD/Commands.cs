@@ -1493,12 +1493,14 @@ namespace HNL.CeilingEstimator.AutoCAD
                     }
                     else
                     {
-                        table.Cells[7, 0].TextString = "Nguồn cắt - cùng hệ";
+                        table.Cells[7, 0].TextString = profile.Module == "D"
+                            ? "Nguồn cắt - tấm dài" : "Nguồn cắt - tấm ngắn";
                         table.Cells[7, 1].TextString = options.SmallStock.DisplayName + " mm";
                         table.Cells[7, 2].TextString = (smallBins + longBins) + " tấm";
                         table.Cells[7, 3].TextString = "Từ mảnh cắt";
 
-                        table.Cells[8, 0].TextString = "TỔNG MUA";
+                        table.Cells[8, 0].TextString = profile.Module == "D"
+                            ? "TỔNG MUA - TẤM DÀI" : "TỔNG MUA - TẤM NGẮN";
                         table.Cells[8, 1].TextString = options.SmallStock.DisplayName + " mm";
                         table.Cells[8, 2].TextString = (full + smallBins + longBins) + " tấm";
                         table.Cells[8, 3].TextString = "Tấm nguyên + nguồn cắt";
