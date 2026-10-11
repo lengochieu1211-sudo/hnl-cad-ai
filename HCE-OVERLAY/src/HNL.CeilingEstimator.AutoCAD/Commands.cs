@@ -530,6 +530,30 @@ namespace HNL.CeilingEstimator.AutoCAD
                     return;
                 }
 
+                // DEMTC RC18.5 single-stock contract: modes S/D must NEVER
+                // buy or list the opposite stock family. Validate the actual
+                // Core bin types, not just the UI labels. Fail closed rather
+                // than silently omitting or relabeling a wrong-stock result.
+                if (!options.MixedMode)
+                {
+                    var expectedCode = profile.Module == "D" ? "D" : "S";
+                    foreach (var group in report.Groups)
+                    {
+                        foreach (var bin in group.Packing.Bins)
+                        {
+                            if (!string.Equals(bin.Code, expectedCode, StringComparison.Ordinal))
+                            {
+                                editor.WriteMessage("\nHNL Tool - LỖI NGUỒN TẤM: chế độ " +
+                                    (profile.Module == "D" ? "Chỉ tấm dài" : "Chỉ tấm ngắn") +
+                                    " nhưng nhóm " + group.Name + " có nguồn " + bin.Code +
+                                    ". Không tạo bảng CAD để tránh sai vật tư. " +
+                                    "Vui lòng lưu LOGFILEON và gửi kiểm tra.");
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 // Preview remains available for diagnosing accepted Hatches.
                 // Never create a seemingly complete quantity table from a partial selection.
                 if (rejected > 0)
