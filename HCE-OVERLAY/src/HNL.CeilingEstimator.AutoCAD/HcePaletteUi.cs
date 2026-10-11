@@ -87,7 +87,8 @@ namespace HNL.CeilingEstimator.AutoCAD
         // Native AutoCAD title can be clipped by dock/auto-hide chrome.
         // Keep it short; render the full, immutable build timestamp in one
         // thin row directly beneath the native title as a visible fallback.
-        internal const string PaletteCaption = "HNL TOOL - CEILING ESTIMATOR PRO | HCE_UPDATED_AT_SHORT_VN";
+        internal const string PaletteCaption = "HNL HCE | HCE_UPDATED_AT_SHORT_VN";
+        internal const string VisibleTitle = "HNL Tool - HCE  ·  HCE_UPDATED_AT_VN";
         internal const string BuildInfo = "v0.3.0  ·  Cập nhật HCE_UPDATED_AT_VN";
         private static PaletteSet? _palette;
         private static HcePaletteView? _view;
@@ -437,32 +438,27 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         private UIElement BuildLayout()
         {
-            // The native Palette caption owns the build stamp. HCF has no
-            // duplicate version header consuming content height.
+            // AutoCAD truncates long native captions when docked. Use a short
+            // date-stamped native caption plus one visible, version-free title.
             var root = new Grid();
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var visibleTitle = Text(HcePaletteService.VisibleTitle, 11, _primary,
+                FontWeights.SemiBold);
+            visibleTitle.Margin = new Thickness(9, 5, 7, 4);
+            visibleTitle.TextWrapping = TextWrapping.NoWrap;
+            visibleTitle.TextTrimming = TextTrimming.CharacterEllipsis;
+            visibleTitle.ToolTip = HcePaletteService.VisibleTitle;
+            Grid.SetRow(visibleTitle, 0);
+            root.Children.Add(visibleTitle);
 
             var body = BuildCalculationTab();
-            Grid.SetRow(body, 0);
+            Grid.SetRow(body, 1);
             root.Children.Add(body);
-
-            // Like HCF, the create action is fixed below the scrolling
-            // configuration. It executes HCECALC on AutoCAD's command stack.
-            var create = CommandButton("Tạo bảng", "HCECALC", true);
-            create.HorizontalAlignment = HorizontalAlignment.Stretch;
-            create.Margin = new Thickness(0);
-            var createFooter = new WpfBorder
-            {
-                Background = _surface, BorderBrush = _border,
-                BorderThickness = new Thickness(0, 1, 0, 0),
-                Padding = new Thickness(9, 6, 9, 6), Child = create
-            };
-            Grid.SetRow(createFooter, 1);
-            root.Children.Add(createFooter);
 
             // Compact data-driven progress; height remains fixed on every stage.
             var strip = new Grid();
@@ -575,6 +571,33 @@ namespace HNL.CeilingEstimator.AutoCAD
                 Cursor = System.Windows.Input.Cursors.Hand,
                 ToolTip = "Tắt HCE; AutoCAD và bản vẽ vẫn mở."
             };
+            // Native WPF Button corners are square even with a rounded rail:
+            // use the HCF-style rounded border as the actual button template.
+            const string stopTemplateXaml = @"<ControlTemplate
+                    xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
+                    xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'
+                    TargetType='{x:Type Button}'>
+                <Border x:Name='StopSurface' CornerRadius='8'
+                        Background='{TemplateBinding Background}'
+                        BorderBrush='{TemplateBinding BorderBrush}'
+                        BorderThickness='{TemplateBinding BorderThickness}'>
+                    <ContentPresenter HorizontalAlignment='Center'
+                                      VerticalAlignment='Center'
+                                      ContentSource='Content'/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property='IsMouseOver' Value='True'>
+                        <Setter TargetName='StopSurface' Property='Background' Value='#FFE4E6'/>
+                    </Trigger>
+                    <Trigger Property='IsPressed' Value='True'>
+                        <Setter TargetName='StopSurface' Property='Background' Value='#FECDD3'/>
+                    </Trigger>
+                    <Trigger Property='IsEnabled' Value='False'>
+                        <Setter TargetName='StopSurface' Property='Opacity' Value='0.45'/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>";
+            _stopHceButton.Template = (ControlTemplate)XamlReader.Parse(stopTemplateXaml);
             _stopHceButton.Click += (sender, args) => RequestStopHce();
             Grid.SetRow(_stopHceButton, 1);
             rightRail.Children.Add(_stopHceButton);
@@ -642,8 +665,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             var content = new StackPanel { Margin = new Thickness(0, 9, 0, 10) };
 
             var selection = Section("01  Chọn Hatch", "#2497FF");
-            selection.Children.Add(CommandButton("Chọn Hatch", "HCESELECT", true));
-            selection.Children.Add(Text("Chọn Hatch trên CAD, nhấn Enter; sau đó bấm Tạo bảng ở thanh dưới.",
+            selection.Children.Add(CommandButton("Chọn Hatch và tạo bảng", "HCECALC", true));
+            selection.Children.Add(Text("Chọn Hatch trên bản vẽ, nhấn Enter; HCE tính và cho chọn vị trí đặt bảng.",
                 10, _muted, FontWeights.Normal));
             content.Children.Add(Card(selection));
 
@@ -652,7 +675,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var result = Section("03  Kết quả", "#F59E0B");
             result.Children.Add(Text("Kết quả hiển thị trên dòng lệnh. Hatch chưa rõ lưới hoặc đơn vị cần xác nhận.",
                 11, _muted, FontWeights.Normal));
-            result.Children.Add(Text("Nhấn Tạo bảng bên dưới để tính từ Hatch vừa chọn, rồi chỉ vị trí đặt bảng. Esc để hủy.",
+            result.Children.Add(Text("Chọn Hatch và tạo bảng ở phía trên; nhấn Esc để hủy đặt bảng.",
                 11, _muted, FontWeights.Normal));
             result.Children.Add(Text("Chưa hỗ trợ xem trước hình học từng tấm.",
                 10, Brush("#E5A84E"), FontWeights.SemiBold));
