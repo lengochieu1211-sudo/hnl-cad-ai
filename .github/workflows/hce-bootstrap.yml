@@ -364,15 +364,20 @@ jobs:
           $path = 'incubator/hnl-ceiling-estimator-pro/scripts/verify-universal.ps1'
           if (-not (Test-Path $path)) { throw 'HCE original package verification script missing' }
           $text = [IO.File]::ReadAllText($path)
+          # The historic payload used quoted command names (PowerShell
+          # single or double quotes depending on version). Preserve all other
+          # verifier conditions and delete exactly two list items.
           foreach ($alias in @('DTC','DEMTC')) {
-            $pattern = ',\s*''' + [regex]::Escape($alias) + ''''
+            $pattern = ',\s*[''"]' + [regex]::Escape($alias) + '[''"]'
             if ([regex]::Matches($text, $pattern).Count -ne 1) {
+              Write-Host 'Actual legacy verifier command checklist:'
+              $text.Split([char]10) | Select-Object -First 35 | ForEach-Object { Write-Host $_ }
               throw "Cannot safely remove obsolete required-command alias from verifier: $alias"
             }
             $text = [regex]::Replace($text, $pattern, '', 1)
           }
-          if (-not $text.Contains("'HCE'") -or $text.Contains("'DTC'") -or $text.Contains("'DEMTC'")) {
-            throw 'HCE command verifier still expects obsolete alias or lost HCE launcher'
+          if ($text -notmatch '[''"]HCE[''"]') {
+            throw 'HCE command verifier lost HCE launcher'
           }
           [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
           Write-Host 'HCE rebuilt-source verifier aligned: HCE only, not DTC/DEMTC.'
