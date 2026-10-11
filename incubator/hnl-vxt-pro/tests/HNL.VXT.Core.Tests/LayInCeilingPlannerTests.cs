@@ -342,9 +342,11 @@ namespace HNL.VXT.Core.Tests
                         DimensionMode = LayInDimensionMode.Grouped,
                         GroupedDimensionCount = 12
                     });
-                Assert.AreEqual(2, plan.DimensionRuns.Count, system.ToString());
+                // Start at 50 inside a 100-wide boundary: both 50-mm cut edges
+                // are measured on each axis; no 600/610 panel may be invented.
+                Assert.AreEqual(4, plan.DimensionRuns.Count, system.ToString());
                 Assert.IsTrue(plan.DimensionRuns.All(d => d.ModuleCount == 1 &&
-                    d.Label == string.Empty && Math.Abs(d.A.DistanceTo(d.B) - 100) < 0.001));
+                    d.Label == string.Empty && Math.Abs(d.A.DistanceTo(d.B) - 50) < 0.001));
             }
         }
 
