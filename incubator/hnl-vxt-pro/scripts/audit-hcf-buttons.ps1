@@ -86,6 +86,31 @@ if ($xaml.Contains('Text="DIM ô nguyên + mép cắt."') -or
     throw 'HCF audit: old Lay-in DIM captions or door point UI were restored.'
 }
 
+# Concealed preview controls must fill the card like the Lay-in three-column actions.
+# Check both the three equal star columns and the unchanged button commands/icons.
+$concealedPreviewActions = [regex]::Match($xaml,
+    '(?s)<Grid x:Name="ConcealedPreviewActions"(?<body>.*?)</Grid>')
+if (-not $concealedPreviewActions.Success) {
+    throw 'HCF audit: missing the concealed preview 3-column action row.'
+}
+$actionRow = $concealedPreviewActions.Value
+if ([regex]::Matches($actionRow, '<ColumnDefinition Width="\*"').Count -ne 3 -or
+    [regex]::Matches($actionRow, '<Button Grid.Column=').Count -ne 3) {
+    throw 'HCF audit: concealed preview actions no longer span three equal-width columns.'
+}
+foreach ($entry in @(
+    @{ Index = 0; Label = 'Cập nhật'; Command = 'RefreshPreviewCommand'; Style = 'RefreshButton' },
+    @{ Index = 1; Label = 'Ẩn'; Command = 'ClearPreviewCommand'; Style = 'HidePreviewButton' },
+    @{ Index = 2; Label = 'Đặt lại'; Command = 'ResetCommand'; Style = 'ResetButton' }
+)) {
+    $expectedButton = '<Button Grid.Column="' + $entry.Index +
+        '" Content="' + $entry.Label + '" Command="{Binding ' + $entry.Command +
+        '}" Style="{StaticResource ' + $entry.Style + '}"'
+    if (-not $actionRow.Contains($expectedButton)) {
+        throw "HCF audit: concealed preview action button/command changed: $($entry.Label)"
+    }
+}
+
 # Lay-in Create MUST first materialize its debounced Preview and require another
 # click rather than produce unpreviewed changes in the drawing.
 if (-not $hostBridgeSource.Contains('if (_pendingLayInPreviewSettings != null)') -or

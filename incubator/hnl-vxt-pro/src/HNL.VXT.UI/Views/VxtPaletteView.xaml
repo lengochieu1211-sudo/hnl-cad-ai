@@ -1058,11 +1058,17 @@
 
                         <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="11"/>
                         <TextBlock Text="{Binding PreviewStatus}" Margin="0,5,0,0" Foreground="{DynamicResource AccentStrong}" TextWrapping="Wrap" FontSize="11"/>
-                        <StackPanel Orientation="Horizontal" Margin="-3,7,0,0">
-                            <Button Content="Cập nhật" Command="{Binding RefreshPreviewCommand}" Style="{StaticResource RefreshButton}" Margin="3" ToolTip="Cập nhật xem trước"/>
-                            <Button Content="Ẩn" Command="{Binding ClearPreviewCommand}" Style="{StaticResource HidePreviewButton}" Margin="3" ToolTip="Ẩn xem trước"/>
-                            <Button Content="Đặt lại" Command="{Binding ResetCommand}" Style="{StaticResource ResetButton}" Margin="3" ToolTip="Khôi phục mặc định"/>
-                        </StackPanel>
+                        <!-- Keep the concealed preview actions aligned and equal-width like Lay-in. -->
+                        <Grid x:Name="ConcealedPreviewActions" Margin="0,7,0,0" MinHeight="29">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Content="Cập nhật" Command="{Binding RefreshPreviewCommand}" Style="{StaticResource RefreshButton}" Margin="0,0,4,0" ToolTip="Cập nhật xem trước"/>
+                            <Button Grid.Column="1" Content="Ẩn" Command="{Binding ClearPreviewCommand}" Style="{StaticResource HidePreviewButton}" Margin="2,0,2,0" ToolTip="Ẩn xem trước"/>
+                            <Button Grid.Column="2" Content="Đặt lại" Command="{Binding ResetCommand}" Style="{StaticResource ResetButton}" Margin="4,0,0,0" ToolTip="Khôi phục mặc định"/>
+                        </Grid>
                     </StackPanel>
                 </Border>
             </StackPanel>
