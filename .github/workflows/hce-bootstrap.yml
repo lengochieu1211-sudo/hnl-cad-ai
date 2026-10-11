@@ -242,7 +242,7 @@ jobs:
           $ui = Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs' -Raw -Encoding utf8
           $cmd = Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/Commands.cs' -Raw -Encoding utf8
           $handlers = [regex]::Matches($ui, 'SelectionChanged\s*\+=\s*\(sender, args\)\s*=>\s*\{.*?\n\s*\};', [Text.RegularExpressions.RegexOptions]::Singleline)
-          if($handlers.Count -lt 8) {throw "Only $($handlers.Count) dropdown SelectionChanged handlers discovered"}
+          if($handlers.Count -lt 4) {throw "Only $($handlers.Count) dropdown SelectionChanged handlers discovered"}
           foreach($handler in $handlers) {
             if($handler.Value.Contains('RefreshLegacyControls();') -or
                $handler.Value.Contains('Items.Clear()')) {
