@@ -355,32 +355,45 @@ jobs:
         shell: powershell
         run: ./HCE-OVERLAY/scripts/apply-vxt-branding.ps1 -Root .
 
-      - name: Align legacy payload command verification with sole HCE launcher
+      - name: Remove obsolete DTC DEMTC from reconstructed HCE manifest and gate
         shell: powershell
         run: |
-          # Historical payload gate required DTC/DEMTC aliases, which are now
-          # intentionally removed. Change only its two required-command tokens
-          # in the reconstructed runner copy; never mutate Golden/Core files.
-          $path = 'incubator/hnl-ceiling-estimator-pro/scripts/verify-universal.ps1'
-          if (-not (Test-Path $path)) { throw 'HCE original package verification script missing' }
-          $text = [IO.File]::ReadAllText($path)
-          # The historic payload used quoted command names (PowerShell
-          # single or double quotes depending on version). Preserve all other
-          # verifier conditions and delete exactly two list items.
-          foreach ($alias in @('DTC','DEMTC')) {
-            $pattern = ',\s*[''"]' + [regex]::Escape($alias) + '[''"]'
-            if ([regex]::Matches($text, $pattern).Count -ne 1) {
-              Write-Host 'Actual legacy verifier command checklist:'
-              $text.Split([char]10) | Select-Object -First 35 | ForEach-Object { Write-Host $_ }
-              throw "Cannot safely remove obsolete required-command alias from verifier: $alias"
+          # The canonical HCE payload is reconstructed from archived base64.
+          # Change only its command registration and verification checklist in
+          # the temporary runner workspace, not protected Golden/Core files.
+          $root = 'incubator/hnl-ceiling-estimator-pro'
+          $checkPath = "$root/scripts/verify-universal.ps1"
+          if (-not (Test-Path $checkPath)) { throw 'HCE original package verification script missing' }
+          $checkText = [IO.File]::ReadAllText($checkPath)
+          $before = "@('HCE','DTC','DEMTC')"
+          $count = ($checkText.Split(@($before), [StringSplitOptions]::None)).Length - 1
+          if ($count -ne 2) { throw "Unexpected command checklist in HCE archived verifier: $count matches; expected exactly 2" }
+          $checkText = $checkText.Replace($before, "@('HCE')")
+          [IO.File]::WriteAllText($checkPath, $checkText, [Text.UTF8Encoding]::new($false))
+
+          $manifestPath = "$root/build/HNL.CeilingEstimator.bundle/PackageContents.xml"
+          if (-not (Test-Path $manifestPath)) { throw 'HCE package manifest missing' }
+          [xml]$manifest = [IO.File]::ReadAllText($manifestPath)
+          $entries = @($manifest.ApplicationPackage.Components.ComponentEntry)
+          if ($entries.Count -ne 5) { throw "Unexpected HCE AutoCAD entry count: $($entries.Count)" }
+          $removed = 0
+          foreach ($entry in $entries) {
+            if ($null -eq $entry.Commands) { throw 'Missing AutoCAD command collection in HCE manifest' }
+            foreach ($command in @($entry.Commands.Command)) {
+              if ([string]$command.Global -in @('DTC','DEMTC','HCEUI')) {
+                [void]$entry.Commands.RemoveChild($command)
+                $removed++
+              }
             }
-            $text = [regex]::Replace($text, $pattern, '', 1)
+            $names = @($entry.Commands.Command | ForEach-Object { $_.Global })
+            if (@($names | Where-Object { $_ -eq 'HCE' }).Count -ne 1 -or
+                @($names | Where-Object { $_ -in @('DTC','DEMTC','HCEUI') }).Count -gt 0) {
+              throw 'HCE manifest must expose exactly one HCE launcher per AutoCAD entry'
+            }
           }
-          if ($text -notmatch '[''"]HCE[''"]') {
-            throw 'HCE command verifier lost HCE launcher'
-          }
-          [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
-          Write-Host 'HCE rebuilt-source verifier aligned: HCE only, not DTC/DEMTC.'
+          if ($removed -ne 10) { throw "Expected 2 obsolete launcher entries for each of 5 AutoCAD versions; got $removed" }
+          $manifest.Save($manifestPath)
+          Write-Host "HCE command cleanup PASS: removed $removed obsolete manifest registrations; 5 HCE launchers retained."
 
       - name: Verify package contract
         shell: powershell
@@ -560,6 +573,23 @@ jobs:
       - name: Build Golden + AutoCAD matrix + Setup EXE
         shell: powershell
         run: ./incubator/hnl-ceiling-estimator-pro/scripts/build-universal-installer.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
+
+      - name: Verify released AutoCAD bundle registers only HCE
+        shell: powershell
+        run: |
+          $path = 'incubator/hnl-ceiling-estimator-pro/build/HNL.CeilingEstimator.bundle/PackageContents.xml'
+          if (-not (Test-Path $path)) { throw 'HCE build bundle manifest missing after installer creation' }
+          [xml]$doc = Get-Content $path -Raw
+          $entries = @($doc.ApplicationPackage.Components.ComponentEntry)
+          if ($entries.Count -ne 5) { throw 'Released HCE bundle must contain AutoCAD 2023-2027' }
+          foreach ($entry in $entries) {
+            $names = @($entry.Commands.Command | ForEach-Object { $_.Global })
+            if (@($names | Where-Object { $_ -eq 'HCE' }).Count -ne 1 -or
+                @($names | Where-Object { $_ -in @('DTC','DEMTC','HCEUI') }).Count -ne 0) {
+              throw "Old HCE/DTC/DEMTC command aliases leaked into packaged AutoCAD $($entry.AppName)"
+            }
+          }
+          Write-Host 'HCE ONE-LAUNCHER PACKAGED MANIFEST PASS: HCE only in all 5 AutoCAD components.'
 
       - name: Inspect bundled HCEUI command load policy
         shell: powershell
