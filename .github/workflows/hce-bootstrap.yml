@@ -223,14 +223,10 @@ jobs:
           if ($ui.Contains("Opacity='0'") -or $ui.Contains('var footerCard = Card(')) {
             throw 'Legacy invisible overlay or large footer card must not return'
           }
-          foreach($phrase in @('Keywords.Add("Summary", "TongHop", "Tổng hợp")',
-                                'Keywords.Add("Detail", "ChiTiet", "Chi tiết")',
-                                'Keywords.Add("NoList", "Khong", "Không liệt kê")',
-                                'Keywords.Add("Proceed", "TiepTuc", "Tiếp tục")',
+          foreach($phrase in @('Keywords.Add("Proceed", "TiepTuc", "Tiếp tục")',
                                 'Keywords.Add("Cancel", "Huy", "Hủy")',
                                 'Keywords.Add("Yes", "Co", "Có")',
-                                'Keywords.Add("No", "Khong", "Không")',
-                                'ChoiceIs(cutResponse, "Detail", "ChiTiet")')) {
+                                'Keywords.Add("No", "Khong", "Không")')) {
             if(-not $commands.Contains($phrase)) { throw "Vietnamese CAD keyword mapping missing: $phrase" }
           }
           if ($commands.Contains('[Summary/Detail/NoList]') -or
@@ -239,6 +235,44 @@ jobs:
             throw 'English selection labels still visible'
           }
           Write-Host 'HCE COMPACT STATUS / HCF WORKING COMBO / VIETNAMESE COMMAND CONTRACT PASS'
+
+      - name: Verify HCE option selection never clears an open list
+        shell: pwsh
+        run: |
+          $ui = Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs' -Raw -Encoding utf8
+          $cmd = Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/Commands.cs' -Raw -Encoding utf8
+          $handlers = [regex]::Matches($ui, 'SelectionChanged\s*\+=\s*\(sender, args\)\s*=>\s*\{.*?\n\s*\};', [Text.RegularExpressions.RegexOptions]::Singleline)
+          if($handlers.Count -lt 8) {throw "Only $($handlers.Count) dropdown SelectionChanged handlers discovered"}
+          foreach($handler in $handlers) {
+            if($handler.Value.Contains('RefreshLegacyControls();') -or
+               $handler.Value.Contains('Items.Clear()')) {
+              throw 'HCE dropdown selection handler must not reload all CAD styles while popup is open'
+            }
+          }
+          foreach($required in @('private void RefreshSelectionState(HceLegacyProfile profile)',
+                                 'RefreshSelectionState(profile);', 'direction.IsEnabled = profile.Module != "S"',
+                                 'priority.IsEnabled = profile.Module == "M"',
+                                 '_legacyTolerance.IsEnabled = profile.SnapEnabled',
+                                 'SaveLegacyCutList(bool enabled)', 'SaveLegacySnap(bool enabled)',
+                                 'RefreshCadTableStyles(profile);', 'RefreshTableStyles(profile);')) {
+            if(-not $ui.Contains($required)) {throw "Option persistence / dependency gate missing: $required"}
+          }
+          $idx = $ui.IndexOf('private void RefreshSelectionState(HceLegacyProfile profile)')
+          $end = $ui.IndexOf('internal void RefreshLegacyControls()', $idx)
+          if($idx -lt 0 -or $end -le $idx) {throw 'Lightweight HCE selection-state helper boundaries missing'}
+          $light = $ui.Substring($idx, $end-$idx)
+          if($light.Contains('Items.Clear()') -or $light.Contains('RefreshCadTableStyles(') -or
+             $light.Contains('RefreshTableStyles(')) {
+            throw 'Lightweight HCE refresh must never clear / re-query CAD styles'
+          }
+          if($cmd.Contains('var cutListChoice') -or
+             $cmd.Contains('editor.GetKeywords(cutListChoice)')) {
+            throw 'After calculation do not repeat cut-list mode question configured in the Palette'
+          }
+          if(-not $cmd.Contains('if (detailedCount > 2000)')) {
+            throw 'Keep separate safety confirmation for very large detailed CAD tables'
+          }
+          Write-Host 'HCE OPTION SELECTION PERSISTENCE / NO REENTRANT LIST RELOAD / NO REPEATED CUT-MODE PROMPT PASS'
 
       - name: Verify HCE default palette and calculator route
         shell: powershell
@@ -396,10 +430,12 @@ jobs:
             if(-not $ui.Contains($part)) { throw "Missing summary/detail selector binding: $part" }
           }
           if($ui.Contains('_legacyCutMode.IsEnabled = profile.CutListEnabled')) { throw 'Cut list mode must not be disabled while checkbox is off' }
-           foreach($part in @('Chưa bật danh sách mảnh cắt trong bảng.', 'cutListChoice.Keywords.Add("Summary", "TongHop", "Tổng hợp")',
-                             'cutListChoice.Keywords.Add("Detail", "ChiTiet", "Chi tiết")', 'cutListChoice.Keywords.Add("NoList", "Khong", "Không liệt kê")',
-                             'Danh sách mảnh cắt trong bảng mới:', 'Không sửa các bảng CAD đã có.')) {
-             if(-not $cmd.Contains($part)){ throw "Missing cut-list runtime fallback: $part" }
+           foreach($part in @('Danh sách mảnh cắt trong bảng mới:', 'Không sửa các bảng CAD đã có.')) {
+             if(-not $cmd.Contains($part)){ throw "Missing cut-list runtime status: $part" }
+           }
+           if($cmd.Contains('var cutListChoice') -or
+              $cmd.Contains('Chưa bật danh sách mảnh cắt trong bảng.')) {
+             throw 'Cut-list mode must not be requested a second time after the Palette selection'
            }
            foreach($part in @(' | Liệt kê: ', 'chỉ áp dụng cho bảng mới.')) {
              if(-not $ui.Contains($part)){ throw "Missing cut-list UI applied-state indication: $part" }
