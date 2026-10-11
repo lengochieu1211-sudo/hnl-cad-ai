@@ -547,7 +547,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             content.Children.Add(Card(BuildLegacySettingsPanel()));
 
             var result = Section("03  Kết quả và bảng", "#F59E0B");
-            result.Children.Add(Text("Kết quả hiện trên Command Line. Hatch chưa rõ lưới hoặc đơn vị sẽ cần xác nhận.",
+            result.Children.Add(Text("Kết quả hiển thị trên dòng lệnh. Hatch chưa rõ lưới hoặc đơn vị cần xác nhận.",
                 11, _muted, FontWeights.Normal));
             result.Children.Add(Text("Tính xong chọn vị trí đặt bảng. Nhấn Esc để hủy; mã N/G/L tùy theo quy mô.",
                 11, _muted, FontWeights.Normal));
@@ -614,7 +614,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var cadStyleRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
             cadStyleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             cadStyleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            cadStyleRow.Children.Add(Text("Table Style (bảng)", 11, _muted, FontWeights.Normal));
+            cadStyleRow.Children.Add(Text("Kiểu bảng CAD", 11, _muted, FontWeights.Normal));
             _legacyCadTableStyle = new ComboBox { MinHeight = 30, Foreground = _primary };
             _legacyCadTableStyle.SelectionChanged += (sender, args) =>
             {
@@ -631,7 +631,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var styleRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
             styleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             styleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            styleRow.Children.Add(Text("Text Style (chữ)", 11, _muted, FontWeights.Normal));
+            styleRow.Children.Add(Text("Kiểu chữ CAD", 11, _muted, FontWeights.Normal));
             _legacyTableStyle = new ComboBox
             {
                 MinHeight = 30, Foreground = _primary
@@ -968,12 +968,18 @@ namespace HNL.CeilingEstimator.AutoCAD
                     _legacyCutMode.IsEnabled = true;
                 }
                 if (_legacySelectors.TryGetValue("Priority", out var p))
+                {
                     p.IsEnabled = profile.Module == "M";
+                    p.ToolTip = "Chỉ sử dụng khi chọn loại tấm Kết hợp.";
+                }
                 if (_legacySelectors.TryGetValue("Direction", out var d))
+                {
                     d.IsEnabled = profile.Module != "S";
+                    d.ToolTip = "Chỉ sử dụng khi có tấm dài (Tấm dài hoặc Kết hợp).";
+                }
                 if (_legacyStatus != null)
                     _legacyStatus.Text = profile.Summary() +
-                        "\nTable Style: " + (string.IsNullOrEmpty(profile.CadTableStyle)
+                        "\nKiểu bảng: " + (string.IsNullOrEmpty(profile.CadTableStyle)
                             ? "Theo DWG" : profile.CadTableStyle) +
                         " | Liệt kê: " + (profile.CutListEnabled ? "BẬT" : "TẮT") +
                         " | Chế độ: " + (profile.CutListMode == "D" ? "Chi tiết" : "Tổng hợp");
