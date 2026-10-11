@@ -355,6 +355,28 @@ jobs:
         shell: powershell
         run: ./HCE-OVERLAY/scripts/apply-vxt-branding.ps1 -Root .
 
+      - name: Align legacy payload command verification with sole HCE launcher
+        shell: powershell
+        run: |
+          # Historical payload gate required DTC/DEMTC aliases, which are now
+          # intentionally removed. Change only its two required-command tokens
+          # in the reconstructed runner copy; never mutate Golden/Core files.
+          $path = 'incubator/hnl-ceiling-estimator-pro/scripts/verify-universal.ps1'
+          if (-not (Test-Path $path)) { throw 'HCE original package verification script missing' }
+          $text = [IO.File]::ReadAllText($path)
+          foreach ($alias in @('DTC','DEMTC')) {
+            $pattern = ',\s*''' + [regex]::Escape($alias) + ''''
+            if ([regex]::Matches($text, $pattern).Count -ne 1) {
+              throw "Cannot safely remove obsolete required-command alias from verifier: $alias"
+            }
+            $text = [regex]::Replace($text, $pattern, '', 1)
+          }
+          if (-not $text.Contains("'HCE'") -or $text.Contains("'DTC'") -or $text.Contains("'DEMTC'")) {
+            throw 'HCE command verifier still expects obsolete alias or lost HCE launcher'
+          }
+          [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
+          Write-Host 'HCE rebuilt-source verifier aligned: HCE only, not DTC/DEMTC.'
+
       - name: Verify package contract
         shell: powershell
         run: ./incubator/hnl-ceiling-estimator-pro/scripts/verify-universal.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
