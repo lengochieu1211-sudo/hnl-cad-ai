@@ -204,12 +204,12 @@ begin
   begin
     BuildPart := ThirdVersionPart(VersionText);
     Cad2026Net10Cached := BuildPart >= 179;
-    Log(Format('HNL VXT: AutoCAD 2026 acad.exe=%s, version=%s, buildPart=%d, NET10=%d', [ExePath, VersionText, BuildPart, Ord(Cad2026Net10Cached)]));
+    Log(Format('HNL Tool - HCF: AutoCAD 2026 acad.exe=%s, version=%s, buildPart=%d, NET10=%d', [ExePath, VersionText, BuildPart, Ord(Cad2026Net10Cached)]));
   end
   else
   begin
     Cad2026Net10Cached := True;
-    Log('HNL VXT: Could not resolve AutoCAD 2026 executable version; defaulting to NET10 build.');
+    Log('HNL Tool - HCF: Could not resolve AutoCAD 2026 executable version; defaulting to NET10 build.');
   end;
 
   Result := Cad2026Net10Cached;

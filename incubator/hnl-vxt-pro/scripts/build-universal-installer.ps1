@@ -40,11 +40,11 @@ foreach ($manifest in @('PackageContents.2026-net8.xml','PackageContents.2026-ne
 
   foreach ($entry in $entries) {
     if ([string]::Equals([string]$entry.LoadOnAutoCADStartup, 'True', [System.StringComparison]::OrdinalIgnoreCase)) {
-      throw "Startup autoload is forbidden for HNL VXT: $manifestPath :: $($entry.AppName)"
+      throw "Startup autoload is forbidden for HNL HCF: $manifestPath :: $($entry.AppName)"
     }
 
     if (-not [string]::Equals([string]$entry.LoadOnCommandInvocation, 'True', [System.StringComparison]::OrdinalIgnoreCase)) {
-      throw "Every HNL VXT component must be command-lazy-loaded: $manifestPath :: $($entry.AppName)"
+      throw "Every HNL HCF component must be command-lazy-loaded: $manifestPath :: $($entry.AppName)"
     }
   }
 }

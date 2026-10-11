@@ -18,7 +18,7 @@ namespace HNL.VXT.AutoCAD
             // GetNestedEntity is intentionally used instead of GetEntity so users can pick a
             // block through nested geometry / dynamic block content / associative-array items.
             var options = new PromptNestedEntityOptions(
-                "\nHNL Tool - VXT Pro: Chọn Block mẫu " + label + " (có thể chọn Block lồng/Array): ");
+                "\nHNL Tool - HCF: Chọn Block mẫu " + label + " (có thể chọn Block lồng/Array): ");
             var result = ed.GetNestedEntity(options);
             if (result.Status != PromptStatus.OK) return;
 
@@ -27,7 +27,7 @@ namespace HNL.VXT.AutoCAD
                 var br = ResolveSelectedBlockReference(result, tr);
                 if (br == null)
                 {
-                    ed.WriteMessage("\nHNL Tool - VXT Pro: Không tìm thấy BlockReference tại vị trí chọn.");
+                    ed.WriteMessage("\nHNL Tool - HCF: Không tìm thấy BlockReference tại vị trí chọn.");
                     return;
                 }
 
@@ -88,7 +88,7 @@ namespace HNL.VXT.AutoCAD
                 }
 
                 ed.WriteMessage(
-                    "\nHNL Tool - VXT Pro: Đã chọn Block " + label + ": " + blockName +
+                    "\nHNL Tool - HCF: Đã chọn Block " + label + ": " + blockName +
                     " • Layer: " + layer + adapterText);
                 tr.Commit();
             }
@@ -104,8 +104,8 @@ namespace HNL.VXT.AutoCAD
             var label = target == EquipmentTarget.General ? "dùng chung" : target == EquipmentTarget.Main ? "cho Xương chính" : "cho Xương phụ";
             var options = new PromptSelectionOptions
             {
-                MessageForAdding = "\nHNL Tool - VXT Pro: Quét chọn đối tượng thiết bị " + label + " (Block/Polyline/Circle/Spline/Hatch/Line): ",
-                MessageForRemoval = "\nHNL Tool - VXT Pro: Bỏ đối tượng khỏi tập chọn: "
+                MessageForAdding = "\nHNL Tool - HCF: Quét chọn đối tượng thiết bị " + label + " (Block/Polyline/Circle/Spline/Hatch/Line): ",
+                MessageForRemoval = "\nHNL Tool - HCF: Bỏ đối tượng khỏi tập chọn: "
             };
             var filter = new SelectionFilter(new[]
             {
@@ -120,14 +120,14 @@ namespace HNL.VXT.AutoCAD
                 StoreEquipmentIds(session, target, Array.Empty<ObjectId>());
                 session.ViewModel?.SetEquipmentStatus(target, 0);
                 VxtTransientPreview.Instance.Refresh();
-                ed.WriteMessage("\nHNL Tool - VXT Pro: Đã xóa tập thiết bị " + label + ".");
+                ed.WriteMessage("\nHNL Tool - HCF: Đã xóa tập thiết bị " + label + ".");
                 return;
             }
 
             var ids = result.Value.GetObjectIds();
             StoreEquipmentIds(session, target, ids);
             session.ViewModel?.SetEquipmentStatus(target, ids.Length);
-            ed.WriteMessage("\nHNL Tool - VXT Pro: Đã chọn " + ids.Length + " đối tượng thiết bị " + label + ".");
+            ed.WriteMessage("\nHNL Tool - HCF: Đã chọn " + ids.Length + " đối tượng thiết bị " + label + ".");
             VxtTransientPreview.Instance.Refresh();
         }
 

@@ -1289,7 +1289,7 @@
         <Border Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="40"
                 Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}"
                 BorderThickness="0,1,0,0" Padding="2,5,2,5">
-            <Button x:Name="StopHcfButton" Width="34" Height="108"
+            <Button x:Name="StopHcfButton" Width="34" Height="64" Padding="2,3"
                     Style="{StaticResource CompactButton}" Click="StopHcfButton_Click"
                     Background="#FFF1F2" BorderBrush="#FECACA" BorderThickness="1"
                     ToolTip="Tắt công cụ vẽ trần và dừng Preview; AutoCAD vẫn mở">
@@ -1298,9 +1298,7 @@
                           Width="19" Height="19" Stretch="Uniform" Stroke="#DC2626"
                           StrokeThickness="2.3" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
                     <TextBlock Text="Tắt" TextAlignment="Center" Margin="0,5,0,0"
-                               Foreground="#B91C1C" FontSize="11" FontWeight="SemiBold">
-                        <TextBlock.LayoutTransform><RotateTransform Angle="-90"/></TextBlock.LayoutTransform>
-                    </TextBlock>
+                               Foreground="#B91C1C" FontSize="11" FontWeight="SemiBold"/>
                 </StackPanel>
             </Button>
         </Border>

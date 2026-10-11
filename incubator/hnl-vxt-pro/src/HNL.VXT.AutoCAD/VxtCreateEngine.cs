@@ -24,13 +24,13 @@ namespace HNL.VXT.AutoCAD
                                    !settings.AutoDimension && session.ManualMainIds.Length > 0;
             if (!session.HasBoundary && !manualHangerOnly)
             {
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Chưa chọn biên trần. Nếu chỉ rải Ty trên Xương chính có sẵn, hãy tắt XC/XP, bật Ty rồi Tạo.");
+                doc.Editor.WriteMessage("\nHNL Tool - HCF: Chưa chọn biên trần. Nếu chỉ rải Ty trên Xương chính có sẵn, hãy tắt XC/XP, bật Ty rồi Tạo.");
                 return;
             }
 
             if (!settings.IsValid(out var error))
             {
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: " + error);
+                doc.Editor.WriteMessage("\nHNL Tool - HCF: " + error);
                 return;
             }
 
@@ -89,7 +89,7 @@ namespace HNL.VXT.AutoCAD
                     if (hardDiagnostics.Count > 0 && allowConstraintOverride)
                     {
                         doc.Editor.WriteMessage(
-                            "\nHNL Tool - VXT Pro: MANUAL OVERRIDE - đang tạo đúng Preview với " +
+                            "\nHNL Tool - HCF: MANUAL OVERRIDE - đang tạo đúng Preview với " +
                             hardDiagnostics.Count +
                             " lỗi bố trí cần chỉnh thủ công sau khi tạo.");
                     }
@@ -211,7 +211,7 @@ namespace HNL.VXT.AutoCAD
 
                 var fallbackWarning = BuildFallbackWarning(counts);
                 doc.Editor.WriteMessage(
-                    "\nHNL Tool - VXT Pro: Đã tạo thành công " + counts.Main + " Xương chính, " +
+                    "\nHNL Tool - HCF: Đã tạo thành công " + counts.Main + " Xương chính, " +
                     counts.Furring + " Xương phụ, " + counts.Hangers + " Ty treo, " +
                     counts.Dimensions + " Dim. Dùng UNDO để hoàn tác toàn bộ thao tác tạo." +
                     fallbackWarning +
@@ -233,7 +233,7 @@ namespace HNL.VXT.AutoCAD
                     settings, ex, "VxtCreateEngine.Execute", diagnosticPlan);
 
                 doc.Editor.WriteMessage(
-                    "\nHNL Tool - VXT Pro: Không tạo được khung xương. Đã rollback toàn bộ. " + ex.Message +
+                    "\nHNL Tool - HCF: Không tạo được khung xương. Đã rollback toàn bộ. " + ex.Message +
                     (string.IsNullOrWhiteSpace(diagnosticPath) ? string.Empty : " | Diagnostic: " + diagnosticPath));
                 session.ViewModel?.SetPreviewError(
                     "Tạo thất bại - đã rollback. Diagnostic ZIP đã được ghi tự động.");

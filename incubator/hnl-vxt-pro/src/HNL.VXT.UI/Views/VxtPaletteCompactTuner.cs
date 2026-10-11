@@ -199,7 +199,7 @@ namespace HNL.VXT.UI.Views
                 Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
                 FontSize = 9.0,
                 Margin = new Thickness(0, 1, 0, 0),
-                ToolTip = "Đơn vị kích thước đang dùng trong HNL VXT"
+                ToolTip = "Đơn vị kích thước đang dùng trong HNL Tool - HCF"
             };
 
             var insertAt = Math.Min(3, titleStack.Children.Count);
@@ -446,6 +446,12 @@ namespace HNL.VXT.UI.Views
             }
             foreach (var button in Descendants<Button>(view))
             {
+                // This is the dedicated power action in the 40-DIP navigation rail,
+                // NOT a form button. Shrinking it to 27 DIP clips its icon and label.
+                // Keep its 64-DIP XAML height and horizontal "Tắt" text on every
+                // Loaded/Palette reopen pass, while compacting ordinary form buttons.
+                if (string.Equals(button.Name, "StopHcfButton", StringComparison.Ordinal))
+                    continue;
                 if (button.Height > 34.0 || double.IsNaN(button.Height)) button.Height = 27.0;
             }
         }

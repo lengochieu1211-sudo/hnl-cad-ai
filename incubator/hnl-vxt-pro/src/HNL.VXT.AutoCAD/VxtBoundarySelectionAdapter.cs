@@ -124,7 +124,7 @@ namespace HNL.VXT.AutoCAD
             if (writeMessage)
             {
                 ed.WriteMessage(
-                    "\nHNL Tool - VXT Pro: Đã dùng " + accepted.Count + " biên trần từ tập chọn sẵn");
+                    "\nHNL Tool - HCF: Đã dùng " + accepted.Count + " biên trần từ tập chọn sẵn");
                 if (autoClosed > 0)
                     ed.WriteMessage("; tự khép " + autoClosed + " biên, khe lớn nhất " +
                         maxAutoCloseGap.ToString("0.###") + " mm");

@@ -18,7 +18,9 @@ namespace HNL.VXT.AutoCAD
 {
     internal static class VxtDiagnosticService
     {
-        private const string ProductLabel = "HNL Tool - VXT Pro v7.0.0-beta.1";
+        private const string ProductLabel = "HNL Tool - Ceiling Framing Pro v7.0.0-beta.1";
+        // Legacy diagnostic directory names ("VXT Pro") are retained so existing
+        // logs and runtime-golden evidence remain discoverable after upgrading.
         private static readonly object Sync = new object();
 
         public static string LastPackagePath { get; private set; }
@@ -32,7 +34,7 @@ namespace HNL.VXT.AutoCAD
             {
                 var analysis = AnalyzeCurrentState(settings, null, "ManualAnalyze");
                 LastAnalysis = analysis.Summary;
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro Diagnostic: " + analysis.Summary);
+                doc.Editor.WriteMessage("\nHNL Tool - HCF Diagnostic: " + analysis.Summary);
                 foreach (var item in analysis.Issues)
                     doc.Editor.WriteMessage("\n  - " + item);
                 if (analysis.Issues.Count == 0)
@@ -40,7 +42,7 @@ namespace HNL.VXT.AutoCAD
             }
             catch (System.Exception ex)
             {
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro Diagnostic: Không phân tích được: " + ex.Message);
+                doc.Editor.WriteMessage("\nHNL Tool - HCF Diagnostic: Không phân tích được: " + ex.Message);
             }
         }
 
@@ -51,8 +53,8 @@ namespace HNL.VXT.AutoCAD
 
             var dialog = new SaveFileDialog
             {
-                Title = "HNL Tool - Xuất gói phân tích lỗi VXT Pro",
-                Filter = "HNL VXT Diagnostic ZIP (*.zip)|*.zip|All files (*.*)|*.*",
+                Title = "HNL Tool - Xuất gói phân tích lỗi HCF",
+                Filter = "HNL HCF Diagnostic ZIP (*.zip)|*.zip|All files (*.*)|*.*",
                 FileName = "HNL-VXT-DIAGNOSTIC-" + DateTime.Now.ToString("yyyy-MM-dd-HHmmss") + ".zip",
                 InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
                 AddExtension = true,
@@ -64,12 +66,12 @@ namespace HNL.VXT.AutoCAD
             try
             {
                 var path = BuildPackage(dialog.FileName, settings, null, "ManualExport", false, null);
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Đã xuất gói lỗi: " + path);
+                doc.Editor.WriteMessage("\nHNL Tool - HCF: Đã xuất gói lỗi: " + path);
                 return path;
             }
             catch (System.Exception ex)
             {
-                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Không thể xuất gói lỗi: " + ex.Message);
+                doc.Editor.WriteMessage("\nHNL Tool - HCF: Không thể xuất gói lỗi: " + ex.Message);
                 return null;
             }
         }
@@ -91,13 +93,13 @@ namespace HNL.VXT.AutoCAD
                 var path = BuildPackage(file, settings, exception, stage, true, null, plan);
                 RecordGolden("FAIL", settings, null, exception, path, stage);
                 if (doc != null)
-                    doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Đã tự lưu gói phân tích lỗi: " + path);
+                    doc.Editor.WriteMessage("\nHNL Tool - HCF: Đã tự lưu gói phân tích lỗi: " + path);
                 return path;
             }
             catch (System.Exception exportError)
             {
                 if (doc != null)
-                    doc.Editor.WriteMessage("\nHNL Tool - VXT Pro: Lỗi phụ khi ghi diagnostic: " + exportError.Message);
+                    doc.Editor.WriteMessage("\nHNL Tool - HCF: Lỗi phụ khi ghi diagnostic: " + exportError.Message);
                 return null;
             }
         }
@@ -563,7 +565,7 @@ namespace HNL.VXT.AutoCAD
             string packagePath)
         {
             var sb = new StringBuilder(4096);
-            sb.AppendLine("HNL TOOL - VXT PRO DIAGNOSTIC REPORT");
+            sb.AppendLine("HNL TOOL - HCF DIAGNOSTIC REPORT");
             sb.AppendLine("========================================");
             sb.AppendLine("Product: " + ProductLabel);
             sb.AppendLine("Time: " + DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
@@ -591,7 +593,7 @@ namespace HNL.VXT.AutoCAD
         private static string BuildReproSteps(VxtSettings settings, AnalysisResult analysis)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("HNL Tool - VXT Pro | Reproduction Steps");
+            sb.AppendLine("HNL Tool - HCF | Reproduction Steps");
             sb.AppendLine("1. Open the original DWG in the same AutoCAD version.");
             sb.AppendLine("2. Run VXT.");
             sb.AppendLine("3. Restore settings from settings.json.");

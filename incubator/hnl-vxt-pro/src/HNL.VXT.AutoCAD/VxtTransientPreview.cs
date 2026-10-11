@@ -184,7 +184,7 @@ namespace HNL.VXT.AutoCAD
                             if (!_largePreviewNoticeShown)
                             {
                                 _largePreviewNoticeShown = true;
-                                doc.Editor.WriteMessage("\nHNL Tool - VXT Pro Preview: " + previewNotice);
+                                doc.Editor.WriteMessage("\nHNL Tool - HCF Preview: " + previewNotice);
                             }
                         }
 
@@ -214,9 +214,9 @@ namespace HNL.VXT.AutoCAD
                     {
                         var constraintSummary = VxtConstraintReport.FormatSummary(plan.Diagnostics);
                         doc.Editor.WriteMessage(
-                            "\nHNL Tool - VXT Pro: Kiểm tra bố trí • " +
+                            "\nHNL Tool - HCF: Kiểm tra bố trí • " +
                             constraintSummary +
-                            ". Mở HNL VXT Pro để xem chi tiết và bấm Mxx.");
+                            ". Mở HCF để xem chi tiết và bấm Mxx.");
                     }
 
                     if (!string.IsNullOrWhiteSpace(previewNotice))
@@ -225,7 +225,7 @@ namespace HNL.VXT.AutoCAD
                 catch (System.Exception ex)
                 {
                     session.ViewModel?.SetPreviewError(ex.Message);
-                    doc.Editor.WriteMessage("\nHNL Tool - VXT Pro Preview: " + ex.Message);
+                    doc.Editor.WriteMessage("\nHNL Tool - HCF Preview: " + ex.Message);
                 }
             }
             finally

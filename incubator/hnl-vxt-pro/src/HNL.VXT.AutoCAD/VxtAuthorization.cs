@@ -34,7 +34,7 @@ namespace HNL.VXT.AutoCAD
             if (doc == null) return false;
 
             var options = new PromptStringOptions(
-                "\nHNL Tool - Nhập mật khẩu sử dụng HNL VXT Pro: ")
+                "\nHNL Tool - Nhập mật khẩu sử dụng HNL Ceiling Framing Pro: ")
             {
                 AllowSpaces = false
             };
@@ -42,7 +42,7 @@ namespace HNL.VXT.AutoCAD
             var result = doc.Editor.GetString(options);
             if (result.Status != PromptStatus.OK)
             {
-                doc.Editor.WriteMessage("\nHNL Tool - Hủy xác thực HNL VXT Pro.");
+                doc.Editor.WriteMessage("\nHNL Tool - Hủy xác thực HNL Ceiling Framing Pro.");
                 return false;
             }
 
@@ -57,7 +57,7 @@ namespace HNL.VXT.AutoCAD
             if (WritePersistentAuthorization())
             {
                 doc.Editor.WriteMessage(
-                    "\nHNL Tool - Đã xác thực HNL VXT Pro. Các lần sau không cần nhập lại mật khẩu.");
+                    "\nHNL Tool - Đã xác thực HNL Ceiling Framing Pro. Các lần sau không cần nhập lại mật khẩu.");
             }
             else
             {

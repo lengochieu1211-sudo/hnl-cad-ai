@@ -114,4 +114,38 @@ foreach ($manifestName in @(
         }
     }
 }
+# STOP is a tall, independent rail control, not a 27-DIP form button.
+# The old blanket compaction clipped its power icon and truncated the word "Tắt".
+$compact = Source 'src/HNL.VXT.UI/Views/VxtPaletteCompactTuner.cs'
+$stop = [regex]::Match($xaml, '(?s)<Button\s+x:Name="StopHcfButton"(?<body>.*?)</Button>')
+if (-not $stop.Success -or -not $stop.Value.Contains('Height="64"') -or
+    $stop.Value.Contains('RotateTransform') -or
+    -not $stop.Value.Contains('Text="Tắt"') -or
+    -not $compact.Contains('string.Equals(button.Name, "StopHcfButton", StringComparison.Ordinal)')) {
+    throw 'HCF audit: STOP navigation power icon and horizontal label can be clipped by global compact sizing.'
+}
+if ([regex]::Matches($xaml, '<RotateTransform Angle="-90"').Count -ne 2) {
+    throw 'HCF audit: only the two mode tabs may use -90 degree labels.'
+}
+
+# Audit *publicly displayed* legacy branding, while preserving HNL.VXT
+# namespaces, CAD command IDs, Registry licensing and historical log paths.
+$legacyUserLabel = 'HNL\s*Tool\s*-\s*VXT\s*Pro|HNL\s+VXT\s+Pro|HNL\s+VXT\s+Diagnostic|HNL\s+TOOL\s*-\s*VXT'
+$sourceRoot = Join-Path $Root 'src'
+foreach ($sourceFile in (Get-ChildItem -LiteralPath $sourceRoot -Recurse -File |
+        Where-Object { $_.Extension -eq '.cs' -or $_.Extension -eq '.xaml' })) {
+    $lineNo = 0
+    foreach ($line in (Get-Content -LiteralPath $sourceFile.FullName -Encoding UTF8)) {
+        $lineNo++
+        $trimmed = $line.TrimStart()
+        if ($trimmed.StartsWith('//') -or $trimmed.StartsWith('*') -or
+            $trimmed.StartsWith('<!--')) { continue }
+        if ($line -match $legacyUserLabel -and
+            $line -match '["\x27]') {
+            throw "HCF audit: visible old VXT branding remains at $($sourceFile.Name):$lineNo"
+        }
+    }
+}
+Write-Host 'HNL HCF navigation rail and user-visible brand label audit PASS.'
+
 Write-Host "HNL HCF button audit PASS: $($bindings.Count) XAML command bindings, $($called.Count) host command calls, $($registered.Count) registered commands, 3 manifests."

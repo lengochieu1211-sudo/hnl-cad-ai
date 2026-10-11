@@ -99,7 +99,7 @@ namespace HNL.VXT.AutoCAD
                     Send("HNLVXTDIRECTION ");
                     break;
                 case MainDirectionMode.RectangleRegions: Send("HNLVXTREGION "); break;
-                default: Write("\nHNL Tool - VXT Pro: Hướng hiện tại không cần thiết lập thêm."); break;
+                default: Write("\nHNL Tool - HCF: Hướng hiện tại không cần thiết lập thêm."); break;
             }
         }
 
@@ -157,7 +157,7 @@ namespace HNL.VXT.AutoCAD
                     else
                     {
                         Send("HNLVXTCLEARPREVIEW ");
-                        Write("\nHNL Tool - VXT Pro: Đã chọn 'Chọn hướng'. Hãy dùng Chọn Polyline hoặc Chọn điểm; sau khi nhận vùng trần HNL Tool sẽ cho chọn 2 điểm hoặc tuyến gấp khúc.");
+                        Write("\nHNL Tool - HCF: Đã chọn 'Chọn hướng'. Hãy dùng Chọn Polyline hoặc Chọn điểm; sau khi nhận vùng trần HNL Tool sẽ cho chọn 2 điểm hoặc tuyến gấp khúc.");
                     }
                     return;
                 }
@@ -168,7 +168,7 @@ namespace HNL.VXT.AutoCAD
                     else
                     {
                         Send("HNLVXTCLEARPREVIEW ");
-                        Write("\nHNL Tool - VXT Pro: Đã chọn chế độ HCN. Hãy dùng Chọn Polyline hoặc Chọn điểm; sau khi nhận vùng trần HNL Tool sẽ vào chia vùng.");
+                        Write("\nHNL Tool - HCF: Đã chọn chế độ HCN. Hãy dùng Chọn Polyline hoặc Chọn điểm; sau khi nhận vùng trần HNL Tool sẽ vào chia vùng.");
                     }
                     return;
                 }
@@ -333,7 +333,7 @@ namespace HNL.VXT.AutoCAD
                 CancelPendingPreview();
                 session.Settings = pending;
                 Send(session.HasBoundary ? "HNLVXTPREVIEW " : "HNLVXTCLEARPREVIEW ");
-                Write("\nHNL Tool - VXT Pro: Preview vừa có thay đổi chưa kịp vẽ. HNL Tool đã cập nhật Preview trước; hãy kiểm tra rồi bấm Tạo lại để bảo đảm WYSIWYG.");
+                Write("\nHNL Tool - HCF: Preview vừa có thay đổi chưa kịp vẽ. HNL Tool đã cập nhật Preview trước; hãy kiểm tra rồi bấm Tạo lại để bảo đảm WYSIWYG.");
                 return;
             }
 
