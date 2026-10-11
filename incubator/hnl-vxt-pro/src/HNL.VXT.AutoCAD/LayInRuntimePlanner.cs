@@ -15,6 +15,9 @@ namespace HNL.VXT.AutoCAD
         public LayInGridSystem System { get; set; }
         public Point2 Origin { get; set; }
         public double AngleRadians { get; set; }
+        public string PatternName { get; set; }
+        public int LoopCount { get; set; }
+        public double HatchArea { get; set; }
     }
 
     internal sealed class LayInBoundaryRuntimePlan
@@ -45,6 +48,7 @@ namespace HNL.VXT.AutoCAD
                     session.BoundaryIds.Count != existing.Count)
                     throw new InvalidOperationException(
                         "HNL Tool - Trần nổi: Tắt Vẽ Hatch cần chọn Hatch có sẵn làm nguồn lưới.");
+                ValidateExistingHatchSources(session);
             }
             else if (existing.Count > 0)
             {
@@ -92,6 +96,42 @@ namespace HNL.VXT.AutoCAD
                 throw new InvalidOperationException("Không có biên trần Lay-in hợp lệ.");
 
             return result;
+        }
+
+        private static void ValidateExistingHatchSources(VxtSession session)
+        {
+            var doc = Autodesk.AutoCAD.ApplicationServices.Core.Application
+                .DocumentManager.MdiActiveDocument;
+            if (doc == null)
+                throw new InvalidOperationException("HNL Tool - Trần nổi: Không có DWG đang mở.");
+
+            using (var tr = doc.Database.TransactionManager.StartTransaction())
+            {
+                for (var i = 0; i < session.LayInExistingHatches.Count; i++)
+                {
+                    var source = session.LayInExistingHatches[i];
+                    if (source.HatchId.IsNull ||
+                        source.HatchId != session.BoundaryIds[i])
+                        throw new InvalidOperationException(
+                            "HNL Tool - Trần nổi: Hatch nguồn đã thay đổi; hãy chọn lại.");
+                    var hatch = tr.GetObject(source.HatchId, OpenMode.ForRead, false) as Hatch;
+                    if (hatch == null ||
+                        !string.Equals(hatch.PatternName, source.PatternName,
+                            StringComparison.OrdinalIgnoreCase) ||
+                        hatch.NumberOfLoops != source.LoopCount ||
+                        Math.Abs(hatch.PatternScale - 1.0) > 0.000001 ||
+                        Math.Abs(hatch.PatternAngle - source.AngleRadians) > 0.000001 ||
+                        Math.Abs(hatch.Origin.X - source.Origin.X) > 0.01 ||
+                        Math.Abs(hatch.Origin.Y - source.Origin.Y) > 0.01 ||
+                        Math.Abs(hatch.Area - source.HatchArea) >
+                            Math.Max(0.1, Math.Abs(source.HatchArea) * 0.000000001))
+                    {
+                        throw new InvalidOperationException(
+                            "HNL Tool - Trần nổi: Hatch nguồn đã bị sửa; hãy chọn lại Hatch trước khi tạo Ty/DIM.");
+                    }
+                }
+                tr.Commit();
+            }
         }
 
         public static void Summarize(

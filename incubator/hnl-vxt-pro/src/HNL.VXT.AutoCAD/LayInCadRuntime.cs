@@ -915,7 +915,10 @@ namespace HNL.VXT.AutoCAD
                             System = system,
                             Origin = new HNL.VXT.Core.Geometry.Point2(
                                 hatch.Origin.X, hatch.Origin.Y),
-                            AngleRadians = hatch.PatternAngle
+                            AngleRadians = hatch.PatternAngle,
+                            PatternName = hatch.PatternName,
+                            LoopCount = hatch.NumberOfLoops,
+                            HatchArea = hatch.Area
                         });
                     }
                     tr.Commit();
