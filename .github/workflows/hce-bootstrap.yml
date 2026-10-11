@@ -352,7 +352,7 @@ jobs:
           Write-Host 'HCE OPTION SELECTION PERSISTENCE / NO REENTRANT LIST RELOAD / NO REPEATED CUT-MODE PROMPT PASS'
 
       - name: Verify HCE default palette and calculator route
-        shell: powershell
+        shell: pwsh
         run: |
           $commands = Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/Commands.cs' -Raw
           $ui = Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs' -Raw
