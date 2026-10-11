@@ -199,6 +199,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             Resources["InputBackground"] = inputBackground;
             Resources["InputBorder"] = inputBorder;
             Resources["ComboArrowBackground"] = Brush(dark ? "#303840" : "#E7EEF5");
+            Resources["HoverBackground"] = _accentSoft;
             Resources[SystemColors.WindowBrushKey] = inputBackground;
             Resources[SystemColors.WindowTextBrushKey] = _primary;
             Resources[SystemColors.ControlBrushKey] = inputBackground;
@@ -231,65 +232,84 @@ namespace HNL.CeilingEstimator.AutoCAD
                 <Setter Property='Foreground' Value='{DynamicResource PrimaryText}'/>
                 <Setter Property='Background' Value='{DynamicResource InputBackground}'/>
                 <Setter Property='BorderBrush' Value='{DynamicResource InputBorder}'/>
-                <Setter Property='BorderThickness' Value='1'/>
-                <Setter Property='Padding' Value='7,3,30,3'/>
                 <Setter Property='MinHeight' Value='30'/>
+                <Setter Property='HorizontalAlignment' Value='Stretch'/>
+                <Setter Property='MaxDropDownHeight' Value='320'/>
                 <Setter Property='Template'>
                     <Setter.Value>
-                        <ControlTemplate TargetType='{x:Type ComboBox}'>
-                            <Grid SnapsToDevicePixels='True'>
-                                <Border x:Name='Chrome'
-                                        Background='{TemplateBinding Background}'
-                                        BorderBrush='{TemplateBinding BorderBrush}'
-                                        BorderThickness='{TemplateBinding BorderThickness}'
-                                        CornerRadius='2'/>
-                                <TextBlock Margin='{TemplateBinding Padding}'
-                                           VerticalAlignment='Center'
-                                           Foreground='{TemplateBinding Foreground}'
-                                           Text='{TemplateBinding SelectionBoxItem}'
-                                           TextTrimming='CharacterEllipsis'/>
-                                <Border Width='27' HorizontalAlignment='Right'
-                                        Background='{DynamicResource ComboArrowBackground}'
-                                        BorderBrush='{TemplateBinding BorderBrush}'
-                                        BorderThickness='1,0,0,0'
-                                        CornerRadius='0,2,2,0'>
-                                    <Path Width='8' Height='5'
-                                          HorizontalAlignment='Center' VerticalAlignment='Center'
-                                          Fill='{DynamicResource PrimaryText}'
-                                          Stretch='Fill'
-                                          Data='M 0 0 L 4 4 L 8 0 Z'/>
-                                </Border>
-                                <ToggleButton Focusable='False' Opacity='0'
-                                              Background='Transparent' BorderThickness='0'
-                                              IsChecked='{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}'/>
-                                <Popup x:Name='PART_Popup'
-                                       Placement='Bottom'
-                                       PlacementTarget='{Binding RelativeSource={RelativeSource TemplatedParent}}'
-                                       AllowsTransparency='True'
-                                       IsOpen='{TemplateBinding IsDropDownOpen}'
-                                       PopupAnimation='Fade'>
-                                    <Border Margin='0,2,0,0'
-                                            Background='{DynamicResource InputBackground}'
-                                            BorderBrush='{DynamicResource InputBorder}'
-                                            BorderThickness='1'
-                                            MinWidth='{Binding PlacementTarget.ActualWidth, ElementName=PART_Popup}'
-                                            MaxHeight='320'>
-                                        <ScrollViewer CanContentScroll='True'>
-                                            <ItemsPresenter/>
-                                        </ScrollViewer>
-                                    </Border>
-                                </Popup>
-                            </Grid>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property='IsKeyboardFocusWithin' Value='True'>
-                                    <Setter TargetName='Chrome' Property='BorderBrush'
-                                            Value='{DynamicResource AccentStrong}'/>
-                                </Trigger>
-                                <Trigger Property='IsEnabled' Value='False'>
-                                    <Setter TargetName='Chrome' Property='Opacity' Value='0.55'/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
+<ControlTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
+                 xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'
+                 TargetType='{x:Type ComboBox}'>
+  <Grid SnapsToDevicePixels='True'>
+    <ToggleButton x:Name='DropDownToggle'
+                  Focusable='False'
+                  Foreground='{DynamicResource PrimaryText}'
+                  ClickMode='Press'
+                  IsChecked='{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}'>
+      <ToggleButton.Template>
+        <ControlTemplate TargetType='{x:Type ToggleButton}'>
+          <Border x:Name='Chrome'
+                  Background='{DynamicResource InputBackground}'
+                  BorderBrush='{DynamicResource InputBorder}'
+                  BorderThickness='1'
+                  CornerRadius='4'>
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width='*'/>
+                <ColumnDefinition Width='28'/>
+              </Grid.ColumnDefinitions>
+              <ContentPresenter Grid.Column='0'
+                                TextElement.Foreground='{DynamicResource PrimaryText}'
+                                Margin='8,0,4,0'
+                                HorizontalAlignment='Left'
+                                VerticalAlignment='Center'
+                                IsHitTestVisible='False'
+                                Content='{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType={x:Type ComboBox}}}'
+                                ContentTemplate='{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType={x:Type ComboBox}}}'
+                                ContentTemplateSelector='{Binding ItemTemplateSelector, RelativeSource={RelativeSource AncestorType={x:Type ComboBox}}}'/>
+              <Border Grid.Column='1' BorderBrush='{DynamicResource InputBorder}' BorderThickness='1,0,0,0'>
+                <Path Width='8' Height='5' Stretch='Fill'
+                      HorizontalAlignment='Center' VerticalAlignment='Center'
+                      Fill='{DynamicResource PrimaryText}' Data='M 0 0 L 8 0 L 4 5 Z'/>
+              </Border>
+            </Grid>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property='IsMouseOver' Value='True'>
+              <Setter TargetName='Chrome' Property='BorderBrush' Value='{DynamicResource AccentStrong}'/>
+              <Setter TargetName='Chrome' Property='Background' Value='{DynamicResource HoverBackground}'/>
+            </Trigger>
+            <Trigger Property='IsChecked' Value='True'>
+              <Setter TargetName='Chrome' Property='BorderBrush' Value='{DynamicResource AccentStrong}'/>
+            </Trigger>
+            <Trigger Property='IsEnabled' Value='False'>
+              <Setter TargetName='Chrome' Property='Background' Value='{DynamicResource InputBackground}'/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </ToggleButton.Template>
+    </ToggleButton>
+
+    <Popup x:Name='PART_Popup'
+           Placement='Bottom'
+           IsOpen='{TemplateBinding IsDropDownOpen}'
+           AllowsTransparency='True'
+           Focusable='False'
+           PopupAnimation='Fade'>
+      <Border Margin='0,2,0,0'
+              MinWidth='{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}'
+              MaxHeight='{TemplateBinding MaxDropDownHeight}'
+              Background='{DynamicResource InputBackground}'
+              BorderBrush='{DynamicResource InputBorder}'
+              BorderThickness='1'
+              CornerRadius='4'>
+        <ScrollViewer Margin='1' SnapsToDevicePixels='True' VerticalScrollBarVisibility='Auto'>
+          <ItemsPresenter/>
+        </ScrollViewer>
+      </Border>
+    </Popup>
+  </Grid>
+</ControlTemplate>
                     </Setter.Value>
                 </Setter>
             </Style>";
@@ -405,8 +425,8 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         private UIElement BuildLayout()
         {
-            // Match HCF's dark/light cards and keep command status outside the
-            // scrolled settings. One HCE mode needs no duplicate tab rail.
+            // Compact HCF-like status rail. Idle = one short row; progress
+            // appears only when the calculation is active or has completed.
             var root = new Grid();
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -414,42 +434,61 @@ namespace HNL.CeilingEstimator.AutoCAD
             Grid.SetRow(body, 0);
             root.Children.Add(body);
 
-            var statusPanel = new StackPanel { Margin = new Thickness(9, 4, 9, 9) };
-            var status = new Grid { Margin = new Thickness(0, 0, 0, 5) };
-            status.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            status.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var strip = new Grid();
+            strip.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            strip.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var top = new Grid();
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             _workStage = Text("Sẵn sàng tính tấm.", 10, _muted, FontWeights.Normal);
+            _workStage.TextWrapping = TextWrapping.NoWrap;
             _workStage.TextTrimming = TextTrimming.CharacterEllipsis;
-            status.Children.Add(_workStage);
+            var statusText = new Grid();
+            statusText.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            statusText.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            statusText.Children.Add(_workStage);
             _workPercent = Text("", 10, _primary, FontWeights.SemiBold);
+            _workPercent.Margin = new Thickness(5, 0, 0, 0);
             Grid.SetColumn(_workPercent, 1);
-            status.Children.Add(_workPercent);
-            statusPanel.Children.Add(status);
-            _workProgress = new ProgressBar
-            {
-                Minimum = 0, Maximum = 100, Value = 0, Height = 7,
-                IsIndeterminate = false,
-                Foreground = _accent, Background = _border,
-                Margin = new Thickness(0, 0, 0, 7)
-            };
-            statusPanel.Children.Add(_workProgress);
+            statusText.Children.Add(_workPercent);
+            top.Children.Add(statusText);
             _stopHceButton = new WpfButton
             {
-                Content = "Tắt HCE",
+                Content = "Tắt HCE", MinWidth = 78, MinHeight = 24,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                MinHeight = 30, MinWidth = 92,
-                Padding = new Thickness(12, 5, 12, 5),
+                Padding = new Thickness(8, 2, 8, 2),
+                Margin = new Thickness(9, 0, 0, 0),
                 Foreground = Brush("#DC2626"),
                 Background = _surface, BorderBrush = _border,
                 BorderThickness = new Thickness(1),
                 Cursor = System.Windows.Input.Cursors.Hand,
-                ToolTip = "Tắt HCE; giữ AutoCAD và dữ liệu bản vẽ đang mở."
+                ToolTip = "Tắt HCE; AutoCAD và bản vẽ vẫn mở."
             };
             _stopHceButton.Click += (sender, args) => RequestStopHce();
-            statusPanel.Children.Add(_stopHceButton);
-            var footerCard = Card(statusPanel);
-            Grid.SetRow(footerCard, 1);
-            root.Children.Add(footerCard);
+            Grid.SetColumn(_stopHceButton, 1);
+            top.Children.Add(_stopHceButton);
+            Grid.SetRow(top, 0);
+            strip.Children.Add(top);
+            _workProgress = new ProgressBar
+            {
+                Minimum = 0, Maximum = 100, Value = 0, Height = 4,
+                IsIndeterminate = false, Visibility = Visibility.Collapsed,
+                Foreground = _accent, Background = _border,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            Grid.SetRow(_workProgress, 1);
+            strip.Children.Add(_workProgress);
+
+            var rail = new WpfBorder
+            {
+                Background = _surface,
+                BorderBrush = _border,
+                BorderThickness = new Thickness(0, 1, 0, 0),
+                Padding = new Thickness(8, 4, 8, 4),
+                Child = strip
+            };
+            Grid.SetRow(rail, 1);
+            root.Children.Add(rail);
             return root;
         }
 
@@ -469,7 +508,11 @@ namespace HNL.CeilingEstimator.AutoCAD
             _workProgress.IsIndeterminate = indeterminate;
             if (!indeterminate)
                 _workProgress.Value = Math.Max(0, Math.Min(100, percent));
-            _workPercent.Text = indeterminate ? "Đang xử lý" : percent + "%";
+            var idle = percent == 0 && !indeterminate &&
+                stage == "Sẵn sàng tính tấm.";
+            _workPercent.Text = idle ? string.Empty :
+                (indeterminate ? "Đang xử lý" : percent + "%");
+            _workProgress.Visibility = idle ? Visibility.Collapsed : Visibility.Visible;
             if (_stopHceButton != null)
                 _stopHceButton.IsEnabled = !HcePaletteService.IsCalculating;
         }
