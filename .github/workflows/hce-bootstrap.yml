@@ -391,7 +391,7 @@ jobs:
               'CommandButton("Tạo bảng", "HCECALC", true)',
               'Grid.SetColumn(rightRail, 1);', 'Grid.SetRowSpan(rightRail, 3);',
               'Width = 40, Background = _surface',
-              'HNL TOOL - CEILING ESTIMATOR PRO | HCE_UPDATED_AT_SHORT_VN')) {
+              'internal const string PaletteCaption = "HNL TOOL - CEILING ESTIMATOR PRO | ')) {
             if (-not $ui.Contains($required)) {
               throw "HCE HCF-style layout / title contract missing: $required"
             }
