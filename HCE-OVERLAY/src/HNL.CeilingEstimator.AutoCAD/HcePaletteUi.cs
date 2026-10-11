@@ -958,11 +958,13 @@ namespace HNL.CeilingEstimator.AutoCAD
             {
                 priority.IsEnabled = profile.Module == "M";
                 priority.ToolTip = "Chỉ dùng khi Loại tấm là Kết hợp.";
+                ToolTipService.SetShowOnDisabled(priority, true);
             }
             if (_legacySelectors.TryGetValue("Direction", out var direction))
             {
                 direction.IsEnabled = profile.Module != "S";
                 direction.ToolTip = "Chỉ dùng với Tấm dài hoặc Kết hợp.";
+                ToolTipService.SetShowOnDisabled(direction, true);
             }
             if (_legacyTolerance != null)
             {
@@ -970,6 +972,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 _legacyTolerance.ToolTip = profile.SnapEnabled
                     ? "Nhập dung sai lưới từ 0 đến 10 mm."
                     : "Bật Sai số lưới để nhập dung sai.";
+                ToolTipService.SetShowOnDisabled(_legacyTolerance, true);
             }
             if (_legacyCutList != null &&
                 _legacyCutList.IsChecked != profile.CutListEnabled)
