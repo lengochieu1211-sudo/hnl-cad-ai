@@ -552,35 +552,11 @@ namespace HNL.CeilingEstimator.AutoCAD
 
                 // HCECALC itself requests a new table. GetPoint is the Cancel gate.
                 // Do not insert a redundant Table/Exit keyword stage.
-                // Runtime fallback for disabled/old palette state: never silently omit
-                // cut sizes from a newly requested CAD Table without showing the choice.
-                // The override is local to this Table; calculation/packing is unchanged.
-                if (!profile.CutListEnabled)
-                {
-                    var cutListChoice = new PromptKeywordOptions(
-                        "\nHNL Tool - Chưa bật danh sách mảnh cắt trong bảng. " +
-                        "Chọn cách liệt kê (Enter = Không liệt kê): ")
-                    {
-                        AllowNone = true
-                    };
-                    cutListChoice.Keywords.Add("Summary", "TongHop", "Tổng hợp");
-                    cutListChoice.Keywords.Add("Detail", "ChiTiet", "Chi tiết");
-                    cutListChoice.Keywords.Add("NoList", "Khong", "Không liệt kê");
-                    var cutResponse = editor.GetKeywords(cutListChoice);
-                    if (cutResponse.Status != PromptStatus.OK &&
-                        cutResponse.Status != PromptStatus.None)
-                    {
-                        editor.WriteMessage("\nHNL Tool - Đã hủy chọn bảng mảnh cắt; bản vẽ giữ nguyên.");
-                        return;
-                    }
-                    if (cutResponse.Status == PromptStatus.OK &&
-                        (ChoiceIs(cutResponse, "Summary", "TongHop") ||
-                         ChoiceIs(cutResponse, "Detail", "ChiTiet")))
-                    {
-                        profile.CutListEnabled = true;
-                        profile.CutListMode = ChoiceIs(cutResponse, "Detail", "ChiTiet") ? "D" : "S";
-                    }
-                }
+                // Cut listing is configured on the HCE Palette. Reopening a
+                // Summary/Detail/NoList prompt after the calculation used to
+                // override that selection, especially when the checkbox was off.
+                // Respect the saved per-DWG choice; do not ask twice. The
+                // separate >2000-detail-rows confirmation stays as a safety gate.
                 editor.WriteMessage("\nHNL Tool - Danh sách mảnh cắt trong bảng mới: " +
                     (profile.CutListEnabled
                         ? (profile.CutListMode == "D" ? "Chi tiết" : "Tổng hợp")
