@@ -491,7 +491,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             _workPercent = Text("—", 14, _accent, FontWeights.Bold);
             _workPercent.HorizontalAlignment = HorizontalAlignment.Center;
             _workPercent.VerticalAlignment = VerticalAlignment.Center;
-            _workPercent.TextAlignment = TextAlignment.Center;
+            _workPercent.TextAlignment = System.Windows.TextAlignment.Center;
             _workPercent.MinWidth = 40;
             var percentBadge = new WpfBorder
             {
