@@ -390,7 +390,7 @@ jobs:
           if($ui.Contains('_legacyCutMode.IsEnabled = profile.CutListEnabled')) { throw 'Cut list mode must not be disabled while checkbox is off' }
            foreach($part in @('Chưa bật danh sách mảnh cắt trong bảng.', 'cutListChoice.Keywords.Add("Summary", "TongHop", "Tổng hợp")',
                              'cutListChoice.Keywords.Add("Detail", "ChiTiet", "Chi tiết")', 'cutListChoice.Keywords.Add("NoList", "Khong", "Không liệt kê")',
-                             'Danh sách mảnh cắt trong bảng mới:, 'Không sửa các bảng CAD đã có.')) {
+                             'Danh sách mảnh cắt trong bảng mới:', 'Không sửa các bảng CAD đã có.')) {
              if(-not $cmd.Contains($part)){ throw "Missing cut-list runtime fallback: $part" }
            }
            foreach($part in @(' | Liệt kê: ', 'chỉ áp dụng cho bảng mới.')) {
