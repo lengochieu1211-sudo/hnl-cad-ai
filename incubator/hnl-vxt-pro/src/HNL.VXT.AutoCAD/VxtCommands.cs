@@ -176,6 +176,8 @@ namespace HNL.VXT.AutoCAD
                 session.Boundaries.AddRange(accepted);
                 session.BoundaryIds.Clear();
                 session.BoundaryIds.AddRange(acceptedIds);
+                session.LayInExistingHatches.Clear();
+                session.ViewModel?.LayIn?.SetPolylineSourceSelected();
                 session.Regions.Clear();
                 session.BoundaryRegionGroups.Clear();
                 session.BoundaryHoleGroups.Clear();
@@ -339,6 +341,8 @@ namespace HNL.VXT.AutoCAD
             session.BoundaryIds.Clear();
             for (var i = 0; i < accepted.Count; i++)
                 session.BoundaryIds.Add(ObjectId.Null);
+            session.LayInExistingHatches.Clear();
+            session.ViewModel?.LayIn?.SetPolylineSourceSelected();
 
             session.BoundaryHoleGroups.Clear();
             foreach (var holes in acceptedHoleGroups)

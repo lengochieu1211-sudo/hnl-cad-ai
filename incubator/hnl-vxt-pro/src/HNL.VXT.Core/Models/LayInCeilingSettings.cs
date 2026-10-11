@@ -60,6 +60,14 @@ namespace HNL.VXT.Core.Models
         public IReadOnlyList<Point2> DoorCandidates { get; set; } = Array.Empty<Point2>();
         public string DoorBlockName { get; set; } = string.Empty;
 
+        // When OFF, selected existing HNL hatch supplies the grid; never create a duplicate.
+        public bool DrawHatch { get; set; } = true;
+        // Preview/Create toggles use the same effective settings.
+        public bool DrawDimensions { get; set; } = true;
+        // Per-boundary DWG hatch phase; null in the normal Polyline/Create workflow.
+        public Point2? ExistingHatchOrigin { get; set; }
+        public double? ExistingHatchAngleRadians { get; set; }
+
         public bool DrawHangers { get; set; } = true;
         // Keep zero Max/edge values as system defaults (1200/1220 and 300/305).
         // Ty minimums are SOFT; maximums are HARD, exactly like concealed ceiling.

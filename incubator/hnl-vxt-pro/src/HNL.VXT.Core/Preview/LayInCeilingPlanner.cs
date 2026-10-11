@@ -40,6 +40,20 @@ namespace HNL.VXT.Core.Preview
                 .ToList();
             var spec = ResolveSpec(settings.GridSystem);
 
+            // An existing Hatch is authoritative for both direction and grid origin.
+            // Never auto-optimize or recenter it, because Ty/DIM would shift off-grid.
+            if (settings.ExistingHatchOrigin.HasValue ||
+                settings.ExistingHatchAngleRadians.HasValue)
+            {
+                if (!settings.ExistingHatchOrigin.HasValue ||
+                    !settings.ExistingHatchAngleRadians.HasValue ||
+                    settings.DrawHatch)
+                    throw new InvalidOperationException(
+                        "HNL Tool - HCF: Nguồn Hatch hiện có chưa hợp lệ.");
+                return BuildAtAngle(boundary, holeList, settings, spec,
+                    settings.ExistingHatchAngleRadians.Value);
+            }
+
             if (settings.MainDirection == LayInMainDirectionMode.AutoOptimize)
             {
                 double longAngle;
@@ -172,7 +186,8 @@ namespace HNL.VXT.Core.Preview
 
             AddDimensions(plan, settings, spec, bounds, angle, phaseX, phaseY);
             var gridDimensionCount = plan.DimensionRuns.Count;
-            if (settings.DimensionMode != LayInDimensionMode.Off &&
+            if (settings.DrawDimensions &&
+                settings.DimensionMode != LayInDimensionMode.Off &&
                 settings.DrawHangers && settings.DimensionHangers)
                 AddHangerDimensions(plan, localMainSegments, settings, angle);
             // Keep both Preview and Create on the same final, collision-checked
@@ -254,6 +269,15 @@ namespace HNL.VXT.Core.Preview
             out double phaseX,
             out double phaseY)
         {
+            if (settings.ExistingHatchOrigin.HasValue)
+            {
+                var phase = Transform2.ToLocal(
+                    settings.ExistingHatchOrigin.Value, angle);
+                phaseX = phase.X;
+                phaseY = phase.Y;
+                return;
+            }
+
             if (settings.StartMode == LayInStartMode.Balanced)
             {
                 phaseX = BalancedPhase(bounds.MinX, bounds.MaxX, spec.ModuleShort);
@@ -481,7 +505,8 @@ namespace HNL.VXT.Core.Preview
             double phaseX,
             double phaseY)
         {
-            if (settings.DimensionMode == LayInDimensionMode.Off) return;
+            if (!settings.DrawDimensions ||
+                settings.DimensionMode == LayInDimensionMode.Off) return;
 
             var acrossModule = spec.HasShortCross ? spec.ModuleShort : spec.MainSpacing;
             if (settings.DimensionMode == LayInDimensionMode.GridAndEdges)

@@ -229,6 +229,71 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void ExistingHatchPhase_OverridesBalancedGridAndAutoDirection()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                DrawHatch = false,
+                GridSystem = LayInGridSystem.Module610x610,
+                MainDirection = LayInMainDirectionMode.AutoOptimize,
+                StartMode = LayInStartMode.Balanced,
+                ExistingHatchOrigin = new Point2(75, 125),
+                ExistingHatchAngleRadians = Math.PI / 6,
+                DrawDimensions = true
+            };
+            var plan = LayInCeilingPlanner.Build(Rect(0, 0, 6100, 4880), null, settings);
+            Assert.AreEqual(Math.PI / 6, plan.MainAngleRadians, 0.000001);
+            Assert.AreEqual(75.0, plan.HatchOrigin.X, 0.000001);
+            Assert.AreEqual(125.0, plan.HatchOrigin.Y, 0.000001);
+            Assert.AreEqual("HNL_CF_610X610", plan.HatchPatternName);
+            Assert.IsTrue(plan.HangerPoints.Count > 0);
+            Assert.IsTrue(plan.DimensionRuns.Count > 0);
+        }
+
+        [TestMethod]
+        public void ExistingHatchCanCreateTyOnly_DimensionToggleDoesNotChangeGrid()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                DrawHatch = false,
+                DrawHangers = true,
+                DrawDimensions = false,
+                DrawStartTileBlock = false,
+                GridSystem = LayInGridSystem.Module600x600,
+                MainDirection = LayInMainDirectionMode.Vertical,
+                ExistingHatchOrigin = new Point2(0, 0),
+                ExistingHatchAngleRadians = 0.0
+            };
+            var tyOnly = LayInCeilingPlanner.Build(Rect(0, 0, 6000, 4800), null, settings);
+            Assert.IsTrue(tyOnly.HangerPoints.Count > 0);
+            Assert.AreEqual(0, tyOnly.DimensionRuns.Count);
+            Assert.IsFalse(tyOnly.FirstTileOrigin.HasValue);
+            settings.DrawDimensions = true;
+            var withDim = LayInCeilingPlanner.Build(Rect(0, 0, 6000, 4800), null, settings);
+            Assert.AreEqual(tyOnly.TeeSegments.Count, withDim.TeeSegments.Count);
+            Assert.AreEqual(tyOnly.HangerPoints.Count, withDim.HangerPoints.Count);
+            Assert.IsTrue(withDim.DimensionRuns.Count > 0);
+            Assert.AreEqual(0, withDim.MainAngleRadians, 0.000001);
+        }
+
+        [TestMethod]
+        public void ExistingHatchPhase_IsInvalidWhenGeneratingNewHatch()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                DrawHatch = true,
+                ExistingHatchOrigin = new Point2(0, 0),
+                ExistingHatchAngleRadians = 0
+            };
+            Assert.ThrowsException<InvalidOperationException>(() =>
+                LayInCeilingPlanner.Build(Rect(0, 0, 6000, 4800), null, settings));
+            var regular = new LayInCeilingSettings();
+            var unchanged = LayInCeilingPlanner.Build(
+                Rect(0, 0, 6000, 4800), null, regular);
+            Assert.AreEqual("HNL_CF_600X600", unchanged.HatchPatternName);
+        }
+
+        [TestMethod]
         public void FromDoor_UsesNearestBoundaryCornerAsHatchOriginReference()
         {
             var boundary = Rect(0, 0, 6000, 4800);

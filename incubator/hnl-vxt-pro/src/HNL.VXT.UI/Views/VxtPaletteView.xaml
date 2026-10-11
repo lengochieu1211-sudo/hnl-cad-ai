@@ -1100,37 +1100,65 @@
                                     <Button Content="Chọn Polyline" Command="{Binding SelectBoundaryCommand}" Grid.Column="0" Style="{StaticResource BoundaryPickButton}" Margin="0,0,4,0"/>
                                     <Button Content="Chọn điểm" Command="{Binding PickBoundaryPointCommand}" Grid.Column="1" Style="{StaticResource BoundaryPickButton}" Margin="4,0,0,0"/>
                                 </Grid>
+                                <Button Content="Chọn Hatch có sẵn" Command="{Binding SelectExistingHatchesCommand}"
+                                        ToolTip="Giữ nguyên các Hatch nguồn. Chỉ tạo Ty, DIM và Block ô đầu theo đúng lưới Hatch."
+                                        Margin="0,0,0,6">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource BoundaryPickButton}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsUsingExistingHatch}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
                                 <TextBlock Text="{Binding BoundaryStatus}" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
                             <StackPanel>
-                                <TextBlock Text="2. Hệ khung" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="2. Hệ khung" Style="{StaticResource SectionTitle}"/>
+                                    <CheckBox Grid.Column="1" IsChecked="{Binding DrawHatch, Mode=TwoWay}"
+                                              Style="{StaticResource ToggleSwitch}"
+                                              ToolTip="Bật: Tạo Hatch mới từ Polyline. Tắt: Chọn Hatch có sẵn; chỉ tạo Ty/DIM/Block."/>
+                                </Grid>
                                 <Grid Margin="0,0,0,7" MinHeight="29">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="Khổ tấm (mm)" Style="{StaticResource FieldLabel}"/>
-                                    <ComboBox Grid.Column="1" ItemsSource="{Binding GridOptions}" SelectedItem="{Binding SelectedGrid, Mode=TwoWay}"/>
+                                    <ComboBox Grid.Column="1" ItemsSource="{Binding GridOptions}" SelectedItem="{Binding SelectedGrid, Mode=TwoWay}"
+                              IsEnabled="{Binding DrawHatch}" ToolTip="Hatch có sẵn tự nhận diện khổ tấm từ mẫu HNL."/>
                                 </Grid>
                                 <Grid MinHeight="29">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="Hướng T chính" Style="{StaticResource FieldLabel}"/>
-                                    <ComboBox Grid.Column="1" ItemsSource="{Binding DirectionOptions}" SelectedItem="{Binding SelectedDirection, Mode=TwoWay}"/>
+                                    <ComboBox Grid.Column="1" ItemsSource="{Binding DirectionOptions}" SelectedItem="{Binding SelectedDirection, Mode=TwoWay}"
+                              IsEnabled="{Binding DrawHatch}" ToolTip="Hatch có sẵn giữ nguyên hướng đã vẽ."/>
                                 </Grid>
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
                             <StackPanel>
-                                <TextBlock Text="3. Gốc lưới" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
-                                <ComboBox ItemsSource="{Binding StartOptions}" SelectedItem="{Binding SelectedStart, Mode=TwoWay}" Margin="0,0,0,7"/>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="3. Gốc lưới / Đuổi tấm" Style="{StaticResource SectionTitle}"/>
+                                    <CheckBox Grid.Column="1" IsChecked="{Binding DrawStartTileBlock, Mode=TwoWay}"
+                                              Style="{StaticResource ToggleSwitch}"
+                                              ToolTip="Bật/tắt chèn Block ô đầu; không thay đổi vị trí lưới."/>
+                                </Grid>
+                                <ComboBox ItemsSource="{Binding StartOptions}" SelectedItem="{Binding SelectedStart, Mode=TwoWay}"
+                                          Margin="0,0,0,7" IsEnabled="{Binding DrawHatch}"
+                                          ToolTip="Khi dùng Hatch có sẵn, gốc lưới tự đọc từ Hatch nguồn."/>
                                 <Grid Margin="0,0,0,7" MinHeight="29">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <Button Grid.Column="0" Content="Chọn điểm đầu" Command="{Binding PickManualStartCommand}" IsEnabled="{Binding IsManualStart}" Style="{StaticResource BoundaryPickButton}" Margin="0,0,4,0"/>
                                     <Button Grid.Column="1" Content="Chọn block cửa" Command="{Binding PickDoorCommand}" IsEnabled="{Binding IsDoorStart}" Style="{StaticResource BoundaryPickButton}" Margin="4,0,0,0"
                                              ToolTip="{Binding DoorBlockSummary}"/>
                                 </Grid>
-                                <CheckBox Content="Chèn Block ô đầu"
-                                          IsChecked="{Binding DrawStartTileBlock, Mode=TwoWay}" Margin="0,4,0,6"/>
-                                <StackPanel IsEnabled="{Binding DrawStartTileBlock}">
+                                <StackPanel IsEnabled="{Binding DrawStartTileBlock}" Margin="0,4,0,0">
                                     <Grid MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/><ColumnDefinition Width="74"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Block ô đầu" Style="{StaticResource FieldLabel}" ToolTip="Để trống để dùng ký hiệu ô đầu HNL."/>
@@ -1143,9 +1171,16 @@
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
-                            <Expander Header="4. Ty treo" IsExpanded="False" HorizontalContentAlignment="Stretch">
-                                <StackPanel Margin="0,8,0,0">
-                                    <CheckBox Content="Vẽ Ty" IsChecked="{Binding DrawHangers, Mode=TwoWay}" Margin="0,0,0,7"/>
+                            <Expander IsExpanded="False" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="4. Ty treo" Style="{StaticResource SectionTitle}"/>
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding DrawHangers, Mode=TwoWay}"
+                                                  Style="{StaticResource ToggleSwitch}" ToolTip="Bật/tắt vẽ Ty treo"/>
+                                    </Grid>
+                                </Expander.Header>
+                                <StackPanel Margin="0,8,0,0" IsEnabled="{Binding DrawHangers}">
                                     <Grid Margin="0,0,0,7" IsEnabled="{Binding DrawHangers}" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Tâm Min (mm)" Style="{StaticResource FieldLabel}"/>
@@ -1183,7 +1218,15 @@
                             </Expander>
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
-                            <Expander Header="5. DIM" IsExpanded="True" HorizontalContentAlignment="Stretch">
+                            <Expander IsExpanded="True" HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="5. DIM" Style="{StaticResource SectionTitle}"/>
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding DrawDimensions, Mode=TwoWay}"
+                                                  Style="{StaticResource ToggleSwitch}" ToolTip="Bật/tắt DIM; giữ kiểu DIM đã chọn"/>
+                                    </Grid>
+                                </Expander.Header>
                                 <StackPanel Margin="0,8,0,0">
                                     <Grid Margin="0,0,0,8" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1266,7 +1309,8 @@
                                     <Grid Margin="0,0,0,7" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Hatch khung" Style="{StaticResource FieldLabel}"/>
-                                        <TextBox Grid.Column="1" Text="{Binding HatchLayer, UpdateSourceTrigger=LostFocus}"/>
+                                        <TextBox Grid.Column="1" Text="{Binding HatchLayer, UpdateSourceTrigger=LostFocus}"
+                                                 IsEnabled="{Binding DrawHatch}" ToolTip="Tắt Vẽ Hatch để giữ nguyên Hatch đã chọn."/>
                                     </Grid>
                                     <Grid Margin="0,0,0,7" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

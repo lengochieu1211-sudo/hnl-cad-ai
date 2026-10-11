@@ -111,6 +111,41 @@ foreach ($entry in @(
     }
 }
 
+# Lay-in source/visibility toggles must keep Preview/Create in parity:
+# an existing Hatch is used as read-only source and must never be duplicated.
+$layInUi = $xaml.Substring($layInStart, $layInEnd - $layInStart)
+foreach ($toggle in @('DrawHatch','DrawHangers','DrawDimensions','DrawStartTileBlock')) {
+    $signature = 'IsChecked="{Binding ' + $toggle + ', Mode=TwoWay}"'
+    if (@([regex]::Matches($layInUi, [regex]::Escape($signature))).Count -ne 1) {
+        throw "HCF audit: Lay-in $toggle right-side switch is missing or duplicated."
+    }
+}
+if (-not $layInUi.Contains('SelectExistingHatchesCommand') -or
+    -not $layInUi.Contains('Chọn Hatch có sẵn') -or
+    -not $registeredSource.Contains('LayInCadRuntime.PickExistingHatches();') -or
+    -not $hostBridgeSource.Contains('Send("HNLCFLAYINHATCHSOURCE ");') -or
+    $registered -notcontains 'HNLCFLAYINHATCHSOURCE') {
+    throw 'HCF audit: Hatch source picker is not connected end to end.'
+}
+$layInCore = Source 'src/HNL.VXT.Core/Preview/LayInCeilingPlanner.cs'
+$layInRuntime = Source 'src/HNL.VXT.AutoCAD/LayInRuntimePlanner.cs'
+$layInCad = Source 'src/HNL.VXT.AutoCAD/LayInCadRuntime.cs'
+$layInSettings = Source 'src/HNL.VXT.Core/Models/LayInCeilingSettings.cs'
+if (-not $layInCore.Contains('settings.ExistingHatchOrigin.HasValue') -or
+    -not $layInCore.Contains('settings.DrawDimensions') -or
+    -not $layInRuntime.Contains('perRegionSettings.ExistingHatchOrigin = hatch.Origin;') -or
+    -not $layInCad.Contains('if (settings.DrawHatch)') -or
+    -not $layInCad.Contains('if (session.LayInSettings.DrawHatch)') -or
+    -not $layInCad.Contains('hatchCount != (settings.DrawHatch ? plans.Count : 0)') -or
+    -not $layInSettings.Contains('public bool DrawHatch') -or
+    -not $layInSettings.Contains('public bool DrawDimensions')) {
+    throw 'HCF audit: selected Hatch phase or zero-Hatch Create parity gate missing.'
+}
+if ($layInUi.Contains('Content="Vẽ Ty"') -or
+    $layInUi.Contains('Content="Chèn Block ô đầu"')) {
+    throw 'HCF audit: duplicate legacy Lay-in toggles were reintroduced.'
+}
+
 # Lay-in Create MUST first materialize its debounced Preview and require another
 # click rather than produce unpreviewed changes in the drawing.
 if (-not $hostBridgeSource.Contains('if (_pendingLayInPreviewSettings != null)') -or

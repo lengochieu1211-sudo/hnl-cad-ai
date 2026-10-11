@@ -99,6 +99,8 @@ namespace HNL.VXT.AutoCAD
                 session.Boundaries.AddRange(accepted);
                 session.BoundaryIds.Clear();
                 session.BoundaryIds.AddRange(acceptedIds);
+                session.LayInExistingHatches.Clear();
+                session.ViewModel?.LayIn?.SetPolylineSourceSelected();
                 session.Regions.Clear();
                 session.BoundaryRegionGroups.Clear();
                 session.BoundaryHoleGroups.Clear();

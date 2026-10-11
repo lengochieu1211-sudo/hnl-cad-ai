@@ -55,6 +55,7 @@ namespace HNL.VXT.AutoCAD
         {
             Boundaries.Clear();
             BoundaryIds.Clear();
+            LayInExistingHatches.Clear();
             BoundaryRegionGroups.Clear();
             BoundaryHoleGroups.Clear();
             BoundaryFurringFromFarEdges.Clear();
@@ -78,6 +79,9 @@ namespace HNL.VXT.AutoCAD
             LayInSettings.DoorPoint = null;
             LayInSettings.DoorCandidates = new Point2[0];
             LayInSettings.DoorBlockName = string.Empty;
+            LayInSettings.ExistingHatchOrigin = null;
+            LayInSettings.ExistingHatchAngleRadians = null;
+            LayInSettings.DrawHatch = true;
             // Explicit DimStyle is a DWG symbol-table reference, not a global preset.
             LayInSettings.DimensionStyle = string.Empty;
             LayInSettings.StartMode = LayInStartMode.Balanced;
@@ -97,6 +101,8 @@ namespace HNL.VXT.AutoCAD
         // closed ceiling polylines. Each polygon remains an independent ceiling area.
         public List<Boundary2> Boundaries { get; } = new List<Boundary2>();
         public List<ObjectId> BoundaryIds { get; } = new List<ObjectId>();
+        public List<LayInExistingHatchInfo> LayInExistingHatches { get; } =
+            new List<LayInExistingHatchInfo>();
 
         // Modeless palette -> AutoCAD command handoff for Mxx click-to-highlight.
         public int PendingBoundaryHighlightIndex { get; set; } = -1;
@@ -110,6 +116,7 @@ namespace HNL.VXT.AutoCAD
             {
                 Boundaries.Clear();
                 BoundaryIds.Clear();
+                LayInExistingHatches.Clear();
                 BoundaryRegionGroups.Clear();
                 BoundaryHoleGroups.Clear();
                 BoundaryFurringFromFarEdges.Clear();

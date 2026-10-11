@@ -273,6 +273,14 @@ namespace HNL.VXT.AutoCAD
             Send("HNLCFLAYINCREATE ");
         }
 
+        public void PickLayInExistingHatches(LayInCeilingSettings settings)
+        {
+            if (settings == null) return;
+            CancelPendingLayInPreview();
+            VxtSession.Current.LayInSettings = settings.Clone();
+            Send("HNLCFLAYINHATCHSOURCE ");
+        }
+
         public void PickLayInManualStart(LayInCeilingSettings settings)
         {
             if (settings == null) return;

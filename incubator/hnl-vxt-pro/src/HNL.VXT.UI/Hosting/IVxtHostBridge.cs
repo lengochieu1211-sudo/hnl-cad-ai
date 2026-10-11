@@ -23,6 +23,7 @@ namespace HNL.VXT.UI.Hosting
         void RequestCreateWithWarning();
         void RequestStopHcf();
 
+        void PickLayInExistingHatches(LayInCeilingSettings settings);
         void RequestLayInPreview(LayInCeilingSettings settings);
         void ClearLayInPreview();
         void RequestLayInCreate(LayInCeilingSettings settings);

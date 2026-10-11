@@ -95,7 +95,10 @@ namespace HNL.VXT.AutoCAD
                 var session = VxtSession.Current;
                 if (!session.HasBoundary) return;
                 var plans = LayInRuntimePlanner.Build(session, session.LayInSettings);
-                var teeCount = plans.Sum(p => p.Plan.TeeSegments.Count);
+                // When using an existing Hatch, the CAD drawing already shows
+                // the Tee grid. Preview must display only the enabled new objects.
+                var teeCount = session.LayInSettings.DrawHatch
+                    ? plans.Sum(p => p.Plan.TeeSegments.Count) : 0;
                 var dimensionCount = plans.Sum(p => p.Plan.DimensionRuns.Count);
                 var hangerCount = plans.Sum(p => p.Plan.HangerPoints.Count);
                 var markerCount = plans.Sum(p =>
@@ -129,6 +132,7 @@ namespace HNL.VXT.AutoCAD
                 }
                 foreach (var item in plans)
                 {
+                    if (session.LayInSettings.DrawHatch)
                     foreach (var tee in item.Plan.TeeSegments)
                     {
                         var line = new Line(ToCad(tee.A), ToCad(tee.B));
@@ -235,11 +239,14 @@ namespace HNL.VXT.AutoCAD
                     var db = doc.Database;
                     var ms = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
                     var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    var hatchLayer = VxtCadResources.EnsureLayInLayer(db, tr, settings.HatchLayer, 7, "Continuous", "25");
+                    var hatchLayer = settings.DrawHatch
+                        ? VxtCadResources.EnsureLayInLayer(db, tr, settings.HatchLayer, 7, "Continuous", "25")
+                        : ObjectId.Null;
                     var hangerLayer = settings.DrawHangers
                         ? VxtCadResources.EnsureLayInLayer(db, tr, settings.HangerLayer, 2, "Continuous", "25")
                         : ObjectId.Null;
-                    var dimLayer = settings.DimensionMode != LayInDimensionMode.Off
+                    var dimLayer = settings.DrawDimensions &&
+                                   settings.DimensionMode != LayInDimensionMode.Off
                         ? VxtCadResources.EnsureLayInLayer(db, tr, settings.DimensionLayer, 4, "Continuous", "25")
                         : ObjectId.Null;
                     var markerLayer = settings.DrawStartTileBlock
@@ -247,7 +254,8 @@ namespace HNL.VXT.AutoCAD
                         : ObjectId.Null;
                     var hangerBlock = settings.DrawHangers
                         ? ResolveHangerBlock(bt, settings.HangerBlockName) : ObjectId.Null;
-                    var dimStyleId = settings.DimensionMode == LayInDimensionMode.Off
+                    var dimStyleId = !settings.DrawDimensions ||
+                                     settings.DimensionMode == LayInDimensionMode.Off
                         ? db.Dimstyle : ResolveDimensionStyle(db, tr, settings.DimensionStyle);
                     var startBlock = settings.DrawStartTileBlock
                         ? (string.IsNullOrWhiteSpace(settings.StartMarkerBlockName)
@@ -257,9 +265,13 @@ namespace HNL.VXT.AutoCAD
 
                     foreach (var item in plans)
                     {
-                        // Exactly one Hatch is materialized for each ceiling region.
-                        CreateHatch(db, tr, ms, item, hatchLayer);
-                        hatchCount++;
+                        if (settings.DrawHatch)
+                        {
+                            // Normal workflow: one new Hatch for each ceiling region.
+                            CreateHatch(db, tr, ms, item, hatchLayer);
+                            hatchCount++;
+                        }
+                        // Existing-Hatch workflow: never modify/erase/copy its source.
 
                         foreach (var hanger in item.Plan.HangerPoints)
                         {
@@ -295,7 +307,7 @@ namespace HNL.VXT.AutoCAD
                         }
                     }
 
-                    if (hatchCount != plans.Count ||
+                    if (hatchCount != (settings.DrawHatch ? plans.Count : 0) ||
                         hangerCount != plans.Sum(p => p.Plan.HangerPoints.Count) ||
                         dimensionCount != plans.Sum(p => p.Plan.DimensionRuns.Count) ||
                         startTileCount != plans.Count(p =>
@@ -843,6 +855,142 @@ namespace HNL.VXT.AutoCAD
                 VxtSession.Current.LayInSettings.ManualStartPoint = point;
                 VxtSession.Current.ViewModel?.LayIn?.SetManualStart(point);
             }
+        }
+
+        internal static void PickExistingHatches()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            var options = new PromptSelectionOptions
+            {
+                MessageForAdding = "\nHNL Tool - Trần nổi: Chọn một hoặc nhiều Hatch lưới HCF có sẵn: ",
+                MessageForRemoval = "\nHNL Tool - Trần nổi: Bỏ Hatch khỏi tập chọn: "
+            };
+            var filter = new SelectionFilter(new[]
+            {
+                new TypedValue((int)DxfCode.Start, "HATCH")
+            });
+            var selected = doc.Editor.GetSelection(options, filter);
+            if (selected.Status != PromptStatus.OK || selected.Value == null) return;
+
+            // Parse into local temporary state. Invalid Hatch/Cancel must never
+            // replace existing boundaries, settings or preview.
+            var boundaries = new List<Boundary2>();
+            var holeGroups = new List<List<Boundary2>>();
+            var sourceIds = new List<ObjectId>();
+            var sources = new List<LayInExistingHatchInfo>();
+            try
+            {
+                using (var tr = doc.Database.TransactionManager.StartTransaction())
+                {
+                    var bt = (BlockTable)tr.GetObject(
+                        doc.Database.BlockTableId, OpenMode.ForRead);
+                    var modelId = bt[BlockTableRecord.ModelSpace];
+                    foreach (var id in selected.Value.GetObjectIds())
+                    {
+                        var hatch = tr.GetObject(id, OpenMode.ForRead, false) as Hatch;
+                        if (hatch == null) continue;
+                        if (hatch.OwnerId != modelId)
+                            throw new InvalidOperationException(
+                                "Chỉ hỗ trợ Hatch trong Model Space.");
+                        var system = ParseHcfHatchSystem(hatch.PatternName);
+                        if (Math.Abs(hatch.PatternScale - 1.0) > 0.000001)
+                            throw new InvalidOperationException(
+                                "Hatch HCF đã đổi PatternScale; không thể suy ra lưới chính xác.");
+                        if (hatch.NumberOfLoops < 1)
+                            throw new InvalidOperationException(
+                                "Hatch HCF không có đường bao hợp lệ.");
+
+                        var outer = ReadHatchPolylineLoop(hatch.GetLoopAt(0));
+                        var holes = new List<Boundary2>();
+                        for (var i = 1; i < hatch.NumberOfLoops; i++)
+                            holes.Add(ReadHatchPolylineLoop(hatch.GetLoopAt(i)));
+
+                        boundaries.Add(outer);
+                        holeGroups.Add(holes);
+                        sourceIds.Add(id);
+                        sources.Add(new LayInExistingHatchInfo
+                        {
+                            HatchId = id,
+                            System = system,
+                            Origin = new HNL.VXT.Core.Geometry.Point2(
+                                hatch.Origin.X, hatch.Origin.Y),
+                            AngleRadians = hatch.PatternAngle
+                        });
+                    }
+                    tr.Commit();
+                }
+                if (sources.Count == 0)
+                    throw new InvalidOperationException("Không tìm thấy Hatch HCF hợp lệ.");
+
+                var session = VxtSession.Current;
+                // One atomic replacement after all source Hatches are validated.
+                session.Boundaries.Clear();
+                session.Boundaries.AddRange(boundaries);
+                session.BoundaryIds.Clear();
+                session.BoundaryIds.AddRange(sourceIds);
+                session.LayInExistingHatches.Clear();
+                session.LayInExistingHatches.AddRange(sources);
+                session.BoundaryHoleGroups.Clear();
+                session.BoundaryHoleGroups.AddRange(holeGroups);
+                session.BoundaryRegionGroups.Clear();
+                session.BoundaryFurringFromFarEdges.Clear();
+                session.Regions.Clear();
+                session.GlobalFurringFromFarEdge = false;
+                session.LayInSettings.DrawHatch = false;
+                session.LayInSettings.ExistingHatchOrigin = null;
+                session.LayInSettings.ExistingHatchAngleRadians = null;
+                session.ViewModel?.SetBoundaryStatus(
+                    "✓ Chọn " + sources.Count + " Hatch lưới có sẵn", true);
+                session.ViewModel?.LayIn?.SetExistingHatchesSelected(
+                    sources.Count, sources[0].System);
+                doc.Editor.WriteMessage(
+                    "\nHNL Tool - Trần nổi: Đã nhận " + sources.Count +
+                    " Hatch. Giữ nguyên Hatch nguồn; tạo Ty/DIM/Block theo lưới gốc.");
+            }
+            catch (Exception ex)
+            {
+                doc.Editor.WriteMessage(
+                    "\nHNL Tool - Trần nổi: Hatch nguồn không hợp lệ: " + ex.Message);
+                VxtSession.Current.ViewModel?.LayIn?.SetPreviewError(ex.Message);
+            }
+        }
+
+        private static LayInGridSystem ParseHcfHatchSystem(string pattern)
+        {
+            switch ((pattern ?? string.Empty).Trim().ToUpperInvariant())
+            {
+                case "HNL_CF_600X600": return LayInGridSystem.Module600x600;
+                case "HNL_CF_610X610": return LayInGridSystem.Module610x610;
+                case "HNL_CF_600X1200": return LayInGridSystem.Module600x1200;
+                case "HNL_CF_610X1220": return LayInGridSystem.Module610x1220;
+                default:
+                    throw new InvalidOperationException(
+                        "Chỉ nhận Hatch HNL_CF_600X600/610X610/600X1200/610X1220.");
+            }
+        }
+
+        private static Boundary2 ReadHatchPolylineLoop(HatchLoop loop)
+        {
+            if (!loop.IsPolyline)
+                throw new InvalidOperationException(
+                    "Hatch có biên cong/segment không phải Polyline; hãy chọn Hatch HCF chuẩn.");
+
+            var vertices = new List<HNL.VXT.Core.Geometry.Point2>();
+            foreach (BulgeVertex vertex in loop.Polyline)
+            {
+                if (Math.Abs(vertex.Bulge) > 0.000001)
+                    throw new InvalidOperationException(
+                        "Hatch có cung tròn; không được xấp xỉ làm lệch lưới.");
+                vertices.Add(new HNL.VXT.Core.Geometry.Point2(
+                    vertex.Vertex.X, vertex.Vertex.Y));
+            }
+            if (vertices.Count > 3 &&
+                vertices[0].DistanceTo(vertices[vertices.Count - 1]) < 0.01)
+                vertices.RemoveAt(vertices.Count - 1);
+            if (vertices.Count < 3)
+                throw new InvalidOperationException("Biên Hatch có ít hơn ba đỉnh.");
+            return new Boundary2(vertices);
         }
 
         internal static void PickDoorBlock()

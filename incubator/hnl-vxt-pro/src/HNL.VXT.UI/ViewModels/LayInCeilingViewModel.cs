@@ -15,6 +15,7 @@ namespace HNL.VXT.UI.ViewModels
         private readonly IVxtHostBridge _host;
         private LayInCeilingSettings _settings = new LayInCeilingSettings();
         private bool _hasBoundary;
+        private bool _usingExistingHatch;
         private string _boundaryStatus = "Chưa chọn biên";
         private string _previewStatus = "Chọn biên để xem trước.";
         private string _summary = "T chính --  •  T phụ dài --  •  T phụ ngắn --  •  Ty --";
@@ -24,6 +25,9 @@ namespace HNL.VXT.UI.ViewModels
             _host = host ?? throw new ArgumentNullException(nameof(host));
 
             SelectBoundaryCommand = new RelayCommand(() => _host.SelectBoundary());
+            SelectExistingHatchesCommand = new RelayCommand(
+                () => _host.PickLayInExistingHatches(Snapshot()),
+                () => !DrawHatch);
             PickBoundaryPointCommand = new RelayCommand(() => _host.PickBoundaryPoint());
             PickManualStartCommand = new RelayCommand(
                 () => _host.PickLayInManualStart(Snapshot()),
@@ -116,6 +120,7 @@ namespace HNL.VXT.UI.ViewModels
         public string[] VerticalPositionOptions { get; } = { "Tự động", "Bên trái", "Bên phải" };
 
         public ICommand SelectBoundaryCommand { get; }
+        public ICommand SelectExistingHatchesCommand { get; }
         public ICommand PickBoundaryPointCommand { get; }
         public ICommand PickManualStartCommand { get; }
         public ICommand PickDoorCommand { get; }
@@ -198,8 +203,28 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        public bool IsManualStart => _settings.StartMode == LayInStartMode.ManualStart;
-        public bool IsDoorStart => _settings.StartMode == LayInStartMode.FromDoor;
+        public bool IsManualStart => _settings.DrawHatch &&
+            _settings.StartMode == LayInStartMode.ManualStart;
+        public bool IsDoorStart => _settings.DrawHatch &&
+            _settings.StartMode == LayInStartMode.FromDoor;
+
+        public bool DrawHatch
+        {
+            get => _settings.DrawHatch;
+            set
+            {
+                if (_settings.DrawHatch == value) return;
+                _settings.DrawHatch = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsUsingExistingHatch));
+                OnPropertyChanged(nameof(IsManualStart));
+                OnPropertyChanged(nameof(IsDoorStart));
+                (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                RequestPreview();
+            }
+        }
+
+        public bool IsUsingExistingHatch => !_settings.DrawHatch;
 
         public bool DrawHangers
         {
@@ -335,8 +360,37 @@ namespace HNL.VXT.UI.ViewModels
             set
             {
                 var next = TextToDimension(value);
-                if (_settings.DimensionMode == next) return;
+                if (_settings.DimensionMode == next &&
+                    _settings.DrawDimensions == (next != LayInDimensionMode.Off))
+                    return;
                 _settings.DimensionMode = next;
+                _settings.DrawDimensions = next != LayInDimensionMode.Off;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DrawDimensions));
+                OnPropertyChanged(nameof(IsGroupedDimension));
+                OnPropertyChanged(nameof(IsDimensionEnabled));
+                OnPropertyChanged(nameof(CanAddOverallDimension));
+                OnPropertyChanged(nameof(IsAdditionalOverallDimensionEnabled));
+                OnPropertyChanged(nameof(CanDimensionHangers));
+                OnPropertyChanged(nameof(IsHangerDimensionOptionsEnabled));
+                RequestPreview();
+            }
+        }
+
+        public bool DrawDimensions
+        {
+            get => _settings.DrawDimensions;
+            set
+            {
+                if (_settings.DrawDimensions == value &&
+                    !(value && _settings.DimensionMode == LayInDimensionMode.Off))
+                    return;
+                _settings.DrawDimensions = value;
+                if (value && _settings.DimensionMode == LayInDimensionMode.Off)
+                {
+                    _settings.DimensionMode = LayInDimensionMode.GridAndEdges;
+                    OnPropertyChanged(nameof(SelectedDimensionMode));
+                }
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsGroupedDimension));
                 OnPropertyChanged(nameof(IsDimensionEnabled));
@@ -348,8 +402,10 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        public bool IsGroupedDimension => _settings.DimensionMode == LayInDimensionMode.Grouped;
-        public bool IsDimensionEnabled => _settings.DimensionMode != LayInDimensionMode.Off;
+        public bool IsGroupedDimension => IsDimensionEnabled &&
+            _settings.DimensionMode == LayInDimensionMode.Grouped;
+        public bool IsDimensionEnabled => _settings.DrawDimensions &&
+            _settings.DimensionMode != LayInDimensionMode.Off;
         public bool CanAddOverallDimension => IsDimensionEnabled && _settings.DimensionMode != LayInDimensionMode.Overall;
         public bool IsAdditionalOverallDimensionEnabled => CanAddOverallDimension && AddOverallDimension;
         public bool CanDimensionHangers => IsDimensionEnabled && DrawHangers;
@@ -522,6 +578,39 @@ namespace HNL.VXT.UI.ViewModels
 
         public LayInCeilingSettings Snapshot() => _settings.Clone();
 
+        // AutoCAD command handlers call these only after selection succeeded.
+        public void SetExistingHatchesSelected(int count, LayInGridSystem firstSystem)
+        {
+            if (count <= 0) return;
+            _usingExistingHatch = true;
+            _settings.DrawHatch = false;
+            _settings.GridSystem = firstSystem;
+            _settings.ExistingHatchOrigin = null;
+            _settings.ExistingHatchAngleRadians = null;
+            OnPropertyChanged(nameof(DrawHatch));
+            OnPropertyChanged(nameof(IsUsingExistingHatch));
+            OnPropertyChanged(nameof(SelectedGrid));
+            OnPropertyChanged(nameof(IsManualStart));
+            OnPropertyChanged(nameof(IsDoorStart));
+            (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            SetBoundaryStatus("✓ " + count + " Hatch có sẵn (giữ nguyên Hatch)", true);
+            RequestPreview();
+        }
+
+        public void SetPolylineSourceSelected()
+        {
+            _usingExistingHatch = false;
+            _settings.DrawHatch = true;
+            _settings.ExistingHatchOrigin = null;
+            _settings.ExistingHatchAngleRadians = null;
+            OnPropertyChanged(nameof(DrawHatch));
+            OnPropertyChanged(nameof(IsUsingExistingHatch));
+            OnPropertyChanged(nameof(IsManualStart));
+            OnPropertyChanged(nameof(IsDoorStart));
+            (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            // Boundary selector schedules the authoritative Preview after state commit.
+        }
+
         public void SetBoundaryStatus(string display, bool hasBoundary)
         {
             BoundaryStatus = display ?? string.Empty;
@@ -538,6 +627,15 @@ namespace HNL.VXT.UI.ViewModels
         {
             _settings.ManualStartPoint = null;
             _settings.DoorPoint = null;
+            _usingExistingHatch = false;
+            _settings.DrawHatch = true;
+            _settings.ExistingHatchOrigin = null;
+            _settings.ExistingHatchAngleRadians = null;
+            OnPropertyChanged(nameof(DrawHatch));
+            OnPropertyChanged(nameof(IsUsingExistingHatch));
+            OnPropertyChanged(nameof(IsManualStart));
+            OnPropertyChanged(nameof(IsDoorStart));
+            (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();
             _settings.DoorCandidates = Array.Empty<HNL.VXT.Core.Geometry.Point2>();
             _settings.DoorBlockName = string.Empty;
             _settings.DimensionStyle = string.Empty;
@@ -634,8 +732,16 @@ namespace HNL.VXT.UI.ViewModels
 
         private void ResetDefaults()
         {
+            var selectedGrid = _settings.GridSystem;
             _settings = new LayInCeilingSettings();
+            // Reset options but preserve the currently selected DWG hatch source.
+            if (_usingExistingHatch)
+            {
+                _settings.DrawHatch = false;
+                _settings.GridSystem = selectedGrid;
+            }
             OnPropertyChanged(string.Empty);
+            (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();
             RequestPreview();
         }
 
@@ -653,6 +759,7 @@ namespace HNL.VXT.UI.ViewModels
 
         private void RaiseCommandStates()
         {
+            (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (PickManualStartCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (PickDoorCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (RefreshPreviewCommand as RelayCommand)?.RaiseCanExecuteChanged();

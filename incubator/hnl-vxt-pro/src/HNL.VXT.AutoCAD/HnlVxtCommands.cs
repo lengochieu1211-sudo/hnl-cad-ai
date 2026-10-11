@@ -256,6 +256,14 @@ namespace HNL.VXT.AutoCAD
             LayInCadRuntime.Create();
         }
 
+        [CommandMethod("HNLCFLAYINHATCHSOURCE", CommandFlags.Modal)]
+        public void LayInPickExistingHatch()
+        {
+            if (!VxtPaletteService.IsActive) return;
+            if (!VxtAuthorization.EnsureAuthorized()) return;
+            LayInCadRuntime.PickExistingHatches();
+        }
+
         [CommandMethod("HNLCFLAYINSTART", CommandFlags.Modal)]
         public void LayInPickStart()
         {
