@@ -1526,16 +1526,20 @@ namespace HNL.CeilingEstimator.AutoCAD
                     }
                     else
                     {
+                        // DEMTC LISP pure-source contract: single-stock mode
+                        // reports only its selected stock family. Never sum
+                        // the S and D bin columns as in the mixed-stock mode.
+                        var pureBins = profile.Module == "D" ? longBins : smallBins;
                         table.Cells[7, 0].TextString = profile.Module == "D"
                             ? "Nguồn cắt - tấm dài" : "Nguồn cắt - tấm ngắn";
                         table.Cells[7, 1].TextString = options.SmallStock.DisplayName + " mm";
-                        table.Cells[7, 2].TextString = (smallBins + longBins) + " tấm";
+                        table.Cells[7, 2].TextString = pureBins + " tấm";
                         table.Cells[7, 3].TextString = "Từ mảnh cắt";
 
                         table.Cells[8, 0].TextString = profile.Module == "D"
                             ? "TỔNG MUA - TẤM DÀI" : "TỔNG MUA - TẤM NGẮN";
                         table.Cells[8, 1].TextString = options.SmallStock.DisplayName + " mm";
-                        table.Cells[8, 2].TextString = (full + smallBins + longBins) + " tấm";
+                        table.Cells[8, 2].TextString = (full + pureBins) + " tấm";
                         table.Cells[8, 3].TextString = "Tấm nguyên + nguồn cắt";
                     }
 
