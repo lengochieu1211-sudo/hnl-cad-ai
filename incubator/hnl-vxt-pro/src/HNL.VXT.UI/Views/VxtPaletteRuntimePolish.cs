@@ -349,17 +349,29 @@ namespace HNL.VXT.UI.Views
         private static Grid CreateEditableComboRow(VxtPaletteView view, string label, string bindingPath, string[] items)
         {
             var row = CreateBaseRow(view, label);
+            // Linetype/lineweight are choices from the active DWG, not editable text fields.
+            // Bind the selected item immediately instead of relying on a later visual-tree
+            // replacement which could leave white stock ComboBox chrome in AutoCAD.
+            var selectedPath = string.Equals(label, "Lineweight", StringComparison.Ordinal)
+                ? "Selected" + bindingPath : bindingPath;
+            var currentProperty = typeof(VxtPaletteViewModel).GetProperty(selectedPath);
+            var current = currentProperty?.GetValue(view.ViewModel, null) as string;
+            var values = (items ?? Array.Empty<string>()).ToList();
+            if (!string.IsNullOrWhiteSpace(current) &&
+                !values.Any(x => string.Equals(x, current, StringComparison.OrdinalIgnoreCase)))
+                values.Insert(0, current);
+
             var combo = new ComboBox
             {
                 Height = 27.0,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                IsEditable = true,
-                ItemsSource = items
+                IsEditable = false,
+                ItemsSource = values.ToArray()
             };
-            combo.SetBinding(ComboBox.TextProperty, new Binding(bindingPath)
+            combo.SetBinding(ComboBox.SelectedItemProperty, new Binding(selectedPath)
             {
                 Mode = BindingMode.TwoWay,
-                UpdateSourceTrigger = UpdateSourceTrigger.LostFocus
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
             });
             Grid.SetColumn(combo, 1);
             row.Children.Add(combo);

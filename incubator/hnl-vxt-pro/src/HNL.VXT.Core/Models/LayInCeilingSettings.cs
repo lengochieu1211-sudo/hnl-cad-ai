@@ -67,6 +67,10 @@ namespace HNL.VXT.Core.Models
         // Opt-in outer overall DIM row; default preserves the existing dimension chains.
         public bool AddOverallDimension { get; set; } = false;
         public double DimensionRowSpacing { get; set; } = 350.0;
+        // Opt-in DIM of actual Ty coordinates along each main T segment.
+        public bool DimensionHangers { get; set; } = false;
+        public LayInHorizontalDimSide HangerDimSide { get; set; } = LayInHorizontalDimSide.Auto;
+        public double HangerDimDistance { get; set; } = 180.0;
 
         public string HatchLayer { get; set; } = "HNL-CF-LAYIN";
         public string HangerLayer { get; set; } = "HNL-CF-HANGER";

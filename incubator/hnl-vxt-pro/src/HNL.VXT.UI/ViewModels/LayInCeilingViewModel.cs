@@ -206,6 +206,8 @@ namespace HNL.VXT.UI.ViewModels
                 if (_settings.DrawHangers == value) return;
                 _settings.DrawHangers = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(CanDimensionHangers));
+                OnPropertyChanged(nameof(IsHangerDimensionOptionsEnabled));
                 RequestPreview();
             }
         }
@@ -282,6 +284,8 @@ namespace HNL.VXT.UI.ViewModels
                 OnPropertyChanged(nameof(IsDimensionEnabled));
                 OnPropertyChanged(nameof(CanAddOverallDimension));
                 OnPropertyChanged(nameof(IsAdditionalOverallDimensionEnabled));
+                OnPropertyChanged(nameof(CanDimensionHangers));
+                OnPropertyChanged(nameof(IsHangerDimensionOptionsEnabled));
                 RequestPreview();
             }
         }
@@ -290,6 +294,47 @@ namespace HNL.VXT.UI.ViewModels
         public bool IsDimensionEnabled => _settings.DimensionMode != LayInDimensionMode.Off;
         public bool CanAddOverallDimension => IsDimensionEnabled && _settings.DimensionMode != LayInDimensionMode.Overall;
         public bool IsAdditionalOverallDimensionEnabled => CanAddOverallDimension && AddOverallDimension;
+        public bool CanDimensionHangers => IsDimensionEnabled && DrawHangers;
+        public bool IsHangerDimensionOptionsEnabled => CanDimensionHangers && DimensionHangers;
+
+        public bool DimensionHangers
+        {
+            get => _settings.DimensionHangers;
+            set
+            {
+                if (_settings.DimensionHangers == value) return;
+                _settings.DimensionHangers = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsHangerDimensionOptionsEnabled));
+                RequestPreview();
+            }
+        }
+
+        public string SelectedHangerDimPosition
+        {
+            get => _settings.HangerDimSide == LayInHorizontalDimSide.Top ? "Phía trên" :
+                _settings.HangerDimSide == LayInHorizontalDimSide.Bottom ? "Phía dưới" : "Tự động";
+            set
+            {
+                var side = (value == "Phía trên" || value == "Trên") ? LayInHorizontalDimSide.Top :
+                    (value == "Phía dưới" || value == "Dưới") ? LayInHorizontalDimSide.Bottom : LayInHorizontalDimSide.Auto;
+                if (_settings.HangerDimSide == side) return;
+                _settings.HangerDimSide = side;
+                Changed();
+            }
+        }
+
+        public double HangerDimDistance
+        {
+            get => _settings.HangerDimDistance;
+            set
+            {
+                var distance = Math.Max(1.0, value);
+                if (Near(_settings.HangerDimDistance, distance)) return;
+                _settings.HangerDimDistance = distance;
+                Changed();
+            }
+        }
 
         public bool AddOverallDimension
         {

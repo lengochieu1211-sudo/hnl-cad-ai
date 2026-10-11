@@ -22,6 +22,8 @@ namespace HNL.VXT.Core.Tests
             Assert.AreEqual(string.Empty, settings.StartMarkerBlockName);
             Assert.IsFalse(settings.AddOverallDimension, "Default DIM chains must remain unchanged.");
             Assert.AreEqual(350.0, settings.DimensionRowSpacing, 0.001);
+            Assert.IsFalse(settings.DimensionHangers);
+            Assert.AreEqual(180.0, settings.HangerDimDistance, 0.001);
         }
 
         [TestMethod]
@@ -304,20 +306,22 @@ namespace HNL.VXT.Core.Tests
                     GroupedDimensionCount = 12
                 });
 
-            Assert.AreEqual(2, plan.DimensionRuns.Count);
-            var x = plan.DimensionRuns.First(d => Math.Abs(d.A.Y - d.B.Y) < 0.001);
-            var y = plan.DimensionRuns.First(d => Math.Abs(d.A.X - d.B.X) < 0.001);
-            Assert.AreEqual(9, x.ModuleCount);
+            Assert.AreEqual(6, plan.DimensionRuns.Count,
+                "Two exact full-module groups plus four independently measured cut edges.");
+            var x = plan.DimensionRuns.Single(d => d.ModuleCount == 9);
+            var y = plan.DimensionRuns.Single(d => d.ModuleCount == 7);
             Assert.AreEqual("9 × 600 = 5400", x.Label);
-            Assert.AreEqual(7, y.ModuleCount);
             Assert.AreEqual("7 × 600 = 4200", y.Label);
+            CollectionAssert.AreEquivalent(new[] { 300.0, 300.0, 150.0, 450.0 },
+                plan.DimensionRuns.Where(d => d.ModuleCount == 1)
+                    .Select(d => d.A.DistanceTo(d.B)).ToArray());
             foreach (var run in plan.DimensionRuns)
                 Assert.AreEqual(run.Module * run.ModuleCount, run.A.DistanceTo(run.B), 0.001,
-                    "Grouped DIM label must match real geometric span after clipping.");
+                    "Each DIM label or native measured span must match its geometry.");
         }
 
         [TestMethod]
-        public void NarrowBoundary_SkipsFullModuleDimsInsteadOfDrawingFalseLabel()
+        public void NarrowBoundary_MeasuresCutEdgesButNeverManufacturesFullModule()
         {
             foreach (var system in new[]
             {
@@ -338,8 +342,132 @@ namespace HNL.VXT.Core.Tests
                         DimensionMode = LayInDimensionMode.Grouped,
                         GroupedDimensionCount = 12
                     });
-                Assert.AreEqual(0, plan.DimensionRuns.Count, system.ToString());
+                Assert.AreEqual(2, plan.DimensionRuns.Count, system.ToString());
+                Assert.IsTrue(plan.DimensionRuns.All(d => d.ModuleCount == 1 &&
+                    d.Label == string.Empty && Math.Abs(d.A.DistanceTo(d.B) - 100) < 0.001));
             }
+        }
+
+        [TestMethod]
+        public void ModuleMode_DimensionsEveryWholePanelForAllFourGridSystems()
+        {
+            foreach (var item in new[]
+            {
+                Tuple.Create(LayInGridSystem.Module600x600, 600.0, 1200.0),
+                Tuple.Create(LayInGridSystem.Module610x610, 610.0, 1220.0),
+                Tuple.Create(LayInGridSystem.Module600x1200, 600.0, 2400.0),
+                Tuple.Create(LayInGridSystem.Module610x1220, 610.0, 2440.0)
+            })
+            {
+                var settings = new LayInCeilingSettings
+                {
+                    GridSystem = item.Item1,
+                    MainDirection = LayInMainDirectionMode.Horizontal,
+                    StartMode = LayInStartMode.ManualStart,
+                    ManualStartPoint = new Point2(0, 0),
+                    DimensionMode = LayInDimensionMode.Module
+                };
+                var plan = LayInCeilingPlanner.Build(
+                    Rect(0, 0, 4 * item.Item2, item.Item3), null, settings);
+                var horizontal = plan.DimensionRuns
+                    .Where(d => Math.Abs(d.A.Y - d.B.Y) < 0.001).ToArray();
+                Assert.AreEqual(4, horizontal.Length, item.Item1.ToString());
+                Assert.IsTrue(horizontal.All(d => d.ModuleCount == 1 &&
+                    d.Label == string.Empty &&
+                    Math.Abs(d.A.DistanceTo(d.B) - item.Item2) < 0.001),
+                    "Each complete tile must have its own native measured DIM.");
+                Assert.AreEqual(6, plan.DimensionRuns.Count, item.Item1.ToString());
+            }
+        }
+
+        [TestMethod]
+        public void GroupedMode_MeasuresAllGroupsShortGroupAndCutSeparately()
+        {
+            foreach (var item in new[]
+            {
+                Tuple.Create(LayInGridSystem.Module600x600, 600.0, 200.0, 4),
+                Tuple.Create(LayInGridSystem.Module610x610, 610.0, 530.0, 3)
+            })
+            {
+                var settings = new LayInCeilingSettings
+                {
+                    GridSystem = item.Item1,
+                    MainDirection = LayInMainDirectionMode.Horizontal,
+                    StartMode = LayInStartMode.ManualStart,
+                    ManualStartPoint = new Point2(0, 0),
+                    DimensionMode = LayInDimensionMode.Grouped,
+                    GroupedDimensionCount = 12
+                };
+                var plan = LayInCeilingPlanner.Build(
+                    Rect(0, 0, 17000, item.Item2 * 10), null, settings);
+                var h = plan.DimensionRuns
+                    .Where(d => Math.Abs(d.A.Y - d.B.Y) < 0.001).ToArray();
+                Assert.AreEqual(4, h.Length);
+                CollectionAssert.AreEqual(
+                    new[] { 12, 12, item.Item4, 1 }, h.Select(d => d.ModuleCount).ToArray());
+                Assert.AreEqual("12 × " + item.Item2.ToString("0") + " = " +
+                    (12 * item.Item2).ToString("0"), h[0].Label);
+                Assert.AreEqual(item.Item4 * item.Item2, h[2].A.DistanceTo(h[2].B), 0.001);
+                Assert.AreEqual(item.Item3, h[3].A.DistanceTo(h[3].B), 0.001);
+                Assert.AreEqual(string.Empty, h[3].Label);
+                Assert.AreEqual(17000, h.Sum(d => d.A.DistanceTo(d.B)), 0.001);
+            }
+        }
+
+        [TestMethod]
+        public void TyDimensions_UseActualHangerPositionsAndDoNotAffectGridOrTy()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                MainDirection = LayInMainDirectionMode.Horizontal,
+                GridSystem = LayInGridSystem.Module610x610,
+                StartMode = LayInStartMode.ManualStart,
+                ManualStartPoint = new Point2(0, 0),
+                DimensionMode = LayInDimensionMode.Overall,
+                DrawHangers = true,
+                HangerMaxSpacing = 1200,
+                HangerEdgeTarget = 300,
+                HangerDimDistance = 180,
+                HangerDimSide = LayInHorizontalDimSide.Top
+            };
+            var ordinary = LayInCeilingPlanner.Build(Rect(0, 0, 6100, 4880), null, settings);
+            var withTySettings = settings.Clone();
+            withTySettings.DimensionHangers = true;
+            var withTy = LayInCeilingPlanner.Build(Rect(0, 0, 6100, 4880), null, withTySettings);
+            Assert.AreEqual(ordinary.TeeSegments.Count, withTy.TeeSegments.Count);
+            Assert.AreEqual(ordinary.HangerPoints.Count, withTy.HangerPoints.Count);
+            Assert.AreEqual(ordinary.DimensionRuns.Count, 2);
+            Assert.IsTrue(withTy.DimensionRuns.Count > ordinary.DimensionRuns.Count);
+            var tyDims = withTy.DimensionRuns.Skip(ordinary.DimensionRuns.Count).ToArray();
+            foreach (var tee in withTy.TeeSegments.Where(t => t.Kind == LayInTeeKind.MainTee))
+            {
+                var dims = tyDims.Where(d => Math.Abs(d.A.Y - tee.A.Y) < 0.001 &&
+                    Math.Abs(d.B.Y - tee.B.Y) < 0.001 &&
+                    Math.Min(d.A.X, d.B.X) >= Math.Min(tee.A.X, tee.B.X) - 0.001 &&
+                    Math.Max(d.A.X, d.B.X) <= Math.Max(tee.A.X, tee.B.X) + 0.001).ToArray();
+                Assert.IsTrue(dims.Length > 0, "DIM Ty should follow each actual T main run.");
+                Assert.AreEqual(tee.Length, dims.Sum(d => d.A.DistanceTo(d.B)), 0.001);
+                Assert.IsTrue(dims.All(d => Math.Abs(d.DimensionLinePoint.Value.Y -
+                    (tee.A.Y + 180)) < 0.001 && d.Label == string.Empty));
+            }
+        }
+
+        [TestMethod]
+        public void TyDimensions_RespectOffAndMissingHangers()
+        {
+            var settings = new LayInCeilingSettings
+            {
+                MainDirection = LayInMainDirectionMode.Horizontal,
+                DimensionMode = LayInDimensionMode.Off,
+                DimensionHangers = true,
+                DrawHangers = true
+            };
+            Assert.AreEqual(0, LayInCeilingPlanner.Build(
+                Rect(0, 0, 6000, 4800), null, settings).DimensionRuns.Count);
+            settings.DimensionMode = LayInDimensionMode.Overall;
+            settings.DrawHangers = false;
+            Assert.AreEqual(2, LayInCeilingPlanner.Build(
+                Rect(0, 0, 6000, 4800), null, settings).DimensionRuns.Count);
         }
 
         [TestMethod]

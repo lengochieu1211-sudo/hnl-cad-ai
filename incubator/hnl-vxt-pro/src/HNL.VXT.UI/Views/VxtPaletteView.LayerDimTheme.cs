@@ -36,6 +36,12 @@ namespace HNL.VXT.UI.Views
             };
         }
 
+        // Retry after the final layout without adding duplicate Loaded handlers.
+        public static void RefreshLayerDimComboTheme(VxtPaletteView view)
+        {
+            if (view != null) ApplyLayerDimComboThemeNow(view);
+        }
+
         private static void ApplyLayerDimComboThemeNow(VxtPaletteView view)
         {
             var card = FindFixedLayerDimCard(view);
@@ -281,6 +287,19 @@ namespace HNL.VXT.UI.Views
                 {
                     foreach (UIElement child in panel.Children)
                         if (child != null) queue.Enqueue(child);
+                }
+
+                // The fixed Layer/DIM card lives inside the concealed TabItem.
+                // Traversing TabControl as ContentControl misses all its items, so
+                // the old theme/conversion pass could silently skip every selector.
+                var items = current as ItemsControl;
+                if (items != null)
+                {
+                    foreach (var item in items.Items)
+                    {
+                        var element = item as DependencyObject;
+                        if (element != null) queue.Enqueue(element);
+                    }
                 }
 
                 var border = current as Border;

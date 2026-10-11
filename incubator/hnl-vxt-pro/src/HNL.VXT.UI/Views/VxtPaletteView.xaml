@@ -1166,7 +1166,8 @@
                                     <Grid Margin="0,0,0,8" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Kiểu DIM" Style="{StaticResource FieldLabel}"/>
-                                        <ComboBox Grid.Column="1" ItemsSource="{Binding DimensionOptions}" SelectedItem="{Binding SelectedDimensionMode, Mode=TwoWay}"/>
+                                        <ComboBox Grid.Column="1" ItemsSource="{Binding DimensionOptions}" SelectedItem="{Binding SelectedDimensionMode, Mode=TwoWay}"
+                                                  ToolTip="Một ô: DIM từng ô nguyên; Gộp ô: chia nhóm theo số ô và DIM riêng phần dư; mép cắt DIM theo số đo thực."/>
                                     </Grid>
                                     <Grid Margin="0,0,0,8" MinHeight="29" IsEnabled="{Binding IsDimensionEnabled}">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1180,13 +1181,15 @@
                                     <Grid Margin="0,0,0,8" IsEnabled="{Binding IsGroupedDimension}" MinHeight="29">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <TextBlock Text="Số ô gộp" Style="{StaticResource FieldLabel}"/>
-                                        <TextBox Grid.Column="1" Text="{Binding GroupedDimensionCount, UpdateSourceTrigger=LostFocus}"/>
+                                        <TextBox Grid.Column="1" Text="{Binding GroupedDimensionCount, UpdateSourceTrigger=LostFocus}"
+                                                 ToolTip="Ví dụ gộp 12 ô: 12 × 600 (hoặc 610); nhóm còn dư và mép cắt có DIM riêng."/>
                                     </Grid>
                                     <StackPanel IsEnabled="{Binding IsDimensionEnabled}">
                                         <Grid Margin="0,0,0,7" MinHeight="29">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/><ColumnDefinition Width="73"/></Grid.ColumnDefinitions>
                                             <TextBlock Text="DIM ngang" Style="{StaticResource FieldLabel}"/>
-                                            <ComboBox Grid.Column="1" ItemsSource="{Binding HorizontalPositionOptions}" SelectedItem="{Binding SelectedHorizontalDimPosition, Mode=TwoWay}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding HorizontalPositionOptions}" SelectedItem="{Binding SelectedHorizontalDimPosition, Mode=TwoWay}"
+                                                      ToolTip="Tự động hiện đặt DIM phía dưới biên trần, không nằm trên mặt tấm."/>
                                             <Button Grid.Column="2" Content="Chọn" Command="{Binding PickHorizontalDimensionCommand}" Style="{StaticResource PickButton}" Margin="5,0,0,0"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,8" MinHeight="29">
@@ -1197,7 +1200,8 @@
                                         <Grid Margin="0,0,0,7" MinHeight="29">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/><ColumnDefinition Width="73"/></Grid.ColumnDefinitions>
                                             <TextBlock Text="DIM dọc" Style="{StaticResource FieldLabel}"/>
-                                            <ComboBox Grid.Column="1" ItemsSource="{Binding VerticalPositionOptions}" SelectedItem="{Binding SelectedVerticalDimPosition, Mode=TwoWay}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding VerticalPositionOptions}" SelectedItem="{Binding SelectedVerticalDimPosition, Mode=TwoWay}"
+                                                      ToolTip="Tự động hiện đặt DIM bên trái biên trần, không nằm trên mặt tấm."/>
                                             <Button Grid.Column="2" Content="Chọn" Command="{Binding PickVerticalDimensionCommand}" Style="{StaticResource PickButton}" Margin="5,0,0,0"/>
                                         </Grid>
                                         <Grid MinHeight="29">
@@ -1215,6 +1219,29 @@
                                             <TextBlock Text="Cách hàng DIM" Style="{StaticResource FieldLabel}"/>
                                             <controls:HnlNumericBox Grid.Column="1" Value="{Binding DimensionRowSpacing, Mode=TwoWay}" Minimum="1" Step="50"/>
                                         </Grid>
+                                        <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0"
+                                                Padding="0,9,0,0" Margin="0,10,0,0">
+                                            <StackPanel>
+                                                <CheckBox Content="DIM Ty treo" IsEnabled="{Binding CanDimensionHangers}"
+                                                          IsChecked="{Binding DimensionHangers, Mode=TwoWay}"
+                                                          ToolTip="DIM theo vị trí Ty thực tế trên từng thanh T chính, gồm khoảng từ đầu/cuối thanh đến Ty."
+                                                          Margin="0,0,0,8"/>
+                                                <Grid Margin="0,0,0,7" MinHeight="29"
+                                                      IsEnabled="{Binding IsHangerDimensionOptionsEnabled}">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Vị trí DIM Ty" Style="{StaticResource FieldLabel}"/>
+                                                    <ComboBox Grid.Column="1" ItemsSource="{Binding HorizontalPositionOptions}"
+                                                              SelectedItem="{Binding SelectedHangerDimPosition, Mode=TwoWay}"/>
+                                                </Grid>
+                                                <Grid MinHeight="29" IsEnabled="{Binding IsHangerDimensionOptionsEnabled}">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Khoảng DIM Ty" Style="{StaticResource FieldLabel}"/>
+                                                    <controls:HnlNumericBox Grid.Column="1"
+                                                                            Value="{Binding HangerDimDistance, Mode=TwoWay}"
+                                                                            Minimum="1" Step="20"/>
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </StackPanel>
                             </Expander>

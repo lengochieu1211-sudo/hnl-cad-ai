@@ -159,6 +159,9 @@ namespace HNL.VXT.Core.Preview
             }
 
             AddDimensions(plan, settings, spec, bounds, angle, phaseX, phaseY);
+            if (settings.DimensionMode != LayInDimensionMode.Off &&
+                settings.DrawHangers && settings.DimensionHangers)
+                AddHangerDimensions(plan, localMainSegments, settings, angle);
             TallyMaterials(plan, spec);
             return plan;
         }
@@ -416,39 +419,112 @@ namespace HNL.VXT.Core.Preview
                 return;
             }
 
-            var requestedCount = settings.DimensionMode == LayInDimensionMode.Grouped
+            // "Một ô" measures EVERY complete panel independently.
+            // "Gộp ô" chains groups of N complete panels across the whole grid.
+            // In both modes, partial cuts at either boundary are measured separately.
+            var groupSize = settings.DimensionMode == LayInDimensionMode.Grouped
                 ? Math.Max(1, settings.GroupedDimensionCount)
                 : 1;
-
-            var xStart = FirstStationAtOrAfter(bounds.MinX, spec.ModuleShort, phaseX);
-            var yStart = FirstStationAtOrAfter(bounds.MinY, acrossModule, phaseY);
-
-            // Count only complete modules after the selected grid start. Counting
-            // from the overall boundary width could label 10 x 600 while the
-            // clipped dimension spans just 5700 when Manual Start is offset.
-            var xCount = Math.Min(requestedCount, Math.Max(0,
-                (int)Math.Floor((bounds.MaxX - xStart) / spec.ModuleShort + Eps)));
-            var yCount = Math.Min(requestedCount, Math.Max(0,
-                (int)Math.Floor((bounds.MaxY - yStart) / acrossModule + Eps)));
-
-            if (xCount > 0)
-            {
-                AddDimensionRun(
-                    plan, xStart, bounds.MinY,
-                    xStart + xCount * spec.ModuleShort, bounds.MinY,
-                    spec.ModuleShort, xCount,
-                    BuildModuleLabel(xCount, spec.ModuleShort), angle, bounds, settings);
-            }
-
-            if (yCount > 0)
-            {
-                AddDimensionRun(
-                    plan, bounds.MinX, yStart,
-                    bounds.MinX, yStart + yCount * acrossModule,
-                    acrossModule, yCount,
-                    BuildModuleLabel(yCount, acrossModule), angle, bounds, settings);
-            }
+            AddPanelAxisDimensions(plan, settings, bounds, angle,
+                bounds.MinX, bounds.MaxX, spec.ModuleShort, phaseX, true, groupSize);
+            AddPanelAxisDimensions(plan, settings, bounds, angle,
+                bounds.MinY, bounds.MaxY, acrossModule, phaseY, false, groupSize);
             AddAdditionalOverallDimensionRuns(plan, settings, bounds, angle);
+        }
+
+        private static void AddPanelAxisDimensions(
+            LayInCeilingPlan plan, LayInCeilingSettings settings, Box2 bounds,
+            double angle, double min, double max, double module, double phase,
+            bool horizontal, int groupSize)
+        {
+            if (module <= Eps || max - min <= Eps) return;
+            var first = FirstStationAtOrAfter(min, module, phase);
+            if (first >= max - Eps)
+            {
+                AddMeasuredDimension(plan, settings, bounds, angle, min, max, horizontal);
+                return;
+            }
+
+            if (first > min + Eps)
+                AddMeasuredDimension(plan, settings, bounds, angle, min, first, horizontal);
+
+            // Do not count the cut edge as a full panel. Group remaining full
+            // modules in lattice multiples and emit the final shorter group.
+            var fullCount = Math.Max(0, (int)Math.Floor((max - first) / module + Eps));
+            for (var i = 0; i < fullCount; i += groupSize)
+            {
+                var count = Math.Min(groupSize, fullCount - i);
+                var start = first + i * module;
+                var end = first + (i + count) * module;
+                if (count == 1)
+                {
+                    AddMeasuredDimension(plan, settings, bounds, angle,
+                        start, end, horizontal);
+                }
+                else if (horizontal)
+                {
+                    AddDimensionRun(plan, start, bounds.MinY, end, bounds.MinY,
+                        module, count, BuildModuleLabel(count, module), angle, bounds, settings);
+                }
+                else
+                {
+                    AddDimensionRun(plan, bounds.MinX, start, bounds.MinX, end,
+                        module, count, BuildModuleLabel(count, module), angle, bounds, settings);
+                }
+            }
+
+            var last = first + fullCount * module;
+            if (last < max - Eps)
+                AddMeasuredDimension(plan, settings, bounds, angle, last, max, horizontal);
+        }
+
+        // DIM Ty is measured from the ACTUAL hanger stations along each physical
+        // main T segment, including end clearances; no guessed ty spacing.
+        private static void AddHangerDimensions(
+            LayInCeilingPlan plan, IReadOnlyList<Segment2> mainSegments,
+            LayInCeilingSettings settings, double angle)
+        {
+            if (plan.HangerPoints.Count == 0 || mainSegments.Count == 0) return;
+            var rows = plan.HangerPoints
+                .Select(p => Transform2.ToLocal(p, angle))
+                .GroupBy(p => Math.Round(p.Y, 3))
+                .ToDictionary(g => g.Key, g => g.Select(p => p.X).OrderBy(x => x).ToArray());
+            var side = settings.HangerDimSide == LayInHorizontalDimSide.Top ? 1.0 : -1.0;
+            var distance = Math.Max(1.0, settings.HangerDimDistance);
+
+            foreach (var segment in mainSegments)
+            {
+                var x1 = Math.Min(segment.A.X, segment.B.X);
+                var x2 = Math.Max(segment.A.X, segment.B.X);
+                var y = segment.A.Y;
+                double[] hangerXs;
+                if (!rows.TryGetValue(Math.Round(y, 3), out hangerXs)) continue;
+
+                var stations = new List<double> { x1 };
+                foreach (var x in hangerXs)
+                {
+                    if (x > x1 + Eps && x < x2 - Eps &&
+                        x > stations[stations.Count - 1] + Eps)
+                        stations.Add(x);
+                }
+                if (x2 > stations[stations.Count - 1] + Eps)
+                    stations.Add(x2);
+
+                // A hanger exactly at the first endpoint is already represented
+                // by x1; otherwise the first/last distances are included.
+                for (var i = 0; i + 1 < stations.Count; i++)
+                {
+                    var start = stations[i];
+                    var end = stations[i + 1];
+                    if (end - start <= Eps) continue;
+                    var a = Transform2.ToWorld(new Point2(start, y), angle);
+                    var b = Transform2.ToWorld(new Point2(end, y), angle);
+                    var offset = Transform2.ToWorld(
+                        new Point2((start + end) * 0.5, y + side * distance), angle);
+                    plan.DimensionRuns.Add(new LayInDimensionRun(
+                        a, b, end - start, 1, string.Empty, offset));
+                }
+            }
         }
 
         // Add a measured overall DIM outside the original grid/cut row only on opt-in.

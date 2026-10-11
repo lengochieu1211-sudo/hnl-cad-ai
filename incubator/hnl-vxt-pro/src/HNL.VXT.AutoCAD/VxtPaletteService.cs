@@ -144,6 +144,15 @@ namespace HNL.VXT.AutoCAD
             stages.Enqueue(new KeyValuePair<string, Action>(
                 "PropertiesLayout",
                 () => VxtPalettePropertiesLayout.Apply(_view)));
+            stages.Enqueue(new KeyValuePair<string, Action>(
+                "FinalComboTheme",
+                () =>
+                {
+                    // Reapply after ALL runtime cards and WPF layout corrections are present.
+                    // Previously some Layer/DIM choices retained white stock templates.
+                    VxtPaletteView.RefreshLayerDimComboTheme(_view);
+                    VxtPaletteView.RefreshAllComboTheme(_view);
+                }));
 
             RunNextUiStage(stages, generation);
         }

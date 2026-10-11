@@ -23,6 +23,12 @@ namespace HNL.VXT.UI.Views
             Dispatcher.BeginInvoke(new Action(() => FinalizeBetaUi(this)), DispatcherPriority.ContextIdle);
         }
 
+        // Reapply after all dynamic Layer/DIM and narrow-dock passes finish.
+        public static void RefreshAllComboTheme(VxtPaletteView view)
+        {
+            if (view != null) FinalizeBetaUi(view);
+        }
+
         private static void FinalizeBetaUi(DependencyObject root)
         {
             if (root == null) return;
@@ -227,8 +233,10 @@ namespace HNL.VXT.UI.Views
               BorderBrush='{DynamicResource InputBorder}'
               BorderThickness='1'
               CornerRadius='4'>
-        <ScrollViewer Margin='1' SnapsToDevicePixels='True' VerticalScrollBarVisibility='Auto'>
-          <ItemsPresenter/>
+        <ScrollViewer Margin='1' SnapsToDevicePixels='True' VerticalScrollBarVisibility='Auto'
+                      ScrollViewer.CanContentScroll='True'
+                      KeyboardNavigation.DirectionalNavigation='Contained'>
+          <ItemsPresenter KeyboardNavigation.DirectionalNavigation='Contained'/>
         </ScrollViewer>
       </Border>
     </Popup>
