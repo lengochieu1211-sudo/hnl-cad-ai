@@ -132,24 +132,42 @@ jobs:
           $null = $combo.Items.Add('Tổng hợp')
           $null = $combo.Items.Add('Chi tiết')
           $combo.SelectedIndex = 0
-          $combo.ApplyTemplate()
-          $toggle = $combo.Template.FindName('DropDownToggle', $combo)
-          $popup = $combo.Template.FindName('PART_Popup', $combo)
-          if ($null -eq $toggle -or $null -eq $popup) {
-            throw 'Functional HCF ComboBox template elements not found'
+          # A detached WPF ComboBox coerces IsDropDownOpen=false until Loaded.
+          # Host it in an actual offscreen window to exercise the live binding.
+          $window = New-Object System.Windows.Window
+          $window.Width = 240
+          $window.Height = 90
+          $window.Left = -5000
+          $window.Top = -5000
+          $window.Opacity = 0
+          $window.ShowActivated = $false
+          $window.ShowInTaskbar = $false
+          $window.Content = $combo
+          try {
+            $window.Show()
+            $combo.ApplyTemplate()
+            if (-not $combo.IsLoaded) { throw 'ComboBox WPF smoke host did not load' }
+            $toggle = $combo.Template.FindName('DropDownToggle', $combo)
+            $popup = $combo.Template.FindName('PART_Popup', $combo)
+            if ($null -eq $toggle -or $null -eq $popup) {
+              throw 'Functional HCF ComboBox template elements not found'
+            }
+            $binding = [System.Windows.Data.BindingOperations]::GetBindingExpression(
+              $toggle, [System.Windows.Controls.Primitives.ToggleButton]::IsCheckedProperty)
+            if ($null -eq $binding) { throw 'DropDownToggle has no IsDropDownOpen binding' }
+            $combo.IsDropDownOpen = $true
+            $binding.UpdateTarget()
+            if ($combo.IsDropDownOpen -ne $true -or $toggle.IsChecked -ne $true) {
+              throw 'ComboBox open status does not reach toggle after WPF Loaded'
+            }
+            $combo.SelectedIndex = 1
+            if ($combo.SelectedItem -ne 'Chi tiết') { throw 'ComboBox cannot select second item' }
+            $combo.IsDropDownOpen = $false
+            $binding.UpdateTarget()
+            if ($toggle.IsChecked -eq $true) { throw 'ComboBox open status cannot reset toggle' }
+            Write-Host 'HCE HCF COMBOBOX INTERACTION SMOKE PASS: loaded template + open state + selection'
           }
-          $binding = [System.Windows.Data.BindingOperations]::GetBindingExpression(
-            $toggle, [System.Windows.Controls.Primitives.ToggleButton]::IsCheckedProperty)
-          if ($null -eq $binding) { throw 'DropDownToggle has no IsDropDownOpen binding' }
-          $combo.IsDropDownOpen = $true
-          $binding.UpdateTarget()
-          if ($toggle.IsChecked -ne $true) { throw 'ComboBox open status does not reach toggle' }
-          $combo.SelectedIndex = 1
-          if ($combo.SelectedItem -ne 'Chi tiết') { throw 'ComboBox cannot select second item' }
-          $combo.IsDropDownOpen = $false
-          $binding.UpdateTarget()
-          if ($toggle.IsChecked -eq $true) { throw 'ComboBox open status cannot reset toggle' }
-          Write-Host 'HCE HCF COMBOBOX INTERACTION SMOKE PASS: template + open state + selection'
+          finally { $window.Close() }
 
       - name: Validate HCE pixel scrolling and visible ComboBox chrome
         shell: powershell
