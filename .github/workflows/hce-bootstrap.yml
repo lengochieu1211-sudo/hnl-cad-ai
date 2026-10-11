@@ -270,6 +270,9 @@ jobs:
           python -X utf8 HCE-OVERLAY/tests/test_mixed_cut_plan.py
           if ($LASTEXITCODE -ne 0) { throw 'HCE mixed-stock verifier regression failed' }
           Write-Host 'HCE RESEARCH MIXED SOURCE VALIDATOR PASS - not manufacturing certified'
+          python -X utf8 HCE-OVERLAY/tests/test_physical_cut_plan.py
+          if ($LASTEXITCODE -ne 0) { throw 'HCE physical stock/kerf safety regression failed' }
+          Write-Host 'HCE PHYSICAL POSITIVE-KERF CUTTING GATE PASS - synthetic, not manufacturing Golden'
 
       - name: Core regression for six DEMTC modules with X/Y and priority S/D
         shell: powershell
