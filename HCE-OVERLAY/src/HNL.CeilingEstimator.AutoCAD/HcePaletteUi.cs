@@ -24,6 +24,9 @@ namespace HNL.CeilingEstimator.AutoCAD
     /// </summary>
     public sealed class HcePaletteCommands
     {
+        [CommandMethod("HCESTOP", CommandFlags.Modal)]
+        public void Stop() { HcePaletteService.StopInCommandContext(); }
+
         [CommandMethod("HCEUI", CommandFlags.Modal)]
         public void Open()
         {
@@ -39,6 +42,41 @@ namespace HNL.CeilingEstimator.AutoCAD
 
     internal static class HcePaletteService
     {
+        private static bool _calculationRunning;
+        internal static bool IsCalculating => _calculationRunning;
+
+        // Progress is presentation-only. No AutoCAD database mutations or engine
+        // calls occur here. The native AutoCAD progress meter runs independently.
+        internal static void BeginCalculation()
+        {
+            _calculationRunning = true;
+            _view?.UpdateWorkProgress(0, "Chuẩn bị phân tích Hatch...", false);
+        }
+
+        internal static void ReportCalculation(int percent, string stage, bool indeterminate = false)
+        {
+            _view?.UpdateWorkProgress(percent, stage, indeterminate);
+        }
+
+        internal static void EndCalculation(bool complete)
+        {
+            _calculationRunning = false;
+            _view?.UpdateWorkProgress(complete ? 100 : 0,
+                complete ? "Hoàn tất. Đã tạo bảng CAD." : "Đã dừng hoặc hủy thao tác.", false);
+        }
+
+        internal static void StopInCommandContext()
+        {
+            var doc = CadApplication.DocumentManager.MdiActiveDocument;
+            if (_calculationRunning)
+            {
+                doc?.Editor.WriteMessage("\nHNL Tool - HCE đang tính; không thể đóng giữa phép tính.");
+                return;
+            }
+            if (_palette != null) _palette.Visible = false;
+            doc?.Editor.WriteMessage("\nHNL Tool - Đã tắt HCE; AutoCAD vẫn chạy. Gõ HCE để mở lại.");
+        }
+
         private static readonly Guid PaletteId = new Guid("3214F7D5-9F11-4DB9-8369-6D40F07C2A8E");
         // CI stamps this once, at build time in Vietnam local time (UTC+07).
         // Never use DateTime.Now here: opening the palette is not a software update.
@@ -108,6 +146,10 @@ namespace HNL.CeilingEstimator.AutoCAD
         private ComboBox? _legacyCutMode;
         private WpfText? _legacyStatus;
         private WpfText? _legacyValidation;
+        private WpfText? _workStage;
+        private WpfText? _workPercent;
+        private ProgressBar? _workProgress;
+        private WpfButton? _stopHceButton;
         private bool _loadingLegacyControls;
 
         public HcePaletteView()
@@ -216,6 +258,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                                               IsChecked='{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}'/>
                                 <Popup x:Name='PART_Popup'
                                        Placement='Bottom'
+                                       PlacementTarget='{Binding RelativeSource={RelativeSource TemplatedParent}}'
                                        AllowsTransparency='True'
                                        IsOpen='{TemplateBinding IsDropDownOpen}'
                                        PopupAnimation='Fade'>
@@ -223,7 +266,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                                             Background='{DynamicResource InputBackground}'
                                             BorderBrush='{DynamicResource InputBorder}'
                                             BorderThickness='1'
-                                            MinWidth='180'
+                                            MinWidth='{Binding PlacementTarget.ActualWidth, ElementName=PART_Popup}'
                                             MaxHeight='320'>
                                         <ScrollViewer CanContentScroll='True'>
                                             <ItemsPresenter/>
@@ -356,11 +399,90 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         private UIElement BuildLayout()
         {
-            // PaletteSet supplies the one and only app name and update time in
-            // AutoCAD's native dock title bar. No inner logo, title or footer.
-            // HCE is the ceiling-panel estimator. HCF is a separate plugin;
-            // do not expose its launcher as a misleading HCE mode tab.
-            return BuildCalculationTab();
+            // Match HCF's dark/light cards and keep command status outside the
+            // scrolled settings. One HCE mode needs no duplicate tab rail.
+            var root = new Grid();
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var body = BuildCalculationTab();
+            Grid.SetRow(body, 0);
+            root.Children.Add(body);
+
+            var footer = new StackPanel { Margin = new Thickness(9, 4, 9, 9) };
+            var status = new Grid { Margin = new Thickness(0, 0, 0, 5) };
+            status.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            status.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            _workStage = Text("Sẵn sàng tính tấm.", 10, _muted, FontWeights.Normal);
+            _workStage.TextTrimming = TextTrimming.CharacterEllipsis;
+            status.Children.Add(_workStage);
+            _workPercent = Text("", 10, _primary, FontWeights.SemiBold);
+            Grid.SetColumn(_workPercent, 1);
+            status.Children.Add(_workPercent);
+            footer.Children.Add(status);
+            _workProgress = new ProgressBar
+            {
+                Minimum = 0, Maximum = 100, Value = 0, Height = 7,
+                IsIndeterminate = false,
+                Foreground = _accent, Background = _border,
+                Margin = new Thickness(0, 0, 0, 7)
+            };
+            footer.Children.Add(_workProgress);
+            _stopHceButton = new WpfButton
+            {
+                Content = "Tắt HCE",
+                HorizontalAlignment = HorizontalAlignment.Right,
+                MinHeight = 30, MinWidth = 92,
+                Padding = new Thickness(12, 5, 12, 5),
+                Foreground = Brush("#DC2626"),
+                Background = _surface, BorderBrush = _border,
+                BorderThickness = new Thickness(1),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                ToolTip = "Tắt HCE; giữ AutoCAD và dữ liệu bản vẽ đang mở."
+            };
+            _stopHceButton.Click += (sender, args) => RequestStopHce();
+            footer.Children.Add(_stopHceButton);
+            var footerCard = Card(footer);
+            Grid.SetRow(footerCard, 1);
+            root.Children.Add(footerCard);
+            return root;
+        }
+
+        internal void UpdateWorkProgress(int percent, string stage, bool indeterminate)
+        {
+            // No DoEvents / DispatcherFrame: avoid re-entering CAD commands
+            // during a transaction. AutoCAD's native meter provides the live cue.
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(
+                    () => UpdateWorkProgress(percent, stage, indeterminate)));
+                return;
+            }
+            if (_workProgress == null || _workStage == null || _workPercent == null)
+                return;
+            _workStage.Text = stage;
+            _workProgress.IsIndeterminate = indeterminate;
+            if (!indeterminate)
+                _workProgress.Value = Math.Max(0, Math.Min(100, percent));
+            _workPercent.Text = indeterminate ? "Đang xử lý" : percent + "%";
+            if (_stopHceButton != null)
+                _stopHceButton.IsEnabled = !HcePaletteService.IsCalculating;
+        }
+
+        private void RequestStopHce()
+        {
+            if (HcePaletteService.IsCalculating) return;
+            var confirmation = System.Windows.MessageBox.Show(
+                "Tắt HCE? AutoCAD và bảng đã tạo vẫn được giữ nguyên.",
+                "HNL Tool - Tắt HCE",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Question,
+                System.Windows.MessageBoxResult.No);
+            if (confirmation != System.Windows.MessageBoxResult.Yes) return;
+            var document = CadApplication.DocumentManager.MdiActiveDocument;
+            if (document == null)
+                HcePaletteService.StopInCommandContext();
+            else
+                document.SendStringToExecute("HCESTOP\n", true, false, false);
         }
 
         private UIElement BuildCalculationTab()
