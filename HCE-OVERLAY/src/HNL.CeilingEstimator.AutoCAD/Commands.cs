@@ -272,6 +272,79 @@ namespace HNL.CeilingEstimator.AutoCAD
             return Fmt(Math.Sqrt(dx * dx + dy * dy));
         }
 
+
+        // UI-only progress instrumentation. The native status-bar meter remains
+        // visible while the modal AutoCAD command runs; no DoEvents and no
+        // additional calculation pass. Cancellation is not simulated.
+        private sealed class HceCommandProgress : IDisposable
+        {
+            private readonly Editor _editor;
+            private readonly ProgressMeter _meter = new ProgressMeter();
+            private readonly System.Diagnostics.Stopwatch _clock =
+                System.Diagnostics.Stopwatch.StartNew();
+            private bool _meterActive;
+            private bool _complete;
+            private int _meterPercent;
+
+            internal HceCommandProgress(Editor editor)
+            {
+                _editor = editor;
+                HcePaletteService.BeginCalculation();
+                try
+                {
+                    _meter.Start("HNL Tool - HCE");
+                    _meter.SetLimit(100);
+                    _meterActive = true;
+                }
+                catch (System.Exception)
+                {
+                    // Presentation failure must not affect Hatch calculation.
+                    _meterActive = false;
+                }
+            }
+
+            internal void Report(int percent, string stage,
+                bool indeterminate = false, bool log = false)
+            {
+                percent = Math.Max(0, Math.Min(100, percent));
+                if (_meterActive)
+                {
+                    try
+                    {
+                        while (_meterPercent < percent)
+                        {
+                            _meter.MeterProgress();
+                            ++_meterPercent;
+                        }
+                    }
+                    catch (System.Exception) { _meterActive = false; }
+                }
+                HcePaletteService.ReportCalculation(percent, stage, indeterminate);
+                if (log)
+                    _editor.WriteMessage("\nHNL Tool - HCE " + stage +
+                        " (" + (indeterminate ? "đang xử lý" : percent + "%") +
+                        ", " + _clock.Elapsed.TotalSeconds.ToString("0.0",
+                            CultureInfo.InvariantCulture) + " s).");
+            }
+
+            internal void Complete()
+            {
+                Report(100, "Hoàn tất tạo bảng CAD.", false, true);
+                _complete = true;
+            }
+
+            public void Dispose()
+            {
+                if (_meterActive)
+                {
+                    try { _meter.Stop(); }
+                    catch (System.Exception) { /* keep cleanup fail-open */ }
+                }
+                _clock.Stop();
+                HcePaletteService.EndCalculation(_complete);
+            }
+        }
+
         private static void RunCeilingEstimator()
         {
             var document = Application.DocumentManager.MdiActiveDocument;
@@ -317,12 +390,19 @@ namespace HNL.CeilingEstimator.AutoCAD
 
             try
             {
+                using var progress = new HceCommandProgress(editor);
+                progress.Report(2, "Bắt đầu đọc Hatch.", false, true);
                 var inputs = new List<HatchInput>();
                 var rejected = 0;
+                var scannedHatches = 0;
                 using (var transaction = document.Database.TransactionManager.StartTransaction())
                 {
                     foreach (SelectedObject selected in picked.Value)
                     {
+                        ++scannedHatches;
+                        progress.Report(2 + (int)(18.0 * scannedHatches /
+                            Math.Max(1, picked.Value.Count)),
+                            "Đọc Hatch: " + scannedHatches + "/" + picked.Value.Count);
                         if (selected == null || selected.ObjectId.IsNull) continue;
                         try
                         {
@@ -380,6 +460,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     }
                 }
 
+                progress.Report(20, "Đã đọc " + inputs.Count + " Hatch.", false, true);
                 if (inputs.Count == 0)
                 {
                     editor.WriteMessage("\nHNL Tool - No supported Hatch boundary found. No drawing changes.");
@@ -428,7 +509,17 @@ namespace HNL.CeilingEstimator.AutoCAD
                     }
                 }
 
-                var report = CalculateOnce(inputs, editor, ref rejected, false, options);
+                progress.Report(20, "Đang phân tích hình học Hatch.", false, true);
+                var report = CalculateOnce(inputs, editor, ref rejected, false, options,
+                    (done, total, handle) => progress.Report(
+                        20 + (int)(55.0 * done / Math.Max(1, total)),
+                        "Phân tích Hatch: " + done + "/" + total),
+                    (done, total, group) => progress.Report(
+                        75 + (int)(13.0 * done / Math.Max(1, total)),
+                        "Tối ưu ghép mảnh biên: " + done + "/" + total +
+                        " nhóm. Đang xử lý Core...",
+                        done < total, done == 0));
+                progress.Report(88, "Đã phân tích và ghép xong.", false, true);
                 if (report.Groups.Count == 0)
                 {
                     editor.WriteMessage("\nHNL Tool - No successful calculation. No drawing changes.");
@@ -512,6 +603,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     }
                 }
 
+                progress.Report(90, "Chờ chọn vị trí đặt bảng.", false, true);
                 var location = editor.GetPoint("\nHNL Tool - Specify result table insertion point: ");
                 if (location.Status != PromptStatus.OK)
                 {
@@ -531,12 +623,22 @@ namespace HNL.CeilingEstimator.AutoCAD
                     if (decision.Status == PromptStatus.OK &&
                         string.Equals(decision.StringResult, "No", StringComparison.OrdinalIgnoreCase))
                     {
-                        InsertTable(document.Database, report, location.Value, profile, false);
+                        progress.Report(93, "Đang lập bảng CAD (không tạo mã chữ).", true, true);
+                        InsertTable(document.Database, report, location.Value, profile, false,
+                            (done, total) => progress.Report(94 + (int)(4.0 * done /
+                                Math.Max(1, total)),
+                                "Căn bảng: " + done + "/" + total + " hàng."));
+                        progress.Complete();
                         editor.WriteMessage("\nHNL Tool - Table created; large text label set was skipped.");
                         return;
                     }
                 }
-                InsertTable(document.Database, report, location.Value, profile, true);
+                progress.Report(93, "Đang lập bảng CAD và mã chữ.", true, true);
+                InsertTable(document.Database, report, location.Value, profile, true,
+                    (done, total) => progress.Report(94 + (int)(4.0 * done /
+                        Math.Max(1, total)),
+                        "Căn bảng: " + done + "/" + total + " hàng."));
+                progress.Complete();
                 editor.WriteMessage("\nHNL Tool - Table created from the same calculation report.");
             }
             catch (System.Exception ex)
@@ -900,15 +1002,19 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         private static CalculationReport CalculateOnce(
             List<HatchInput> inputs, Editor editor, ref int rejected,
-            bool tracePerHatch = false, DemtcOptions? selectedOptions = null)
+            bool tracePerHatch = false, DemtcOptions? selectedOptions = null,
+            Action<int, int, string>? onHatchProgress = null,
+            Action<int, int, string>? onPackingProgress = null)
         {
             var engine = new DemtcEngine();
             // HCEGOLDEN always uses unchanged defaults. UI is a separate snapshot.
             var options = selectedOptions ?? new DemtcOptions();
             var report = new CalculationReport();
             var groups = new Dictionary<string, MaterialGroup>(StringComparer.Ordinal);
-            foreach (var input in inputs)
+            for (var hatchIndex = 0; hatchIndex < inputs.Count; hatchIndex++)
             {
+                var input = inputs[hatchIndex];
+                onHatchProgress?.Invoke(hatchIndex, inputs.Count, input.Handle);
                 HatchCalculationResult calc;
                 try
                 {
@@ -957,11 +1063,15 @@ namespace HNL.CeilingEstimator.AutoCAD
                 group.BoundaryFullPieces.AddRange(calc.PureResult.BoundaryFullPieces);
                 if (calc.Path == "general-line-loop") group.GeneralFallbackCount++;
             }
-            foreach (var group in report.Groups)
+            onHatchProgress?.Invoke(inputs.Count, inputs.Count, string.Empty);
+            for (var groupIndex = 0; groupIndex < report.Groups.Count; groupIndex++)
             {
+                var group = report.Groups[groupIndex];
+                onPackingProgress?.Invoke(groupIndex, report.Groups.Count, group.Name);
                 // Pack across all Hatches of one material group, not independently per Hatch.
                 group.Packing = engine.PackCutPieces(group.Cuts, options);
             }
+            onPackingProgress?.Invoke(report.Groups.Count, report.Groups.Count, string.Empty);
             return report;
         }
 
@@ -1176,7 +1286,8 @@ namespace HNL.CeilingEstimator.AutoCAD
         // One transient MText + cached repeated cell values (no new DWG objects).
         private static void FitHceTableToText(Table table, Database database,
             TableStyle cadStyle, int rowCount, int groupHeadingRow,
-            bool cutEnabled, int cutHeadingRow, int cutRowsCount)
+            bool cutEnabled, int cutHeadingRow, int cutRowsCount,
+            Action<int, int>? onMeasuredRow = null)
         {
             var widths = new double[4];
             var heights = new double[rowCount];
@@ -1188,6 +1299,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 probe.Width = 0.0; // Natural width, no word wrap.
                 for (var row = 0; row < rowCount; row++)
                 {
+                    if (row % 128 == 0) onMeasuredRow?.Invoke(row, rowCount);
                     var merged = row == 0 || row == groupHeadingRow ||
                         (cutEnabled && (row == cutHeadingRow ||
                          (cutRowsCount == 0 && row == cutHeadingRow + 2)));
@@ -1242,6 +1354,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     heights[row] = Math.Max(heights[row], fallbackHeight * 2.0);
                 }
             }
+            onMeasuredRow?.Invoke(rowCount, rowCount);
             var allWidth = 0.0;
             for (var col = 0; col < 4; col++)
             {
@@ -1261,7 +1374,8 @@ namespace HNL.CeilingEstimator.AutoCAD
         }
 
         private static void InsertTable(Database database, CalculationReport report, Point3d point,
-            HceLegacyProfile profile, bool drawLabels)
+            HceLegacyProfile profile, bool drawLabels,
+            Action<int, int>? onMeasuredRow = null)
         {
             var options = profile.ToOptions();
             var labelHeight = profile.LabelTextHeight;
@@ -1468,7 +1582,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                             }
                     }
                     FitHceTableToText(table, database, cadTableStyle, rows,
-                        groupHeadingRow, cutDetailsEnabled, cutHeadingRow, cutRows.Count);
+                        groupHeadingRow, cutDetailsEnabled, cutHeadingRow, cutRows.Count,
+                        onMeasuredRow);
                     table.GenerateLayout();
                     currentSpace.AppendEntity(table);
                     transaction.AddNewlyCreatedDBObject(table, true);
