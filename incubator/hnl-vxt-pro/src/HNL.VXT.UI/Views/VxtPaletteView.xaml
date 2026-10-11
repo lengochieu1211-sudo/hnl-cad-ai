@@ -1277,6 +1277,41 @@
                         <Border Style="{StaticResource SectionCard}" BorderBrush="{DynamicResource AccentBorder}">
                             <StackPanel>
                                 <TextBlock Text="Xem trước" Style="{StaticResource SectionTitle}"/>
+                                <!-- Match the actual LayInCadRuntime transient ACI colors: T main=1,
+                                     long cross=3, short cross=5, hanger=2, DIM=4.
+                                     Create still produces one Hatch per ceiling; these are Preview keys. -->
+                                <WrapPanel Margin="0,7,0,3">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,10,5" ToolTip="T chính • ACI 1 (đỏ) khi xem trước trên CAD">
+                                        <Border Style="{StaticResource DomainBadge}" Background="#FFFF0000" Margin="0,0,4,0">
+                                            <TextBlock Text="TC" Style="{StaticResource DomainBadgeText}" Foreground="White"/>
+                                        </Border>
+                                        <TextBlock Text="T chính" Style="{StaticResource FieldLabel}" FontSize="11"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,10,5" ToolTip="T phụ dài • ACI 3 (xanh lá) khi xem trước trên CAD">
+                                        <Border Style="{StaticResource DomainBadge}" Background="#FF00FF00" Margin="0,0,4,0">
+                                            <TextBlock Text="TD" Style="{StaticResource DomainBadgeText}" Foreground="Black"/>
+                                        </Border>
+                                        <TextBlock Text="T phụ dài" Style="{StaticResource FieldLabel}" FontSize="11"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,10,5" ToolTip="T phụ ngắn • ACI 5 (xanh dương) khi xem trước trên CAD">
+                                        <Border Style="{StaticResource DomainBadge}" Background="#FF0000FF" Margin="0,0,4,0">
+                                            <TextBlock Text="TN" Style="{StaticResource DomainBadgeText}" Foreground="White"/>
+                                        </Border>
+                                        <TextBlock Text="T phụ ngắn" Style="{StaticResource FieldLabel}" FontSize="11"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,10,5" IsEnabled="{Binding DrawHangers}" ToolTip="Ty treo • ACI 2 (vàng) khi xem trước trên CAD">
+                                        <Border Style="{StaticResource DomainBadge}" Background="#FFFFFF00" Margin="0,0,4,0">
+                                            <TextBlock Text="TY" Style="{StaticResource DomainBadgeText}" Foreground="Black"/>
+                                        </Border>
+                                        <TextBlock Text="Ty" Style="{StaticResource FieldLabel}" FontSize="11"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5" IsEnabled="{Binding IsDimensionEnabled}" ToolTip="DIM • ACI 4 (cyan) khi xem trước trên CAD">
+                                        <Border Style="{StaticResource DomainBadge}" Background="#FF00FFFF" Margin="0,0,4,0">
+                                            <TextBlock Text="DIM" Style="{StaticResource DomainBadgeText}" Foreground="Black"/>
+                                        </Border>
+                                        <TextBlock Text="DIM" Style="{StaticResource FieldLabel}" FontSize="11"/>
+                                    </StackPanel>
+                                </WrapPanel>
                                 <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,6,0,3"/>
                                 <TextBlock Text="{Binding PreviewStatus}" TextWrapping="Wrap" Style="{StaticResource HintText}"/>
                                 <Grid Margin="0,8,0,0" MinHeight="29">
