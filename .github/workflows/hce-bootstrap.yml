@@ -79,17 +79,32 @@ jobs:
         run: |
           $uiPath = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs'
           $ui = [IO.File]::ReadAllText($uiPath)
-          if (-not $ui.Contains('HNL HCE Pro | HCE_UPDATED_AT_VN')) { throw 'Missing HCE build-time caption marker' }
+          if (-not $ui.Contains('HNL HCE | HCE_UPDATED_AT_SHORT_VN') -or
+              -not $ui.Contains('v0.3.0  ·  Cập nhật HCE_UPDATED_AT_VN')) {
+            throw 'Missing compact native title and full-year one-line update stamp'
+          }
           if ($ui.Contains('pack://application:,,,/HNL.CeilingEstimator.AutoCAD;component/Assets/HNL-Logo-Official.png')) { throw 'Redundant HCE Palette logo still present' }
           if ($ui.Contains('titleStack.Children.Add') -or $ui.Contains('footer.Child =')) { throw 'Redundant Palette header/footer still present' }
           if (-not $ui.Contains('new PaletteSet(PaletteCaption, PaletteId)')) { throw 'Caption not wired into native AutoCAD PaletteSet' }
-          if (-not $ui.Contains('palette.AddVisual(PaletteCaption, view)')) { throw 'HCE tab must reuse the build-time caption' }
-          $buildTimeVN = [DateTime]::UtcNow.AddHours(7).ToString('dd/MM/yyyy HH:mm', [Globalization.CultureInfo]::InvariantCulture)
+          if (-not $ui.Contains('palette.AddVisual("HCE", view)')) { throw 'Short AutoCAD palette tab name must be HCE' }
+          $nowVN = [DateTime]::UtcNow.AddHours(7)
+          $buildTimeVN = $nowVN.ToString('dd/MM/yyyy HH:mm', [Globalization.CultureInfo]::InvariantCulture)
+          $shortTimeVN = $nowVN.ToString('dd/MM HH:mm', [Globalization.CultureInfo]::InvariantCulture)
+          $ui = $ui.Replace('HCE_UPDATED_AT_SHORT_VN', $shortTimeVN)
           $ui = $ui.Replace('HCE_UPDATED_AT_VN', $buildTimeVN)
-          if ($ui.Contains('HCE_UPDATED_AT_VN')) { throw 'Unstamped HCE Palette title marker' }
+          if ($ui.Contains('HCE_UPDATED_AT_VN') -or $ui.Contains('HCE_UPDATED_AT_SHORT_VN')) {
+            throw 'Unstamped HCE Palette update/build-time marker'
+          }
+          $expectedNative = "HNL HCE | $shortTimeVN"
+          $expectedFull = "v0.3.0  ·  Cập nhật $buildTimeVN"
+          if (-not $ui.Contains($expectedNative) -or -not $ui.Contains($expectedFull) -or
+              -not $ui.Contains('Grid.SetRow(buildInfo, 0)')) {
+            throw 'HCE update timestamp must be wired to native title and slim visible WPF line'
+          }
           [IO.File]::WriteAllText($uiPath, $ui, [Text.UTF8Encoding]::new($false))
-          Write-Host "HCE PALETTE NATIVE TITLE PASS: HNL HCE Pro | $buildTimeVN (UTC+07, build time)"
-          Write-Host 'HCE PALETTE HEADER-FOOTER REMOVAL PASS: native caption only, calculator plus progress/stop strip'
+          Write-Host "HCE PALETTE TITLE PASS: $expectedNative (UTC+07, build time)"
+          Write-Host "HCE PALETTE VISIBLE STAMP PASS: $expectedFull"
+          Write-Host 'HCE PALETTE COMPACT FRAME PASS: no duplicate bulky header; one slim visible update line'
           
       - name: Validate HCE WPF templates and Hatch Area safeguards
         shell: powershell
