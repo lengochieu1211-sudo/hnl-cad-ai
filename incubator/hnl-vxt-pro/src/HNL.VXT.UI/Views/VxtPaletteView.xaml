@@ -1120,9 +1120,13 @@
                         <Border Style="{StaticResource SectionCard}">
                             <StackPanel>
                                 <Grid Margin="0,0,0,8">
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
                                     <TextBlock Text="2. Hệ khung" Style="{StaticResource SectionTitle}"/>
-                                    <CheckBox Grid.Column="1" IsChecked="{Binding DrawHatch, Mode=TwoWay}"
+                                    <TextBlock Grid.Column="1" Text="Hatch" Style="{StaticResource FieldLabel}"
+                                               FontSize="10.5" Margin="0,0,7,0"/>
+                                    <CheckBox Grid.Column="2" IsChecked="{Binding DrawHatch, Mode=TwoWay}"
                                               Style="{StaticResource ToggleSwitch}"
                                               ToolTip="Bật: Tạo Hatch mới từ Polyline. Tắt: Chọn Hatch có sẵn; chỉ tạo Ty/DIM/Block."/>
                                 </Grid>
@@ -1143,9 +1147,13 @@
                         <Border Style="{StaticResource SectionCard}">
                             <StackPanel>
                                 <Grid Margin="0,0,0,8">
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
                                     <TextBlock Text="3. Gốc lưới / Đuổi tấm" Style="{StaticResource SectionTitle}"/>
-                                    <CheckBox Grid.Column="1" IsChecked="{Binding DrawStartTileBlock, Mode=TwoWay}"
+                                    <TextBlock Grid.Column="1" Text="Block ô đầu" Style="{StaticResource FieldLabel}"
+                                               FontSize="10.5" Margin="0,0,7,0"/>
+                                    <CheckBox Grid.Column="2" IsChecked="{Binding DrawStartTileBlock, Mode=TwoWay}"
                                               Style="{StaticResource ToggleSwitch}"
                                               ToolTip="Bật/tắt chèn Block ô đầu; không thay đổi vị trí lưới."/>
                                 </Grid>
