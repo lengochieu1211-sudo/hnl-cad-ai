@@ -70,9 +70,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                         var doubleText = userPattern ? hatch.PatternDouble.ToString() : "n/a";
                         editor.WriteMessage("\nHCEQA handle=" + hatch.Handle +
                             " layer=" + hatch.Layer +
-                            " pattern=" + hatch.PatternName +
+                            " kiểu hatch=" + hatch.PatternName +
                             " type=" + hatch.PatternType +
-                            " scale=" + scaleText +
+                            " tỉ lệ=" + scaleText +
                             " space=" + spacingText +
                             " double=" + doubleText +
                             " origin=" + Fmt(hatch.Origin.X) + "," + Fmt(hatch.Origin.Y) +
@@ -149,8 +149,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                             {
                                 inputs.Add(input);
                                 editor.WriteMessage("\nHCEGOLDEN INPUT handle=" + input.Handle +
-                                    " pattern=" + input.PatternName +
-                                    " scale=" + Fmt(input.PatternScale) +
+                                    " kiểu hatch=" + input.PatternName +
+                                    " tỉ lệ=" + Fmt(input.PatternScale) +
                                     " area=" + Fmt(input.Area) +
                                     " segments=" + input.Segments.Count +
                                     " origin=" + Fmt(input.Frame.Origin.X) + "," +
@@ -345,6 +345,14 @@ namespace HNL.CeilingEstimator.AutoCAD
             }
         }
 
+        // Displayed text is Vietnamese, stable global keyword aliases remain
+        // backwards-compatible; accept both returned global and local names.
+        private static bool ChoiceIs(PromptResult result, string globalName, string localName)
+        {
+            return string.Equals(result.StringResult, globalName, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(result.StringResult, localName, StringComparison.OrdinalIgnoreCase);
+        }
+
         private static void RunCeilingEstimator()
         {
             var document = Application.DocumentManager.MdiActiveDocument;
@@ -359,9 +367,9 @@ namespace HNL.CeilingEstimator.AutoCAD
             double chosenGridAngle = 0.0;
             if (profile.GridMode == "2")
             {
-                var origin = editor.GetPoint("\nHNL Tool - Pick grid origin: ");
+                var origin = editor.GetPoint("\nHNL Tool - Chọn điểm gốc lưới: ");
                 if (origin.Status != PromptStatus.OK) return;
-                var next = new PromptPointOptions("\nHNL Tool - Pick grid X direction: ")
+                var next = new PromptPointOptions("\nHNL Tool - Chọn hướng trục X của lưới: ")
                     { UseBasePoint = true, BasePoint = origin.Value };
                 var direction = editor.GetPoint(next);
                 if (direction.Status != PromptStatus.OK) return;
@@ -369,7 +377,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 var ddy = direction.Value.Y - origin.Value.Y;
                 if (ddx * ddx + ddy * ddy <= 1e-12)
                 {
-                    editor.WriteMessage("\nHNL Tool - Grid direction too short; no changes.");
+                    editor.WriteMessage("\nHNL Tool - Hướng lưới quá ngắn; không thay đổi bản vẽ.");
                     return;
                 }
                 chosenGridOrigin = new Point2(origin.Value.X, origin.Value.Y);
@@ -378,13 +386,13 @@ namespace HNL.CeilingEstimator.AutoCAD
 
             var selectionOptions = new PromptSelectionOptions
             {
-                MessageForAdding = "\nHNL Tool - Select one or more Hatch entities: "
+                MessageForAdding = "\nHNL Tool - Chọn một hoặc nhiều Hatch trần: "
             };
             var filter = new SelectionFilter(new[] { new TypedValue((int)DxfCode.Start, "HATCH") });
             var picked = editor.GetSelection(selectionOptions, filter);
             if (picked.Status != PromptStatus.OK || picked.Value == null)
             {
-                editor.WriteMessage("\nHNL Tool - Cancelled. No drawing changes.");
+                editor.WriteMessage("\nHNL Tool - Đã hủy; không thay đổi bản vẽ.");
                 return;
             }
 
@@ -418,9 +426,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                                     !input.PatternBaseVerified)
                                 {
                                     rejected++;
-                                    editor.WriteMessage("\nHNL Tool - Rejected Hatch handle=" +
+                                    editor.WriteMessage("\nHNL Tool - Loại Hatch handle=" +
                                         hatch.Handle + ": DXF 43/44 phase unavailable; " +
-                                        "cannot certify Theo Hatch grid (use HCEQA).");
+                                        "không thể kiểm chứng lưới theo Hatch (dùng HCEQA).");
                                     continue;
                                 }
                                 if (profile.GridMode == "1")
@@ -430,31 +438,31 @@ namespace HNL.CeilingEstimator.AutoCAD
                                 inputs.Add(input);
                                 if (profile.GridMode == "3" && input.PatternBaseVerified)
                                     editor.WriteMessage("\nHNL Tool - Hatch " + input.Handle +
-                                        " grid anchored to DXF 43/44=" +
+                                        " gốc lưới theo DXF 43/44=" +
                                         Fmt(input.Frame.Origin.X) + "," +
                                         Fmt(input.Frame.Origin.Y) + " (LISP parity).");
                                 if (input.RecoveredNearClosed)
                                     editor.WriteMessage("\nHNL Tool - Hatch handle=" + input.Handle +
-                                        " NotClosed gap=" + Fmt(input.NearClosedGapMm) +
-                                        " mm; near-closed loop included after topology checks. " +
-                                        "Original DWG Hatch unchanged.");
+                                        " khe hở chưa khép kín=" + Fmt(input.NearClosedGapMm) +
+                                        " mm; đã nhận đường bao sau khi kiểm tra topology. " +
+                                        "Không sửa Hatch gốc.");
                                 if (input.AreaFromBoundary)
                                     editor.WriteMessage("\nHNL Tool - Hatch handle=" + input.Handle +
-                                        " native Area=NotApplicable; certified simple-loop boundary area=" +
-                                        Fmt(input.Area) + " mm2 (strict topology gate).");
+                                        " native Area=NotApplicable; diện tích đường bao được kiểm chứng=" +
+                                        Fmt(input.Area) + " mm2 (đã kiểm tra topology).");
                             }
                             else
                             {
                                 rejected++;
-                                editor.WriteMessage("\nHNL Tool - Rejected Hatch handle=" +
+                                editor.WriteMessage("\nHNL Tool - Loại Hatch handle=" +
                                     hatch.Handle + " id=" + selected.ObjectId + ": " + reason);
                             }
                         }
                         catch (System.Exception ex)
                         {
                             rejected++;
-                            editor.WriteMessage("\nHNL Tool - Rejected Hatch id=" +
-                                selected.ObjectId + " at opening/reading: " +
+                            editor.WriteMessage("\nHNL Tool - Loại Hatch id=" +
+                                selected.ObjectId + " khi mở/đọc Hatch: " +
                                 ex.GetType().Name + " " + ex.Message);
                         }
                     }
@@ -463,25 +471,25 @@ namespace HNL.CeilingEstimator.AutoCAD
                 progress.Report(20, "Đã đọc " + inputs.Count + " Hatch.", false, true);
                 if (inputs.Count == 0)
                 {
-                    editor.WriteMessage("\nHNL Tool - No supported Hatch boundary found. No drawing changes.");
+                    editor.WriteMessage("\nHNL Tool - Không có đường bao Hatch hợp lệ; bản vẽ giữ nguyên.");
                     return;
                 }
 
                 // Reject implicit assumptions. Non-user-defined PAT spacing cannot be
                 // proven from PatternScale alone, so require explicit user acceptance.
-                editor.WriteMessage("\nHNL Tool - Unit mode=" +
+                editor.WriteMessage("\nHNL Tool - Đơn vị DWG=" +
                     document.Database.Insunits.ToString() +
-                    ". Golden input coordinates are millimeters.");
-                editor.WriteMessage("\nHNL Tool - Module policy=" + options.GridWidth + "x" +
-                    options.GridHeight + " mm; pitch family=" + profile.Family + ".");
+                    ". Hệ tọa độ kiểm chứng sử dụng milimét.");
+                editor.WriteMessage("\nHNL Tool - Kích thước module=" + options.GridWidth + "x" +
+                    options.GridHeight + " mm; hệ lưới=" + profile.Family + ".");
                 foreach (var input in inputs)
                 {
                     if (!input.UserGridVerified)
                         editor.WriteMessage("\nHNL Tool - Hatch " + input.Handle +
-                            " pattern=" + input.PatternName +
-                            " scale=" + Fmt(input.PatternScale) +
+                            " kiểu hatch=" + input.PatternName +
+                            " tỉ lệ=" + Fmt(input.PatternScale) +
                             " has no certified " + profile.Family +
-                            "mm spacing; verify before proceeding.");
+                            "mm; kiểm tra trước khi tiếp tục.");
                 }
                 var acceptKey = profile.Family == 610 ? "Use610" : "Use600";
                 // Do not ask Use600/Use610 again after the user has configured
@@ -494,17 +502,18 @@ namespace HNL.CeilingEstimator.AutoCAD
                 if (needsConfirmation)
                 {
                     var acknowledge = new PromptKeywordOptions(
-                        "\nHNL Tool - Grid pitch or DWG unit is not verified. [Proceed/Cancel] <Cancel>: ")
+                        "\nHNL Tool - Chưa xác minh đơn vị DWG hoặc bước lưới. " +
+                        "Chọn cách xử lý (Enter = Hủy): ")
                     {
                         AllowNone = true
                     };
-                    acknowledge.Keywords.Add("Proceed");
-                    acknowledge.Keywords.Add("Cancel");
+                    acknowledge.Keywords.Add("Proceed", "TiepTuc", "Tiếp tục");
+                    acknowledge.Keywords.Add("Cancel", "Huy", "Hủy");
                     var consent = editor.GetKeywords(acknowledge);
                     if (consent.Status != PromptStatus.OK ||
-                        !string.Equals(consent.StringResult, "Proceed", StringComparison.OrdinalIgnoreCase))
+                        !ChoiceIs(consent, "Proceed", "TiepTuc"))
                     {
-                        editor.WriteMessage("\nHNL Tool - Unverified grid cancelled. No drawing changes.");
+                        editor.WriteMessage("\nHNL Tool - Đã hủy khi lưới chưa xác minh; không thay đổi bản vẽ.");
                         return;
                     }
                 }
@@ -522,7 +531,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 progress.Report(88, "Đã phân tích và ghép xong.", false, true);
                 if (report.Groups.Count == 0)
                 {
-                    editor.WriteMessage("\nHNL Tool - No successful calculation. No drawing changes.");
+                    editor.WriteMessage("\nHNL Tool - Không có mảng trần tính toán thành công; bản vẽ giữ nguyên.");
                     return;
                 }
 
@@ -531,8 +540,8 @@ namespace HNL.CeilingEstimator.AutoCAD
                 if (rejected > 0)
                 {
                     WritePreview(editor, report, rejected);
-                    editor.WriteMessage("\nHNL Tool - INCOMPLETE SELECTION. " +
-                        "Table is blocked; resolve rejected Hatch handles and rerun.");
+                    editor.WriteMessage("\nHNL Tool - KẾT QUẢ CHƯA ĐẦY ĐỦ. " +
+                        "Không tạo bảng; hãy kiểm tra các mã Hatch bị loại rồi chạy lại.");
                     return;
                 }
 
@@ -549,33 +558,33 @@ namespace HNL.CeilingEstimator.AutoCAD
                 if (!profile.CutListEnabled)
                 {
                     var cutListChoice = new PromptKeywordOptions(
-                        "\nHNL Tool - Cut-piece list is OFF. Include in new Table [Summary/Detail/NoList] <NoList>: ")
+                        "\nHNL Tool - Chưa bật danh sách mảnh cắt trong bảng. " +
+                        "Chọn cách liệt kê (Enter = Không liệt kê): ")
                     {
                         AllowNone = true
                     };
-                    cutListChoice.Keywords.Add("Summary");
-                    cutListChoice.Keywords.Add("Detail");
-                    cutListChoice.Keywords.Add("NoList");
+                    cutListChoice.Keywords.Add("Summary", "TongHop", "Tổng hợp");
+                    cutListChoice.Keywords.Add("Detail", "ChiTiet", "Chi tiết");
+                    cutListChoice.Keywords.Add("NoList", "Khong", "Không liệt kê");
                     var cutResponse = editor.GetKeywords(cutListChoice);
                     if (cutResponse.Status != PromptStatus.OK &&
                         cutResponse.Status != PromptStatus.None)
                     {
-                        editor.WriteMessage("\nHNL Tool - Cut-list choice cancelled; DWG unchanged.");
+                        editor.WriteMessage("\nHNL Tool - Đã hủy chọn bảng mảnh cắt; bản vẽ giữ nguyên.");
                         return;
                     }
                     if (cutResponse.Status == PromptStatus.OK &&
-                        (string.Equals(cutResponse.StringResult, "Summary", StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(cutResponse.StringResult, "Detail", StringComparison.OrdinalIgnoreCase)))
+                        (ChoiceIs(cutResponse, "Summary", "TongHop") ||
+                         ChoiceIs(cutResponse, "Detail", "ChiTiet")))
                     {
                         profile.CutListEnabled = true;
-                        profile.CutListMode = string.Equals(cutResponse.StringResult, "Detail",
-                            StringComparison.OrdinalIgnoreCase) ? "D" : "S";
+                        profile.CutListMode = ChoiceIs(cutResponse, "Detail", "ChiTiet") ? "D" : "S";
                     }
                 }
-                editor.WriteMessage("\nHNL Tool - New Table cut-piece list: " +
+                editor.WriteMessage("\nHNL Tool - Danh sách mảnh cắt trong bảng mới: " +
                     (profile.CutListEnabled
-                        ? (profile.CutListMode == "D" ? "DETAIL" : "SUMMARY")
-                        : "OFF") + ". Existing CAD tables are not modified.");
+                        ? (profile.CutListMode == "D" ? "Chi tiết" : "Tổng hợp")
+                        : "Không liệt kê") + ". Không sửa các bảng CAD đã có.");
 
                 // Like the original LISP, detailed cut lists can be slow on large Hatches.
                 // Confirm before allocating thousands of AutoCAD Table rows.
@@ -586,42 +595,42 @@ namespace HNL.CeilingEstimator.AutoCAD
                     if (detailedCount > 2000)
                     {
                         var verifyDetail = new PromptKeywordOptions(
-                            "\nHNL Tool - Detailed cut table has " + detailedCount +
-                            " rows and may be slow. [Proceed/Cancel] <Cancel>: ")
+                            "\nHNL Tool - Bảng chi tiết có " + detailedCount +
+                            " dòng, có thể mất nhiều thời gian. (Enter = Hủy): ")
                         {
                             AllowNone = true
                         };
-                        verifyDetail.Keywords.Add("Proceed");
-                        verifyDetail.Keywords.Add("Cancel");
+                        verifyDetail.Keywords.Add("Proceed", "TiepTuc", "Tiếp tục");
+                        verifyDetail.Keywords.Add("Cancel", "Huy", "Hủy");
                         var consent = editor.GetKeywords(verifyDetail);
                         if (consent.Status != PromptStatus.OK ||
-                            !string.Equals(consent.StringResult, "Proceed", StringComparison.OrdinalIgnoreCase))
+                            !ChoiceIs(consent, "Proceed", "TiepTuc"))
                         {
-                            editor.WriteMessage("\nHNL Tool - Detailed table cancelled; DWG unchanged.");
+                            editor.WriteMessage("\nHNL Tool - Đã hủy lập bảng chi tiết; bản vẽ giữ nguyên.");
                             return;
                         }
                     }
                 }
 
                 progress.Report(90, "Chờ chọn vị trí đặt bảng.", false, true);
-                var location = editor.GetPoint("\nHNL Tool - Specify result table insertion point: ");
+                var location = editor.GetPoint("\nHNL Tool - Chọn vị trí đặt bảng khối lượng: ");
                 if (location.Status != PromptStatus.OK)
                 {
-                    editor.WriteMessage("\nHNL Tool - Table cancelled. No drawing changes.");
+                    editor.WriteMessage("\nHNL Tool - Đã hủy đặt bảng; bản vẽ giữ nguyên.");
                     return;
                 }
                 var labelCount = CountLabelCandidates(report);
                 if (labelCount > 2000)
                 {
                     var verifyLabels = new PromptKeywordOptions(
-                        "\nHNL Tool - Create " + labelCount +
-                        " N/G/L labels on the DWG? [Yes/No] <Yes>: ") { AllowNone = true };
-                    verifyLabels.Keywords.Add("Yes");
-                    verifyLabels.Keywords.Add("No");
+                        "\nHNL Tool - Có tạo " + labelCount +
+                        " mã N/G/L lên bản vẽ không? (Enter = Có): ") { AllowNone = true };
+                    verifyLabels.Keywords.Add("Yes", "Co", "Có");
+                    verifyLabels.Keywords.Add("No", "Khong", "Không");
                     var decision = editor.GetKeywords(verifyLabels);
                     if (decision.Status == PromptStatus.Cancel) return;
                     if (decision.Status == PromptStatus.OK &&
-                        string.Equals(decision.StringResult, "No", StringComparison.OrdinalIgnoreCase))
+                        ChoiceIs(decision, "No", "Khong"))
                     {
                         progress.Report(93, "Đang lập bảng CAD (không tạo mã chữ).", true, true);
                         InsertTable(document.Database, report, location.Value, profile, false,
@@ -629,7 +638,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                                 Math.Max(1, total)),
                                 "Căn bảng: " + done + "/" + total + " hàng."));
                         progress.Complete();
-                        editor.WriteMessage("\nHNL Tool - Table created; large text label set was skipped.");
+                        editor.WriteMessage("\nHNL Tool - Đã tạo bảng; bỏ qua số lượng lớn mã chữ trên bản vẽ.");
                         return;
                     }
                 }
@@ -639,11 +648,11 @@ namespace HNL.CeilingEstimator.AutoCAD
                         Math.Max(1, total)),
                         "Căn bảng: " + done + "/" + total + " hàng."));
                 progress.Complete();
-                editor.WriteMessage("\nHNL Tool - Table created from the same calculation report.");
+                editor.WriteMessage("\nHNL Tool - Đã tạo bảng từ kết quả tính toán hiện hành.");
             }
             catch (System.Exception ex)
             {
-                editor.WriteMessage("\nHNL Tool - Runtime adapter error: " + ex.Message);
+                editor.WriteMessage("\nHNL Tool - Lỗi kết nối AutoCAD: " + ex.Message);
                 // Do not partially create geometry on calculation errors.
             }
         }
