@@ -148,6 +148,7 @@ namespace HNL.CeilingEstimator.AutoCAD
         private readonly SolidColorBrush _accentSoft;
         private readonly System.Collections.Generic.Dictionary<string, ComboBox> _legacySelectors =
             new System.Collections.Generic.Dictionary<string, ComboBox>();
+        private Grid? _legacyPriorityRow;
         private CheckBox? _legacySnap;
         private TextBox? _legacyTolerance;
         private ComboBox? _legacyTableStyle;
@@ -801,6 +802,14 @@ namespace HNL.CeilingEstimator.AutoCAD
                 RefreshSelectionState(profile);
             };
             _legacySelectors[key] = selector;
+            if (key == "Priority")
+            {
+                // This choice applies only to mixed stock. Keep its per-DWG
+                // value for the next mixed selection but never show it for
+                // short-only or long-only modes.
+                _legacyPriorityRow = row;
+                row.Visibility = System.Windows.Visibility.Collapsed;
+            }
             Grid.SetColumn(selector, 1);
             row.Children.Add(selector);
             return row;
@@ -972,6 +981,12 @@ namespace HNL.CeilingEstimator.AutoCAD
         // partially typed numeric value on an unrelated option change.
         private void RefreshSelectionState(HceLegacyProfile profile)
         {
+            // Do not display "Tấm ngắn làm chính" in D-only mode (or the
+            // inverse). The remembered priority has no meaning until M.
+            if (_legacyPriorityRow != null)
+                _legacyPriorityRow.Visibility = profile.Module == "M"
+                    ? System.Windows.Visibility.Visible
+                    : System.Windows.Visibility.Collapsed;
             if (_legacySelectors.TryGetValue("Priority", out var priority))
             {
                 priority.IsEnabled = profile.Module == "M";
