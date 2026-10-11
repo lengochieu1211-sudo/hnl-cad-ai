@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Runtime.CompilerServices;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -21,42 +20,6 @@ namespace HNL.CeilingEstimator.AutoCAD
         // in a valid AutoCAD command context without touching DemtcEngine.
         [CommandMethod("HCE", CommandFlags.Modal)]
         public void Hce() { new HcePaletteCommands().Open(); }
-
-        // Keep selection scoped to the DWG, never cache geometry or quantities.
-        private sealed class HatchSelectionState
-        {
-            internal ObjectId[] Ids = Array.Empty<ObjectId>();
-        }
-        private static readonly ConditionalWeakTable<Database, HatchSelectionState>
-            SelectedHatches = new ConditionalWeakTable<Database, HatchSelectionState>();
-
-        [CommandMethod("HCESELECT", CommandFlags.Modal)]
-        public void SelectHatches()
-        {
-            var doc = Application.DocumentManager.MdiActiveDocument;
-            if (doc == null) return;
-            var state = SelectedHatches.GetValue(doc.Database, db => new HatchSelectionState());
-            state.Ids = Array.Empty<ObjectId>(); // Cancel discards previous selection.
-            var picked = doc.Editor.GetSelection(
-                new PromptSelectionOptions { MessageForAdding =
-                    "\nHNL Tool - Chọn Hatch trần, nhấn Enter: " },
-                new SelectionFilter(new[] { new TypedValue((int)DxfCode.Start, "HATCH") }));
-            if (picked.Status != PromptStatus.OK || picked.Value == null)
-            {
-                doc.Editor.WriteMessage("\nHNL Tool - Đã hủy chọn Hatch; lựa chọn cũ đã xóa.");
-                HcePaletteService.ReportCalculation(0, "Chưa chọn Hatch. Vui lòng chọn lại.");
-                return;
-            }
-            var seen = new HashSet<ObjectId>();
-            var ids = new List<ObjectId>();
-            foreach (var id in picked.Value.GetObjectIds())
-                if (!id.IsNull && seen.Add(id)) ids.Add(id);
-            state.Ids = ids.ToArray();
-            doc.Editor.WriteMessage("\nHNL Tool - Đã chọn " + state.Ids.Length +
-                " Hatch. Bấm Tạo bảng để đọc lại và tính từ bản vẽ hiện tại.");
-            HcePaletteService.ReportCalculation(0,
-                "Đã chọn " + state.Ids.Length + " Hatch. Sẵn sàng tạo bảng.");
-        }
 
         [CommandMethod("HCECALC", CommandFlags.Modal)]
         public void HceCalculate() { RunCeilingEstimator(); }
@@ -416,24 +379,16 @@ namespace HNL.CeilingEstimator.AutoCAD
                 chosenGridAngle = Math.Atan2(ddy, ddx);
             }
 
-            // Fresh read on every Create; direct HCECALC keeps legacy prompt.
-            var state = SelectedHatches.GetValue(document.Database,
-                db => new HatchSelectionState());
-            ObjectId[] selectedIds = state.Ids;
-            if (selectedIds.Length == 0)
+            var selectionOptions = new PromptSelectionOptions
             {
-                var picked = editor.GetSelection(
-                    new PromptSelectionOptions
-                    {
-                        MessageForAdding = "\nHNL Tool - Chọn một hoặc nhiều Hatch trần: "
-                    },
-                    new SelectionFilter(new[] { new TypedValue((int)DxfCode.Start, "HATCH") }));
-                if (picked.Status != PromptStatus.OK || picked.Value == null)
-                {
-                    editor.WriteMessage("\nHNL Tool - Đã hủy; không thay đổi bản vẽ.");
-                    return;
-                }
-                selectedIds = picked.Value.GetObjectIds();
+                MessageForAdding = "\nHNL Tool - Chọn một hoặc nhiều Hatch trần: "
+            };
+            var filter = new SelectionFilter(new[] { new TypedValue((int)DxfCode.Start, "HATCH") });
+            var picked = editor.GetSelection(selectionOptions, filter);
+            if (picked.Status != PromptStatus.OK || picked.Value == null)
+            {
+                editor.WriteMessage("\nHNL Tool - Đã hủy; không thay đổi bản vẽ.");
+                return;
             }
 
             try
@@ -445,22 +400,17 @@ namespace HNL.CeilingEstimator.AutoCAD
                 var scannedHatches = 0;
                 using (var transaction = document.Database.TransactionManager.StartTransaction())
                 {
-                    foreach (ObjectId selectedId in selectedIds)
+                    foreach (SelectedObject selected in picked.Value)
                     {
                         ++scannedHatches;
                         progress.Report(2 + (int)(18.0 * scannedHatches /
-                            Math.Max(1, selectedIds.Length)),
-                            "Đọc Hatch: " + scannedHatches + "/" + selectedIds.Length);
-                        if (selectedId.IsNull) { rejected++; continue; }
+                            Math.Max(1, picked.Value.Count)),
+                            "Đọc Hatch: " + scannedHatches + "/" + picked.Value.Count);
+                        if (selected == null || selected.ObjectId.IsNull) continue;
                         try
                         {
-                            var hatch = transaction.GetObject(selectedId, OpenMode.ForRead, false) as Hatch;
-                            if (hatch == null)
-                            {
-                                rejected++;
-                                editor.WriteMessage("\nHNL Tool - Đối tượng không còn là Hatch: " + selectedId);
-                                continue;
-                            }
+                            var hatch = transaction.GetObject(selected.ObjectId, OpenMode.ForRead, false) as Hatch;
+                            if (hatch == null) continue;
                             HatchInput input;
                             string reason;
                             if (TryExtractHatch(hatch, out input, out reason, profile.Family))
@@ -500,14 +450,14 @@ namespace HNL.CeilingEstimator.AutoCAD
                             {
                                 rejected++;
                                 editor.WriteMessage("\nHNL Tool - Loại Hatch handle=" +
-                                    hatch.Handle + " id=" + selectedId + ": " + reason);
+                                    hatch.Handle + " id=" + selected.ObjectId + ": " + reason);
                             }
                         }
                         catch (System.Exception ex)
                         {
                             rejected++;
                             editor.WriteMessage("\nHNL Tool - Loại Hatch id=" +
-                                selectedId + " khi mở/đọc Hatch: " +
+                                selected.ObjectId + " khi mở/đọc Hatch: " +
                                 ex.GetType().Name + " " + ex.Message);
                         }
                     }
