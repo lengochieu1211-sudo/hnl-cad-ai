@@ -30,6 +30,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             var document = Application.DocumentManager.MdiActiveDocument;
             if (document == null) return;
             var editor = document.Editor;
+            // HCEQA must validate the user-selected 600/610 family, just like HCECALC.
+            var diagnosticPitch = HceLegacyProfiles.For(document.Database).Family;
             var selection = editor.GetSelection(
                 new PromptSelectionOptions
                 {
@@ -44,7 +46,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             using (var tr = document.Database.TransactionManager.StartTransaction())
             {
                 editor.WriteMessage("\nHNL Tool - HCEQA đơn vị bản vẽ=" +
-                    document.Database.Insunits.ToString());
+                    document.Database.Insunits.ToString() + "; hệ đang chọn=" +
+                    diagnosticPitch + " mm.");
                 foreach (SelectedObject selected in selection.Value)
                 {
                     if (selected == null || selected.ObjectId.IsNull) continue;
@@ -88,7 +91,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                         }
                         HatchInput extracted;
                         string failure;
-                        if (TryExtractHatch(hatch, out extracted, out failure))
+                        if (TryExtractHatch(hatch, out extracted, out failure, diagnosticPitch))
                             editor.WriteMessage("\n  bridge=accepted areaSource=" +
                                 (extracted.AreaFromBoundary ? "boundary-fallback" : "native") +
                                 " phasePolicy=" + (extracted.PatternBaseVerified
@@ -123,7 +126,8 @@ namespace HNL.CeilingEstimator.AutoCAD
             var rejected = 0;
             editor.WriteMessage("\nHNL Tool - HCEGOLDEN kiểm tra Hatch trong không gian hiện hành (chỉ đọc).");
             editor.WriteMessage("\nHNL Tool - Đơn vị bản vẽ=" + database.Insunits +
-                "; tạm giả định bước lưới 610 mm; cần kiểm tra thông số Hatch thực tế.");
+                "; HCEGOLDEN cố định hệ 610 mm / Kết hợp, tấm ngắn làm chính." +
+                " Không sử dụng lựa chọn S/D trên Palette; HCECALC dùng cấu hình hiện hành.");
             try
             {
                 using (var transaction = database.TransactionManager.StartTransaction())
