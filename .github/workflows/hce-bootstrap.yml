@@ -449,7 +449,7 @@ jobs:
           Write-Host 'HCE DEMTC UI control inventory PASS: family/module/priority/direction/grid/snap/tolerance'
 
       - name: Verify six DEMTC mode mapping without changing protected Core
-        shell: powershell
+        shell: pwsh
         run: |
           $root = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD'
           $ui = Get-Content "$root/HceLegacyProfile.cs" -Raw
