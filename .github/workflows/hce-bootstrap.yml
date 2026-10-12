@@ -460,6 +460,16 @@ jobs:
           foreach ($required in @('profile.ToOptions()', 'TryExtractHatch(hatch, out input, out reason, profile.Family)', 'ref rejected, false, options', 'GridMode == "2"')) {
             if (-not $bridge.Contains($required)) { throw "Missing DEMTC bridge setting $required" }
           }
+          foreach ($required in @('var diagnosticPitch = HceLegacyProfiles.For(document.Database).Family;',
+              'TryExtractHatch(hatch, out extracted, out failure, diagnosticPitch)',
+              'HCEGOLDEN cố định hệ 610 mm / Kết hợp',
+              'Không sử dụng lựa chọn S/D trên Palette; HCECALC dùng cấu hình hiện hành.')) {
+            if (-not $bridge.Contains($required)) { throw "HCE S/D diagnostic family/fixed-Golden disclosure missing: $required" }
+          }
+          if ($bridge.Contains('TryExtractHatch(hatch, out extracted, out failure))')) {
+            throw 'HCEQA must never silently use the default 610 pitch in a 600 drawing'
+          }
+          Write-Host 'HCE HCEQA ACTIVE 600/610 FAMILY + FIXED GOLDEN 610/M WARNING PASS'
           Write-Host 'HCE six-mode command/UI wiring source check PASS; Golden fixture still runs with defaults.'
 
       - name: Setup .NET 8 and 10
