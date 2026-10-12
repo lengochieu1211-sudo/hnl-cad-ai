@@ -296,6 +296,83 @@
             <EventSetter Event="Loaded" Handler="ComboBox_Loaded"/>
         </Style>
 
+
+        <!-- Editable layer name picker. The WPF stock editable ComboBox chrome
+             is white in dark AutoCAD; provide all named PARTs in an isolated template.
+             This style is applied only to HCF lay-in Layer fields. -->
+        <Style x:Key="HcfEditableLayerCombo" TargetType="{x:Type ComboBox}"
+               BasedOn="{StaticResource {x:Type ComboBox}}">
+            <Setter Property="IsEditable" Value="True"/>
+            <Setter Property="StaysOpenOnEdit" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBox}">
+                        <Grid SnapsToDevicePixels="True">
+                            <Border x:Name="LayerChrome" Background="{DynamicResource InputBackground}"
+                                    BorderBrush="{DynamicResource InputBorder}" BorderThickness="1"
+                                    CornerRadius="4"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="28"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="PART_EditableTextBox" Grid.Column="0"
+                                         Style="{x:Null}" Background="Transparent" BorderThickness="0"
+                                         Foreground="{DynamicResource PrimaryText}"
+                                         CaretBrush="{DynamicResource AccentStrong}"
+                                         SelectionBrush="{DynamicResource AccentSoft}"
+                                         Padding="8,0,3,0" VerticalContentAlignment="Center"
+                                         HorizontalAlignment="Stretch" Focusable="True"
+                                         IsReadOnly="{TemplateBinding IsReadOnly}"/>
+                                <ToggleButton Grid.Column="1" Focusable="False" ClickMode="Press"
+                                              Background="Transparent" BorderThickness="0"
+                                              IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                            <Border Background="Transparent" BorderBrush="{DynamicResource InputBorder}"
+                                                    BorderThickness="1,0,0,0">
+                                                <Path Width="8" Height="5" Stretch="Fill"
+                                                      Fill="{DynamicResource PrimaryText}"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      Data="M0,0 L8,0 L4,5 Z"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+                            </Grid>
+                            <Popup x:Name="PART_Popup" Placement="Bottom" Focusable="False"
+                                   AllowsTransparency="True" PopupAnimation="Fade"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}">
+                                <Border Background="{DynamicResource InputBackground}"
+                                        BorderBrush="{DynamicResource InputBorder}" BorderThickness="1"
+                                        CornerRadius="4" Margin="0,2,0,0"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <ScrollViewer Margin="1" VerticalScrollBarVisibility="Auto"
+                                                  ScrollViewer.CanContentScroll="True"
+                                                  KeyboardNavigation.DirectionalNavigation="Contained">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="LayerChrome" Property="Opacity" Value="0.85"/>
+                                <Setter TargetName="PART_EditableTextBox" Property="Foreground" Value="{DynamicResource SecondaryText}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="LayerChrome" Property="BorderBrush" Value="{DynamicResource AccentStrong}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="LayerChrome" Property="BorderBrush" Value="{DynamicResource AccentStrong}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="Button">
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="12"/>
@@ -1314,102 +1391,133 @@
                         <Border Style="{StaticResource SectionCard}">
                             <Expander Header="6. Layer" IsExpanded="False" HorizontalContentAlignment="Stretch">
                                 <StackPanel Margin="0,8,0,0">
-                                    <TextBlock Text="Chọn layer trong DWG; màu/nét/độ dày chỉ dùng khi tạo layer mới."
-                                               Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                                    <StackPanel Margin="0,0,0,9" IsEnabled="{Binding DrawHatch}">
-                                        <Grid MinHeight="29">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="108"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Text="Hatch khung" Style="{StaticResource FieldLabel}"/>
-                                            <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding LayerOptions}"
-                                                      Text="{Binding HatchLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                    <TextBlock Text="Layer có sẵn giữ nguyên thuộc tính; màu, nét, độ dày chỉ áp dụng cho layer mới."
+                                               Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,9"/>
+
+                                    <!-- Hatch khung: layer/name and line appearance use a compact 2-column layout. -->
+                                    <StackPanel Margin="0,0,0,8" IsEnabled="{Binding DrawHatch}">
+                                        <Grid MinHeight="27">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Hatch khung" FontWeight="SemiBold" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" Style="{StaticResource HcfEditableLayerCombo}"
+                                                      ItemsSource="{Binding LayerOptions}"
+                                                      Text="{Binding HatchLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                      ToolTip="Chọn layer DWG hoặc gõ tên layer mới."/>
                                         </Grid>
-                                        <Grid Margin="0,4,0,0">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,3,0">
+                                        <Grid Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,5,0">
                                                 <TextBlock Text="Màu" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding QuickColorOptions}" SelectedItem="{Binding SelectedHatchColor}"/>
+                                                <ComboBox ItemsSource="{Binding QuickColorOptions}"
+                                                          SelectedItem="{Binding SelectedHatchColor, Mode=TwoWay}"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="1" Margin="3,0,3,0">
-                                                <TextBlock Text="Kiểu nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox IsEditable="True" ItemsSource="{Binding LinetypeOptions}"
-                                                          Text="{Binding HatchLinetype, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                            <StackPanel Grid.Column="1" Margin="5,0,0,0">
+                                                <TextBlock Text="Độ dày nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox ItemsSource="{Binding LineweightOptions}"
+                                                          SelectedItem="{Binding SelectedHatchLineweight, Mode=TwoWay}"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="2" Margin="3,0,0,0">
-                                                <TextBlock Text="Độ dày" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding LineweightOptions}" SelectedItem="{Binding SelectedHatchLineweight}"/>
-                                            </StackPanel>
+                                        </Grid>
+                                        <Grid MinHeight="27" Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Kiểu nét" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding LinetypeOptions}"
+                                                      SelectedItem="{Binding HatchLinetype, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                         </Grid>
                                     </StackPanel>
-                                    <StackPanel Margin="0,0,0,9" IsEnabled="{Binding DrawHangers}">
-                                        <Grid MinHeight="29">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="108"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Text="Ty treo" Style="{StaticResource FieldLabel}"/>
-                                            <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding LayerOptions}"
-                                                      Text="{Binding HangerLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                    <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,0,1" Margin="0,0,0,8"/>
+
+                                    <!-- Ty treo: layer/name and line appearance use a compact 2-column layout. -->
+                                    <StackPanel Margin="0,0,0,8" IsEnabled="{Binding DrawHangers}">
+                                        <Grid MinHeight="27">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Ty treo" FontWeight="SemiBold" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" Style="{StaticResource HcfEditableLayerCombo}"
+                                                      ItemsSource="{Binding LayerOptions}"
+                                                      Text="{Binding HangerLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                      ToolTip="Chọn layer DWG hoặc gõ tên layer mới."/>
                                         </Grid>
-                                        <Grid Margin="0,4,0,0">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,3,0">
+                                        <Grid Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,5,0">
                                                 <TextBlock Text="Màu" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding QuickColorOptions}" SelectedItem="{Binding SelectedHangerColor}"/>
+                                                <ComboBox ItemsSource="{Binding QuickColorOptions}"
+                                                          SelectedItem="{Binding SelectedHangerColor, Mode=TwoWay}"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="1" Margin="3,0,3,0">
-                                                <TextBlock Text="Kiểu nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox IsEditable="True" ItemsSource="{Binding LinetypeOptions}"
-                                                          Text="{Binding HangerLinetype, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                            <StackPanel Grid.Column="1" Margin="5,0,0,0">
+                                                <TextBlock Text="Độ dày nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox ItemsSource="{Binding LineweightOptions}"
+                                                          SelectedItem="{Binding SelectedHangerLineweight, Mode=TwoWay}"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="2" Margin="3,0,0,0">
-                                                <TextBlock Text="Độ dày" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding LineweightOptions}" SelectedItem="{Binding SelectedHangerLineweight}"/>
-                                            </StackPanel>
+                                        </Grid>
+                                        <Grid MinHeight="27" Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Kiểu nét" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding LinetypeOptions}"
+                                                      SelectedItem="{Binding HangerLinetype, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                         </Grid>
                                     </StackPanel>
-                                    <StackPanel Margin="0,0,0,9" IsEnabled="{Binding IsDimensionEnabled}">
-                                        <Grid MinHeight="29">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="108"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Text="DIM" Style="{StaticResource FieldLabel}"/>
-                                            <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding LayerOptions}"
-                                                      Text="{Binding DimensionLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                    <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,0,1" Margin="0,0,0,8"/>
+
+                                    <!-- DIM: layer/name and line appearance use a compact 2-column layout. -->
+                                    <StackPanel Margin="0,0,0,8" IsEnabled="{Binding IsDimensionEnabled}">
+                                        <Grid MinHeight="27">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="DIM" FontWeight="SemiBold" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" Style="{StaticResource HcfEditableLayerCombo}"
+                                                      ItemsSource="{Binding LayerOptions}"
+                                                      Text="{Binding DimensionLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                      ToolTip="Chọn layer DWG hoặc gõ tên layer mới."/>
                                         </Grid>
-                                        <Grid Margin="0,4,0,0">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,3,0">
+                                        <Grid Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,5,0">
                                                 <TextBlock Text="Màu" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding QuickColorOptions}" SelectedItem="{Binding SelectedDimensionColor}"/>
+                                                <ComboBox ItemsSource="{Binding QuickColorOptions}"
+                                                          SelectedItem="{Binding SelectedDimensionColor, Mode=TwoWay}"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="1" Margin="3,0,3,0">
-                                                <TextBlock Text="Kiểu nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox IsEditable="True" ItemsSource="{Binding LinetypeOptions}"
-                                                          Text="{Binding DimensionLinetype, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                            <StackPanel Grid.Column="1" Margin="5,0,0,0">
+                                                <TextBlock Text="Độ dày nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox ItemsSource="{Binding LineweightOptions}"
+                                                          SelectedItem="{Binding SelectedDimensionLineweight, Mode=TwoWay}"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="2" Margin="3,0,0,0">
-                                                <TextBlock Text="Độ dày" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding LineweightOptions}" SelectedItem="{Binding SelectedDimensionLineweight}"/>
-                                            </StackPanel>
+                                        </Grid>
+                                        <Grid MinHeight="27" Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Kiểu nét" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding LinetypeOptions}"
+                                                      SelectedItem="{Binding DimensionLinetype, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                         </Grid>
                                     </StackPanel>
-                                    <StackPanel Margin="0,0,0,9" IsEnabled="{Binding DrawStartTileBlock}">
-                                        <Grid MinHeight="29">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="108"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Text="Block ô đầu" Style="{StaticResource FieldLabel}"/>
-                                            <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding LayerOptions}"
-                                                      Text="{Binding StartMarkerLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                    <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,0,1" Margin="0,0,0,8"/>
+
+                                    <!-- Block ô đầu: layer/name and line appearance use a compact 2-column layout. -->
+                                    <StackPanel Margin="0,0,0,0" IsEnabled="{Binding DrawStartTileBlock}">
+                                        <Grid MinHeight="27">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Block ô đầu" FontWeight="SemiBold" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" Style="{StaticResource HcfEditableLayerCombo}"
+                                                      ItemsSource="{Binding LayerOptions}"
+                                                      Text="{Binding StartMarkerLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                      ToolTip="Chọn layer DWG hoặc gõ tên layer mới."/>
                                         </Grid>
-                                        <Grid Margin="0,4,0,0">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,3,0">
+                                        <Grid Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,5,0">
                                                 <TextBlock Text="Màu" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding QuickColorOptions}" SelectedItem="{Binding SelectedStartMarkerColor}"/>
+                                                <ComboBox ItemsSource="{Binding QuickColorOptions}"
+                                                          SelectedItem="{Binding SelectedStartMarkerColor, Mode=TwoWay}"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="1" Margin="3,0,3,0">
-                                                <TextBlock Text="Kiểu nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox IsEditable="True" ItemsSource="{Binding LinetypeOptions}"
-                                                          Text="{Binding StartMarkerLinetype, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                            <StackPanel Grid.Column="1" Margin="5,0,0,0">
+                                                <TextBlock Text="Độ dày nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox ItemsSource="{Binding LineweightOptions}"
+                                                          SelectedItem="{Binding SelectedStartMarkerLineweight, Mode=TwoWay}"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="2" Margin="3,0,0,0">
-                                                <TextBlock Text="Độ dày" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding LineweightOptions}" SelectedItem="{Binding SelectedStartMarkerLineweight}"/>
-                                            </StackPanel>
+                                        </Grid>
+                                        <Grid MinHeight="27" Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Kiểu nét" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding LinetypeOptions}"
+                                                      SelectedItem="{Binding StartMarkerLinetype, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                         </Grid>
                                     </StackPanel>
                                 </StackPanel>

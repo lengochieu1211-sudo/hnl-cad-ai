@@ -146,6 +146,24 @@ if ($layInUi.Contains('Content="Vẽ Ty"') -or
     throw 'HCF audit: duplicate legacy Lay-in toggles were reintroduced.'
 }
 
+
+# Narrow Palette: the Lay-in resource card must not use a host-stock white editable
+# ComboBox for linetypes, or split color/linetype/lineweight into 3 cramped columns.
+$layerSectionStart = $layInUi.IndexOf('<Expander Header="6. Layer"')
+$layerSectionEnd = $layInUi.IndexOf('</Expander>', $layerSectionStart)
+if ($layerSectionStart -lt 0 -or $layerSectionEnd -le $layerSectionStart) {
+    throw 'HCF Layer UI: missing 6. Layer section.'
+}
+$layInLayerUi = $layInUi.Substring($layerSectionStart, $layerSectionEnd - $layerSectionStart)
+if (-not $xaml.Contains('<Style x:Key="HcfEditableLayerCombo"') -or
+    -not $xaml.Contains('x:Name="PART_EditableTextBox"') -or
+    @([regex]::Matches($layInLayerUi, 'Style="\{StaticResource HcfEditableLayerCombo\}"')).Count -ne 4 -or
+    @([regex]::Matches($layInLayerUi, 'SelectedItem="\{Binding (Hatch|Hanger|Dimension|StartMarker)Linetype,')).Count -ne 4 -or
+    $layInLayerUi.Contains('IsEditable="True"') -or
+    $layInLayerUi.Contains('<ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>')) {
+    throw 'HCF Layer UI: stock editable chrome or cramped 3-column appearance regression.'
+}
+
 # A selected Lay-in Hatch is never a concealed Polyline boundary.
 $paletteVm = Source 'src/HNL.VXT.UI/ViewModels/VxtPaletteViewModel.cs'
 $layInVm = Source 'src/HNL.VXT.UI/ViewModels/LayInCeilingViewModel.cs'
