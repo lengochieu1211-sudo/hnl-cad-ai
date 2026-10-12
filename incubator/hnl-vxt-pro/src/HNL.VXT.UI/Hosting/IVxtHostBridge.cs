@@ -2,6 +2,11 @@ using HNL.VXT.Core.Models;
 
 namespace HNL.VXT.UI.Hosting
 {
+    public interface IVxtLayerCatalog
+    {
+        string[] GetLayerNames();
+    }
+
     public interface IVxtHostBridge
     {
         bool IsDarkTheme { get; }

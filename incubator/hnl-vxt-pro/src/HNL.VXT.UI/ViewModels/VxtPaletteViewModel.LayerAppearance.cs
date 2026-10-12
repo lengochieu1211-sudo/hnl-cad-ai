@@ -212,7 +212,7 @@ namespace HNL.VXT.UI.ViewModels
             return brush;
         }
 
-        private static string ColorIndexToText(short value)
+        internal static string ColorIndexToText(short value)
         {
             switch (value)
             {
@@ -229,7 +229,7 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        private static short TextToColorIndex(string value, short fallback)
+        internal static short TextToColorIndex(string value, short fallback)
         {
             switch (value)
             {
@@ -246,7 +246,7 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        private static string LineweightToText(string raw)
+        internal static string LineweightToText(string raw)
         {
             switch (raw)
             {
@@ -261,7 +261,7 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
-        private static string TextToLineweight(string text, string fallback)
+        internal static string TextToLineweight(string text, string fallback)
         {
             if (string.Equals(text, "Mặc định", StringComparison.Ordinal)) return "-3";
             if (string.Equals(text, "ByBlock", StringComparison.Ordinal)) return "-2";

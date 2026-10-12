@@ -1314,22 +1314,104 @@
                         <Border Style="{StaticResource SectionCard}">
                             <Expander Header="6. Layer" IsExpanded="False" HorizontalContentAlignment="Stretch">
                                 <StackPanel Margin="0,8,0,0">
-                                    <Grid Margin="0,0,0,7" MinHeight="29">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="Hatch khung" Style="{StaticResource FieldLabel}"/>
-                                        <TextBox Grid.Column="1" Text="{Binding HatchLayer, UpdateSourceTrigger=LostFocus}"
-                                                 IsEnabled="{Binding DrawHatch}" ToolTip="Tắt Vẽ Hatch để giữ nguyên Hatch đã chọn."/>
-                                    </Grid>
-                                    <Grid Margin="0,0,0,7" MinHeight="29">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="Ty treo" Style="{StaticResource FieldLabel}"/>
-                                        <TextBox Grid.Column="1" Text="{Binding HangerLayer, UpdateSourceTrigger=LostFocus}"/>
-                                    </Grid>
-                                    <Grid MinHeight="29">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="DIM" Style="{StaticResource FieldLabel}"/>
-                                        <TextBox Grid.Column="1" Text="{Binding DimensionLayer, UpdateSourceTrigger=LostFocus}"/>
-                                    </Grid>
+                                    <TextBlock Text="Chọn layer trong DWG; màu/nét/độ dày chỉ dùng khi tạo layer mới."
+                                               Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <StackPanel Margin="0,0,0,9" IsEnabled="{Binding DrawHatch}">
+                                        <Grid MinHeight="29">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="108"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Hatch khung" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding LayerOptions}"
+                                                      Text="{Binding HatchLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                        </Grid>
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,3,0">
+                                                <TextBlock Text="Màu" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox ItemsSource="{Binding QuickColorOptions}" SelectedItem="{Binding SelectedHatchColor}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Margin="3,0,3,0">
+                                                <TextBlock Text="Kiểu nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox IsEditable="True" ItemsSource="{Binding LinetypeOptions}"
+                                                          Text="{Binding HatchLinetype, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Margin="3,0,0,0">
+                                                <TextBlock Text="Độ dày" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox ItemsSource="{Binding LineweightOptions}" SelectedItem="{Binding SelectedHatchLineweight}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,0,9" IsEnabled="{Binding DrawHangers}">
+                                        <Grid MinHeight="29">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="108"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Ty treo" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding LayerOptions}"
+                                                      Text="{Binding HangerLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                        </Grid>
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,3,0">
+                                                <TextBlock Text="Màu" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox ItemsSource="{Binding QuickColorOptions}" SelectedItem="{Binding SelectedHangerColor}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Margin="3,0,3,0">
+                                                <TextBlock Text="Kiểu nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox IsEditable="True" ItemsSource="{Binding LinetypeOptions}"
+                                                          Text="{Binding HangerLinetype, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Margin="3,0,0,0">
+                                                <TextBlock Text="Độ dày" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox ItemsSource="{Binding LineweightOptions}" SelectedItem="{Binding SelectedHangerLineweight}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,0,9" IsEnabled="{Binding IsDimensionEnabled}">
+                                        <Grid MinHeight="29">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="108"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="DIM" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding LayerOptions}"
+                                                      Text="{Binding DimensionLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                        </Grid>
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,3,0">
+                                                <TextBlock Text="Màu" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox ItemsSource="{Binding QuickColorOptions}" SelectedItem="{Binding SelectedDimensionColor}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Margin="3,0,3,0">
+                                                <TextBlock Text="Kiểu nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox IsEditable="True" ItemsSource="{Binding LinetypeOptions}"
+                                                          Text="{Binding DimensionLinetype, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Margin="3,0,0,0">
+                                                <TextBlock Text="Độ dày" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox ItemsSource="{Binding LineweightOptions}" SelectedItem="{Binding SelectedDimensionLineweight}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,0,9" IsEnabled="{Binding DrawStartTileBlock}">
+                                        <Grid MinHeight="29">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="108"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Block ô đầu" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding LayerOptions}"
+                                                      Text="{Binding StartMarkerLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                        </Grid>
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,3,0">
+                                                <TextBlock Text="Màu" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox ItemsSource="{Binding QuickColorOptions}" SelectedItem="{Binding SelectedStartMarkerColor}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Margin="3,0,3,0">
+                                                <TextBlock Text="Kiểu nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox IsEditable="True" ItemsSource="{Binding LinetypeOptions}"
+                                                          Text="{Binding StartMarkerLinetype, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Margin="3,0,0,0">
+                                                <TextBlock Text="Độ dày" Style="{StaticResource FieldLabel}" FontSize="10"/>
+                                                <ComboBox ItemsSource="{Binding LineweightOptions}" SelectedItem="{Binding SelectedStartMarkerLineweight}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
                                 </StackPanel>
                             </Expander>
                         </Border>

@@ -10,7 +10,7 @@ using HNL.VXT.UI.Hosting;
 
 namespace HNL.VXT.AutoCAD
 {
-    internal sealed class VxtHostBridge : IVxtHostBridge
+    internal sealed class VxtHostBridge : IVxtHostBridge, IVxtLayerCatalog
     {
         private readonly DispatcherTimer _previewTimer;
         private readonly DispatcherTimer _layInPreviewTimer;
@@ -44,6 +44,13 @@ namespace HNL.VXT.AutoCAD
                 try { return Convert.ToInt32(Application.GetSystemVariable("COLORTHEME")) == 0; }
                 catch { return true; }
             }
+        }
+
+        public string[] GetLayerNames()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            return doc == null ? Array.Empty<string>() :
+                ReadSymbolNames(doc.Database, doc.Database.LayerTableId);
         }
 
         public string[] GetLinetypeNames()

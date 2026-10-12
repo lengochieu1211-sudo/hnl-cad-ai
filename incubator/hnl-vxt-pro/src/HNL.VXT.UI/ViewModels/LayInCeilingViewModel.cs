@@ -560,6 +560,130 @@ namespace HNL.VXT.UI.ViewModels
             }
         }
 
+        // CAD resource lists are read from the active DWG; custom values stay selectable.
+        public string[] LayerOptions => ((_host as IVxtLayerCatalog)?.GetLayerNames()
+            ?? Array.Empty<string>()).Concat(new[] {
+                _settings.HatchLayer, _settings.HangerLayer,
+                _settings.DimensionLayer, _settings.StartMarkerLayer
+            }).Where(x => !string.IsNullOrWhiteSpace(x))
+              .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToArray();
+
+        public string[] LinetypeOptions => (_host.GetLinetypeNames()
+            ?? Array.Empty<string>()).Concat(new[] {
+                "Continuous", _settings.HatchLinetype, _settings.HangerLinetype,
+                _settings.DimensionLinetype, _settings.StartMarkerLinetype
+            }).Where(x => !string.IsNullOrWhiteSpace(x))
+              .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToArray();
+
+        public string[] QuickColorOptions { get; } = {
+            "Đỏ", "Vàng", "Xanh lá", "Cyan", "Xanh dương",
+            "Magenta", "Trắng / Đen", "Xám", "Xám nhạt"
+        };
+        public string[] LineweightOptions { get; } = {
+            "Mặc định", "ByBlock", "ByLayer", "0.00 mm", "0.05 mm",
+            "0.09 mm", "0.13 mm", "0.15 mm", "0.18 mm", "0.20 mm",
+            "0.25 mm", "0.30 mm", "0.35 mm", "0.40 mm", "0.50 mm",
+            "0.53 mm", "0.60 mm", "0.70 mm", "0.80 mm", "0.90 mm",
+            "1.00 mm", "1.06 mm", "1.20 mm", "1.40 mm", "1.58 mm",
+            "2.00 mm", "2.11 mm"
+        };
+
+        private void ChangeColor(Func<short> get, Action<short> set, string text, string property)
+        {
+            var next = VxtPaletteViewModel.TextToColorIndex(text, get());
+            if (next == get()) return;
+            set(next);
+            OnPropertyChanged(property);
+            RequestPreview();
+        }
+        private void ChangeLineweight(Func<string> get, Action<string> set, string text, string property)
+        {
+            SetText(set, get(), VxtPaletteViewModel.TextToLineweight(text, get()), property);
+        }
+
+        public string SelectedHatchColor
+        {
+            get => VxtPaletteViewModel.ColorIndexToText(_settings.HatchColorIndex);
+            set => ChangeColor(() => _settings.HatchColorIndex,
+                v => _settings.HatchColorIndex = v, value, nameof(SelectedHatchColor));
+        }
+        public string SelectedHatchLineweight
+        {
+            get => VxtPaletteViewModel.LineweightToText(_settings.HatchLineweight);
+            set => ChangeLineweight(() => _settings.HatchLineweight,
+                v => _settings.HatchLineweight = v, value, nameof(SelectedHatchLineweight));
+        }
+        public string HatchLinetype
+        {
+            get => _settings.HatchLinetype;
+            set => SetText(v => _settings.HatchLinetype = v,
+                _settings.HatchLinetype, value, nameof(HatchLinetype));
+        }
+
+        public string SelectedHangerColor
+        {
+            get => VxtPaletteViewModel.ColorIndexToText(_settings.HangerColorIndex);
+            set => ChangeColor(() => _settings.HangerColorIndex,
+                v => _settings.HangerColorIndex = v, value, nameof(SelectedHangerColor));
+        }
+        public string SelectedHangerLineweight
+        {
+            get => VxtPaletteViewModel.LineweightToText(_settings.HangerLineweight);
+            set => ChangeLineweight(() => _settings.HangerLineweight,
+                v => _settings.HangerLineweight = v, value, nameof(SelectedHangerLineweight));
+        }
+        public string HangerLinetype
+        {
+            get => _settings.HangerLinetype;
+            set => SetText(v => _settings.HangerLinetype = v,
+                _settings.HangerLinetype, value, nameof(HangerLinetype));
+        }
+
+        public string SelectedDimensionColor
+        {
+            get => VxtPaletteViewModel.ColorIndexToText(_settings.DimensionColorIndex);
+            set => ChangeColor(() => _settings.DimensionColorIndex,
+                v => _settings.DimensionColorIndex = v, value, nameof(SelectedDimensionColor));
+        }
+        public string SelectedDimensionLineweight
+        {
+            get => VxtPaletteViewModel.LineweightToText(_settings.DimensionLineweight);
+            set => ChangeLineweight(() => _settings.DimensionLineweight,
+                v => _settings.DimensionLineweight = v, value, nameof(SelectedDimensionLineweight));
+        }
+        public string DimensionLinetype
+        {
+            get => _settings.DimensionLinetype;
+            set => SetText(v => _settings.DimensionLinetype = v,
+                _settings.DimensionLinetype, value, nameof(DimensionLinetype));
+        }
+
+        public string SelectedStartMarkerColor
+        {
+            get => VxtPaletteViewModel.ColorIndexToText(_settings.StartMarkerColorIndex);
+            set => ChangeColor(() => _settings.StartMarkerColorIndex,
+                v => _settings.StartMarkerColorIndex = v, value, nameof(SelectedStartMarkerColor));
+        }
+        public string SelectedStartMarkerLineweight
+        {
+            get => VxtPaletteViewModel.LineweightToText(_settings.StartMarkerLineweight);
+            set => ChangeLineweight(() => _settings.StartMarkerLineweight,
+                v => _settings.StartMarkerLineweight = v, value, nameof(SelectedStartMarkerLineweight));
+        }
+        public string StartMarkerLinetype
+        {
+            get => _settings.StartMarkerLinetype;
+            set => SetText(v => _settings.StartMarkerLinetype = v,
+                _settings.StartMarkerLinetype, value, nameof(StartMarkerLinetype));
+        }
+
+        public string StartMarkerLayer
+        {
+            get => _settings.StartMarkerLayer;
+            set => SetText(v => _settings.StartMarkerLayer = v,
+                _settings.StartMarkerLayer, value, nameof(StartMarkerLayer));
+        }
+
         public string HatchLayer
         {
             get => _settings.HatchLayer;
@@ -621,6 +745,8 @@ namespace HNL.VXT.UI.ViewModels
             HasBoundary = hasBoundary;
             // DimStyle table belongs to the active DWG, not to the palette.
             OnPropertyChanged(nameof(DimStyleOptions));
+            OnPropertyChanged(nameof(LayerOptions));
+            OnPropertyChanged(nameof(LinetypeOptions));
             if (!hasBoundary)
                 PreviewStatus = "Chọn biên để xem trước.";
         }
@@ -647,6 +773,8 @@ namespace HNL.VXT.UI.ViewModels
             OnPropertyChanged(nameof(DoorBlockSummary));
             OnPropertyChanged(nameof(SelectedDimensionStyle));
             OnPropertyChanged(nameof(DimStyleOptions));
+            OnPropertyChanged(nameof(LayerOptions));
+            OnPropertyChanged(nameof(LinetypeOptions));
             if (_settings.StartMode != LayInStartMode.Balanced)
             {
                 _settings.StartMode = LayInStartMode.Balanced;

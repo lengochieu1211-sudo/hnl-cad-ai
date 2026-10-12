@@ -122,6 +122,12 @@ namespace HNL.VXT.AutoCAD
                 var dimStyleId = plans.Any(p => p.Plan.DimensionRuns.Count > 0)
                     ? ResolveDimensionStyle(db, session.LayInSettings.DimensionStyle)
                     : db.Dimstyle;
+                var hangerPreviewColor = PreviewLayerAci(db,
+                    session.LayInSettings.HangerLayer, session.LayInSettings.HangerColorIndex);
+                var dimensionPreviewColor = PreviewLayerAci(db,
+                    session.LayInSettings.DimensionLayer, session.LayInSettings.DimensionColorIndex);
+                var markerPreviewColor = PreviewLayerAci(db,
+                    session.LayInSettings.StartMarkerLayer, session.LayInSettings.StartMarkerColorIndex);
                 ObjectId previewHangerBlock;
                 using (var readTr = db.TransactionManager.StartTransaction())
                 {
@@ -148,14 +154,14 @@ namespace HNL.VXT.AutoCAD
                             ? (Entity)new Circle(ToCad(hanger), Vector3d.ZAxis, 18.0)
                             : new BlockReference(ToCad(hanger), previewHangerBlock);
                         marker.SetDatabaseDefaults(db);
-                        marker.ColorIndex = 2;
+                        marker.ColorIndex = hangerPreviewColor;
                         AddTransient(marker);
                     }
                     if (showDimensions)
                     foreach (var run in item.Plan.DimensionRuns)
                     {
                         var dimension = BuildDimension(db, run, item.Plan.ModuleShort, dimStyleId);
-                        dimension.ColorIndex = 4;
+                        dimension.ColorIndex = dimensionPreviewColor;
                         // A transient dimension has no database owner. GenerateLayout
                         // before AddTransient so the complete labeled DIM is visible.
                         dimension.GenerateLayout();
@@ -163,7 +169,7 @@ namespace HNL.VXT.AutoCAD
                     }
                     if (showHangersAndMarker && session.LayInSettings.DrawStartTileBlock &&
                         item.Plan.FirstTileOrigin.HasValue)
-                        PreviewStartTile(db, item.Plan, session.LayInSettings);
+                        PreviewStartTile(db, item.Plan, session.LayInSettings, markerPreviewColor);
                 }
                 int main, longCross, shortCross, hangers;
                 double waste;
@@ -240,17 +246,21 @@ namespace HNL.VXT.AutoCAD
                     var ms = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
                     var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                     var hatchLayer = settings.DrawHatch
-                        ? VxtCadResources.EnsureLayInLayer(db, tr, settings.HatchLayer, 7, "Continuous", "25")
+                        ? VxtCadResources.EnsureLayInLayer(db, tr, settings.HatchLayer, settings.HatchColorIndex,
+                            settings.HatchLinetype, settings.HatchLineweight)
                         : ObjectId.Null;
                     var hangerLayer = settings.DrawHangers
-                        ? VxtCadResources.EnsureLayInLayer(db, tr, settings.HangerLayer, 2, "Continuous", "25")
+                        ? VxtCadResources.EnsureLayInLayer(db, tr, settings.HangerLayer, settings.HangerColorIndex,
+                            settings.HangerLinetype, settings.HangerLineweight)
                         : ObjectId.Null;
                     var dimLayer = settings.DrawDimensions &&
                                    settings.DimensionMode != LayInDimensionMode.Off
-                        ? VxtCadResources.EnsureLayInLayer(db, tr, settings.DimensionLayer, 4, "Continuous", "25")
+                        ? VxtCadResources.EnsureLayInLayer(db, tr, settings.DimensionLayer, settings.DimensionColorIndex,
+                            settings.DimensionLinetype, settings.DimensionLineweight)
                         : ObjectId.Null;
                     var markerLayer = settings.DrawStartTileBlock
-                        ? VxtCadResources.EnsureLayInLayer(db, tr, "HNL-CF-START", 3, "Continuous", "25")
+                        ? VxtCadResources.EnsureLayInLayer(db, tr, settings.StartMarkerLayer, settings.StartMarkerColorIndex,
+                            settings.StartMarkerLinetype, settings.StartMarkerLineweight)
                         : ObjectId.Null;
                     var hangerBlock = settings.DrawHangers
                         ? ResolveHangerBlock(bt, settings.HangerBlockName) : ObjectId.Null;
@@ -503,8 +513,21 @@ namespace HNL.VXT.AutoCAD
             };
         }
 
+        private static short PreviewLayerAci(Database db, string name, short fallback)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return fallback;
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                var table = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                if (!table.Has(name)) return fallback;
+                var layer = (LayerTableRecord)tr.GetObject(table[name], OpenMode.ForRead);
+                var aci = layer.Color.ColorIndex;
+                return aci >= 1 && aci <= 255 ? aci : fallback;
+            }
+        }
+
         private static void PreviewStartTile(
-            Database db, LayInCeilingPlan plan, LayInCeilingSettings settings)
+            Database db, LayInCeilingPlan plan, LayInCeilingSettings settings, short previewColor)
         {
             if (!string.IsNullOrWhiteSpace(settings.StartMarkerBlockName))
             {
@@ -516,7 +539,7 @@ namespace HNL.VXT.AutoCAD
                     var id = ResolveBlock(bt, settings.StartMarkerBlockName);
                     var marker = MakeStartTileReference(db, tr, plan, id, false);
                     marker.SetDatabaseDefaults(db);
-                    marker.ColorIndex = 3;
+                    marker.ColorIndex = previewColor;
                     AddTransient(marker);
                 }
                 return;
@@ -534,7 +557,7 @@ namespace HNL.VXT.AutoCAD
                             cos * p.Y * plan.FirstTileHeight)).ToList();
                 var line = MakeSymbolPolyline(vertices);
                 line.SetDatabaseDefaults(db);
-                line.ColorIndex = 3;
+                line.ColorIndex = previewColor;
                 AddTransient(line);
             }
         }
