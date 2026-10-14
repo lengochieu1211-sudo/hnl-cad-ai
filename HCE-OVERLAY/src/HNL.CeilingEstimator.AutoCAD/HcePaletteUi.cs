@@ -112,8 +112,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                     Size = new DrawingSize(420, 730),
                     KeepFocus = false
                 };
-                // Short tab name leaves room for Autodesk's native palette buttons.
-                palette.AddVisual("Tính Tấm Trần", view);
+                // Internal tab ID only. A single PaletteSet visual needs no displayed tab;
+                // never enable ShowTabForSingle or add a duplicate visible header.
+                palette.AddVisual("HCE", view);
                 _view = view;
                 _palette = palette;
                 // Apply the settings of the active DWG on every document switch.
@@ -125,7 +126,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     try
                     {
                         currentView.Dispatcher.BeginInvoke(
-                            new Action(() => currentView.RefreshLegacyControls()),
+                            new Action(() => currentView.RefreshLegacyControls(onlyOnDocumentChange: true)),
                             System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                     }
                     catch (System.Exception)
@@ -176,6 +177,7 @@ namespace HNL.CeilingEstimator.AutoCAD
         private ProgressBar? _workProgress;
         private WpfButton? _stopHceButton;
         private bool _loadingLegacyControls;
+        private Database? _lastLegacyDatabase;
 
         public HcePaletteView()
         {
@@ -942,13 +944,38 @@ namespace HNL.CeilingEstimator.AutoCAD
                    !double.IsInfinity(value) && !double.IsNaN(value);
         }
 
-        // Commit pending Palette inputs before queuing a calculation.
-        // AutoCAD PaletteSet may delay LostFocus while switching focus.
+        // Read the ACTUAL WPF dropdown selection at click-time. The prior
+        // implementation committed only numeric TextBoxes: an AutoCAD activation
+        // could reload an older per-DWG mode before the queued HCECALC began.
+        private bool TryReadLegacyChoice(string key, out string value)
+        {
+            value = string.Empty;
+            if (!_legacySelectors.TryGetValue(key, out var selector) ||
+                !(selector.Tag is string[] choices) ||
+                selector.SelectedIndex < 0 || selector.SelectedIndex >= choices.Length)
+                return false;
+            value = choices[selector.SelectedIndex];
+            return true;
+        }
+
         private bool CommitPendingCalculationSettings()
         {
             var profile = ActiveLegacyProfile();
-            if (profile == null || _legacyTableHeight == null || _legacyLabelHeight == null)
+            if (profile == null || _loadingLegacyControls ||
+                _legacyTableHeight == null || _legacyLabelHeight == null)
                 return false;
+            if (!TryReadLegacyChoice("Family", out var familyChoice) ||
+                !TryReadLegacyChoice("Module", out var moduleChoice) ||
+                !TryReadLegacyChoice("Priority", out var priorityChoice) ||
+                !TryReadLegacyChoice("Direction", out var directionChoice) ||
+                !TryReadLegacyChoice("Grid", out var gridChoice) ||
+                !int.TryParse(familyChoice, NumberStyles.Integer, CultureInfo.InvariantCulture, out var family) ||
+                (moduleChoice != "S" && moduleChoice != "D" && moduleChoice != "M"))
+            {
+                if (_legacyValidation != null)
+                    _legacyValidation.Text = "HNL Tool: Chọn đầy đủ Hệ trần / Loại tấm / Chế độ lưới trước khi tính.";
+                return false;
+            }
             if (!TryParseUiMm(_legacyTableHeight.Text, out var tableHeight) ||
                 tableHeight < 0 || tableHeight > 10000)
             {
@@ -965,22 +992,61 @@ namespace HNL.CeilingEstimator.AutoCAD
                 _legacyLabelHeight.Focus();
                 return false;
             }
-            double tolerance = profile.Tolerance;
-            if (profile.SnapEnabled &&
-                (_legacyTolerance == null ||
-                 !TryParseUiMm(_legacyTolerance.Text, out tolerance) ||
-                 tolerance < 0 || tolerance > 10))
+            var candidate = profile.Clone();
+            candidate.Family = family;
+            candidate.Module = moduleChoice;
+            candidate.Priority = priorityChoice;
+            candidate.Direction = directionChoice;
+            candidate.GridMode = gridChoice;
+            candidate.SnapEnabled = _legacySnap?.IsChecked == true;
+            if (candidate.SnapEnabled)
+            {
+                if (_legacyTolerance == null ||
+                    !TryParseUiMm(_legacyTolerance.Text, out var tolerance) ||
+                    tolerance < 0 || tolerance > 10)
+                {
+                    if (_legacyValidation != null)
+                        _legacyValidation.Text = "HNL Tool: Dung sai phải từ 0 đến 10 mm.";
+                    _legacyTolerance?.Focus();
+                    return false;
+                }
+                candidate.Tolerance = tolerance;
+            }
+            candidate.TableTextHeight = tableHeight;
+            candidate.LabelTextHeight = labelHeight;
+            if (_legacyTableStyle != null && _legacyTableStyle.SelectedIndex >= 0)
+                candidate.TableTextStyle = _legacyTableStyle.SelectedIndex == 0
+                    ? string.Empty : _legacyTableStyle.SelectedItem?.ToString() ?? string.Empty;
+            if (_legacyCadTableStyle != null && _legacyCadTableStyle.SelectedIndex >= 0)
+                candidate.CadTableStyle = _legacyCadTableStyle.SelectedIndex == 0
+                    ? string.Empty : _legacyCadTableStyle.SelectedItem?.ToString() ?? string.Empty;
+            try { candidate.ToOptions(); }
+            catch (System.Exception ex)
             {
                 if (_legacyValidation != null)
-                    _legacyValidation.Text = "HNL Tool: Dung sai phải từ 0 đến 10 mm.";
-                _legacyTolerance?.Focus();
+                    _legacyValidation.Text = "HNL Tool: Cấu hình tấm không hợp lệ: " + ex.Message;
                 return false;
             }
-            // Apply all three inputs only after validation has succeeded.
-            profile.TableTextHeight = tableHeight;
-            profile.LabelTextHeight = labelHeight;
-            if (profile.SnapEnabled) profile.Tolerance = tolerance;
+
+            // Commit the visible selection and numeric settings together before
+            // SendStringToExecute queues a command in AutoCAD's document context.
+            profile.Family = candidate.Family;
+            profile.Module = candidate.Module;
+            profile.Priority = candidate.Priority;
+            profile.Direction = candidate.Direction;
+            profile.GridMode = candidate.GridMode;
+            profile.SnapEnabled = candidate.SnapEnabled;
+            profile.Tolerance = candidate.Tolerance;
+            profile.TableTextHeight = candidate.TableTextHeight;
+            profile.LabelTextHeight = candidate.LabelTextHeight;
+            profile.TableTextStyle = candidate.TableTextStyle;
+            profile.CadTableStyle = candidate.CadTableStyle;
             if (_legacyValidation != null) _legacyValidation.Text = string.Empty;
+            RefreshSelectionState(profile);
+            CadApplication.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+                "\nHNL Tool - HCE Palette chốt lựa chọn: mode=" + profile.Module +
+                " priority=" + profile.Priority + " family=" + profile.Family +
+                " grid=" + profile.GridMode + "; " + profile.Summary());
             return true;
         }
 
@@ -994,7 +1060,10 @@ namespace HNL.CeilingEstimator.AutoCAD
             {
                 profile.Tolerance = value;
                 if (_legacyValidation != null) _legacyValidation.Text = "";
-                RefreshLegacyControls();
+                // A numeric blur must not rebuild all ComboBoxes and reset S/D/M.
+                if (_legacyTolerance != null)
+                    _legacyTolerance.Text = value.ToString("0.###", CultureInfo.CurrentCulture);
+                RefreshSelectionState(profile);
             }
             else
             {
@@ -1170,10 +1239,14 @@ namespace HNL.CeilingEstimator.AutoCAD
                     " | Chế độ: " + (profile.CutListMode == "D" ? "Chi tiết" : "Tổng hợp");
         }
 
-        internal void RefreshLegacyControls()
+        internal void RefreshLegacyControls(bool onlyOnDocumentChange = false)
         {
-            var profile = ActiveLegacyProfile();
-            if (profile == null) return;
+            var doc = CadApplication.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            // DocumentActivated can fire while a WPF ComboBox is open; do not
+            // reapply a stale selection for the same DWG while the user edits.
+            if (onlyOnDocumentChange && ReferenceEquals(_lastLegacyDatabase, doc.Database)) return;
+            var profile = HceLegacyProfiles.For(doc.Database);
             _loadingLegacyControls = true;
             try
             {
@@ -1199,6 +1272,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     _legacyCutMode.SelectedIndex = profile.CutListMode == "D" ? 1 : 0;
                 RefreshSelectionState(profile);
                 if (_legacyValidation != null) _legacyValidation.Text = "";
+                _lastLegacyDatabase = doc.Database;
             }
             finally { _loadingLegacyControls = false; }
         }

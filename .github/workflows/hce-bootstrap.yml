@@ -94,7 +94,11 @@ jobs:
               -not $ui.Contains('_palette.Name = PaletteCaption;')) {
             throw 'AutoCAD PaletteSet.Name must be set on create and every show; no GUID change'
           }
-          if (-not $ui.Contains('palette.AddVisual("Tính Tấm Trần", view)')) { throw 'HCE tab must describe the estimator, not show HCE alone' }
+          if (-not $ui.Contains('palette.AddVisual("HCE", view)') -or
+              $ui.Contains('PaletteSetStyles.ShowTabForSingle |') -or
+              $ui.Contains('palette.AddVisual("Tính Tấm Trần", view)')) {
+            throw 'Single HCE Palette should use hidden native tab; full name lives in native caption only'
+          }
           $nowVN = [DateTime]::UtcNow.AddHours(7)
           $buildTimeVN = $nowVN.ToString('dd/MM/yyyy HH:mm', [Globalization.CultureInfo]::InvariantCulture)
           $shortTimeVN = $nowVN.ToString('dd/MM HH:mm', [Globalization.CultureInfo]::InvariantCulture)
@@ -641,6 +645,29 @@ jobs:
           foreach($v in @('TableTextStyle', 'TableTextHeight')) {
             if(-not $profile.Contains($v) -or -not $ui.Contains($v) -or -not $cmd.Contains($v)) { throw "Missing RC5.4 real table binding: $v" }
           }
+          # The click-time commit must capture the user-visible selection, not
+          # rely on a prior SelectionChanged or the default M/S profile.
+          foreach($needle in @(
+            'TryReadLegacyChoice("Family", out var familyChoice)',
+            'TryReadLegacyChoice("Module", out var moduleChoice)',
+            'TryReadLegacyChoice("Priority", out var priorityChoice)',
+            'TryReadLegacyChoice("Direction", out var directionChoice)',
+            'TryReadLegacyChoice("Grid", out var gridChoice)',
+            'candidate.Module = moduleChoice;',
+            'profile.Module = candidate.Module;',
+            'profile.Priority = candidate.Priority;',
+            'RefreshLegacyControls(onlyOnDocumentChange: true)',
+            'ReferenceEquals(_lastLegacyDatabase, doc.Database)',
+            'HCE Palette chốt lựa chọn: mode='
+          )) {
+            if (-not $ui.Contains($needle)) {
+              throw "HCE S/D/M WPF-selected profile handoff gate missing: $needle"
+            }
+          }
+          if ($ui.Contains('palette.AddVisual("Tính Tấm Trần", view)')) {
+            throw 'Unrequested duplicate Vietnamese palette tab still exists'
+          }
+          Write-Host 'HCE LIVE UI S/D/M TO HCECALC PROFILE COMMIT GATE PASS'
           if (-not $ui.Contains('CommitPendingCalculationSettings()') -or
               -not $ui.Contains('if (command == "HCECALC" && !CommitPendingCalculationSettings()) return;') -or
               -not $cmd.Contains('var modeStamp = profile.Module == "M"') -or
