@@ -361,6 +361,11 @@ namespace HNL.CeilingEstimator.AutoCAD
             var options = profile.ToOptions();
             editor.WriteMessage("\nHNL Tool - HCE Pro v0.3.0: kiểm tra diện tích và gốc lưới (chưa chứng nhận Runtime Golden).");
             editor.WriteMessage("\nHNL Tool - " + profile.Summary());
+            editor.WriteMessage("\nHCECALC CONFIG mode=" + profile.Module +
+                " priority=" + profile.Priority +
+                " tableTextStyle=" + (string.IsNullOrEmpty(profile.TableTextStyle) ? "TABLESTYLE" : profile.TableTextStyle) +
+                " tableTextHeightMm=" + Fmt(profile.TableTextHeight) +
+                " labelTextHeightMm=" + Fmt(profile.LabelTextHeight));
 
             Point2? chosenGridOrigin = null;
             double chosenGridAngle = 0.0;
@@ -1479,8 +1484,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                     table.Cells[2, 0].TextString = "Tấm nguyên";
                     table.Cells[2, 1].TextString = "N-...";
                     table.Cells[2, 2].TextString = full + " tấm";
+                    var modeStamp = profile.Module == "M" ? "M/" + profile.Priority : profile.Module;
                     table.Cells[2, 3].TextString = options.GridWidth + " x " +
-                        options.GridHeight + " mm (module)";
+                        options.GridHeight + " mm (module " + modeStamp + ")";
 
                     table.Cells[3, 0].TextString = "Ô biên kiểm tra";
                     table.Cells[3, 1].TextString = "Biên";
