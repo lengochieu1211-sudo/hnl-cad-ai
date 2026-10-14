@@ -316,7 +316,9 @@ if (-not $typographyUi.Contains('var tabs = current as TabControl;') -or
     -not $typographyUi.Contains('var sectionNumberStyle = view.TryFindResource("SectionNumber") as Style;') -or
     -not $typographyUi.Contains('var badgeStyle = view.TryFindResource("DomainBadgeText") as Style;') -or
     -not $typographyUi.Contains('combo.Height = 27.0;') -or
-    -not $typographyUi.Contains('grid.MinHeight = 29.0;')) {
+    -not $typographyUi.Contains('grid.MinHeight = 29.0;') -or
+    -not $typographyUi.Contains('preferences.RowSpacing == "Tiêu chuẩn"') -or
+    -not $typographyUi.Contains('preferences.CardSpacing == "Tiêu chuẩn"')) {
     throw 'HCF UI: typography, row metrics or inactive ceiling tab normalization regressed.'
 }
 if (-not $numericUi.Contains('MinHeight="27"') -or
@@ -350,4 +352,8 @@ foreach ($technical in @('Hatch','Block','DIM','MEP','Layer')) {
     if (-not $xaml.Contains($technical)) {
         throw "HCF UI: required technical CAD term disappeared: $technical"
     }
+}
+
+if (-not $xaml.Contains('ToolTip="Tắt HCF: dừng xem trước và đóng giao diện; AutoCAD vẫn mở"')) {
+    throw 'HCF UI: STOP tooltip localization regressed.'
 }

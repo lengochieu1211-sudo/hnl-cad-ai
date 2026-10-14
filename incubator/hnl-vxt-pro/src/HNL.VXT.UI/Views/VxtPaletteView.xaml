@@ -1618,7 +1618,7 @@
                 BorderThickness="0,1,0,0" Padding="2,5,2,5">
             <Button x:Name="StopHcfButton" Style="{StaticResource HcfStopRailButton}"
                     Click="StopHcfButton_Click" AutomationProperties.Name="Tắt HCF"
-                    ToolTip="Tắt HCF: dừng Preview và đóng giao diện; AutoCAD vẫn mở">
+                    ToolTip="Tắt HCF: dừng xem trước và đóng giao diện; AutoCAD vẫn mở">
                 <Path Tag="HCF_RAIL_STOP_ICON" Data="M10,2 L10,10 M5,5 A8,8 0 1 0 15,5"
                       Width="19" Height="19" Stretch="Uniform" Stroke="White"
                       StrokeThickness="2.3" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>

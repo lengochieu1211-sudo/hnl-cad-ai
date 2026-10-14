@@ -87,6 +87,13 @@ namespace HNL.VXT.UI.Views
             var fieldStyle = view.TryFindResource("FieldLabel") as Style;
             var hintStyle = view.TryFindResource("HintText") as Style;
             var badgeStyle = view.TryFindResource("DomainBadgeText") as Style;
+            var cardStyle = view.TryFindResource("SectionCard") as Style;
+            var preferences = VxtUiPreferences.Load();
+            // Keep the user's spacing choice while making both tabs deterministic.
+            var rowGap = preferences.RowSpacing == "Thoáng" ? 8.0 :
+                preferences.RowSpacing == "Tiêu chuẩn" ? 6.0 : 4.0;
+            var cardGap = preferences.CardSpacing == "Thoáng" ? 9.0 :
+                preferences.CardSpacing == "Tiêu chuẩn" ? 7.0 : 5.0;
             var primaryButtonStyle = view.TryFindResource("PrimaryButton") as Style;
 
             foreach (var node in Walk(view))
@@ -148,6 +155,13 @@ namespace HNL.VXT.UI.Views
                         // to smaller ad-hoc font sizes. They follow the same Properties body size.
                         text.FontSize = BodySize * scale;
                     }
+
+                    // Wrapped helper/status text follows the same line-height on both tabs.
+                    if (text.TextWrapping != TextWrapping.NoWrap)
+                    {
+                        text.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+                        text.LineHeight = Math.Max(13.0, text.FontSize + 2.0);
+                    }
                 }
 
                 var combo = node as ComboBox;
@@ -200,6 +214,11 @@ namespace HNL.VXT.UI.Views
             // Leave configured margin density and CAD geometry untouched.
             foreach (var node in Walk(view))
             {
+                var card = node as Border;
+                if (cardStyle != null && card != null && ReferenceEquals(card.Style, cardStyle) &&
+                    card.Margin.Bottom > 0)
+                    card.Margin = new Thickness(card.Margin.Left, card.Margin.Top, card.Margin.Right, cardGap);
+
                 var grid = node as Grid;
                 if (grid == null || grid.ColumnDefinitions.Count != 2) continue;
                 var labelColumn = grid.ColumnDefinitions[0].Width;
@@ -215,8 +234,12 @@ namespace HNL.VXT.UI.Views
                              (child is ComboBox || child is TextBox || child is HnlNumericBox))
                         hasEditor = true;
                 }
-                if (hasLabel && hasEditor && grid.MinHeight < 29.0)
-                    grid.MinHeight = 29.0;
+                if (hasLabel && hasEditor)
+                {
+                    if (grid.MinHeight < 29.0) grid.MinHeight = 29.0;
+                    if (grid.Margin.Bottom > 0)
+                        grid.Margin = new Thickness(grid.Margin.Left, grid.Margin.Top, grid.Margin.Right, rowGap);
+                }
             }
         }
 
