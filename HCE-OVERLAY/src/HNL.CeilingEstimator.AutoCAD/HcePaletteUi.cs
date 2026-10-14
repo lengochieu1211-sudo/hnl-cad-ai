@@ -622,7 +622,8 @@ namespace HNL.CeilingEstimator.AutoCAD
 
             var stageText = string.IsNullOrWhiteSpace(stage) ? "Đang xử lý..." : stage;
             var value = Math.Max(0, Math.Min(100, percent));
-            var idle = !indeterminate && value == 0 && stageText == "Sẵn sàng tính tấm.";
+            var idle = !indeterminate && value == 0 &&
+                (stageText == "Sẵn sàng tính tấm." || stageText.StartsWith("Đã đổi cấu hình", StringComparison.Ordinal));
             var canceled = !indeterminate && value == 0 &&
                 stageText == "Đã dừng hoặc hủy thao tác.";
             var completed = !indeterminate && value == 100 &&
@@ -665,7 +666,7 @@ namespace HNL.CeilingEstimator.AutoCAD
 
             var selection = Section("01  Chọn Hatch", "#2497FF");
             selection.Children.Add(CommandButton("Chọn Hatch và tạo bảng", "HCECALC", true));
-            selection.Children.Add(Text("Chọn Hatch trên bản vẽ, nhấn Enter; HCE tính và cho chọn vị trí đặt bảng.",
+            selection.Children.Add(Text("Đổi loại tấm không tự cập nhật bảng CAD cũ. Bấm nút để chọn Hatch, tính lại và đặt bảng mới.",
                 10, _muted, FontWeights.Normal));
             content.Children.Add(Card(selection));
 
@@ -904,6 +905,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 // reloading every CAD TableStyle during SelectionChanged closes
                 // the WPF popup and can discard its newly selected item.
                 RefreshSelectionState(profile);
+                MarkResultsOutdated();
             };
             _legacySelectors[key] = selector;
             if (key == "Priority")
@@ -1192,6 +1194,14 @@ namespace HNL.CeilingEstimator.AutoCAD
         // Lightweight UI state only. Never clear or repopulate a ComboBox
         // while its SelectionChanged event is running, and never overwrite a
         // partially typed numeric value on an unrelated option change.
+        // A changed ComboBox does NOT recalculate previously inserted tables.
+        // Clear the previous 100% banner so it cannot be mistaken for a fresh result.
+        private void MarkResultsOutdated()
+        {
+            if (_loadingLegacyControls || HcePaletteService.IsCalculating) return;
+            UpdateWorkProgress(0, "Đã đổi cấu hình - cần chọn Hatch và tính lại", false);
+        }
+
         private void RefreshSelectionState(HceLegacyProfile profile)
         {
             // Do not display "Tấm ngắn làm chính" in D-only mode (or the
@@ -1374,7 +1384,39 @@ namespace HNL.CeilingEstimator.AutoCAD
             {
                 var document = CadApplication.DocumentManager.MdiActiveDocument;
                 if (document == null) return;
-                if (command == "HCECALC" && !CommitPendingCalculationSettings()) return;
+                // SendStringToExecute can otherwise be consumed as input by an
+                // active MOVE/SELECT command (observed in user AutoCAD log).
+                // Never cancel the user's command or claim calculation started.
+                if (command == "HCECALC")
+                {
+                    if (HcePaletteService.IsCalculating)
+                    {
+                        document.Editor.WriteMessage("\nHNL Tool - HCE đang tính; không thể chạy lại.");
+                        return;
+                    }
+                    int activeCommands;
+                    try
+                    {
+                        activeCommands = Convert.ToInt32(
+                            CadApplication.GetSystemVariable("CMDACTIVE"), CultureInfo.InvariantCulture);
+                    }
+                    catch (System.Exception)
+                    {
+                        document.Editor.WriteMessage(
+                            "\nHNL Tool - Không xác định được trạng thái lệnh AutoCAD; không gửi HCECALC.");
+                        return;
+                    }
+                    if (activeCommands != 0)
+                    {
+                        document.Editor.WriteMessage(
+                            "\nHNL Tool - AutoCAD còn lệnh đang chạy (CMDACTIVE=" +
+                            activeCommands + "). Hãy kết thúc lệnh hoặc nhấn Esc trước khi tính lại.");
+                        UpdateWorkProgress(0, "Kết thúc lệnh AutoCAD trước khi tính", false);
+                        return;
+                    }
+                    if (!CommitPendingCalculationSettings()) return;
+                    UpdateWorkProgress(0, "Đang chờ AutoCAD nhận lệnh HCECALC...", false);
+                }
                 document.Editor.WriteMessage("\nHNL Tool - Palette executing " + command + ".");
                 // Invoke from the normal AutoCAD command stack, never from a WPF
                 // Click transaction. This preserves selection and Undo semantics.

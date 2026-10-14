@@ -667,6 +667,22 @@ jobs:
           if ($ui.Contains('palette.AddVisual("Tính Tấm Trần", view)')) {
             throw 'Unrequested duplicate Vietnamese palette tab still exists'
           }
+          foreach($needle in @(
+            'private void MarkResultsOutdated()',
+            'MarkResultsOutdated();',
+            'Đã đổi cấu hình - cần chọn Hatch và tính lại',
+            'Đổi loại tấm không tự cập nhật bảng CAD cũ',
+            'CadApplication.GetSystemVariable("CMDACTIVE")',
+            'activeCommands != 0',
+            'Hãy kết thúc lệnh hoặc nhấn Esc trước khi tính lại.',
+            'if (!CommitPendingCalculationSettings()) return;',
+            'UpdateWorkProgress(0, "Đang chờ AutoCAD nhận lệnh HCECALC...", false)'
+          )) {
+            if (-not $ui.Contains($needle)) {
+              throw "HCE stale-result/command-idle safety gate missing: $needle"
+            }
+          }
+          Write-Host 'HCE CAD ACTIVE-COMMAND GUARD + STALE RESULT STATE GATE PASS'
           Write-Host 'HCE LIVE UI S/D/M TO HCECALC PROFILE COMMIT GATE PASS'
           if (-not $ui.Contains('CommitPendingCalculationSettings()') -or
               -not $ui.Contains('if (command == "HCECALC" && !CommitPendingCalculationSettings()) return;') -or
