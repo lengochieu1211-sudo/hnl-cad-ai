@@ -685,7 +685,9 @@ jobs:
           Write-Host 'HCE CAD ACTIVE-COMMAND GUARD + STALE RESULT STATE GATE PASS'
           Write-Host 'HCE LIVE UI S/D/M TO HCECALC PROFILE COMMIT GATE PASS'
           if (-not $ui.Contains('CommitPendingCalculationSettings()') -or
-              -not $ui.Contains('if (command == "HCECALC" && !CommitPendingCalculationSettings()) return;') -or
+              -not $ui.Contains('if (!CommitPendingCalculationSettings()) return;') -or
+              -not $ui.Contains('if (activeCommands != 0)') -or
+              -not $ui.Contains('CadApplication.GetSystemVariable("CMDACTIVE")') -or
               -not $cmd.Contains('var modeStamp = profile.Module == "M"') -or
               -not $cmd.Contains('HCECALC CONFIG mode=')) {
             throw 'HCE palette settings commit or S/D/M result provenance gate missing'
