@@ -202,7 +202,7 @@ if (-not $stopUi.Contains('Style="{StaticResource HcfStopRailButton}"') -or
     $stopUi.Contains('Background="#FFF1F2"')) {
     throw 'HCF Stop UI: white STOP background or redundant visible label.'
 }
-if (-not $layInUi.Contains('Padding="8"')) {
+if (-not [regex]::IsMatch($xaml, 'Padding="8">\s*<StackPanel DataContext="\{Binding LayIn\}">')) {
     throw 'HCF UI: lay-in ScrollViewer padding no longer matches concealed tab.'
 }
 
