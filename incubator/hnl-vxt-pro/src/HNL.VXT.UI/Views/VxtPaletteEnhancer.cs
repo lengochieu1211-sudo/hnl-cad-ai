@@ -336,8 +336,14 @@ namespace HNL.VXT.UI.Views
             var secondary = dark ? "#AEB8C4" : "#64748B";
             switch (state.Preferences.TextColor)
             {
-                case "Sáng": primary = "#F8FAFC"; secondary = "#CBD5E1"; break;
-                case "Tối": primary = "#172033"; secondary = "#475569"; break;
+                case "Sáng":
+                    // A bright font on a light input is unreadable: keep theme contrast.
+                    if (dark) { primary = "#F8FAFC"; secondary = "#CBD5E1"; }
+                    break;
+                case "Tối":
+                    // A dark font on a dark input is unreadable: keep theme contrast.
+                    if (!dark) { primary = "#172033"; secondary = "#475569"; }
+                    break;
                 case "Xanh HNL": primary = dark ? "#93C5FD" : "#1D4ED8"; secondary = dark ? "#60A5FA" : "#3B82F6"; break;
             }
             view.Resources["PrimaryText"] = Brush(primary);

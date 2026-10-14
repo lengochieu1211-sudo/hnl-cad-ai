@@ -83,8 +83,10 @@ namespace HNL.VXT.UI.Views
             view.FontSize = BodySize * scale;
 
             var sectionStyle = view.TryFindResource("SectionTitle") as Style;
+            var sectionNumberStyle = view.TryFindResource("SectionNumber") as Style;
             var fieldStyle = view.TryFindResource("FieldLabel") as Style;
             var hintStyle = view.TryFindResource("HintText") as Style;
+            var badgeStyle = view.TryFindResource("DomainBadgeText") as Style;
             var primaryButtonStyle = view.TryFindResource("PrimaryButton") as Style;
 
             foreach (var node in Walk(view))
@@ -99,8 +101,19 @@ namespace HNL.VXT.UI.Views
                     {
                         text.FontSize = SectionTitleSize * scale;
                         text.FontWeight = FontWeights.SemiBold;
-                        // DynamicResource semantics: section titles follow theme/accent changes.
-                        text.SetResourceReference(TextBlock.ForegroundProperty, "AccentStrong");
+                        // Preserve the SectionTitle resource color (PrimaryText) and intentional
+                        // AccentStrong overrides on highlighted headings. Do not paint all titles
+                        // with an accent: both ceiling modes must follow identical style rules.
+                    }
+                    else if (sectionNumberStyle != null && ReferenceEquals(text.Style, sectionNumberStyle))
+                    {
+                        text.FontSize = 11.0 * scale;
+                        text.FontWeight = FontWeights.SemiBold;
+                    }
+                    else if (badgeStyle != null && ReferenceEquals(text.Style, badgeStyle))
+                    {
+                        // XC/XP/Ty/DIM badges use smaller tokens; 12-DIP text can clip them.
+                        text.FontSize = 10.0 * scale;
                     }
                     else if (fieldStyle != null && ReferenceEquals(text.Style, fieldStyle))
                     {
@@ -109,6 +122,12 @@ namespace HNL.VXT.UI.Views
                     else if (hintStyle != null && ReferenceEquals(text.Style, hintStyle))
                     {
                         text.FontSize = HintSize * scale;
+                    }
+                    else if (string.Equals(text.Text, "Trần chìm", StringComparison.Ordinal) ||
+                             string.Equals(text.Text, "Trần nổi", StringComparison.Ordinal))
+                    {
+                        // Navigation rail labels are rotated and cannot fit body-size text.
+                        text.FontSize = 10.5 * scale;
                     }
                     else if (string.Equals(text.Text, "Ceiling Framing Pro", StringComparison.OrdinalIgnoreCase))
                     {
@@ -135,6 +154,7 @@ namespace HNL.VXT.UI.Views
                 if (combo != null)
                 {
                     combo.FontSize = BodySize * scale;
+                    combo.Height = 27.0;
                     continue;
                 }
 
@@ -142,6 +162,7 @@ namespace HNL.VXT.UI.Views
                 if (textBox != null)
                 {
                     textBox.FontSize = BodySize * scale;
+                    textBox.Height = 27.0;
                     continue;
                 }
 
@@ -149,6 +170,7 @@ namespace HNL.VXT.UI.Views
                 if (numeric != null)
                 {
                     numeric.FontSize = BodySize * scale;
+                    numeric.Height = 27.0;
                     continue;
                 }
 
@@ -172,6 +194,29 @@ namespace HNL.VXT.UI.Views
                         button.FontSize = BodySize * scale;
                     }
                 }
+            }
+
+            // Normalize form row minimums only after the shared styles are applied.
+            // Leave configured margin density and CAD geometry untouched.
+            foreach (var node in Walk(view))
+            {
+                var grid = node as Grid;
+                if (grid == null || grid.ColumnDefinitions.Count != 2) continue;
+                var labelColumn = grid.ColumnDefinitions[0].Width;
+                if (!labelColumn.IsAbsolute || labelColumn.Value < 100 || labelColumn.Value > 200) continue;
+
+                var hasLabel = false;
+                var hasEditor = false;
+                foreach (UIElement child in grid.Children)
+                {
+                    if (child is TextBlock && Grid.GetColumn(child) == 0)
+                        hasLabel = true;
+                    else if (Grid.GetColumn(child) == 1 &&
+                             (child is ComboBox || child is TextBox || child is HnlNumericBox))
+                        hasEditor = true;
+                }
+                if (hasLabel && hasEditor && grid.MinHeight < 29.0)
+                    grid.MinHeight = 29.0;
             }
         }
 
@@ -215,9 +260,22 @@ namespace HNL.VXT.UI.Views
                         if (child != null) queue.Enqueue(child);
                 }
 
-                var border = current as Border;
-                if (border != null && border.Child != null)
-                    queue.Enqueue(border.Child);
+                var decorator = current as Decorator;
+                if (decorator != null && decorator.Child != null)
+                    queue.Enqueue(decorator.Child);
+
+                // TabControl does not inherit ContentControl; without visiting its Items,
+                // typography reached neither concealed nor lay-in form consistently.
+                // Visit logical TabItems even while one tab has no visual tree yet.
+                var tabs = current as TabControl;
+                if (tabs != null)
+                {
+                    foreach (var item in tabs.Items)
+                    {
+                        var tab = item as DependencyObject;
+                        if (tab != null) queue.Enqueue(tab);
+                    }
+                }
 
                 var headered = current as HeaderedContentControl;
                 if (headered != null)

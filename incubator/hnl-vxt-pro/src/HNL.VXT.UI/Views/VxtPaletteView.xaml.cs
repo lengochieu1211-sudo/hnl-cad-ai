@@ -145,10 +145,11 @@ namespace HNL.VXT.UI.Views
 
             var constraintSummary = new TextBlock
             {
-                FontSize = 9.5,
-                Foreground = (Brush)Resources["SecondaryText"],
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 2, 0, 0)
             };
+            constraintSummary.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryText");
             constraintSummary.SetBinding(
                 TextBlock.TextProperty,
                 new Binding(nameof(VxtPaletteViewModel.ConstraintSummary)));
@@ -165,19 +166,21 @@ namespace HNL.VXT.UI.Views
                 Padding = new Thickness(7, 3, 7, 3),
                 VerticalAlignment = VerticalAlignment.Center
             };
+            stateBadge.SetResourceReference(Border.BackgroundProperty, "AccentSoft");
+            stateBadge.SetResourceReference(Border.BorderBrushProperty, "AccentBorder");
             var stateText = new TextBlock
             {
-                FontSize = 9,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)Resources["AccentStrong"]
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold
             };
+            stateText.SetResourceReference(TextBlock.ForegroundProperty, "AccentStrong");
             stateText.SetBinding(TextBlock.TextProperty, new Binding(nameof(VxtPaletteViewModel.DiagnosticState)));
             stateBadge.Child = stateText;
             Grid.SetColumn(stateBadge, 1);
             header.Children.Add(stateBadge);
             var scope = new TextBlock
             {
-                Text = "Kiểm tra: cấu hình Min/Max • biên trần • Block XC/XP/Ty • DimStyle • tài nguyên DWG • Runtime Golden AutoCAD.",
+                Text = "Kiểm tra: Min/Max • biên trần • Block XC/XP/Ty • DimStyle • tài nguyên DWG • kiểm tra chuẩn AutoCAD.",
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 8)
             };
@@ -193,22 +196,25 @@ namespace HNL.VXT.UI.Views
                 Padding = new Thickness(8, 7, 8, 7),
                 Margin = new Thickness(0, 0, 0, 8)
             };
+            statusBox.SetResourceReference(Border.BackgroundProperty, "InputBackground");
+            statusBox.SetResourceReference(Border.BorderBrushProperty, "InputBorder");
             var status = new TextBlock
             {
                 TextWrapping = TextWrapping.Wrap,
-                FontSize = 10.5
+                FontSize = 11
             };
+            status.SetResourceReference(TextBlock.ForegroundProperty, "PrimaryText");
             status.SetBinding(TextBlock.TextProperty, new Binding(nameof(VxtPaletteViewModel.DiagnosticStatus)));
             statusBox.Child = status;
             panel.Children.Add(statusBox);
 
             var constraintLabel = new TextBlock
             {
-                Text = "Chi tiết theo mảng (bấm Mxx để chọn đúng Polyline):",
-                FontSize = 9.5,
-                Foreground = (Brush)Resources["SecondaryText"],
+                Text = "Chi tiết từng mảng (chọn M01, M02... để tìm Polyline):",
+                FontSize = 11,
                 Margin = new Thickness(0, 0, 0, 4)
             };
+            constraintLabel.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryText");
             panel.Children.Add(constraintLabel);
 
             var constraintList = new ListBox
@@ -220,8 +226,11 @@ namespace HNL.VXT.UI.Views
                 Background = (Brush)Resources["InputBackground"],
                 BorderBrush = (Brush)Resources["InputBorder"],
                 BorderThickness = new Thickness(1),
-                ToolTip = "Bấm M01/M02/... để chọn và highlight đúng Polyline biên trần trong AutoCAD"
+                ToolTip = "Chọn M01, M02... để tìm và làm nổi bật Polyline biên trần trong AutoCAD"
             };
+            constraintList.SetResourceReference(ListBox.BackgroundProperty, "InputBackground");
+            constraintList.SetResourceReference(ListBox.BorderBrushProperty, "InputBorder");
+            constraintList.SetResourceReference(ListBox.ForegroundProperty, "PrimaryText");
             constraintList.SelectionChanged += (sender, args) =>
             {
                 var item = constraintList.SelectedItem as VxtConstraintDiagnostic;
@@ -234,11 +243,11 @@ namespace HNL.VXT.UI.Views
 
             var golden = new Button
             {
-                Content = "▶ Chạy Runtime Golden 6000×4000",
+                Content = "Chạy kiểm tra chuẩn 6000×4000",
                 Command = ViewModel.RuntimeGoldenCommand,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Margin = new Thickness(0, 0, 0, 7),
-                ToolTip = "Tự kiểm tra Core + API AutoCAD thật bằng transaction tạm; không lưu đối tượng vào DWG"
+                ToolTip = "Chạy kiểm tra chuẩn bằng Core và API AutoCAD; chỉ dùng đối tượng tạm, không lưu vào DWG"
             };
             if (Resources["CompactButton"] is Style goldenStyle) golden.Style = goldenStyle;
             panel.Children.Add(golden);
@@ -249,7 +258,7 @@ namespace HNL.VXT.UI.Views
 
             var analyze = new Button
             {
-                Content = "✓ Phân tích nhanh",
+                Content = "Phân tích nhanh",
                 Command = ViewModel.AnalyzeDiagnosticsCommand,
                 Margin = new Thickness(0, 0, 4, 0),
                 ToolTip = "Kiểm tra cấu hình, biên trần, Block, DimStyle và tài nguyên bản vẽ"
@@ -259,7 +268,7 @@ namespace HNL.VXT.UI.Views
 
             var export = new Button
             {
-                Content = "⬇ Xuất Diagnostic ZIP",
+                Content = "Xuất gói chẩn đoán ZIP",
                 Command = ViewModel.ExportDiagnosticsUiCommand,
                 Margin = new Thickness(4, 0, 0, 0),
                 ToolTip = "Xuất gói đầy đủ để phân tích sâu khi có lỗi"
@@ -271,28 +280,29 @@ namespace HNL.VXT.UI.Views
 
             var packageLabel = new TextBlock
             {
-                Text = "Gói lỗi gần nhất:",
-                FontSize = 9.5,
-                Foreground = (Brush)Resources["SecondaryText"]
+                Text = "Gói chẩn đoán gần nhất:",
+                FontSize = 11
             };
+            packageLabel.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryText");
             panel.Children.Add(packageLabel);
 
             var packagePath = new TextBlock
             {
-                FontSize = 9.5,
-                Foreground = (Brush)Resources["SecondaryText"],
+                FontSize = 11,
                 TextWrapping = TextWrapping.Wrap
             };
+            packagePath.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryText");
             packagePath.SetBinding(TextBlock.TextProperty, new Binding(nameof(VxtPaletteViewModel.DiagnosticPackagePath)));
             panel.Children.Add(packagePath);
 
             var commandHint = new TextBlock
             {
-                Text = "Lệnh kỹ thuật: HNLVXTGOLDEN • HNLVXTANALYZE • HNLVXTDIAG",
-                FontSize = 9,
-                Foreground = (Brush)Resources["SecondaryText"],
+                Text = "Lệnh kiểm tra: HNLVXTGOLDEN • HNLVXTANALYZE • HNLVXTDIAG",
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 5, 0, 0)
             };
+            commandHint.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryText");
             panel.Children.Add(commandHint);
 
             var expander = new Expander

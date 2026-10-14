@@ -7,8 +7,8 @@ namespace HNL.VXT.UI.ViewModels
     public sealed partial class VxtPaletteViewModel
     {
         private string _diagnosticState = "Chưa kiểm tra";
-        private string _diagnosticStatus = "Chưa chạy phân tích. Bấm Phân tích nhanh để kiểm tra cấu hình và tài nguyên Cad.";
-        private string _diagnosticPackagePath = "Chưa có gói Diagnostic ZIP.";
+        private string _diagnosticStatus = "Chưa chạy phân tích. Bấm Phân tích nhanh để kiểm tra cấu hình và tài nguyên bản vẽ.";
+        private string _diagnosticPackagePath = "Chưa có gói chẩn đoán ZIP.";
         private ICommand _analyzeDiagnosticsCommand;
         private ICommand _exportDiagnosticsUiCommand;
         private ICommand _runtimeGoldenCommand;
@@ -69,22 +69,22 @@ namespace HNL.VXT.UI.ViewModels
         {
             try
             {
-                DiagnosticState = "Đang chạy Golden";
-                DiagnosticStatus = "HNL Tool đang chạy Runtime Golden 6000×4000 bằng API AutoCAD thật. Bài test không lưu đối tượng vào DWG...";
+                DiagnosticState = "Đang kiểm tra chuẩn";
+                DiagnosticStatus = "HNL Tool đang chạy kiểm tra chuẩn 6000×4000 bằng API AutoCAD. Không lưu đối tượng tạm vào DWG...";
                 _host.RequestRuntimeGolden();
             }
             catch (Exception ex)
             {
-                DiagnosticState = "Runtime lỗi";
-                DiagnosticStatus = "Không khởi động được Runtime Golden: " + ex.Message;
+                DiagnosticState = "Kiểm tra lỗi";
+                DiagnosticStatus = "Không khởi động được kiểm tra chuẩn: " + ex.Message;
             }
         }
 
         public void SetRuntimeGoldenResult(bool passed, string summary, string diagnosticPath)
         {
-            DiagnosticState = passed ? "Runtime đạt" : "Runtime lỗi";
+            DiagnosticState = passed ? "Kiểm tra đạt" : "Kiểm tra lỗi";
             DiagnosticStatus = string.IsNullOrWhiteSpace(summary)
-                ? (passed ? "Runtime Golden đạt." : "Runtime Golden lỗi.")
+                ? (passed ? "Kiểm tra chuẩn đạt." : "Kiểm tra chuẩn lỗi.")
                 : NormalizeUserFacingDiagnosticText(summary);
             if (!string.IsNullOrWhiteSpace(diagnosticPath))
                 DiagnosticPackagePath = diagnosticPath;
@@ -113,18 +113,18 @@ namespace HNL.VXT.UI.ViewModels
                 var path = _host.ExportDiagnostics(_settings.Clone());
                 if (string.IsNullOrWhiteSpace(path))
                 {
-                    DiagnosticStatus = "Đã hủy xuất Diagnostic ZIP hoặc không tạo được file.";
+                    DiagnosticStatus = "Đã hủy xuất gói chẩn đoán ZIP hoặc không tạo được tệp.";
                     return;
                 }
 
                 DiagnosticPackagePath = path;
-                DiagnosticStatus = "Đã xuất Diagnostic ZIP. Gửi file này khi cần phân tích lỗi sâu.";
+                DiagnosticStatus = "Đã xuất gói chẩn đoán ZIP. Gửi tệp này khi cần phân tích lỗi chi tiết.";
                 if (DiagnosticState == "Chưa kiểm tra") DiagnosticState = "Đã xuất ZIP";
             }
             catch (Exception ex)
             {
                 DiagnosticState = "Lỗi";
-                DiagnosticStatus = "Không xuất được Diagnostic ZIP: " + ex.Message;
+                DiagnosticStatus = "Không xuất được gói chẩn đoán ZIP: " + ex.Message;
             }
         }
     }

@@ -304,3 +304,50 @@ foreach ($sourceFile in (Get-ChildItem -LiteralPath $sourceRoot -Recurse -File |
 Write-Host 'HNL HCF navigation rail and user-visible brand label audit PASS.'
 
 Write-Host "HNL HCF button audit PASS: $($bindings.Count) XAML command bindings, $($called.Count) host command calls, $($registered.Count) registered commands, 3 manifests."
+
+# Complete UI/localization audit: both tabs must be traversed even when one is inactive.
+$typographyUi = Source 'src/HNL.VXT.UI/Views/VxtPaletteTypography.cs'
+$numericUi = Source 'src/HNL.VXT.UI/Controls/HnlNumericBox.xaml'
+$diagnosticUi = Source 'src/HNL.VXT.UI/Views/VxtPaletteView.xaml.cs'
+$diagnosticVmUi = Source 'src/HNL.VXT.UI/ViewModels/VxtPaletteViewModel.Diagnostics.cs'
+$themeUi = Source 'src/HNL.VXT.UI/Views/VxtPaletteEnhancer.cs'
+if (-not $typographyUi.Contains('var tabs = current as TabControl;') -or
+    -not $typographyUi.Contains('foreach (var item in tabs.Items)') -or
+    -not $typographyUi.Contains('var sectionNumberStyle = view.TryFindResource("SectionNumber") as Style;') -or
+    -not $typographyUi.Contains('var badgeStyle = view.TryFindResource("DomainBadgeText") as Style;') -or
+    -not $typographyUi.Contains('combo.Height = 27.0;') -or
+    -not $typographyUi.Contains('grid.MinHeight = 29.0;')) {
+    throw 'HCF UI: typography, row metrics or inactive ceiling tab normalization regressed.'
+}
+if (-not $numericUi.Contains('MinHeight="27"') -or
+    -not $numericUi.Contains('Background="{DynamicResource InputBackground}"') -or
+    -not $numericUi.Contains('Foreground="{DynamicResource PrimaryText}"') -or
+    -not $numericUi.Contains('BorderBrush="{DynamicResource InputBorder}"')) {
+    throw 'HCF UI: numeric editor height or dark/light theme colors regressed.'
+}
+if (-not $themeUi.Contains('if (dark) { primary = "#F8FAFC"; secondary = "#CBD5E1"; }') -or
+    -not $themeUi.Contains('if (!dark) { primary = "#172033"; secondary = "#475569"; }')) {
+    throw 'HCF UI: user text-color preference can create illegible dark/light contrast.'
+}
+foreach ($token in @(
+    'Text = "Kiểm tra bố trí"',
+    'Content = "Phân tích nhanh"',
+    'Content = "Xuất gói chẩn đoán ZIP"',
+    'Content = "Chạy kiểm tra chuẩn 6000×4000"',
+    'statusBox.SetResourceReference(Border.BackgroundProperty, "InputBackground");',
+    'constraintList.SetResourceReference(ListBox.ForegroundProperty, "PrimaryText");')) {
+    if (-not $diagnosticUi.Contains($token)) {
+        throw "HCF UI: diagnostic layout/theme/localization missing: $token"
+    }
+}
+if ($diagnosticUi.Contains('Xuất Diagnostic ZIP') -or
+    $diagnosticUi.Contains('highlight đúng Polyline') -or
+    $diagnosticVmUi.Contains('Chưa có gói Diagnostic ZIP.') -or
+    $diagnosticVmUi.Contains('HNL Tool đang chạy Runtime Golden')) {
+    throw 'HCF UI: mixed-language diagnostic captions were reintroduced.'
+}
+foreach ($technical in @('Hatch','Block','DIM','MEP','Layer')) {
+    if (-not $xaml.Contains($technical)) {
+        throw "HCF UI: required technical CAD term disappeared: $technical"
+    }
+}
