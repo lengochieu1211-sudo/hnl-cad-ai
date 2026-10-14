@@ -98,7 +98,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             {
                 // Lazy UI initialization: no WPF work on AutoCAD startup.
                 var view = new HcePaletteView();
-                var palette = new PaletteSet("HCE", PaletteId)
+                var palette = new PaletteSet(PaletteCaption, PaletteId)
                 {
                     // Constructor's first argument doubles as an AutoCAD
                     // restore command with a GUID. Name is the native window
@@ -113,7 +113,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     KeepFocus = false
                 };
                 // Short tab name leaves room for Autodesk's native palette buttons.
-                palette.AddVisual("HCE", view);
+                palette.AddVisual("Tính Tấm Trần", view);
                 _view = view;
                 _palette = palette;
                 // Apply the settings of the active DWG on every document switch.
@@ -140,6 +140,9 @@ namespace HNL.CeilingEstimator.AutoCAD
             // Reapply on every show; do not reset dock/size/position settings.
             _palette.Name = PaletteCaption;
             _palette.Visible = true;
+            // Emit binary build identity to detect a stale AutoCAD-loaded DLL.
+            CadApplication.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+                "\nHNL Tool - " + PaletteCaption);
         }
     }
 

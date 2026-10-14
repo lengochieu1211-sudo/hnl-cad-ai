@@ -75,7 +75,7 @@ jobs:
           }
 
       - name: Stamp native HCE Palette title and audit no repeated header
-        shell: powershell
+        shell: pwsh
         run: |
           $uiPath = 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs'
           $ui = [IO.File]::ReadAllText($uiPath)
@@ -89,12 +89,12 @@ jobs:
           }
           if ($ui.Contains('pack://application:,,,/HNL.CeilingEstimator.AutoCAD;component/Assets/HNL-Logo-Official.png')) { throw 'Redundant HCE Palette logo still present' }
           if ($ui.Contains('titleStack.Children.Add') -or $ui.Contains('footer.Child =')) { throw 'Redundant Palette header/footer still present' }
-          if (-not $ui.Contains('new PaletteSet("HCE", PaletteId)') -or
+          if (-not $ui.Contains('new PaletteSet(PaletteCaption, PaletteId)') -or
               -not $ui.Contains('Name = PaletteCaption,') -or
               -not $ui.Contains('_palette.Name = PaletteCaption;')) {
             throw 'AutoCAD PaletteSet.Name must be set on create and every show; no GUID change'
           }
-          if (-not $ui.Contains('palette.AddVisual("HCE", view)')) { throw 'Short AutoCAD palette tab name must be HCE' }
+          if (-not $ui.Contains('palette.AddVisual("Tính Tấm Trần", view)')) { throw 'HCE tab must describe the estimator, not show HCE alone' }
           $nowVN = [DateTime]::UtcNow.AddHours(7)
           $buildTimeVN = $nowVN.ToString('dd/MM/yyyy HH:mm', [Globalization.CultureInfo]::InvariantCulture)
           $shortTimeVN = $nowVN.ToString('dd/MM HH:mm', [Globalization.CultureInfo]::InvariantCulture)
@@ -115,6 +115,30 @@ jobs:
             throw 'Native AutoCAD title must show timestamp; no fake WPF title row'
           }
           [IO.File]::WriteAllText($uiPath, $ui, [Text.UTF8Encoding]::new($false))
+
+          # The native Palette and Inno Setup must share one immutable build stamp.
+          # Do not change AppId, AppVersion or the installation target.
+          $issPath = 'incubator/hnl-ceiling-estimator-pro/installer/HNL.CeilingEstimator.Universal.Setup.iss'
+          if (-not (Test-Path $issPath)) { throw 'HCE installer source missing' }
+          $shortHead = $env:GITHUB_SHA.Substring(0, 8)
+          $fileStamp = $nowVN.ToString('yyyyMMdd_HHmm', [Globalization.CultureInfo]::InvariantCulture)
+          $iss = [IO.File]::ReadAllText($issPath)
+          $oldBase = '#define MySetupBaseName "HNL_Ceiling_Estimator_Pro_Universal_Setup_0.3.0"'
+          $oldVerName = 'AppVerName={#MyAppName} v{#MyAppVersion}'
+          $oldDescription = 'VersionInfoDescription=HNL Tool - Ceiling Estimator Pro Universal AutoCAD 2023-2027 Installer'
+          foreach ($token in @($oldBase, $oldVerName, $oldDescription)) {
+            if ([regex]::Matches($iss, [regex]::Escape($token)).Count -ne 1) {
+              throw "HCE installer identity template changed unexpectedly: $token"
+            }
+          }
+          $outName = "HNL_Ceiling_Estimator_Pro_Universal_Setup_0.3.0_$($fileStamp)_$($shortHead)"
+          $iss = $iss.Replace($oldBase, "#define MySetupBaseName `"$outName`"")
+          $iss = $iss.Replace($oldVerName, "$oldVerName - Build $buildTimeVN")
+          $iss = $iss.Replace($oldDescription, "$oldDescription - Build $buildTimeVN")
+          [IO.File]::WriteAllText($issPath, $iss, [Text.UTF8Encoding]::new($false))
+          Add-Content -Path $env:GITHUB_ENV -Value "HCE_BUILD_TIME_VN=$buildTimeVN" -Encoding utf8
+          Add-Content -Path $env:GITHUB_ENV -Value "HCE_BUILD_FILE_STAMP=$fileStamp" -Encoding utf8
+          Write-Host "HCE INNO STAMP PASS: $outName.exe | Build $buildTimeVN | HEAD $shortHead"
           Write-Host "HCE PALETTE TITLE PASS: $expectedNative (UTC+07, build time)"
           Write-Host "HCE PALETTE NATIVE NAME PASS: $expectedNative (no WPF header)"
           Write-Host 'HCE PALETTE COMPACT FRAME PASS: only native title; GUID and docking preserved'
@@ -711,6 +735,23 @@ jobs:
       - name: Build Golden + AutoCAD matrix + Setup EXE
         shell: powershell
         run: ./incubator/hnl-ceiling-estimator-pro/scripts/build-universal-installer.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
+
+      - name: Verify dated HCE installer identity from actual compiled EXE
+        shell: pwsh
+        run: |
+          $shortHead = $env:GITHUB_SHA.Substring(0, 8)
+          $expected = "HNL_Ceiling_Estimator_Pro_Universal_Setup_0.3.0_$($env:HCE_BUILD_FILE_STAMP)_$($shortHead).exe"
+          $dir = 'incubator/hnl-ceiling-estimator-pro/artifacts/universal-installer'
+          $exes = @(Get-ChildItem $dir -Filter '*.exe' -File)
+          if ($exes.Count -ne 1 -or $exes[0].Name -cne $expected) {
+            throw "HCE build filename lacks stamp/HEAD: expected=$expected; found=$($exes.Name)"
+          }
+          $version = $exes[0].VersionInfo
+          if ($version.FileDescription -notlike "*Build $env:HCE_BUILD_TIME_VN*") {
+            throw "HCE EXE file details do not match stamped build time: $($version.FileDescription)"
+          }
+          Write-Host "HCE DATED SETUP BINARY PASS: $expected"
+          Write-Host "HCE EXE VERSION DESCRIPTION PASS: $($version.FileDescription)"
 
       - name: Verify released AutoCAD bundle registers only HCE
         shell: powershell
