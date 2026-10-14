@@ -132,13 +132,14 @@ jobs:
             }
           }
           $outName = "HNL_Ceiling_Estimator_Pro_Universal_Setup_0.3.0_$($fileStamp)_$($shortHead)"
-          $iss = $iss.Replace($oldBase, "#define MySetupBaseName `"$outName`"")
+          # Preserve the original filename until the existing build script finishes.
+          # Its release verification requires this exact legacy basename.
           $iss = $iss.Replace($oldVerName, "$oldVerName - Build $buildTimeVN")
           $iss = $iss.Replace($oldDescription, "$oldDescription - Build $buildTimeVN")
           [IO.File]::WriteAllText($issPath, $iss, [Text.UTF8Encoding]::new($false))
           Add-Content -Path $env:GITHUB_ENV -Value "HCE_BUILD_TIME_VN=$buildTimeVN" -Encoding utf8
           Add-Content -Path $env:GITHUB_ENV -Value "HCE_BUILD_FILE_STAMP=$fileStamp" -Encoding utf8
-          Write-Host "HCE INNO STAMP PASS: $outName.exe | Build $buildTimeVN | HEAD $shortHead"
+          Write-Host "HCE INNO BUILD METADATA PASS: Build $buildTimeVN | HEAD $shortHead; EXE filename will be stamped after canonical builder."
           Write-Host "HCE PALETTE TITLE PASS: $expectedNative (UTC+07, build time)"
           Write-Host "HCE PALETTE NATIVE NAME PASS: $expectedNative (no WPF header)"
           Write-Host 'HCE PALETTE COMPACT FRAME PASS: only native title; GUID and docking preserved'
@@ -735,6 +736,33 @@ jobs:
       - name: Build Golden + AutoCAD matrix + Setup EXE
         shell: powershell
         run: ./incubator/hnl-ceiling-estimator-pro/scripts/build-universal-installer.ps1 -Root ./incubator/hnl-ceiling-estimator-pro
+
+      - name: Rename completed HCE setup with build stamp and update checksum
+        shell: pwsh
+        run: |
+          $dir = 'incubator/hnl-ceiling-estimator-pro/artifacts/universal-installer'
+          $shortHead = $env:GITHUB_SHA.Substring(0, 8)
+          $oldName = 'HNL_Ceiling_Estimator_Pro_Universal_Setup_0.3.0.exe'
+          $newName = "HNL_Ceiling_Estimator_Pro_Universal_Setup_0.3.0_$($env:HCE_BUILD_FILE_STAMP)_$($shortHead).exe"
+          $oldExe = Join-Path $dir $oldName
+          $newExe = Join-Path $dir $newName
+          $oldChecksum = "$oldExe.sha256.txt"
+          $newChecksum = "$newExe.sha256.txt"
+          if (-not (Test-Path $oldExe) -or -not (Test-Path $oldChecksum) -or (Test-Path $newExe)) {
+            throw 'Unexpected setup file state after canonical HCE builder'
+          }
+          $manifest = [IO.File]::ReadAllText($oldChecksum)
+          if (-not $manifest.Contains($oldName)) { throw 'Canonical EXE checksum manifest lacks expected source filename' }
+          Move-Item -LiteralPath $oldExe -Destination $newExe
+          $manifest = $manifest.Replace($oldName, $newName)
+          $hash = (Get-FileHash -LiteralPath $newExe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if (-not $manifest.ToLowerInvariant().TrimStart().StartsWith($hash)) {
+            throw 'HCE installer checksum mismatch after rename'
+          }
+          [IO.File]::WriteAllText($newChecksum, $manifest, [Text.UTF8Encoding]::new($false))
+          Remove-Item -LiteralPath $oldChecksum
+          Write-Host "HCE SETUP OUTPUT RENAMED: $newName"
+          Write-Host "HCE SHA256 VERIFIED: $hash"
 
       - name: Verify dated HCE installer identity from actual compiled EXE
         shell: pwsh
