@@ -238,15 +238,16 @@ foreach ($manifestName in @(
         }
     }
 }
-# STOP is a tall, independent rail control, not a 27-DIP form button.
-# The old blanket compaction clipped its power icon and truncated the word "Tắt".
+# STOP is a square icon-only rail control. The compact tuner must not resize it.
 $compact = Source 'src/HNL.VXT.UI/Views/VxtPaletteCompactTuner.cs'
 $stop = [regex]::Match($xaml, '(?s)<Button\s+x:Name="StopHcfButton"(?<body>.*?)</Button>')
-if (-not $stop.Success -or -not $stop.Value.Contains('Height="64"') -or
+if (-not $stop.Success -or
+    -not $stop.Value.Contains('Style="{StaticResource HcfStopRailButton}"') -or
+    -not $stop.Value.Contains('Tag="HCF_RAIL_STOP_ICON"') -or
     $stop.Value.Contains('RotateTransform') -or
-    -not $stop.Value.Contains('Text="Tắt"') -or
+    $stop.Value.Contains('<TextBlock') -or
     -not $compact.Contains('string.Equals(button.Name, "StopHcfButton", StringComparison.Ordinal)')) {
-    throw 'HCF audit: STOP navigation power icon and horizontal label can be clipped by global compact sizing.'
+    throw 'HCF audit: icon-only STOP rail or compact-tuner exemption regressed.'
 }
 if ([regex]::Matches($xaml, '<RotateTransform Angle="-90"').Count -ne 2) {
     throw 'HCF audit: only the two mode tabs may use -90 degree labels.'
