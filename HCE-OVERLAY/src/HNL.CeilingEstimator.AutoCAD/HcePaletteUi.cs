@@ -86,7 +86,7 @@ namespace HNL.CeilingEstimator.AutoCAD
         // Never use DateTime.Now here: opening the palette is not a software update.
         // Update the native AutoCAD PaletteSet.Name, NOT an extra WPF line.
         // Keep the caption short enough for docked panels; preserve the GUID.
-        internal const string PaletteCaption = "HNL HCE | HCE_UPDATED_AT_SHORT_VN";
+        internal const string PaletteCaption = "HNL Ceiling Estimator Pro • HCE_UPDATED_AT_VN";
         internal const string BuildInfo = "v0.3.0  ·  Cập nhật HCE_UPDATED_AT_VN";
         private static PaletteSet? _palette;
         private static HcePaletteView? _view;
@@ -939,6 +939,48 @@ namespace HNL.CeilingEstimator.AutoCAD
                    !double.IsInfinity(value) && !double.IsNaN(value);
         }
 
+        // Commit pending Palette inputs before queuing a calculation.
+        // AutoCAD PaletteSet may delay LostFocus while switching focus.
+        private bool CommitPendingCalculationSettings()
+        {
+            var profile = ActiveLegacyProfile();
+            if (profile == null || _legacyTableHeight == null || _legacyLabelHeight == null)
+                return false;
+            if (!TryParseUiMm(_legacyTableHeight.Text, out var tableHeight) ||
+                tableHeight < 0 || tableHeight > 10000)
+            {
+                if (_legacyValidation != null)
+                    _legacyValidation.Text = "HNL Tool: Cao chữ bảng phải từ 0 đến 10000 mm.";
+                _legacyTableHeight.Focus();
+                return false;
+            }
+            if (!TryParseUiMm(_legacyLabelHeight.Text, out var labelHeight) ||
+                labelHeight <= 0 || labelHeight > 10000)
+            {
+                if (_legacyValidation != null)
+                    _legacyValidation.Text = "HNL Tool: Cao mã ô phải lớn hơn 0 và không quá 10000 mm.";
+                _legacyLabelHeight.Focus();
+                return false;
+            }
+            double tolerance = profile.Tolerance;
+            if (profile.SnapEnabled &&
+                (_legacyTolerance == null ||
+                 !TryParseUiMm(_legacyTolerance.Text, out tolerance) ||
+                 tolerance < 0 || tolerance > 10))
+            {
+                if (_legacyValidation != null)
+                    _legacyValidation.Text = "HNL Tool: Dung sai phải từ 0 đến 10 mm.";
+                _legacyTolerance?.Focus();
+                return false;
+            }
+            // Apply all three inputs only after validation has succeeded.
+            profile.TableTextHeight = tableHeight;
+            profile.LabelTextHeight = labelHeight;
+            if (profile.SnapEnabled) profile.Tolerance = tolerance;
+            if (_legacyValidation != null) _legacyValidation.Text = string.Empty;
+            return true;
+        }
+
         private void SaveLegacyTolerance()
         {
             if (_loadingLegacyControls || _legacyTolerance == null) return;
@@ -1255,6 +1297,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             {
                 var document = CadApplication.DocumentManager.MdiActiveDocument;
                 if (document == null) return;
+                if (command == "HCECALC" && !CommitPendingCalculationSettings()) return;
                 document.Editor.WriteMessage("\nHNL Tool - Palette executing " + command + ".");
                 // Invoke from the normal AutoCAD command stack, never from a WPF
                 // Click transaction. This preserves selection and Undo semantics.
