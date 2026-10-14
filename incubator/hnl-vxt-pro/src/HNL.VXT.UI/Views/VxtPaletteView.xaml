@@ -1394,7 +1394,7 @@
                                     <TextBlock Text="Layer có sẵn giữ nguyên thuộc tính; màu, nét, độ dày chỉ áp dụng cho layer mới."
                                                Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,9"/>
 
-                                    <!-- Hatch khung: layer/name and line appearance use a compact 2-column layout. -->
+                                    <!-- Hatch khung: layer appearance fields each occupy one aligned row. -->
                                     <StackPanel Margin="0,0,0,8" IsEnabled="{Binding DrawHatch}">
                                         <Grid MinHeight="27">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1404,18 +1404,11 @@
                                                       Text="{Binding HatchLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                                       ToolTip="Chọn layer DWG hoặc gõ tên layer mới."/>
                                         </Grid>
-                                        <Grid Margin="0,5,0,0">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,5,0">
-                                                <TextBlock Text="Màu" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding QuickColorOptions}"
-                                                          SelectedItem="{Binding SelectedHatchColor, Mode=TwoWay}"/>
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1" Margin="5,0,0,0">
-                                                <TextBlock Text="Độ dày nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding LineweightOptions}"
-                                                          SelectedItem="{Binding SelectedHatchLineweight, Mode=TwoWay}"/>
-                                            </StackPanel>
+                                        <Grid MinHeight="27" Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Màu" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding QuickColorOptions}"
+                                                      SelectedItem="{Binding SelectedHatchColor, Mode=TwoWay}"/>
                                         </Grid>
                                         <Grid MinHeight="27" Margin="0,5,0,0">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1423,10 +1416,16 @@
                                             <ComboBox Grid.Column="1" ItemsSource="{Binding LinetypeOptions}"
                                                       SelectedItem="{Binding HatchLinetype, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                         </Grid>
+                                        <Grid MinHeight="27" Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Độ dày nét" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding LineweightOptions}"
+                                                      SelectedItem="{Binding SelectedHatchLineweight, Mode=TwoWay}"/>
+                                        </Grid>
                                     </StackPanel>
                                     <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,0,1" Margin="0,0,0,8"/>
 
-                                    <!-- Ty treo: layer/name and line appearance use a compact 2-column layout. -->
+                                    <!-- Ty treo: layer appearance fields each occupy one aligned row. -->
                                     <StackPanel Margin="0,0,0,8" IsEnabled="{Binding DrawHangers}">
                                         <Grid MinHeight="27">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1436,18 +1435,11 @@
                                                       Text="{Binding HangerLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                                       ToolTip="Chọn layer DWG hoặc gõ tên layer mới."/>
                                         </Grid>
-                                        <Grid Margin="0,5,0,0">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,5,0">
-                                                <TextBlock Text="Màu" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding QuickColorOptions}"
-                                                          SelectedItem="{Binding SelectedHangerColor, Mode=TwoWay}"/>
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1" Margin="5,0,0,0">
-                                                <TextBlock Text="Độ dày nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding LineweightOptions}"
-                                                          SelectedItem="{Binding SelectedHangerLineweight, Mode=TwoWay}"/>
-                                            </StackPanel>
+                                        <Grid MinHeight="27" Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Màu" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding QuickColorOptions}"
+                                                      SelectedItem="{Binding SelectedHangerColor, Mode=TwoWay}"/>
                                         </Grid>
                                         <Grid MinHeight="27" Margin="0,5,0,0">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1455,10 +1447,16 @@
                                             <ComboBox Grid.Column="1" ItemsSource="{Binding LinetypeOptions}"
                                                       SelectedItem="{Binding HangerLinetype, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                         </Grid>
+                                        <Grid MinHeight="27" Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Độ dày nét" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding LineweightOptions}"
+                                                      SelectedItem="{Binding SelectedHangerLineweight, Mode=TwoWay}"/>
+                                        </Grid>
                                     </StackPanel>
                                     <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,0,1" Margin="0,0,0,8"/>
 
-                                    <!-- DIM: layer/name and line appearance use a compact 2-column layout. -->
+                                    <!-- DIM: layer appearance fields each occupy one aligned row. -->
                                     <StackPanel Margin="0,0,0,8" IsEnabled="{Binding IsDimensionEnabled}">
                                         <Grid MinHeight="27">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1468,18 +1466,11 @@
                                                       Text="{Binding DimensionLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                                       ToolTip="Chọn layer DWG hoặc gõ tên layer mới."/>
                                         </Grid>
-                                        <Grid Margin="0,5,0,0">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,5,0">
-                                                <TextBlock Text="Màu" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding QuickColorOptions}"
-                                                          SelectedItem="{Binding SelectedDimensionColor, Mode=TwoWay}"/>
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1" Margin="5,0,0,0">
-                                                <TextBlock Text="Độ dày nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding LineweightOptions}"
-                                                          SelectedItem="{Binding SelectedDimensionLineweight, Mode=TwoWay}"/>
-                                            </StackPanel>
+                                        <Grid MinHeight="27" Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Màu" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding QuickColorOptions}"
+                                                      SelectedItem="{Binding SelectedDimensionColor, Mode=TwoWay}"/>
                                         </Grid>
                                         <Grid MinHeight="27" Margin="0,5,0,0">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1487,10 +1478,16 @@
                                             <ComboBox Grid.Column="1" ItemsSource="{Binding LinetypeOptions}"
                                                       SelectedItem="{Binding DimensionLinetype, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                         </Grid>
+                                        <Grid MinHeight="27" Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Độ dày nét" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding LineweightOptions}"
+                                                      SelectedItem="{Binding SelectedDimensionLineweight, Mode=TwoWay}"/>
+                                        </Grid>
                                     </StackPanel>
                                     <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,0,1" Margin="0,0,0,8"/>
 
-                                    <!-- Block ô đầu: layer/name and line appearance use a compact 2-column layout. -->
+                                    <!-- Block ô đầu: layer appearance fields each occupy one aligned row. -->
                                     <StackPanel Margin="0,0,0,0" IsEnabled="{Binding DrawStartTileBlock}">
                                         <Grid MinHeight="27">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -1500,24 +1497,23 @@
                                                       Text="{Binding StartMarkerLayer, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                                       ToolTip="Chọn layer DWG hoặc gõ tên layer mới."/>
                                         </Grid>
-                                        <Grid Margin="0,5,0,0">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,5,0">
-                                                <TextBlock Text="Màu" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding QuickColorOptions}"
-                                                          SelectedItem="{Binding SelectedStartMarkerColor, Mode=TwoWay}"/>
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1" Margin="5,0,0,0">
-                                                <TextBlock Text="Độ dày nét" Style="{StaticResource FieldLabel}" FontSize="10"/>
-                                                <ComboBox ItemsSource="{Binding LineweightOptions}"
-                                                          SelectedItem="{Binding SelectedStartMarkerLineweight, Mode=TwoWay}"/>
-                                            </StackPanel>
+                                        <Grid MinHeight="27" Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Màu" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding QuickColorOptions}"
+                                                      SelectedItem="{Binding SelectedStartMarkerColor, Mode=TwoWay}"/>
                                         </Grid>
                                         <Grid MinHeight="27" Margin="0,5,0,0">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                             <TextBlock Text="Kiểu nét" Style="{StaticResource FieldLabel}"/>
                                             <ComboBox Grid.Column="1" ItemsSource="{Binding LinetypeOptions}"
                                                       SelectedItem="{Binding StartMarkerLinetype, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                        </Grid>
+                                        <Grid MinHeight="27" Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="Độ dày nét" Style="{StaticResource FieldLabel}"/>
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding LineweightOptions}"
+                                                      SelectedItem="{Binding SelectedStartMarkerLineweight, Mode=TwoWay}"/>
                                         </Grid>
                                     </StackPanel>
                                 </StackPanel>

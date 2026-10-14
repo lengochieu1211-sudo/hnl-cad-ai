@@ -147,8 +147,8 @@ if ($layInUi.Contains('Content="Vẽ Ty"') -or
 }
 
 
-# Narrow Palette: the Lay-in resource card must not use a host-stock white editable
-# ComboBox for linetypes, or split color/linetype/lineweight into 3 cramped columns.
+# Narrow Palette: each Lay-in Layer field occupies its own aligned row.
+# Keep all 4 dark-theme editable layer selectors; prevent multi-column appearance regression.
 $layerSectionStart = $layInUi.IndexOf('<Expander Header="6. Layer"')
 $layerSectionEnd = $layInUi.IndexOf('</Expander>', $layerSectionStart)
 if ($layerSectionStart -lt 0 -or $layerSectionEnd -le $layerSectionStart) {
@@ -160,8 +160,11 @@ if (-not $xaml.Contains('<Style x:Key="HcfEditableLayerCombo"') -or
     @([regex]::Matches($layInLayerUi, 'Style="\{StaticResource HcfEditableLayerCombo\}"')).Count -ne 4 -or
     @([regex]::Matches($layInLayerUi, 'SelectedItem="\{Binding (Hatch|Hanger|Dimension|StartMarker)Linetype,')).Count -ne 4 -or
     $layInLayerUi.Contains('IsEditable="True"') -or
-    $layInLayerUi.Contains('<ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>')) {
-    throw 'HCF Layer UI: stock editable chrome or cramped 3-column appearance regression.'
+    $layInLayerUi.Contains('<ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>') -or
+    $layInLayerUi.Contains('<ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>') -or
+    @([regex]::Matches($layInLayerUi, '<Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="\*"/></Grid.ColumnDefinitions>')).Count -ne 16 -or
+    @([regex]::Matches($layInLayerUi, '<TextBlock Text="(Màu|Kiểu nét|Độ dày nét)" Style="\{StaticResource FieldLabel\}"/>')).Count -ne 12) {
+    throw 'HCF Layer UI: invalid themed ComboBox or per-field single-row layout regression.'
 }
 
 # A selected Lay-in Hatch is never a concealed Polyline boundary.
