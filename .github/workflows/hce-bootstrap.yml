@@ -358,7 +358,7 @@ jobs:
             if(-not $ui.Contains($required)) {throw "Option persistence / dependency gate missing: $required"}
           }
           $idx = $ui.IndexOf('private void RefreshSelectionState(HceLegacyProfile profile)')
-          $end = $ui.IndexOf('internal void RefreshLegacyControls()', $idx)
+          $end = $ui.IndexOf('internal void RefreshLegacyControls(bool onlyOnDocumentChange = false)', $idx)
           if($idx -lt 0 -or $end -le $idx) {throw 'Lightweight HCE selection-state helper boundaries missing'}
           $light = $ui.Substring($idx, $end-$idx)
           if($light.Contains('Items.Clear()') -or $light.Contains('RefreshCadTableStyles(') -or
