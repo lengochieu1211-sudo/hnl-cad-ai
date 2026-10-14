@@ -274,6 +274,7 @@ if (-not $layInLayerUi.Contains('<Expander.HeaderTemplate>') -or
     throw 'HCF UI: Lay-in Layer header no longer shares concealed section colors.'
 }
 if (-not $xaml.Contains('<Style x:Key="PickButton" TargetType="Button" BasedOn="{StaticResource CompactButton}">') -or
+    -not $xaml.Contains('<Style x:Key="BoundaryPickButton" TargetType="Button" BasedOn="{StaticResource CompactButton}">') -or
     $xaml.Contains('<Style x:Key="PickButton" TargetType="Button" BasedOn="{StaticResource IconCompactButton}">')) {
     throw 'HCF UI: Select buttons must be text-only without decorative Pick arrow.'
 }
