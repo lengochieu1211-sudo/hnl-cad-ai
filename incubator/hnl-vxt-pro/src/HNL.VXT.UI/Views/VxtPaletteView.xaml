@@ -434,8 +434,8 @@
             <Setter Property="Width" Value="34"/>
             <Setter Property="Height" Value="34"/>
             <Setter Property="Padding" Value="0"/>
-            <Setter Property="Background" Value="#7F2934"/>
-            <Setter Property="BorderBrush" Value="#A34856"/>
+            <Setter Property="Background" Value="#B83B45"/>
+            <Setter Property="BorderBrush" Value="#D5646F"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -447,11 +447,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="StopChrome" Property="Background" Value="#AD4250"/>
-                                <Setter TargetName="StopChrome" Property="BorderBrush" Value="#D0717A"/>
+                                <Setter TargetName="StopChrome" Property="Background" Value="#D34B57"/>
+                                <Setter TargetName="StopChrome" Property="BorderBrush" Value="#F08490"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="StopChrome" Property="Background" Value="#65212B"/>
+                                <Setter TargetName="StopChrome" Property="Background" Value="#96303A"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="StopChrome" Property="Opacity" Value="0.45"/>
@@ -536,7 +536,7 @@
             <Setter Property="Padding" Value="10,2"/>
         </Style>
 
-        <Style x:Key="PickButton" TargetType="Button" BasedOn="{StaticResource IconCompactButton}">
+        <Style x:Key="PickButton" TargetType="Button" BasedOn="{StaticResource CompactButton}">
             <Setter Property="Tag" Value="Pick"/>
         </Style>
         <Style x:Key="SettingsButton" TargetType="Button" BasedOn="{StaticResource IconCompactButton}">
@@ -1203,7 +1203,7 @@
                         <!-- The three essential stages stay open; advanced sections are compact. -->
                         <Border Style="{StaticResource SectionCard}">
                             <StackPanel>
-                                <TextBlock Text="1. Chọn biên" Style="{StaticResource SectionTitle}" Margin="0,0,0,7"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,7"><TextBlock Text="1." Style="{StaticResource SectionNumber}"/><TextBlock Text="Chọn biên" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentStrong}"/></StackPanel>
                                 <Grid Margin="0,0,0,6" MinHeight="29">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <Button Content="Chọn Polyline" Command="{Binding SelectBoundaryCommand}" Grid.Column="0" Style="{StaticResource BoundaryPickButton}" Margin="0,0,4,0"/>
@@ -1232,7 +1232,7 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="2. Hệ khung" Style="{StaticResource SectionTitle}"/>
+                                    <StackPanel Orientation="Horizontal"><TextBlock Text="2." Style="{StaticResource SectionNumber}"/><TextBlock Text="Hệ khung" Style="{StaticResource SectionTitle}"/></StackPanel>
                                     <TextBlock Grid.Column="1" Text="Hatch" Style="{StaticResource FieldLabel}"
                                                FontSize="10.5" Margin="0,0,7,0"/>
                                     <CheckBox Grid.Column="2" IsChecked="{Binding DrawHatch, Mode=TwoWay}"
@@ -1259,7 +1259,7 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="3. Gốc lưới / Đuổi tấm" Style="{StaticResource SectionTitle}"/>
+                                    <StackPanel Orientation="Horizontal"><TextBlock Text="3." Style="{StaticResource SectionNumber}"/><TextBlock Text="Gốc lưới / Đuổi tấm" Style="{StaticResource SectionTitle}"/></StackPanel>
                                     <TextBlock Grid.Column="1" Text="Block ô đầu" Style="{StaticResource FieldLabel}"
                                                FontSize="10.5" Margin="0,0,7,0"/>
                                     <CheckBox Grid.Column="2" IsChecked="{Binding DrawStartTileBlock, Mode=TwoWay}"
@@ -1292,7 +1292,7 @@
                                 <Expander.Header>
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="4. Ty treo" Style="{StaticResource SectionTitle}"/>
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="4." Style="{StaticResource SectionNumber}"/><TextBlock Text="Ty treo" Style="{StaticResource SectionTitle}"/></StackPanel>
                                         <CheckBox Grid.Column="1" IsChecked="{Binding DrawHangers, Mode=TwoWay}"
                                                   Style="{StaticResource ToggleSwitch}" ToolTip="Bật/tắt vẽ Ty treo"/>
                                     </Grid>
@@ -1339,7 +1339,7 @@
                                 <Expander.Header>
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <TextBlock Text="5. DIM" Style="{StaticResource SectionTitle}"/>
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="5." Style="{StaticResource SectionNumber}"/><TextBlock Text="DIM" Style="{StaticResource SectionTitle}"/></StackPanel>
                                         <CheckBox Grid.Column="1" IsChecked="{Binding DrawDimensions, Mode=TwoWay}"
                                                   Style="{StaticResource ToggleSwitch}" ToolTip="Bật/tắt DIM; giữ kiểu DIM đã chọn"/>
                                     </Grid>
@@ -1422,6 +1422,14 @@
                         </Border>
                         <Border Style="{StaticResource SectionCard}">
                             <Expander Header="6. Layer" IsExpanded="False" HorizontalContentAlignment="Stretch">
+                                <Expander.HeaderTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="6." Style="{StaticResource SectionNumber}"/>
+                                            <TextBlock Text="Layer" Style="{StaticResource SectionTitle}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </Expander.HeaderTemplate>
                                 <StackPanel Margin="0,8,0,0">
                                     <TextBlock Text="Layer có sẵn giữ nguyên thuộc tính; màu, nét, độ dày chỉ áp dụng cho layer mới."
                                                Style="{StaticResource HintText}" TextWrapping="Wrap" Margin="0,0,0,9"/>
@@ -1604,8 +1612,8 @@
             </TabItem>
         </TabControl>
 
-        <!-- Independently controlled STOP stays below the vertical tabs, not mixed into modes. -->
-        <Border Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="40"
+        <!-- STOP occupies the bottom-right rail cell, alongside (not on top of) Create. -->
+        <Border Grid.Row="2" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="40"
                 Background="{DynamicResource CardBackground}" BorderBrush="{DynamicResource CardBorder}"
                 BorderThickness="0,1,0,0" Padding="2,5,2,5">
             <Button x:Name="StopHcfButton" Style="{StaticResource HcfStopRailButton}"

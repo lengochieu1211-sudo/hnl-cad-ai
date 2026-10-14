@@ -190,8 +190,8 @@ $stopUiStart = $xaml.IndexOf('<Button x:Name="StopHcfButton"')
 $stopUiEnd = $xaml.IndexOf('</Button>', $stopUiStart)
 if ($stopUiStart -lt 0 -or $stopUiEnd -le $stopUiStart -or
     -not $xaml.Contains('<Style x:Key="HcfStopRailButton"') -or
-    -not $xaml.Contains('Value="#7F2934"') -or
-    -not $xaml.Contains('Value="#AD4250"')) {
+    -not $xaml.Contains('Value="#B83B45"') -or
+    -not $xaml.Contains('Value="#D34B57"')) {
     throw 'HCF Stop UI: themed icon-only STOP style missing.'
 }
 $stopUi = $xaml.Substring($stopUiStart, $stopUiEnd - $stopUiStart)
@@ -244,6 +244,7 @@ $stop = [regex]::Match($xaml, '(?s)<Button\s+x:Name="StopHcfButton"(?<body>.*?)<
 if (-not $stop.Success -or
     -not $stop.Value.Contains('Style="{StaticResource HcfStopRailButton}"') -or
     -not $stop.Value.Contains('Tag="HCF_RAIL_STOP_ICON"') -or
+    -not $stop.Value.Contains('AutomationProperties.Name="Tắt HCF"') -or
     $stop.Value.Contains('RotateTransform') -or
     $stop.Value.Contains('<TextBlock') -or
     -not $compact.Contains('string.Equals(button.Name, "StopHcfButton", StringComparison.Ordinal)')) {
@@ -251,6 +252,34 @@ if (-not $stop.Success -or
 }
 if ([regex]::Matches($xaml, '<RotateTransform Angle="-90"').Count -ne 2) {
     throw 'HCF audit: only the two mode tabs may use -90 degree labels.'
+}
+
+# Unified section number colors: both ceiling tabs use the same SectionNumber / SectionTitle styles.
+$layInHeaderUi = $layInUi.Substring(0, $layerSectionStart)
+foreach ($section in @(
+    @('1.', 'Chọn biên'), @('2.', 'Hệ khung'), @('3.', 'Gốc lưới / Đuổi tấm'),
+    @('4.', 'Ty treo'), @('5.', 'DIM'))) {
+    $sectionNum = [regex]::Escape($section[0])
+    $sectionLabel = [regex]::Escape($section[1])
+    $sectionPattern = '<StackPanel Orientation="Horizontal"[^>]*><TextBlock Text="' +
+        $sectionNum + '" Style="\\{StaticResource SectionNumber\\}"/><TextBlock Text="' +
+        $sectionLabel + '" Style="\\{StaticResource SectionTitle\\}"'
+    if (-not [regex]::IsMatch($layInHeaderUi, $sectionPattern)) {
+        throw "HCF UI: Lay-in section $($section[0]) does not share concealed heading styles."
+    }
+}
+if (-not $layInLayerUi.Contains('<Expander.HeaderTemplate>') -or
+    -not $layInLayerUi.Contains('Text="6." Style="{StaticResource SectionNumber}"') -or
+    -not $layInLayerUi.Contains('Text="Layer" Style="{StaticResource SectionTitle}"')) {
+    throw 'HCF UI: Lay-in Layer header no longer shares concealed section colors.'
+}
+if (-not $xaml.Contains('<Style x:Key="PickButton" TargetType="Button" BasedOn="{StaticResource CompactButton}">') -or
+    $xaml.Contains('<Style x:Key="PickButton" TargetType="Button" BasedOn="{StaticResource IconCompactButton}">')) {
+    throw 'HCF UI: Select buttons must be text-only without decorative Pick arrow.'
+}
+if (-not $xaml.Contains('<Border Grid.Row="2" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="40"') -or
+    -not $xaml.Contains('<Border Grid.Row="2" Margin="0,0,40,0"')) {
+    throw 'HCF UI: STOP must occupy bottom-right cell without covering Create.'
 }
 
 # Audit *publicly displayed* legacy branding, while preserving HNL.VXT
