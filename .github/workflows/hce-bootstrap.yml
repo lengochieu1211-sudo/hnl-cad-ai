@@ -135,7 +135,7 @@ jobs:
           # Preserve the original filename until the existing build script finishes.
           # Its release verification requires this exact legacy basename.
           $iss = $iss.Replace($oldVerName, "$oldVerName - Build $buildTimeVN")
-          $iss = $iss.Replace($oldDescription, "$oldDescription - Build $buildTimeVN")
+          $iss = $iss.Replace($oldDescription, "VersionInfoDescription=HNL Ceiling Estimator Pro - Build $buildTimeVN")
           [IO.File]::WriteAllText($issPath, $iss, [Text.UTF8Encoding]::new($false))
           Add-Content -Path $env:GITHUB_ENV -Value "HCE_BUILD_TIME_VN=$buildTimeVN" -Encoding utf8
           Add-Content -Path $env:GITHUB_ENV -Value "HCE_BUILD_FILE_STAMP=$fileStamp" -Encoding utf8
