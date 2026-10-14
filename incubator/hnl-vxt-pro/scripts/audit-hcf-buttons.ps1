@@ -357,3 +357,11 @@ foreach ($technical in @('Hatch','Block','DIM','MEP','Layer')) {
 if (-not $xaml.Contains('ToolTip="Tắt HCF: dừng xem trước và đóng giao diện; AutoCAD vẫn mở"')) {
     throw 'HCF UI: STOP tooltip localization regressed.'
 }
+
+# The final PropertiesLayout stage executes after Typography in VxtPaletteService.
+# Guard against shrinking 27 px editors / 29 px rows to the old 24/26 metrics.
+$propertiesLayoutUi = Source 'src/HNL.VXT.UI/Views/VxtPalettePropertiesLayout.cs'
+if (-not $propertiesLayoutUi.Contains('private const double PropertyRowMinHeight = 29.0;') -or
+    -not $propertiesLayoutUi.Contains('private const double EditorHeight = 27.0;')) {
+    throw 'HCF UI: final Properties pass must keep 29 px property rows and 27 px editors.'
+}

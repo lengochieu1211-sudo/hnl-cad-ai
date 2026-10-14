@@ -22,8 +22,8 @@ namespace HNL.VXT.UI.Views
         private const string RowDividerTag = "HNL_VXT_PROPERTIES_ROW_DIVIDER";
         private const string ColumnDividerTag = "HNL_VXT_PROPERTIES_COLUMN_DIVIDER";
         private const double PropertyColumnWidth = 142.0;
-        private const double PropertyRowMinHeight = 26.0;
-        private const double EditorHeight = 24.0;
+        private const double PropertyRowMinHeight = 29.0;
+        private const double EditorHeight = 27.0;
 
         public static void Apply(VxtPaletteView view)
         {
