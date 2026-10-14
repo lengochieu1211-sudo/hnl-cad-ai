@@ -246,7 +246,7 @@ jobs:
               -not $comboChrome.Contains('SystemColors.ControlLightBrushKey') -or
               -not $ceilingUi.Contains('Text="Trần chìm"') -or
               -not $ceilingUi.Contains('Text="Trần nổi"') -or
-              -not $ceilingUi.Contains('Text="4. Ty treo" Style="{StaticResource SectionTitle}"') -or
+              -not $ceilingUi.Contains('Text="4." Style="{StaticResource SectionNumber}"/><TextBlock Text="Ty treo" Style="{StaticResource SectionTitle}"') -or
               -not $ceilingUi.Contains('IsChecked="{Binding DrawHangers, Mode=TwoWay}"') -or
               -not $layInLabels.Contains('LayInMainDirectionMode.ParallelShortSide') -or
               -not $layInLabels.Contains('LayInStartMode.Balanced')) {
