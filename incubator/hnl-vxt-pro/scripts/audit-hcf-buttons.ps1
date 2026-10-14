@@ -262,8 +262,8 @@ foreach ($section in @(
     $sectionNum = [regex]::Escape($section[0])
     $sectionLabel = [regex]::Escape($section[1])
     $sectionPattern = '<StackPanel Orientation="Horizontal"[^>]*><TextBlock Text="' +
-        $sectionNum + '" Style="\\{StaticResource SectionNumber\\}"/><TextBlock Text="' +
-        $sectionLabel + '" Style="\\{StaticResource SectionTitle\\}"'
+        $sectionNum + '" Style="\{StaticResource SectionNumber\}"/><TextBlock Text="' +
+        $sectionLabel + '" Style="\{StaticResource SectionTitle\}"'
     if (-not [regex]::IsMatch($layInHeaderUi, $sectionPattern)) {
         throw "HCF UI: Lay-in section $($section[0]) does not share concealed heading styles."
     }
