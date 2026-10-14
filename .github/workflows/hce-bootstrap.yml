@@ -81,9 +81,9 @@ jobs:
           $ui = [IO.File]::ReadAllText($uiPath)
           # Windows PowerShell 5 may decode GitHub workflow script literals
           # without a UTF-8 BOM. Test ASCII wiring/tokens, not accented text.
-          if (-not $ui.Contains('HNL HCE | HCE_UPDATED_AT_SHORT_VN') -or
+          if (-not $ui.Contains('HNL Ceiling Estimator Pro') -or
               -not $ui.Contains('internal const string BuildInfo = "v0.3.0') -or
-              -not $ui.Contains('internal const string PaletteCaption = "HNL HCE | HCE_UPDATED_AT_SHORT_VN";') -or
+              -not $ui.Contains('internal const string PaletteCaption = "HNL Ceiling Estimator Pro') -or
               -not $ui.Contains('HCE_UPDATED_AT_VN')) {
             throw 'Missing native HCE caption and build metadata stamp'
           }
@@ -103,7 +103,7 @@ jobs:
           if ($ui.Contains('HCE_UPDATED_AT_VN') -or $ui.Contains('HCE_UPDATED_AT_SHORT_VN')) {
             throw 'Unstamped HCE Palette update/build-time marker'
           }
-          $expectedNative = "HNL HCE | $shortTimeVN"
+          $expectedNative = "HNL Ceiling Estimator Pro $([char]0x2022) $buildTimeVN"
           $stampLine = ($ui -split "`n" | Where-Object { $_.Contains('internal const string BuildInfo = ') } | Select-Object -First 1)
           if (-not $ui.Contains($expectedNative) -or
               -not $stampLine.Contains($buildTimeVN) -or
@@ -413,7 +413,7 @@ jobs:
               'Width = 40, Background = _surface',
               "CornerRadius='8'",
               '_stopHceButton.Template = (ControlTemplate)XamlReader.Parse(stopTemplateXaml);',
-              'internal const string PaletteCaption = "HNL HCE | ')) {
+              'internal const string PaletteCaption = "HNL Ceiling Estimator Pro')) {
             if (-not $ui.Contains($required)) {
               throw "Single button / build date / rounded HCF stop gate missing: $required"
             }
@@ -615,6 +615,12 @@ jobs:
           $cmd=Get-Content "$root/Commands.cs" -Raw
           foreach($v in @('TableTextStyle', 'TableTextHeight')) {
             if(-not $profile.Contains($v) -or -not $ui.Contains($v) -or -not $cmd.Contains($v)) { throw "Missing RC5.4 real table binding: $v" }
+          }
+          if (-not $ui.Contains('CommitPendingCalculationSettings()') -or
+              -not $ui.Contains('if (command == "HCECALC" && !CommitPendingCalculationSettings()) return;') -or
+              -not $cmd.Contains('var modeStamp = profile.Module == "M"') -or
+              -not $cmd.Contains('HCECALC CONFIG mode=')) {
+            throw 'HCE palette settings commit or S/D/M result provenance gate missing'
           }
           foreach($v in @('RefreshTableStyles', 'SaveLegacyTableHeight', 'TextStyleTable', 'Grid.SetColumn(_legacyTableHeight, 1)', 'cell.TextHeight', 'cell.TextStyleId')) {
             if(-not (($ui+$cmd).Contains($v))) { throw "Missing RC5.4 UI/adapter table setting: $v" }
