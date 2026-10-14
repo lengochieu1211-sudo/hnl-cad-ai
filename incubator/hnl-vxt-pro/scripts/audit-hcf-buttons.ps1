@@ -162,8 +162,10 @@ if (-not $xaml.Contains('<Style x:Key="HcfEditableLayerCombo"') -or
     $layInLayerUi.Contains('IsEditable="True"') -or
     $layInLayerUi.Contains('<ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>') -or
     $layInLayerUi.Contains('<ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>') -or
-    @([regex]::Matches($layInLayerUi, '<Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="\*"/></Grid.ColumnDefinitions>')).Count -ne 16 -or
-    @([regex]::Matches($layInLayerUi, '<TextBlock Text="(Màu|Kiểu nét|Độ dày nét)" Style="\{StaticResource FieldLabel\}"/>')).Count -ne 12) {
+    @([regex]::Matches($layInLayerUi, '<Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="\*"/></Grid.ColumnDefinitions>')).Count -ne 16 -or
+    @([regex]::Matches($layInLayerUi, '<TextBlock Text="(Màu|Kiểu nét|Độ dày nét)" Style="\{StaticResource FieldLabel\}"/>')).Count -ne 12 -or
+    @([regex]::Matches($layInLayerUi, '<Grid MinHeight="29"')).Count -ne 16 -or
+    @([regex]::Matches($layInLayerUi, 'Margin="0,7,0,0"')).Count -ne 12) {
     throw 'HCF Layer UI: invalid themed ComboBox or per-field single-row layout regression.'
 }
 
@@ -183,6 +185,27 @@ if (-not $hostBridgeSource.Contains('if (_pendingLayInPreviewSettings != null)')
     -not $hostBridgeSource.Contains('Send("HNLCFLAYINCREATE ");')) {
     throw 'HCF audit: Lay-in Preview/Create WYSIWYG gate missing.'
 }
+# HCF STOP: icon-only action on a dark warning surface, independent of light/dark theme.
+$stopUiStart = $xaml.IndexOf('<Button x:Name="StopHcfButton"')
+$stopUiEnd = $xaml.IndexOf('</Button>', $stopUiStart)
+if ($stopUiStart -lt 0 -or $stopUiEnd -le $stopUiStart -or
+    -not $xaml.Contains('<Style x:Key="HcfStopRailButton"') -or
+    -not $xaml.Contains('Value="#7F2934"') -or
+    -not $xaml.Contains('Value="#AD4250"')) {
+    throw 'HCF Stop UI: themed icon-only STOP style missing.'
+}
+$stopUi = $xaml.Substring($stopUiStart, $stopUiEnd - $stopUiStart)
+if (-not $stopUi.Contains('Style="{StaticResource HcfStopRailButton}"') -or
+    -not $stopUi.Contains('AutomationProperties.Name="Tắt HCF"') -or
+    -not $stopUi.Contains('Tag="HCF_RAIL_STOP_ICON"') -or
+    $stopUi.Contains('<TextBlock') -or
+    $stopUi.Contains('Background="#FFF1F2"')) {
+    throw 'HCF Stop UI: white STOP background or redundant visible label.'
+}
+if (-not $layInUi.Contains('Padding="8"')) {
+    throw 'HCF UI: lay-in ScrollViewer padding no longer matches concealed tab.'
+}
+
 if (-not $xaml.Contains('Click="StopHcfButton_Click"') -or
     -not $hostBridgeSource.Contains('Send("HNLCFSTOP ");') -or
     $registered -notcontains 'HNLCFSTOP') {
