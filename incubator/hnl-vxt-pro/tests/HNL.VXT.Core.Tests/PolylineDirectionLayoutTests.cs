@@ -260,7 +260,7 @@ namespace HNL.VXT.Core.Tests
                 new Point2(750.0, 750.0)
             };
 
-            foreach (var guide in new[] { path, path.Reverse().ToArray() })
+            foreach (var guide in new[] { path, path.AsEnumerable().Reverse().ToArray() })
             {
                 var regions = VxtPolylineDirectionPartitioner.Partition(boundary, guide).ToList();
                 Assert.AreEqual(4, regions.Count);
@@ -306,7 +306,7 @@ namespace HNL.VXT.Core.Tests
             });
             var path = hole.Vertices.Concat(new[] { hole.Vertices[0] }).ToArray();
 
-            foreach (var guide in new[] { path, path.Reverse().ToArray() })
+            foreach (var guide in new[] { path, path.AsEnumerable().Reverse().ToArray() })
             {
                 var regions = VxtPolylineDirectionPartitioner.Partition(boundary, guide).ToList();
                 Assert.AreEqual(4, regions.Count);
