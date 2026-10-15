@@ -247,6 +247,87 @@ namespace HNL.VXT.Core.Tests
                 () => VxtPolylineDirectionPartitioner.Partition(boundary, path));
         }
 
+        [TestMethod]
+        public void ClosedTallRectanglePath_OppositeSidesNeverOverlap()
+        {
+            var boundary = Rectangle(5000.0, 18000.0);
+            var path = new[]
+            {
+                new Point2(750.0, 750.0),
+                new Point2(4250.0, 750.0),
+                new Point2(4250.0, 17250.0),
+                new Point2(750.0, 17250.0),
+                new Point2(750.0, 750.0)
+            };
+
+            foreach (var guide in new[] { path, path.Reverse().ToArray() })
+            {
+                var regions = VxtPolylineDirectionPartitioner.Partition(boundary, guide).ToList();
+                Assert.AreEqual(4, regions.Count);
+                Assert.AreEqual(5000.0 * 18000.0,
+                    regions.Sum(r => Math.Abs(Area(r.RegionBoundary))), 0.1,
+                    "A long rectangle must not duplicate area between opposite directions.");
+
+                for (var x = 100.0; x < 5000.0; x += 310.0)
+                for (var y = 100.0; y < 18000.0; y += 410.0)
+                {
+                    var point = new Point2(x, y);
+                    if (regions.Any(r => DistanceToBoundary(r.RegionBoundary, point) <= 0.5))
+                        continue;
+                    Assert.AreEqual(1, regions.Count(r => StrictlyInside(r.RegionBoundary, point)),
+                        "Closed long-rectangle path has a missing or overlapping direction region.");
+                }
+            }
+        }
+
+        [TestMethod]
+        public void KxDxfOuterAndInnerPolylines_ClosedGuideDoesNotDoubleFrameCorridors()
+        {
+            // Actual two closed polylines from the 2026-10-15 user KX.dxf in mm.
+            var boundary = new Boundary2(new[]
+            {
+                new Point2(241721.8084407249, -27498.44248091476),
+                new Point2(241462.9885910929, -27498.44248091476),
+                new Point2(241462.7426894536, -27548.3682788274),
+                new Point2(235731.8120778265, -27548.43822824378),
+                new Point2(235731.8047989144, -28589.38996211129),
+                new Point2(236417.4158193589, -28589.39325826561),
+                new Point2(236417.4230982710, -44963.44152439912),
+                new Point2(240821.8084388127, -44963.44152439991),
+                new Point2(240821.8084388279, -44888.44152372043),
+                new Point2(241721.8084407249, -44888.44152498972)
+            });
+            var hole = new Boundary2(new[]
+            {
+                new Point2(237217.1104944222, -28648.69232801191),
+                new Point2(240771.8084950476, -28648.69232801191),
+                new Point2(240771.8084950479, -43688.44152354515),
+                new Point2(237217.1104944224, -43688.44152354515)
+            });
+            var path = hole.Vertices.Concat(new[] { hole.Vertices[0] }).ToArray();
+
+            foreach (var guide in new[] { path, path.Reverse().ToArray() })
+            {
+                var regions = VxtPolylineDirectionPartitioner.Partition(boundary, guide).ToList();
+                Assert.AreEqual(4, regions.Count);
+                Assert.AreEqual(Math.Abs(Area(boundary)),
+                    regions.Sum(r => Math.Abs(Area(r.RegionBoundary))), 0.1,
+                    "KX.dxf guide must partition the outer ceiling exactly once.");
+
+                for (var x = 235900.0; x < 241700.0; x += 185.0)
+                for (var y = -44800.0; y < -27500.0; y += 335.0)
+                {
+                    var point = new Point2(x, y);
+                    if (!StrictlyInside(boundary, point) || StrictlyInside(hole, point))
+                        continue;
+                    if (regions.Any(r => DistanceToBoundary(r.RegionBoundary, point) <= 0.5))
+                        continue;
+                    Assert.AreEqual(1, regions.Count(r => StrictlyInside(r.RegionBoundary, point)),
+                        "KX.dxf corridor must be assigned to exactly one XC direction.");
+                }
+            }
+        }
+
         private static bool StrictlyInside(Boundary2 boundary, Point2 point)
         {
             var inside = false;

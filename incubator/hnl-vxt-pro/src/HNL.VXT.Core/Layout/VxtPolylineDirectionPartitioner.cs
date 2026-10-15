@@ -44,6 +44,24 @@ namespace HNL.VXT.Core.Layout
             for (var i = 0; i + 1 < points.Count; i++)
                 directions.Add(Unit(points[i], points[i + 1]));
 
+            // Four-sided orthogonal closed guides need an opposite-side bisector too.
+            // Adjacent corner bisectors alone overlap for elongated rectangles (KX.dxf).
+            // Leave open guides, diamonds, and non-rectangular paths unchanged.
+            var rectangularLoop = isClosed && directions.Count == 4;
+            if (rectangularLoop)
+            {
+                for (var i = 0; i < directions.Count; i++)
+                {
+                    var a = directions[i];
+                    var b = directions[(i + 1) % directions.Count];
+                    if (Math.Abs(a.X * b.X + a.Y * b.Y) > 1e-5)
+                    {
+                        rectangularLoop = false;
+                        break;
+                    }
+                }
+            }
+
             var regions = new List<VxtLayoutRegion>(directions.Count);
             for (var segmentIndex = 0; segmentIndex < directions.Count; segmentIndex++)
             {
@@ -79,6 +97,22 @@ namespace HNL.VXT.Core.Layout
                 {
                     var normal = BisectorNormal(directions[segmentIndex], directions[segmentIndex + 1]);
                     polygon = ClipHalfPlane(polygon, points[segmentIndex + 1], normal, keepPositive: false);
+                }
+
+                if (rectangularLoop)
+                {
+                    // Split the two opposite side regions at their shared center line.
+                    // This preserves the area exactly once without moving any XC lattice.
+                    var opposite = (segmentIndex + 2) % directions.Count;
+                    var midpoint = new Point2(
+                        (points[segmentIndex].X + points[opposite].X) * 0.5,
+                        (points[segmentIndex].Y + points[opposite].Y) * 0.5);
+                    var normal = new Vector2(
+                        -directions[segmentIndex].Y, directions[segmentIndex].X);
+                    var signedSide =
+                        (points[segmentIndex].X - midpoint.X) * normal.X +
+                        (points[segmentIndex].Y - midpoint.Y) * normal.Y;
+                    polygon = ClipHalfPlane(polygon, midpoint, normal, signedSide >= 0.0);
                 }
 
                 polygon = CleanPolygon(polygon);
