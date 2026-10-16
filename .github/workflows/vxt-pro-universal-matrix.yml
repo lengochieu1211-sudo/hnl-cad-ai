@@ -353,7 +353,7 @@ jobs:
               -not $ceilingUi.Contains('Tag="HCF_RAIL_CONCEALED_ICON"') -or
               -not $ceilingUi.Contains('Tag="HCF_RAIL_LAYIN_ICON"') -or
               -not $ceilingUi.Contains('Tag="HCF_RAIL_STOP_ICON"') -or
-              -not $ceilingUi.Contains('Margin="0,0,40,0"') -or
+              -not $ceilingUi.Contains('<Grid Grid.Row="2" ClipToBounds="True">') -or
               -not $ceilingUi.Contains('<RotateTransform Angle="-90"/>') -or
               -not $ceilingUi.Contains('x:Name="StopHcfButton"') -or
               -not $ceilingUi.Contains('Click="StopHcfButton_Click"') -or
