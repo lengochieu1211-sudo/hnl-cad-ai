@@ -278,9 +278,15 @@ if (-not $xaml.Contains('<Style x:Key="PickButton" TargetType="Button" BasedOn="
     $xaml.Contains('<Style x:Key="PickButton" TargetType="Button" BasedOn="{StaticResource IconCompactButton}">')) {
     throw 'HCF UI: Select buttons must be text-only without decorative Pick arrow.'
 }
-if (-not $xaml.Contains('<Border Grid.Row="2" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="40"') -or
-    -not $xaml.Contains('<Border Grid.Row="2" Margin="0,0,40,0"')) {
-    throw 'HCF UI: STOP must occupy bottom-right cell without covering Create.'
+# Footer cells must be siblings in a real 40-DIP grid column, not overlapping
+# Borders with an implicit 40-DIP right Margin that can clip on PaletteSet resize.
+if (-not $xaml.Contains('<Grid Grid.Row="2" ClipToBounds="True">') -or
+    -not $xaml.Contains('<ColumnDefinition Width="40"/>') -or
+    -not $xaml.Contains('<Border Grid.Column="0" Background="{DynamicResource CardBackground}"') -or
+    -not $xaml.Contains('<Border Grid.Column="1" Background="{DynamicResource CardBackground}"') -or
+    -not $xaml.Contains('HorizontalAlignment="Center" VerticalAlignment="Center"') -or
+    $xaml.Contains('<Border Grid.Row="2" Margin="0,0,40,0"')) {
+    throw 'HCF UI: fixed footer STOP/Create cells can overlap or become obscured.'
 }
 
 # Audit *publicly displayed* legacy branding, while preserving HNL.VXT
