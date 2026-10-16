@@ -75,6 +75,23 @@ if (-not $xaml.Contains('x:Name="ConcealedCreateButton"') -or
     throw 'HCF audit: concealed Create button loses its handler on Palette reopen.'
 }
 
+# The legacy Ty-only Loaded handler clears the WPF Command binding. It MUST
+# dispatch the actual warning command when the visible Create button switches to
+# "Tạo có cảnh báo"; otherwise it silently sends strict Create and rolls back.
+$warningMode = $legacy.IndexOf('if (vm.HasOverrideableHardConstraints)')
+$warningDispatch = $legacy.IndexOf('vm.CreateWithWarningCommand.Execute(null);')
+$normalDispatch = $legacy.IndexOf('vm.CreateCommand.Execute(null);')
+if ($warningMode -lt 0 -or $warningDispatch -le $warningMode -or
+    $normalDispatch -le $warningDispatch -or
+    -not $legacy.Contains('if (!vm.CanCreateWithWarning) return;') -or
+    -not $xaml.Contains('Value="Tạo có cảnh báo"') -or
+    -not $xaml.Contains('Value="{Binding CreateWithWarningCommand}"') -or
+    -not $hostBridgeSource.Contains('Send(allowConstraintOverride ? "HNLVXTCREATEWARN " : "HNLVXTCREATE ");') -or
+    -not $registeredSource.Contains('ExecuteCreate(allowConstraintOverride: true);') -or
+    $registered -notcontains 'HNLVXTCREATEWARN') {
+    throw 'HCF audit: warning Create is silently routed to strict Create by legacy Ty-only handler.'
+}
+
 # Guard the redundant Lay-in DIM captions and the point-based door picker from returning.
 # This catches source/UI regressions but not an old AutoCAD DLL already in memory.
 if ($xaml.Contains('Text="DIM ô nguyên + mép cắt."') -or

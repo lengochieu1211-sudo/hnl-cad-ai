@@ -54,11 +54,22 @@ namespace HNL.VXT.UI.Views
             var button = sender as Button;
             var vm = button?.DataContext as VxtPaletteViewModel;
             if (vm == null) return;
+
+            // The Loaded compatibility hook removes Button.Command to support legacy
+            // Ty-only creation without a boundary. Dispatching CreateCommand unconditionally
+            // here bypassed the PrimaryCreateButton warning trigger and blocked HARD errors
+            // even when the button visibly said "Tạo có cảnh báo".
+            if (vm.HasOverrideableHardConstraints)
+            {
+                if (!vm.CanCreateWithWarning) return;
+                vm.CreateWithWarningCommand.Execute(null);
+                return;
+            }
+
             if (!vm.CanCreate && !IsLegacyManualTyOnly(vm)) return;
 
-            // RelayCommand.Execute deliberately does not re-check CanExecute. For normal mode
-            // vm.CanCreate is already true; for the one approved legacy mode the host coordinator
-            // performs the existing-XC selection before entering the transactional Create engine.
+            // Preserve the certified normal Create and legacy manual-Ty-only paths.
+            // The host always validates resources, Preview/Create parity and transactions.
             vm.CreateCommand.Execute(null);
         }
 
