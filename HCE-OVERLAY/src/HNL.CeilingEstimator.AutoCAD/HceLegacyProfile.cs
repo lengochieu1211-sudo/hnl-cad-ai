@@ -46,7 +46,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var longW = isLongY ? n : n * 2;
             var longH = isLongY ? n * 2 : n;
             var small = new StockSpec("S", n, n, n == 600 ? "595x595" : "605x605");
-            var large = new StockSpec("D", longW, longH, n == 600 ? "595x1190" : "605x1210");
+            var large = new StockSpec("D", longW, longH, n == 600 ? "595x1195" : "605x1210");
             var isMixed = Module == "M";
             var largeMain = Module == "D" || (isMixed && Priority == "D");
             return new DemtcOptions

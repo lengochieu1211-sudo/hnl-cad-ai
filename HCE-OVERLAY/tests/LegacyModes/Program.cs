@@ -46,7 +46,22 @@ internal static class Program
             Assert(mode!="S" || o.SmallStock.DisplayName==
                 (pitch==600?"595x595":"605x605"), "short-only stock "+pitch+"/"+priority);
             Assert(mode!="D" || o.SmallStock.DisplayName==
-                (pitch==600?"595x1190":"605x1210"), "long-only stock "+pitch+"/"+priority);
+                (pitch==600?"595x1195":"605x1210"), "long-only stock "+pitch+"/"+priority);
+            // DisplayName is a CAD Table label only: geometry and stock
+            // packing must retain their independent nominal 600/610 dimensions.
+            Assert(o.SmallStock.DisplayName ==
+                (mode=="D"?(pitch==600?"595x1195":"605x1210"):
+                           (pitch==600?"595x595":"605x605")),
+                "display stock short-slot "+pitch+"/"+mode+"/"+direction);
+            Assert(o.LargeStock.DisplayName ==
+                (pitch==600?"595x1195":"605x1210"),
+                "display long stock "+pitch+"/"+mode+"/"+direction);
+            Assert(o.LargeStock.Width==(direction=="Y"?pitch:2*pitch) &&
+                   o.LargeStock.Height==(direction=="Y"?2*pitch:pitch),
+                "nominal long geometry must not follow 595/605 display strings");
+            Assert(o.SmallStock.Width==(mode=="D"?(direction=="Y"?pitch:2*pitch):pitch) &&
+                   o.SmallStock.Height==(mode=="D"?(direction=="Y"?2*pitch:pitch):pitch),
+                "nominal short-slot geometry must not follow display strings");
             Assert(!o.SnapEnabled && o.SnapTolerance==0, "Snap OFF");
             var calc=engine.CalculateLineHatch(rect,new GridFrame(new Point2(0,0),0),2400d*2400d,o);
             Assert(calc.Success && calc.PureResult!=null, "calc "+pitch+"/"+mode+"/"+direction+"/"+priority+" "+calc.FailureReason);
