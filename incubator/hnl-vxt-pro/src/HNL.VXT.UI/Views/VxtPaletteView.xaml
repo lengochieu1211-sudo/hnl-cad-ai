@@ -1090,21 +1090,21 @@
                                 <CheckBox IsChecked="{Binding DimMain}" Style="{StaticResource SecondaryToggleSwitch}"/>
                                 <TextBlock Grid.Column="1" Text="Xương chính" Style="{StaticResource FieldLabel}"/>
                                 <ComboBox Grid.Column="2" ItemsSource="{Binding DimensionPositionOptions}" SelectedItem="{Binding SelectedMainDimPosition}" IsEnabled="{Binding DimMain}"/>
-                                <Button Grid.Column="3" Content="Chọn" Command="{Binding PickMainDimCommand}" IsEnabled="{Binding DimMain}" Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
+                                <Button Grid.Column="3" Content="Đặt" ToolTip="Chọn vị trí đặt DIM. Để DIM XC có sẵn: tắt rải XC, chọn biên trần, bấm Tạo và chọn XC hiện có." Command="{Binding PickMainDimCommand}" IsEnabled="{Binding DimMain}" Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
                             </Grid>
                             <Grid Margin="0,0,0,7">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
                                 <CheckBox IsChecked="{Binding DimFurring}" Style="{StaticResource SecondaryToggleSwitch}"/>
                                 <TextBlock Grid.Column="1" Text="Xương phụ" Style="{StaticResource FieldLabel}"/>
                                 <ComboBox Grid.Column="2" ItemsSource="{Binding DimensionPositionOptions}" SelectedItem="{Binding SelectedFurringDimPosition}" IsEnabled="{Binding DimFurring}"/>
-                                <Button Grid.Column="3" Content="Chọn" Command="{Binding PickFurringDimCommand}" IsEnabled="{Binding DimFurring}" Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
+                                <Button Grid.Column="3" Content="Đặt" ToolTip="Chọn vị trí đặt DIM. Để DIM XP có sẵn: tắt rải XP, chọn biên trần, bấm Tạo và chọn XP hiện có (gồm MLINE)." Command="{Binding PickFurringDimCommand}" IsEnabled="{Binding DimFurring}" Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
                             </Grid>
                             <Grid Margin="0,0,0,9">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
                                 <CheckBox IsChecked="{Binding DimHanger}" Style="{StaticResource SecondaryToggleSwitch}"/>
                                 <TextBlock Grid.Column="1" Text="Ty treo" Style="{StaticResource FieldLabel}"/>
                                 <ComboBox Grid.Column="2" ItemsSource="{Binding DimensionPositionOptions}" SelectedItem="{Binding SelectedHangerDimPosition}" IsEnabled="{Binding DimHanger}"/>
-                                <Button Grid.Column="3" Content="Chọn" Command="{Binding PickHangerDimCommand}" IsEnabled="{Binding DimHanger}" Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
+                                <Button Grid.Column="3" Content="Đặt" ToolTip="Chọn vị trí đặt DIM. Để DIM Ty có sẵn: tắt rải Ty, chọn biên trần, bấm Tạo và chọn các Block Ty hiện có." Command="{Binding PickHangerDimCommand}" IsEnabled="{Binding DimHanger}" Style="{StaticResource PickButton}" Margin="6,0,0,0"/>
                             </Grid>
 
                             <Border BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0" Padding="0,9,0,0">

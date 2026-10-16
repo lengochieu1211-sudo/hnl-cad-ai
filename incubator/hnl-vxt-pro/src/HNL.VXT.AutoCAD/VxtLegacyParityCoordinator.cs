@@ -70,14 +70,14 @@ namespace HNL.VXT.AutoCAD
             if (!settings.DrawMain && (settings.DrawHangers || (settings.AutoDimension && settings.DimMain)))
             {
                 ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã tắt Rải Xương Chính. Quét chọn Xương Chính có sẵn để rải Ty hoặc Dim.");
-                if (!TrySelectExisting(ed, "LINE,LWPOLYLINE,POLYLINE,INSERT", out var ids)) return;
+                if (!TrySelectExisting(ed, "LINE,LWPOLYLINE,POLYLINE,MLINE,INSERT", out var ids)) return;
                 session.ManualMainIds = ids;
             }
 
             if (!settings.DrawFurring && settings.AutoDimension && settings.DimFurring)
             {
                 ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã tắt Rải Xương Phụ. Quét chọn Xương Phụ có sẵn để ghi kích thước.");
-                if (!TrySelectExisting(ed, "LINE,LWPOLYLINE,POLYLINE,INSERT", out var ids)) return;
+                if (!TrySelectExisting(ed, "LINE,LWPOLYLINE,POLYLINE,MLINE,INSERT", out var ids)) return;
                 session.ManualFurringIds = ids;
             }
 
@@ -92,6 +92,16 @@ namespace HNL.VXT.AutoCAD
                 settings.HangerLayout == HangerLayoutMode.OneSideFollowFurring && session.ManualMainIds.Length > 0)
             {
                 PromptManualHangerDirections(doc, session, settings);
+            }
+
+            // A DIM-only request must not silently succeed with zero new dimensions
+            // when Enter was used to skip all existing XC/XP/Ty source selections.
+            if (settings.AutoDimension && !settings.DrawMain && !settings.DrawFurring &&
+                !settings.DrawHangers && session.ManualMainIds.Length == 0 &&
+                session.ManualFurringIds.Length == 0 && session.ManualHangerIds.Length == 0)
+            {
+                ed.WriteMessage("\nHNL Tool - HCF: Chưa chọn XC, XP hoặc Ty có sẵn để ghi DIM. Không tạo đối tượng nào.");
+                return;
             }
 
             if (settings.DrawHangers && !HasBlock(doc.Database, settings.HangerBlockName))

@@ -92,6 +92,18 @@ if ($warningMode -lt 0 -or $warningDispatch -le $warningMode -or
     throw 'HCF audit: warning Create is silently routed to strict Create by legacy Ty-only handler.'
 }
 
+# Existing CAD XC/XP/Ty DIM: both XC and XP source selection MUST accept native
+# AutoCAD MLINE (the HCF Create engine itself can emit XP as MLINE).
+# Also guard DIM-only zero-selection, and keep DIM position pick separate from source pick.
+$manualExisting = Source 'src/HNL.VXT.AutoCAD/VxtLegacyParityCoordinator.cs'
+if ([regex]::Matches($manualExisting, 'TrySelectExisting\\(ed, "LINE,LWPOLYLINE,POLYLINE,MLINE,INSERT"').Count -ne 2 -or
+    -not $manualExisting.Contains('Chưa chọn XC, XP hoặc Ty có sẵn để ghi DIM.') -or
+    -not $xaml.Contains('Content="Đặt" ToolTip="Chọn vị trí đặt DIM. Để DIM XC có sẵn:') -or
+    -not $xaml.Contains('Content="Đặt" ToolTip="Chọn vị trí đặt DIM. Để DIM XP có sẵn:') -or
+    -not $xaml.Contains('Content="Đặt" ToolTip="Chọn vị trí đặt DIM. Để DIM Ty có sẵn:')) {
+    throw 'HCF audit: existing XC/XP/Ty DIM selection or button explanation regressed.'
+}
+
 # Guard the redundant Lay-in DIM captions and the point-based door picker from returning.
 # This catches source/UI regressions but not an old AutoCAD DLL already in memory.
 if ($xaml.Contains('Text="DIM ô nguyên + mép cắt."') -or
