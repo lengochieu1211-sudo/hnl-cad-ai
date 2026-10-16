@@ -1,7 +1,7 @@
 using System;
 using DrawingSize = System.Drawing.Size;
 using System.Globalization;
-using System.Runtime.CompilerServices;
+using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using HNL.CeilingEstimator.Core.Models;
 using System.Windows;
@@ -65,6 +65,11 @@ namespace HNL.CeilingEstimator.AutoCAD
             _calculationRunning = false;
             _view?.UpdateWorkProgress(complete ? 100 : 0,
                 complete ? "Hoàn tất. Đã tạo bảng CAD." : "Đã dừng hoặc hủy thao tác.", false);
+        }
+
+        internal static void ForgetDatabase(IntPtr key)
+        {
+            _view?.ForgetDatabase(key);
         }
 
         internal static void StopInCommandContext()
@@ -177,7 +182,7 @@ namespace HNL.CeilingEstimator.AutoCAD
         private ProgressBar? _workProgress;
         private WpfButton? _stopHceButton;
         private bool _loadingLegacyControls;
-        private Database? _lastLegacyDatabase;
+        private IntPtr _lastLegacyDatabaseKey;
 
         public HcePaletteView()
         {
@@ -959,9 +964,16 @@ namespace HNL.CeilingEstimator.AutoCAD
             return true;
         }
 
-        private bool CommitPendingCalculationSettings()
+        private bool CommitPendingCalculationSettings(Document document)
         {
-            var profile = ActiveLegacyProfile();
+            var active = CadApplication.DocumentManager.MdiActiveDocument;
+            if (active == null || active.Database.UnmanagedObject != document.Database.UnmanagedObject)
+            {
+                if (_legacyValidation != null)
+                    _legacyValidation.Text = "HNL Tool: DWG đã đổi; chọn lại trước khi tính.";
+                return false;
+            }
+            var profile = HceLegacyProfiles.For(document.Database);
             if (profile == null || _loadingLegacyControls ||
                 _legacyTableHeight == null || _legacyLabelHeight == null)
                 return false;
@@ -1044,10 +1056,14 @@ namespace HNL.CeilingEstimator.AutoCAD
             profile.CadTableStyle = candidate.CadTableStyle;
             if (_legacyValidation != null) _legacyValidation.Text = string.Empty;
             RefreshSelectionState(profile);
-            CadApplication.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+            HceLegacyProfiles.Queue(document.Database, candidate);
+            document.Editor.WriteMessage(
                 "\nHNL Tool - HCE Palette chốt lựa chọn: mode=" + profile.Module +
                 " priority=" + profile.Priority + " family=" + profile.Family +
-                " grid=" + profile.GridMode + "; " + profile.Summary());
+                " grid=" + profile.GridMode +
+                " tableTextHeightMm=" + profile.TableTextHeight.ToString("0.###", CultureInfo.InvariantCulture) +
+                " db=" + document.Database.UnmanagedObject +
+                "; " + profile.Summary());
             return true;
         }
 
@@ -1250,13 +1266,18 @@ namespace HNL.CeilingEstimator.AutoCAD
                     " | Chế độ: " + (profile.CutListMode == "D" ? "Chi tiết" : "Tổng hợp");
         }
 
+        internal void ForgetDatabase(IntPtr key)
+        {
+            if (_lastLegacyDatabaseKey == key) _lastLegacyDatabaseKey = IntPtr.Zero;
+        }
+
         internal void RefreshLegacyControls(bool onlyOnDocumentChange = false)
         {
             var doc = CadApplication.DocumentManager.MdiActiveDocument;
             if (doc == null) return;
             // DocumentActivated can fire while a WPF ComboBox is open; do not
             // reapply a stale selection for the same DWG while the user edits.
-            if (onlyOnDocumentChange && ReferenceEquals(_lastLegacyDatabase, doc.Database)) return;
+            if (onlyOnDocumentChange && _lastLegacyDatabaseKey == doc.Database.UnmanagedObject) return;
             var profile = HceLegacyProfiles.For(doc.Database);
             _loadingLegacyControls = true;
             try
@@ -1283,7 +1304,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                     _legacyCutMode.SelectedIndex = profile.CutListMode == "D" ? 1 : 0;
                 RefreshSelectionState(profile);
                 if (_legacyValidation != null) _legacyValidation.Text = "";
-                _lastLegacyDatabase = doc.Database;
+                _lastLegacyDatabaseKey = doc.Database.UnmanagedObject;
             }
             finally { _loadingLegacyControls = false; }
         }
@@ -1415,13 +1436,25 @@ namespace HNL.CeilingEstimator.AutoCAD
                         UpdateWorkProgress(0, "Kết thúc lệnh AutoCAD trước khi tính", false);
                         return;
                     }
-                    if (!CommitPendingCalculationSettings()) return;
+                    if (HceLegacyProfiles.IsQueued(document.Database))
+                    {
+                        document.Editor.WriteMessage(
+                            "\nHNL Tool - HCECALC đang chờ; không gửi yêu cầu trùng.");
+                        return;
+                    }
+                    if (!CommitPendingCalculationSettings(document)) return;
                     UpdateWorkProgress(0, "Đang chờ AutoCAD nhận lệnh HCECALC...", false);
                 }
                 document.Editor.WriteMessage("\nHNL Tool - Palette executing " + command + ".");
                 // Invoke from the normal AutoCAD command stack, never from a WPF
                 // Click transaction. This preserves selection and Undo semantics.
-                document.SendStringToExecute(command + "\n", true, false, false);
+                try { document.SendStringToExecute(command + "\n", true, false, false); }
+                catch (System.Exception ex)
+                {
+                    if (command == "HCECALC") HceLegacyProfiles.ClearQueued(document.Database);
+                    document.Editor.WriteMessage("\nHNL Tool - Không thể gửi lệnh " +
+                        command + ": " + ex.Message);
+                }
             };
             return button;
         }
@@ -1443,11 +1476,29 @@ namespace HNL.CeilingEstimator.AutoCAD
 
     internal static class HceLegacyProfiles
     {
-        private static readonly ConditionalWeakTable<Database, HceLegacyProfile> Values =
-            new ConditionalWeakTable<Database, HceLegacyProfile>();
-
-        public static HceLegacyProfile For(Database database) => Values.GetValue(
-            database, key => new HceLegacyProfile());
+        static HceLegacyProfiles()
+        {
+            CadApplication.DocumentManager.DocumentToBeDestroyed += (sender, args) =>
+            {
+                try
+                {
+                    var key = args.Document.Database.UnmanagedObject;
+                    HceProfileSessionStore.Remove(key);
+                    HcePaletteService.ForgetDatabase(key);
+                }
+                catch (System.Exception) { /* AutoCAD shutdown can dispose objects. */ }
+            };
+        }
+        public static HceLegacyProfile For(Database database) =>
+            HceProfileSessionStore.For(database.UnmanagedObject);
+        public static void Queue(Database database, HceLegacyProfile settings) =>
+            HceProfileSessionStore.Queue(database.UnmanagedObject, settings);
+        public static bool IsQueued(Database database) =>
+            HceProfileSessionStore.IsQueued(database.UnmanagedObject);
+        public static HceLegacyProfile Consume(Database database, out bool fromPalette) =>
+            HceProfileSessionStore.Consume(database.UnmanagedObject, out fromPalette);
+        public static void ClearQueued(Database database) =>
+            HceProfileSessionStore.ClearQueued(database.UnmanagedObject);
     }
 
 }

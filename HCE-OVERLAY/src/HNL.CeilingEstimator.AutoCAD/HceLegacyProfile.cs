@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Globalization;
 using HNL.CeilingEstimator.Core.Models;
@@ -75,5 +76,69 @@ namespace HNL.CeilingEstimator.AutoCAD
         }
     }
 
+
+    // Per-native-DWG session state. Managed Database wrappers are not suitable
+    // as ConditionalWeakTable keys across Palette and command contexts.
+    internal static class HceProfileSessionStore
+    {
+        private sealed class State
+        {
+            internal HceLegacyProfile Profile = new HceLegacyProfile();
+            internal HceLegacyProfile? Queued;
+        }
+        private static readonly object Gate = new object();
+        private static readonly System.Collections.Generic.Dictionary<IntPtr, State> ByNativeDb =
+            new System.Collections.Generic.Dictionary<IntPtr, State>();
+        private static State StateFor(IntPtr key)
+        {
+            if (key == IntPtr.Zero) throw new InvalidOperationException("Invalid HCE database key.");
+            if (!ByNativeDb.TryGetValue(key, out var state))
+            {
+                state = new State();
+                ByNativeDb.Add(key, state);
+            }
+            return state;
+        }
+        internal static HceLegacyProfile For(IntPtr key)
+        {
+            lock (Gate) return StateFor(key).Profile;
+        }
+        internal static void Queue(IntPtr key, HceLegacyProfile selected)
+        {
+            lock (Gate) StateFor(key).Queued = selected.Clone();
+        }
+        internal static bool IsQueued(IntPtr key)
+        {
+            lock (Gate) return StateFor(key).Queued != null;
+        }
+        internal static HceLegacyProfile Consume(IntPtr key, out bool fromPalette)
+        {
+            lock (Gate)
+            {
+                var state = StateFor(key);
+                if (state.Queued != null)
+                {
+                    var result = state.Queued.Clone();
+                    state.Queued = null;
+                    fromPalette = true;
+                    return result;
+                }
+                foreach (var other in ByNativeDb)
+                    if (other.Key != key && other.Value.Queued != null)
+                        throw new InvalidOperationException("HCECALC pending in another DWG.");
+                fromPalette = false;
+                return state.Profile.Clone();
+            }
+        }
+        internal static void ClearQueued(IntPtr key)
+        {
+            lock (Gate)
+                if (ByNativeDb.TryGetValue(key, out var state)) state.Queued = null;
+        }
+        internal static void Remove(IntPtr key)
+        {
+            lock (Gate) ByNativeDb.Remove(key);
+        }
+    }
 
 }

@@ -112,6 +112,36 @@ internal static class Program
         Console.WriteLine("HCE LISP PURE STOCK MATERIAL PARITY PASS "+
             pureRuns+"/16; packed bins="+exercisedPureStockBins+
             "; no opposite source, lost pieces, or mixed-priority leakage");
+        var db1 = new IntPtr(0x123450);
+        var db2 = new IntPtr(0x223450);
+        var p1 = HceProfileSessionStore.For(db1);
+        p1.Module = "S";
+        p1.TableTextHeight = 75;
+        Assert(ReferenceEquals(p1, HceProfileSessionStore.For(db1)),
+            "Same native DWG identity must retain settings");
+        Assert(HceProfileSessionStore.For(db2).Module == "M",
+            "Different DWG settings must stay independent");
+        HceProfileSessionStore.Queue(db1, p1);
+        Assert(HceProfileSessionStore.IsQueued(db1), "Queued settings");
+        p1.Module = "D"; p1.TableTextHeight = 100;
+        var snapshot = HceProfileSessionStore.Consume(db1, out var fromPalette);
+        Assert(fromPalette && snapshot.Module == "S" && snapshot.TableTextHeight == 75,
+            "Queued command must use immutable S and 75mm");
+        var direct = HceProfileSessionStore.Consume(db1, out fromPalette);
+        Assert(!fromPalette && direct.Module == "D" && direct.TableTextHeight == 100,
+            "Direct command uses latest DWG settings");
+        HceProfileSessionStore.Queue(db1, p1);
+        bool wrongDwgBlocked = false;
+        try { HceProfileSessionStore.Consume(db2, out fromPalette); }
+        catch (InvalidOperationException) { wrongDwgBlocked = true; }
+        Assert(wrongDwgBlocked, "Wrong-DWG HCECALC must fail closed");
+        HceProfileSessionStore.ClearQueued(db1);
+        HceProfileSessionStore.Remove(db1);
+        Assert(HceProfileSessionStore.For(db1).Module == "M",
+            "Closed DWG clears settings");
+        HceProfileSessionStore.Remove(db1);
+        HceProfileSessionStore.Remove(db2);
+        Console.WriteLine("HCE NATIVE DWG CONFIG SNAPSHOT TESTS PASS");
         Console.WriteLine("HCE SIX-MODE CORE GATES PASS "+n+"/24; Golden defaults preserved");
     }
 }

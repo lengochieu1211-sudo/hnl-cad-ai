@@ -357,7 +357,15 @@ namespace HNL.CeilingEstimator.AutoCAD
             var document = Application.DocumentManager.MdiActiveDocument;
             if (document == null) return;
             var editor = document.Editor;
-            var profile = HceLegacyProfiles.For(document.Database).Clone();
+            HceLegacyProfile profile;
+            bool fromPalette;
+            try { profile = HceLegacyProfiles.Consume(document.Database, out fromPalette); }
+            catch (System.Exception ex)
+            {
+                editor.WriteMessage("\nHNL Tool - HCECALC sai ngữ cảnh cấu hình DWG: " +
+                    ex.Message + ". Không đọc Hatch hoặc tạo bảng.");
+                return;
+            }
             var options = profile.ToOptions();
             editor.WriteMessage("\nHNL Tool - HCE Pro v0.3.0: kiểm tra diện tích và gốc lưới (chưa chứng nhận Runtime Golden).");
             editor.WriteMessage("\nHNL Tool - " + profile.Summary());
@@ -365,7 +373,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                 " priority=" + profile.Priority +
                 " tableTextStyle=" + (string.IsNullOrEmpty(profile.TableTextStyle) ? "TABLESTYLE" : profile.TableTextStyle) +
                 " tableTextHeightMm=" + Fmt(profile.TableTextHeight) +
-                " labelTextHeightMm=" + Fmt(profile.LabelTextHeight));
+                " labelTextHeightMm=" + Fmt(profile.LabelTextHeight) +
+                " source=" + (fromPalette ? "PaletteSnapshot" : "DWGProfile") +
+                " db=" + document.Database.UnmanagedObject);
 
             Point2? chosenGridOrigin = null;
             double chosenGridAngle = 0.0;

@@ -658,7 +658,7 @@ jobs:
             'profile.Module = candidate.Module;',
             'profile.Priority = candidate.Priority;',
             'RefreshLegacyControls(onlyOnDocumentChange: true)',
-            'ReferenceEquals(_lastLegacyDatabase, doc.Database)',
+            '_lastLegacyDatabaseKey == doc.Database.UnmanagedObject',
             'HCE Palette chốt lựa chọn: mode='
           )) {
             if (-not $ui.Contains($needle)) {
@@ -676,17 +676,30 @@ jobs:
             'CadApplication.GetSystemVariable("CMDACTIVE")',
             'activeCommands != 0',
             'Hãy kết thúc lệnh hoặc nhấn Esc trước khi tính lại.',
-            'if (!CommitPendingCalculationSettings()) return;',
+            'if (!CommitPendingCalculationSettings(document)) return;',
             'UpdateWorkProgress(0, "Đang chờ AutoCAD nhận lệnh HCECALC...", false)'
           )) {
             if (-not $ui.Contains($needle)) {
               throw "HCE stale-result/command-idle safety gate missing: $needle"
             }
           }
+          foreach($needle in @('HceProfileSessionStore.For(database.UnmanagedObject)',
+                               'HceProfileSessionStore.Queue(database.UnmanagedObject, settings)',
+                               'HceProfileSessionStore.Consume(database.UnmanagedObject, out fromPalette)',
+                               'HceLegacyProfiles.Queue(document.Database, candidate)',
+                               'HceLegacyProfiles.Consume(document.Database, out fromPalette)',
+                               'DocumentToBeDestroyed', 'PaletteSnapshot')) {
+            if(-not (($ui+$cmd+$profile).Contains($needle))) {
+              throw "HCE per-DWG snapshot gate missing: $needle"
+            }
+          }
+          if($ui.Contains('ConditionalWeakTable<Database, HceLegacyProfile>')) {
+            throw 'HCE must not key settings by wrapper reference'
+          }
           Write-Host 'HCE CAD ACTIVE-COMMAND GUARD + STALE RESULT STATE GATE PASS'
           Write-Host 'HCE LIVE UI S/D/M TO HCECALC PROFILE COMMIT GATE PASS'
-          if (-not $ui.Contains('CommitPendingCalculationSettings()') -or
-              -not $ui.Contains('if (!CommitPendingCalculationSettings()) return;') -or
+          if (-not $ui.Contains('CommitPendingCalculationSettings(document)') -or
+              -not $ui.Contains('if (!CommitPendingCalculationSettings(document)) return;') -or
               -not $ui.Contains('if (activeCommands != 0)') -or
               -not $ui.Contains('CadApplication.GetSystemVariable("CMDACTIVE")') -or
               -not $cmd.Contains('var modeStamp = profile.Module == "M"') -or
