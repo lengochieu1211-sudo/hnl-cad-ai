@@ -696,12 +696,13 @@ jobs:
           foreach($v in @('RefreshTableStyles', 'SaveLegacyTableHeight', 'TextStyleTable', 'Grid.SetColumn(_legacyTableHeight, 1)', 'cell.TextHeight', 'cell.TextStyleId')) {
             if(-not (($ui+$cmd).Contains($v))) { throw "Missing RC5.4 UI/adapter table setting: $v" }
           }
-          foreach($v in @('table.SetTextHeight(textHeight, RowType.TitleRow);',
-                          'table.SetTextHeight(textHeight, RowType.HeaderRow);',
-                          'table.SetTextHeight(textHeight, RowType.DataRow);')) {
+          foreach($v in @('table.SetTextHeight(textHeight, (int)RowType.TitleRow);',
+                          'table.SetTextHeight(textHeight, (int)RowType.HeaderRow);',
+                          'table.SetTextHeight(textHeight, (int)RowType.DataRow);')) {
             if(-not $cmd.Contains($v)) { throw "HCE native CAD Table text-height contract missing: $v" }
           }
-          foreach($v in @('Cao chữ bảng: 0 = theo TableStyle.',
+          foreach($v in @('Cao chữ bảng (mm)', 'if (changed) MarkResultsOutdated();',
+                          'Cao chữ bảng: 0 = theo TableStyle.',
                           'AutomationProperties.SetName(_stopHceButton, "Tắt HCE")',
                           'Width = 34, Height = 34')) {
             if(-not $ui.Contains($v)) { throw "HCE table height help / HCF stop icon parity missing: $v" }

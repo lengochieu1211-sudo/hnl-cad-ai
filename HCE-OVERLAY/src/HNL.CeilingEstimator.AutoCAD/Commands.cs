@@ -1465,9 +1465,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                     // overrides below; 0 still inherits the drawing's TableStyle.
                     if (textHeight > 0)
                     {
-                        table.SetTextHeight(textHeight, RowType.TitleRow);
-                        table.SetTextHeight(textHeight, RowType.HeaderRow);
-                        table.SetTextHeight(textHeight, RowType.DataRow);
+                        table.SetTextHeight(textHeight, (int)RowType.TitleRow);
+                        table.SetTextHeight(textHeight, (int)RowType.HeaderRow);
+                        table.SetTextHeight(textHeight, (int)RowType.DataRow);
                     }
                     // Initial dimensions are temporary: exact MTEXT fit occurs below.
                     table.SetRowHeight(12);

@@ -772,7 +772,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             var heightRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
             heightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             heightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            heightRow.Children.Add(Text("Cao chữ (mm)", 11, _muted, FontWeights.Normal));
+            heightRow.Children.Add(Text("Cao chữ bảng (mm)", 11, _muted, FontWeights.Normal));
             _legacyTableHeight = new TextBox
             {
                 MinHeight = 30, HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -1081,8 +1081,10 @@ namespace HNL.CeilingEstimator.AutoCAD
             if (TryParseUiMm(_legacyTableHeight.Text, out var value) &&
                 value >= 0 && value <= 10000)
             {
+                var changed = Math.Abs(profile.TableTextHeight - value) > 1e-9;
                 profile.TableTextHeight = value;
                 if (_legacyValidation != null) _legacyValidation.Text = string.Empty;
+                if (changed) MarkResultsOutdated();
             }
             else if (_legacyValidation != null)
                 _legacyValidation.Text = "HNL Tool: Cao chữ bảng phải từ 0 đến 10000 mm.";
