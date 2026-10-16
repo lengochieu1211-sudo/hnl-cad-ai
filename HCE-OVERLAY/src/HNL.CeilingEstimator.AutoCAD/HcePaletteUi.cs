@@ -544,39 +544,33 @@ namespace HNL.CeilingEstimator.AutoCAD
             hceTab.ToolTip = "HNL Tool - Ceiling Estimator Pro";
             rightRail.Children.Add(hceTab);
 
-            var stopContent = new StackPanel
-            {
-                Orientation = Orientation.Vertical,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            stopContent.Children.Add(new System.Windows.Shapes.Path
+            // Match current HCF: compact icon-only red 34x34 STOP on the right rail.
+            // Confirmation, cancellation guard and HCESTOP command stay unchanged.
+            var stopIcon = new System.Windows.Shapes.Path
             {
                 Data = Geometry.Parse("M10,2 L10,10 M5,5 A8,8 0 1 0 15,5"),
                 Width = 19, Height = 19, Stretch = Stretch.Uniform,
-                Stroke = Brush("#DC2626"), StrokeThickness = 2.3
-            });
-            var stopLabel = Text("Tắt", 11, Brush("#B91C1C"), FontWeights.SemiBold);
-            stopLabel.HorizontalAlignment = HorizontalAlignment.Center;
-            stopLabel.Margin = new Thickness(0, 5, 0, 0);
-            stopContent.Children.Add(stopLabel);
+                Stroke = Brush("#FFFFFF"), StrokeThickness = 2.3,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round
+            };
             _stopHceButton = new WpfButton
             {
-                Content = stopContent, Width = 34, Height = 64,
-                Padding = new Thickness(2, 3, 2, 3),
-                Margin = new Thickness(2, 5, 2, 5),
-                Background = Brush("#FFF1F2"), BorderBrush = Brush("#FECACA"),
+                Content = stopIcon, Width = 34, Height = 34,
+                Padding = new Thickness(0),
+                Margin = new Thickness(3, 5, 3, 5),
+                Background = Brush("#B83B45"), BorderBrush = Brush("#D5646F"),
+                Foreground = Brush("#FFFFFF"),
                 BorderThickness = new Thickness(1),
                 Cursor = System.Windows.Input.Cursors.Hand,
-                ToolTip = "Tắt HCE; AutoCAD và bản vẽ vẫn mở."
+                ToolTip = "Tắt HCE: đóng giao diện; AutoCAD và bản vẽ vẫn mở."
             };
-            // Native WPF Button corners are square even with a rounded rail:
-            // use the HCF-style rounded border as the actual button template.
+            System.Windows.Automation.AutomationProperties.SetName(_stopHceButton, "Tắt HCE");
             const string stopTemplateXaml = @"<ControlTemplate
                     xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
                     xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'
                     TargetType='{x:Type Button}'>
-                <Border x:Name='StopSurface' CornerRadius='8'
+                <Border x:Name='StopSurface' CornerRadius='5'
                         Background='{TemplateBinding Background}'
                         BorderBrush='{TemplateBinding BorderBrush}'
                         BorderThickness='{TemplateBinding BorderThickness}'>
@@ -586,10 +580,11 @@ namespace HNL.CeilingEstimator.AutoCAD
                 </Border>
                 <ControlTemplate.Triggers>
                     <Trigger Property='IsMouseOver' Value='True'>
-                        <Setter TargetName='StopSurface' Property='Background' Value='#FFE4E6'/>
+                        <Setter TargetName='StopSurface' Property='Background' Value='#D34B57'/>
+                        <Setter TargetName='StopSurface' Property='BorderBrush' Value='#F08490'/>
                     </Trigger>
                     <Trigger Property='IsPressed' Value='True'>
-                        <Setter TargetName='StopSurface' Property='Background' Value='#FECDD3'/>
+                        <Setter TargetName='StopSurface' Property='Background' Value='#96303A'/>
                     </Trigger>
                     <Trigger Property='IsEnabled' Value='False'>
                         <Setter TargetName='StopSurface' Property='Opacity' Value='0.45'/>
@@ -786,10 +781,14 @@ namespace HNL.CeilingEstimator.AutoCAD
                 BorderBrush = (Brush)Resources["InputBorder"],
                 Padding = new Thickness(6, 3, 6, 3)
             };
+            _legacyTableHeight.ToolTip = "Cao chữ bảng CAD mới (mm). 0 = theo TableStyle của DWG; bảng cũ không tự cập nhật.";
             _legacyTableHeight.LostFocus += (sender, args) => SaveLegacyTableHeight();
             Grid.SetColumn(_legacyTableHeight, 1);
             heightRow.Children.Add(_legacyTableHeight);
             table.Children.Add(heightRow);
+            table.Children.Add(Text(
+                "Cao chữ bảng: 0 = theo TableStyle. Nhập số dương cho bảng CAD mới; bảng cũ giữ nguyên.",
+                10, _muted, FontWeights.Normal));
             var labelHeightRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
             labelHeightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             labelHeightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

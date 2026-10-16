@@ -274,7 +274,8 @@ jobs:
           $commands = Get-Content "$root/Commands.cs" -Raw
           foreach($phrase in @("ClickMode='Press'", 'x:Name=''DropDownToggle''', 'IsDropDownOpen', 'PART_Popup',
                                 'MaxDropDownHeight', 'new Thickness(0, 1, 0, 0)', 'Visibility.Collapsed',
-                                'Height = 64', 'Sẵn sàng tính tấm.', 'Tắt HCE')) {
+                                'Width = 34, Height = 34', '#B83B45', 'Stroke = Brush("#FFFFFF")',
+                                'Sẵn sàng tính tấm.', 'Tắt HCE')) {
             if(-not $ui.Contains($phrase)) { throw "HCE compact bar or HCF dropdown behavior missing: $phrase" }
           }
           if ($ui.Contains("Opacity='0'") -or $ui.Contains('var footerCard = Card(')) {
@@ -694,6 +695,16 @@ jobs:
           }
           foreach($v in @('RefreshTableStyles', 'SaveLegacyTableHeight', 'TextStyleTable', 'Grid.SetColumn(_legacyTableHeight, 1)', 'cell.TextHeight', 'cell.TextStyleId')) {
             if(-not (($ui+$cmd).Contains($v))) { throw "Missing RC5.4 UI/adapter table setting: $v" }
+          }
+          foreach($v in @('table.SetTextHeight(textHeight, RowType.TitleRow);',
+                          'table.SetTextHeight(textHeight, RowType.HeaderRow);',
+                          'table.SetTextHeight(textHeight, RowType.DataRow);')) {
+            if(-not $cmd.Contains($v)) { throw "HCE native CAD Table text-height contract missing: $v" }
+          }
+          foreach($v in @('Cao chữ bảng: 0 = theo TableStyle.',
+                          'AutomationProperties.SetName(_stopHceButton, "Tắt HCE")',
+                          'Width = 34, Height = 34')) {
+            if(-not $ui.Contains($v)) { throw "HCE table height help / HCF stop icon parity missing: $v" }
           }
           $profile=Get-Content "$root/HceLegacyProfile.cs" -Raw
           foreach($part in @('LabelTextHeight', 'BuildLabelSpecs', 'PiecesInLispOrder()', 'BoundaryFullPieces.AddRange', 'LabelPointWcs', 'AddCadLabel(currentSpace, transaction', 'CellRange.Create(table', 'table.SetSize(rows, 4)', 'transaction.Commit();')) {

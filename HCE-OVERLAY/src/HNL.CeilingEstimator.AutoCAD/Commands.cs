@@ -1461,6 +1461,14 @@ namespace HNL.CeilingEstimator.AutoCAD
                     if (textHeight < 0 || textHeight > 10000 ||
                         double.IsNaN(textHeight) || double.IsInfinity(textHeight))
                         throw new InvalidOperationException("Invalid HCE Table text height");
+                    // Set native Table row-type overrides as well as individual cell
+                    // overrides below; 0 still inherits the drawing's TableStyle.
+                    if (textHeight > 0)
+                    {
+                        table.SetTextHeight(textHeight, RowType.TitleRow);
+                        table.SetTextHeight(textHeight, RowType.HeaderRow);
+                        table.SetTextHeight(textHeight, RowType.DataRow);
+                    }
                     // Initial dimensions are temporary: exact MTEXT fit occurs below.
                     table.SetRowHeight(12);
                     table.SetColumnWidth(55);
