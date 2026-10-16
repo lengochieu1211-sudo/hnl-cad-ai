@@ -696,6 +696,36 @@ jobs:
           if($ui.Contains('ConditionalWeakTable<Database, HceLegacyProfile>')) {
             throw 'HCE must not key settings by wrapper reference'
           }
+          # Runtime user screenshot showed S in Palette with M/S table and 100%;
+          # regression gate must reject the old early-return stale-result behavior.
+          foreach($required in @(
+            'private bool _changedWhileCalculating;',
+            'private bool DisplayMatchesSnapshot(HceLegacyProfile settings, IntPtr nativeDatabase)',
+            'internal void BeginWork(HceLegacyProfile settings, IntPtr nativeDatabase)',
+            'internal void EndWork(bool complete)',
+            'if (_legacySettingsEditor != null) _legacySettingsEditor.IsEnabled = false;',
+            'if (_legacySettingsEditor != null) _legacySettingsEditor.IsEnabled = true;',
+            'if (HcePaletteService.IsCalculating)',
+            '_changedWhileCalculating = true;',
+            'Cấu hình lần tính tiếp theo:',
+            'HCE UI chọn Loại tấm: mode=',
+            'Đã đổi cấu hình - bảng vừa tạo theo'
+          )) {
+            if(-not $ui.Contains($required)) {
+              throw "HCE calculated-mode/palette-status parity gate missing: $required"
+            }
+          }
+          if($ui.Contains('if (_loadingLegacyControls || HcePaletteService.IsCalculating) return;')) {
+            throw 'A mode change during calculation must never be discarded at 100%'
+          }
+          foreach($required in @(
+            'new HceCommandProgress(editor, profile, document.Database.UnmanagedObject)',
+            'HcePaletteService.BeginCalculation(settings, nativeDatabase)'
+          )) {
+            if(-not (($cmd+$ui).Contains($required))) {
+              throw "HCE progress must carry actual calculated mode to Palette: $required"
+            }
+          }
           Write-Host 'HCE CAD ACTIVE-COMMAND GUARD + STALE RESULT STATE GATE PASS'
           Write-Host 'HCE LIVE UI S/D/M TO HCECALC PROFILE COMMIT GATE PASS'
           if (-not $ui.Contains('CommitPendingCalculationSettings(document)') -or

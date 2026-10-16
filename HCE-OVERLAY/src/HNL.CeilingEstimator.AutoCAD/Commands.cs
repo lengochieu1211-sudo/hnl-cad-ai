@@ -285,10 +285,10 @@ namespace HNL.CeilingEstimator.AutoCAD
             private bool _complete;
             private int _meterPercent;
 
-            internal HceCommandProgress(Editor editor)
+            internal HceCommandProgress(Editor editor, HceLegacyProfile settings, IntPtr nativeDatabase)
             {
                 _editor = editor;
-                HcePaletteService.BeginCalculation();
+                HcePaletteService.BeginCalculation(settings, nativeDatabase);
                 try
                 {
                     _meter.Start("HNL Tool - HCE");
@@ -412,7 +412,7 @@ namespace HNL.CeilingEstimator.AutoCAD
 
             try
             {
-                using var progress = new HceCommandProgress(editor);
+                using var progress = new HceCommandProgress(editor, profile, document.Database.UnmanagedObject);
                 progress.Report(2, "Bắt đầu đọc Hatch.", false, true);
                 var inputs = new List<HatchInput>();
                 var rejected = 0;

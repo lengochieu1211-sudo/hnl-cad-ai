@@ -49,9 +49,12 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         // Progress is presentation-only. No AutoCAD database mutations or engine
         // calls occur here. The native AutoCAD progress meter runs independently.
-        internal static void BeginCalculation()
+        internal static void BeginCalculation(HceLegacyProfile settings, IntPtr nativeDatabase)
         {
             _calculationRunning = true;
+            // Snapshot is authoritative even if the WPF selection changes
+            // while AutoCAD is processing its modal Hatch command.
+            _view?.BeginWork(settings, nativeDatabase);
             _view?.UpdateWorkProgress(0, "Chuẩn bị phân tích Hatch...", false);
         }
 
@@ -63,8 +66,7 @@ namespace HNL.CeilingEstimator.AutoCAD
         internal static void EndCalculation(bool complete)
         {
             _calculationRunning = false;
-            _view?.UpdateWorkProgress(complete ? 100 : 0,
-                complete ? "Hoàn tất. Đã tạo bảng CAD." : "Đã dừng hoặc hủy thao tác.", false);
+            _view?.EndWork(complete);
         }
 
         internal static void ForgetDatabase(IntPtr key)
@@ -181,6 +183,13 @@ namespace HNL.CeilingEstimator.AutoCAD
         private WpfBorder? _workIndicator;
         private ProgressBar? _workProgress;
         private WpfButton? _stopHceButton;
+        private StackPanel? _legacySettingsEditor;
+        private WpfText? _nextCalculationHint;
+        private HceLegacyProfile? _calculationSnapshot;
+        private HceLegacyProfile? _lastCompletedSnapshot;
+        private IntPtr _calculationNativeDb;
+        private IntPtr _lastCompletedNativeDb;
+        private bool _changedWhileCalculating;
         private bool _loadingLegacyControls;
         private IntPtr _lastLegacyDatabaseKey;
 
@@ -666,6 +675,8 @@ namespace HNL.CeilingEstimator.AutoCAD
 
             var selection = Section("01  Chọn Hatch", "#2497FF");
             selection.Children.Add(CommandButton("Chọn Hatch và tạo bảng", "HCECALC", true));
+            _nextCalculationHint = Text("", 11, _primary, FontWeights.SemiBold);
+            selection.Children.Add(_nextCalculationHint);
             selection.Children.Add(Text("Đổi loại tấm không tự cập nhật bảng CAD cũ. Bấm nút để chọn Hatch, tính lại và đặt bảng mới.",
                 10, _muted, FontWeights.Normal));
             content.Children.Add(Card(selection));
@@ -734,6 +745,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             gridSection.Children.Add(tol);
 
             var wrapped = new StackPanel();
+            _legacySettingsEditor = wrapped;
             wrapped.Children.Add(Card(config));
             wrapped.Children.Add(Card(gridSection));
             var table = Section("Bảng CAD", "#A78BFA");
@@ -910,6 +922,10 @@ namespace HNL.CeilingEstimator.AutoCAD
                 // the WPF popup and can discard its newly selected item.
                 RefreshSelectionState(profile);
                 MarkResultsOutdated();
+                if (key == "Module")
+                    CadApplication.DocumentManager.MdiActiveDocument?.Editor.WriteMessage(
+                        "\nHNL Tool - HCE UI chọn Loại tấm: mode=" + value +
+                        " (bảng CAD đã tạo không tự cập nhật; cần tính lại).");
             };
             _legacySelectors[key] = selector;
             if (key == "Priority")
@@ -1100,6 +1116,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 var changed = Math.Abs(profile.TableTextHeight - value) > 1e-9;
                 profile.TableTextHeight = value;
                 if (_legacyValidation != null) _legacyValidation.Text = string.Empty;
+                UpdateNextCalculationHint(profile);
                 if (changed) MarkResultsOutdated();
             }
             else if (_legacyValidation != null)
@@ -1211,12 +1228,98 @@ namespace HNL.CeilingEstimator.AutoCAD
         // Lightweight UI state only. Never clear or repopulate a ComboBox
         // while its SelectionChanged event is running, and never overwrite a
         // partially typed numeric value on an unrelated option change.
-        // A changed ComboBox does NOT recalculate previously inserted tables.
-        // Clear the previous 100% banner so it cannot be mistaken for a fresh result.
+        // Changes never retrofit CAD objects that have already been created.
+        // Do not discard a pending change during computation: after finishing
+        // the status must be stale, never 100% for another selected mode.
         private void MarkResultsOutdated()
         {
-            if (_loadingLegacyControls || HcePaletteService.IsCalculating) return;
-            UpdateWorkProgress(0, "Đã đổi cấu hình - cần chọn Hatch và tính lại", false);
+            if (_loadingLegacyControls) return;
+            if (HcePaletteService.IsCalculating)
+            {
+                _changedWhileCalculating = true;
+                return;
+            }
+            UpdateWorkProgress(0, "Đã đổi cấu hình - cần chọn Hatch và tính lại (bảng CAD cũ giữ nguyên)", false);
+        }
+
+        private static string ModeText(HceLegacyProfile profile)
+        {
+            return profile.Module == "S" ? "Tấm ngắn (S)" :
+                profile.Module == "D" ? "Tấm dài (D)" :
+                "Kết hợp (M/" + profile.Priority + ")";
+        }
+
+        private void UpdateNextCalculationHint(HceLegacyProfile profile)
+        {
+            if (_nextCalculationHint == null) return;
+            var typedHeight = _legacyTableHeight?.Text;
+            _nextCalculationHint.Text = "Cấu hình lần tính tiếp theo: " + ModeText(profile) +
+                " | Cao chữ bảng=" +
+                (string.IsNullOrWhiteSpace(typedHeight)
+                    ? profile.TableTextHeight.ToString("0.###", CultureInfo.InvariantCulture)
+                    : typedHeight.Trim()) + " mm";
+        }
+
+        // Compare the displayed options with the precise settings used to
+        // create this table. This is independent of the shared per-DWG profile:
+        // that profile can change while the calculation runs.
+        private bool DisplayMatchesSnapshot(HceLegacyProfile settings, IntPtr nativeDatabase)
+        {
+            var currentDocument = CadApplication.DocumentManager.MdiActiveDocument;
+            if (currentDocument == null ||
+                currentDocument.Database.UnmanagedObject != nativeDatabase ||
+                !TryReadLegacyChoice("Family", out var family) ||
+                !TryReadLegacyChoice("Module", out var module) ||
+                !TryReadLegacyChoice("Priority", out var priority) ||
+                !TryReadLegacyChoice("Direction", out var direction) ||
+                !TryReadLegacyChoice("Grid", out var grid) ||
+                !TryParseUiMm(_legacyTableHeight?.Text ?? "", out var tableHeight) ||
+                !TryParseUiMm(_legacyLabelHeight?.Text ?? "", out var labelHeight))
+                return false;
+            return family == settings.Family.ToString(CultureInfo.InvariantCulture) &&
+                module == settings.Module && priority == settings.Priority &&
+                direction == settings.Direction && grid == settings.GridMode &&
+                Math.Abs(tableHeight - settings.TableTextHeight) < 1e-9 &&
+                Math.Abs(labelHeight - settings.LabelTextHeight) < 1e-9 &&
+                (_legacySnap?.IsChecked == true) == settings.SnapEnabled;
+        }
+
+        internal void BeginWork(HceLegacyProfile settings, IntPtr nativeDatabase)
+        {
+            _calculationSnapshot = settings.Clone();
+            _calculationNativeDb = nativeDatabase;
+            _changedWhileCalculating = !DisplayMatchesSnapshot(settings, nativeDatabase);
+            // Do not let WPF show a different mode/height for a command that
+            // already consumed its immutable profile snapshot.
+            if (_legacySettingsEditor != null) _legacySettingsEditor.IsEnabled = false;
+        }
+
+        internal void EndWork(bool complete)
+        {
+            if (_legacySettingsEditor != null) _legacySettingsEditor.IsEnabled = true;
+            var settings = _calculationSnapshot;
+            var db = _calculationNativeDb;
+            _calculationSnapshot = null;
+            _calculationNativeDb = IntPtr.Zero;
+            if (!complete)
+            {
+                UpdateWorkProgress(0, "Đã dừng hoặc hủy thao tác.", false);
+                return;
+            }
+            if (settings == null)
+            {
+                UpdateWorkProgress(0, "Đã đổi cấu hình - không xác minh được lượt tính; kiểm tra log HCECALC", false);
+                return;
+            }
+            _lastCompletedSnapshot = settings.Clone();
+            _lastCompletedNativeDb = db;
+            var changed = _changedWhileCalculating || !DisplayMatchesSnapshot(settings, db);
+            var stamp = ModeText(settings) +
+                " | chữ " + settings.TableTextHeight.ToString("0.###", CultureInfo.InvariantCulture) + " mm";
+            if (changed)
+                UpdateWorkProgress(0, "Đã đổi cấu hình - bảng vừa tạo theo " + stamp + "; cần tính lại", false);
+            else
+                UpdateWorkProgress(100, "Hoàn tất bảng " + stamp + " (không tự cập nhật bảng cũ)", false);
         }
 
         private void RefreshSelectionState(HceLegacyProfile profile)
@@ -1258,6 +1361,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 finally { _loadingLegacyControls = wasLoading; }
             }
             if (_legacyCutMode != null) _legacyCutMode.IsEnabled = true;
+            UpdateNextCalculationHint(profile);
             if (_legacyStatus != null)
                 _legacyStatus.Text = profile.Summary() +
                     "\nKiểu bảng: " + (string.IsNullOrEmpty(profile.CadTableStyle)
@@ -1307,6 +1411,10 @@ namespace HNL.CeilingEstimator.AutoCAD
                 _lastLegacyDatabaseKey = doc.Database.UnmanagedObject;
             }
             finally { _loadingLegacyControls = false; }
+            if (_lastCompletedSnapshot != null &&
+                !HcePaletteService.IsCalculating &&
+                !DisplayMatchesSnapshot(_lastCompletedSnapshot, _lastCompletedNativeDb))
+                MarkResultsOutdated();
         }
 
         private void SetChoice(string key, string value)
