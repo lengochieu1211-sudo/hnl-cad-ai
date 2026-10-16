@@ -96,7 +96,7 @@ if ($warningMode -lt 0 -or $warningDispatch -le $warningMode -or
 # AutoCAD MLINE (the HCF Create engine itself can emit XP as MLINE).
 # Also guard DIM-only zero-selection, and keep DIM position pick separate from source pick.
 $manualExisting = Source 'src/HNL.VXT.AutoCAD/VxtLegacyParityCoordinator.cs'
-if ([regex]::Matches($manualExisting, 'TrySelectExisting\\(ed, "LINE,LWPOLYLINE,POLYLINE,MLINE,INSERT"').Count -ne 2 -or
+if ([regex]::Matches($manualExisting, 'TrySelectExisting\(ed, "LINE,LWPOLYLINE,POLYLINE,MLINE,INSERT"').Count -ne 2 -or
     -not $manualExisting.Contains('Chưa chọn XC, XP hoặc Ty có sẵn để ghi DIM.') -or
     -not $xaml.Contains('Content="Đặt" ToolTip="Chọn vị trí đặt DIM. Để DIM XC có sẵn:') -or
     -not $xaml.Contains('Content="Đặt" ToolTip="Chọn vị trí đặt DIM. Để DIM XP có sẵn:') -or
