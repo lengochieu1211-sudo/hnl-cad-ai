@@ -441,7 +441,7 @@ jobs:
               'Grid.SetRowSpan(rightRail, 2);',
               'Grid.SetColumn(rightRail, 1);',
               'Width = 40, Background = _surface',
-              "CornerRadius='8'",
+              "CornerRadius='5'",
               '_stopHceButton.Template = (ControlTemplate)XamlReader.Parse(stopTemplateXaml);',
               'internal const string PaletteCaption = "HNL Ceiling Estimator Pro')) {
             if (-not $ui.Contains($required)) {
