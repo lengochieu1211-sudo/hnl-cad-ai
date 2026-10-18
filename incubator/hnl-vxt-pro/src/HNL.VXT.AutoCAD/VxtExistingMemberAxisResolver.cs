@@ -94,7 +94,7 @@ namespace HNL.VXT.AutoCAD
             }
         }
 
-        private static ResolvedAxis ResolveBlock(BlockReference block, Transaction tr)
+        internal static ResolvedAxis ResolveBlock(BlockReference block, Transaction tr)
         {
             try
             {

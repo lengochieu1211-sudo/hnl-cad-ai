@@ -104,6 +104,23 @@ if ([regex]::Matches($manualExisting, 'TrySelectExisting\(ed, "LINE,LWPOLYLINE,P
     throw 'HCF audit: existing XC/XP/Ty DIM selection or button explanation regressed.'
 }
 
+# Manual existing XC/XP Block DIM in Pro must take the midpoint of the transformed
+# resolved member axis, never silently substitute a WCS bounding-box center.
+# Legacy, non-Block XC/XP and hanger (Ty) DIM must preserve their old center path.
+$manualDimEngine = Source 'src/HNL.VXT.AutoCAD/VxtManualExistingEngine.cs'
+$axisResolver = Source 'src/HNL.VXT.AutoCAD/VxtExistingMemberAxisResolver.cs'
+if (-not $manualDimEngine.Contains('ReadCenters(session.ManualMainIds, tr, settings)') -or
+    -not $manualDimEngine.Contains('ReadCenters(session.ManualFurringIds, tr, settings)') -or
+    -not $manualDimEngine.Contains('ReadCenters(session.ManualHangerIds, tr)') -or
+    -not $manualDimEngine.Contains('settings.OptimizationMode != VxtOptimizationMode.Legacy') -or
+    -not $manualDimEngine.Contains('VxtExistingMemberAxisResolver.ResolveBlock(block, tr)') -or
+    -not $manualDimEngine.Contains('(axis.Start.X + axis.End.X) * 0.5') -or
+    -not $manualDimEngine.Contains('throw new InvalidOperationException(') -or
+    -not $axisResolver.Contains('internal static ResolvedAxis ResolveBlock(BlockReference block, Transaction tr)') -or
+    -not $axisResolver.Contains('return ExtendAxisToVisibleInstance(block, definitionAxis) ?? definitionAxis;')) {
+    throw 'HCF audit: manual Pro XC/XP Block dimension centerline gate regressed.'
+}
+
 # Guard the redundant Lay-in DIM captions and the point-based door picker from returning.
 # This catches source/UI regressions but not an old AutoCAD DLL already in memory.
 if ($xaml.Contains('Text="DIM ô nguyên + mép cắt."') -or

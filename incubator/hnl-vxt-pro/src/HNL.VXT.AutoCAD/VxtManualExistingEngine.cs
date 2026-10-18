@@ -145,8 +145,8 @@ namespace HNL.VXT.AutoCAD
             var needHanger = settings.DimHanger && !settings.DrawHangers && session.ManualHangerIds.Length > 0;
             if (!needMain && !needFurring && !needHanger) return 0;
 
-            var mainCenters = needMain ? ReadCenters(session.ManualMainIds, tr) : new List<Point2>();
-            var furringCenters = needFurring ? ReadCenters(session.ManualFurringIds, tr) : new List<Point2>();
+            var mainCenters = needMain ? ReadCenters(session.ManualMainIds, tr, settings) : new List<Point2>();
+            var furringCenters = needFurring ? ReadCenters(session.ManualFurringIds, tr, settings) : new List<Point2>();
             var hangerCenters = needHanger ? ReadCenters(session.ManualHangerIds, tr) : new List<Point2>();
             var dimStyleId = VxtTransientPreview.ResolveDimStyle(settings.DimensionStyle, db, dimStyleTable);
             var dimLayerId = layerTable[settings.DimensionLayer];
@@ -309,13 +309,30 @@ namespace HNL.VXT.AutoCAD
             return rows;
         }
 
-        private static List<Point2> ReadCenters(IEnumerable<ObjectId> ids, Transaction tr)
+        private static List<Point2> ReadCenters(IEnumerable<ObjectId> ids, Transaction tr, VxtSettings settings = null)
         {
             var result = new List<Point2>();
             foreach (var id in ids)
             {
                 var entity = TryGetEntity(id, tr);
                 if (entity == null) continue;
+
+                // Only Pro XC/XP DIM BlockReferences use the transformed member axis.
+                // Legacy XC/XP, non-block source geometry and Ty keep their prior behavior.
+                if (entity is BlockReference block && settings != null &&
+                    settings.OptimizationMode != VxtOptimizationMode.Legacy)
+                {
+                    var axis = VxtExistingMemberAxisResolver.ResolveBlock(block, tr);
+                    if (axis == null || axis.Length <= 1e-8)
+                        throw new InvalidOperationException(
+                            "Không xác định được trục Block XC/XP có sẵn (" + entity.Handle +
+                            "). Hãy kiểm tra Block hoặc chọn đường tim LINE/POLYLINE.");
+                    result.Add(new Point2(
+                        (axis.Start.X + axis.End.X) * 0.5,
+                        (axis.Start.Y + axis.End.Y) * 0.5));
+                    continue;
+                }
+
                 try
                 {
                     var ext = entity.GeometricExtents;
