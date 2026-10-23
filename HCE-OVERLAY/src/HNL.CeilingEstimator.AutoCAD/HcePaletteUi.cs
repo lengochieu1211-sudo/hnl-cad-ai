@@ -548,15 +548,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                 Width = 40, Background = _surface,
                 VerticalAlignment = VerticalAlignment.Stretch
             };
-            rightRail.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            // STOP stays at the upper right; the native Palette title already names HCE.
             rightRail.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var hceTab = Text("HCE", 11, _primary, FontWeights.SemiBold);
-            hceTab.LayoutTransform = new RotateTransform(-90);
-            hceTab.HorizontalAlignment = HorizontalAlignment.Center;
-            hceTab.VerticalAlignment = VerticalAlignment.Top;
-            hceTab.Margin = new Thickness(0, 26, 0, 0);
-            hceTab.ToolTip = "HNL Tool - Ceiling Estimator Pro";
-            rightRail.Children.Add(hceTab);
+            rightRail.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
             // Match current HCF: compact icon-only red 34x34 STOP on the right rail.
             // Confirmation, cancellation guard and HCESTOP command stay unchanged.
@@ -607,7 +601,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             </ControlTemplate>";
             _stopHceButton.Template = (ControlTemplate)XamlReader.Parse(stopTemplateXaml);
             _stopHceButton.Click += (sender, args) => RequestStopHce();
-            Grid.SetRow(_stopHceButton, 1);
+            Grid.SetRow(_stopHceButton, 0);
             rightRail.Children.Add(_stopHceButton);
             Grid.SetColumn(rightRail, 1);
             Grid.SetRowSpan(rightRail, 2);

@@ -448,6 +448,20 @@ jobs:
               throw "Single button / build date / rounded HCF stop gate missing: $required"
             }
           }
+          # The 40px right rail places the existing guarded STOP at the top,
+          # with no duplicated rotated HCE label (native caption already names HCE).
+          foreach ($required in @(
+              'rightRail.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });',
+              'rightRail.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });',
+              'Grid.SetRow(_stopHceButton, 0);')) {
+            if (-not $ui.Contains($required)) {
+              throw "HCE upper-right STOP rail layout missing: $required"
+            }
+          }
+          if ($ui.Contains('var hceTab = Text("HCE"') -or
+              $ui.Contains('Grid.SetRow(_stopHceButton, 1);')) {
+            throw 'Obsolete rotated HCE label or bottom STOP remains'
+          }
           if ($ui.Contains('CommandButton("Tạo bảng", "HCECALC", true)') -or
               $ui.Contains('VisibleTitle') -or $ui.Contains('visibleTitle') -or
               $ui.Contains('CommandButton("Chọn Hatch", "HCESELECT", true)') -or
