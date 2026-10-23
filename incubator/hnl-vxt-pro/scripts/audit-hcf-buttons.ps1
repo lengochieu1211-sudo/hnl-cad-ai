@@ -232,7 +232,7 @@ if (-not $hostBridgeSource.Contains('if (_pendingLayInPreviewSettings != null)')
     throw 'HCF audit: Lay-in Preview/Create WYSIWYG gate missing.'
 }
 # HCF STOP: icon-only action on a dark warning surface, independent of light/dark theme.
-$stopUiStart = $xaml.IndexOf('<Button x:Name="StopHcfButton"')
+$stopUiStart = $xaml.IndexOf('x:Name="StopHcfButton"')
 $stopUiEnd = $xaml.IndexOf('</Button>', $stopUiStart)
 if ($stopUiStart -lt 0 -or $stopUiEnd -le $stopUiStart -or
     -not $xaml.Contains('<Style x:Key="HcfStopRailButton"') -or
@@ -286,7 +286,7 @@ foreach ($manifestName in @(
 }
 # STOP is a square icon-only rail control. The compact tuner must not resize it.
 $compact = Source 'src/HNL.VXT.UI/Views/VxtPaletteCompactTuner.cs'
-$stop = [regex]::Match($xaml, '(?s)<Button\s+x:Name="StopHcfButton"(?<body>.*?)</Button>')
+$stop = [regex]::Match($xaml, '(?s)<Button\s+Grid.Row="1"\s+x:Name="StopHcfButton"(?<body>.*?)</Button>')
 if (-not $stop.Success -or
     -not $stop.Value.Contains('Style="{StaticResource HcfStopRailButton}"') -or
     -not $stop.Value.Contains('Tag="HCF_RAIL_STOP_ICON"') -or
@@ -324,8 +324,8 @@ if (-not $xaml.Contains('<Style x:Key="PickButton" TargetType="Button" BasedOn="
     $xaml.Contains('<Style x:Key="PickButton" TargetType="Button" BasedOn="{StaticResource IconCompactButton}">')) {
     throw 'HCF UI: Select buttons must be text-only without decorative Pick arrow.'
 }
-# Footer cells must be siblings in a real 40-DIP grid column, not overlapping
-# Borders with an implicit 40-DIP right Margin that can clip on PaletteSet resize.
+# Footer keeps its Create/empty-rail columns without overlapping. STOP is
+# directly below the two tab items and no longer at the bottom of the palette.
 if (-not $xaml.Contains('<Grid Grid.Row="2" ClipToBounds="True">') -or
     -not $xaml.Contains('<ColumnDefinition Width="40"/>') -or
     -not $xaml.Contains('<Border Grid.Column="0" Background="{DynamicResource CardBackground}"') -or
@@ -333,6 +333,32 @@ if (-not $xaml.Contains('<Grid Grid.Row="2" ClipToBounds="True">') -or
     -not $xaml.Contains('HorizontalAlignment="Center" VerticalAlignment="Center"') -or
     $xaml.Contains('<Border Grid.Row="2" Margin="0,0,40,0"')) {
     throw 'HCF UI: fixed footer STOP/Create cells can overlap or become obscured.'
+}
+
+# Both 116-DIP TabItems must contain a strictly shorter 108-DIP selected
+# segment plus 8-DIP bottom gap (rather than a 116+7 overrun that clips the glow).
+# STOP must follow the items host inside the same right-hand navigation rail,
+# never inside the Create footer or inside an individual TabItem.
+$modeTabStyleStart = $xaml.IndexOf('<Style x:Key="CeilingModeTabItem"')
+$modeTabStyleEnd = $xaml.IndexOf('</Style>', $modeTabStyleStart)
+$modeTabStyle = $xaml.Substring($modeTabStyleStart, $modeTabStyleEnd - $modeTabStyleStart)
+$modeRailStyleStart = $xaml.IndexOf('<Style x:Key="CeilingModeTabControl"')
+$modeRailStyleEnd = $xaml.IndexOf('</Style>', $modeRailStyleStart)
+$modeRailStyle = $xaml.Substring($modeRailStyleStart, $modeRailStyleEnd - $modeRailStyleStart)
+$footerIndex = $xaml.IndexOf('<Grid Grid.Row="2" ClipToBounds="True">')
+if ($modeTabStyleStart -lt 0 -or $modeTabStyleEnd -le $modeTabStyleStart -or
+    $modeRailStyleStart -lt 0 -or $modeRailStyleEnd -le $modeRailStyleStart -or
+    $footerIndex -lt 0 -or
+    -not $modeTabStyle.Contains('<Setter Property="Height" Value="116"/>') -or
+    -not $modeTabStyle.Contains('Height="108"') -or
+    -not $modeTabStyle.Contains('Margin="0,0,0,8"') -or
+    $modeTabStyle.Contains('Height="{TemplateBinding Height}"') -or
+    -not $modeRailStyle.Contains('Orientation="Vertical" IsItemsHost="True"') -or
+    -not $modeRailStyle.Contains('<Button Grid.Row="1" x:Name="StopHcfButton"') -or
+    $modeRailStyle.IndexOf('x:Name="StopHcfButton"') -lt $modeRailStyle.IndexOf('IsItemsHost="True"') -or
+    $xaml.IndexOf('x:Name="StopHcfButton"', $footerIndex) -ge 0 -or
+    [regex]::Matches($xaml, 'x:Name="StopHcfButton"').Count -ne 1) {
+    throw 'HCF UI: tab highlight is cropped or STOP is not below Lay-in tab in the navigation rail.'
 }
 
 # Audit *publicly displayed* legacy branding, while preserving HNL.VXT

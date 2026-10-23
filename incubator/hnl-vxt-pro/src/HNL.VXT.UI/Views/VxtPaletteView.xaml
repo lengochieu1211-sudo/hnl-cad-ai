@@ -637,10 +637,28 @@
                             <Border Grid.Column="1" Background="{DynamicResource CardBackground}"
                                     BorderBrush="{DynamicResource CardBorder}"
                                     BorderThickness="1,0,0,0" Padding="2,5,2,5">
-                                <StackPanel Orientation="Vertical" IsItemsHost="True"
-                                            HorizontalAlignment="Center"
-                                            VerticalAlignment="Top"
-                                            KeyboardNavigation.TabNavigation="Local"/>
+                                <!-- Navigation and STOP share one rail, independent of the footer.
+                                     The real tab items host is kept intact for selection binding. -->
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Grid.Row="0" Orientation="Vertical" IsItemsHost="True"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Top"
+                                                KeyboardNavigation.TabNavigation="Local"/>
+                                    <Button Grid.Row="1" x:Name="StopHcfButton"
+                                            Style="{StaticResource HcfStopRailButton}"
+                                            Margin="0,4,0,0"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            Click="StopHcfButton_Click" AutomationProperties.Name="Tắt HCF"
+                                            ToolTip="Tắt HCF: dừng xem trước và đóng giao diện; AutoCAD vẫn mở">
+                                        <Path Tag="HCF_RAIL_STOP_ICON" Data="M10,2 L10,10 M5,5 A8,8 0 1 0 15,5"
+                                              Width="19" Height="19" Stretch="Uniform" Stroke="White"
+                                              StrokeThickness="2.3" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    </Button>
+                                </Grid>
                             </Border>
                             <ContentPresenter Grid.Column="0"
                                               x:Name="PART_SelectedContentHost"
@@ -671,8 +689,8 @@
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="1" CornerRadius="5"
                                 Width="{TemplateBinding Width}"
-                                Height="{TemplateBinding Height}"
-                                Margin="0,0,0,7"
+                                Height="108"
+                                Margin="0,0,0,8"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter ContentSource="Header"
                                               HorizontalAlignment="Center"
@@ -1612,8 +1630,8 @@
             </TabItem>
         </TabControl>
 
-        <!-- Fixed footer: explicit non-overlapping Create / STOP cells even at narrow
-             AutoCAD palette docks, resized heights and high-DPI scaling. -->
+        <!-- Fixed Create footer: the separate STOP remains below both tabs in the
+             40-DIP navigation rail, never in the bottom action row. -->
         <Grid Grid.Row="2" ClipToBounds="True">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
@@ -1649,17 +1667,7 @@
                 </StackPanel>
             </Border>
             <Border Grid.Column="1" Background="{DynamicResource CardBackground}"
-                    BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0"
-                    Padding="2,5,2,5">
-                <Button x:Name="StopHcfButton" Style="{StaticResource HcfStopRailButton}"
-                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                        Click="StopHcfButton_Click" AutomationProperties.Name="Tắt HCF"
-                        ToolTip="Tắt HCF: dừng xem trước và đóng giao diện; AutoCAD vẫn mở">
-                    <Path Tag="HCF_RAIL_STOP_ICON" Data="M10,2 L10,10 M5,5 A8,8 0 1 0 15,5"
-                          Width="19" Height="19" Stretch="Uniform" Stroke="White"
-                          StrokeThickness="2.3" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                </Button>
-            </Border>
+                    BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,1,0,0"/>
         </Grid>
     </Grid>
 </UserControl>
