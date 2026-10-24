@@ -1,0 +1,50 @@
+name: HCE CI151 Exact Full Source Backup
+
+on:
+  push:
+    branches:
+      - backup/hce-ci151-full-source
+
+permissions:
+  contents: read
+
+jobs:
+  full-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical exact HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: fb2b18914e573cde94a9a375942b44f29410f185
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify source identity and stage complete tracked tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact="fb2b18914e573cde94a9a375942b44f29410f185"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$exact"
+          stage="$RUNNER_TEMP/HNL-HCE-CI151-FULL-SOURCE"
+          mkdir -p "$stage"
+          git archive --format=tar HEAD | tar -xf - -C "$stage"
+          test -f "$stage/HCE-OVERLAY/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs"
+          test -f "$stage/.github/workflows/hce-bootstrap.yml"
+          grep -Fq 'Grid.SetRow(_stopHceButton, 0);' "$stage/HCE-OVERLAY/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs"
+          printf 'Repository: lengochieu1211-sudo/hnl-cad-ai\nBranch: research/hce-pro-bootstrap\nExact HEAD: %s\nVersion: v0.3.0\nCI: #151 PASS\nSource snapshot: git archive, complete tracked repository tree, no .git\n' "$exact" > "$stage/HCE-FULL-SOURCE-CHECKPOINT.txt"
+          cd "$stage"
+          find . -type f ! -name 'HCE-FULL-SOURCE-SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum > HCE-FULL-SOURCE-SHA256SUMS.txt
+          sha256sum --check HCE-FULL-SOURCE-SHA256SUMS.txt > /dev/null
+          echo "Exact source HEAD: $actual"
+          echo "Number of archived source files: $(find . -type f | wc -l)"
+          echo "HCE FULL SOURCE SNAPSHOT PASS"
+
+      - name: Upload complete source ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HNL-HCE-v0.3.0-FULL-SOURCE-CI151-fb2b1891-20261023
+          path: ${{ runner.temp }}/HNL-HCE-CI151-FULL-SOURCE/
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 6
