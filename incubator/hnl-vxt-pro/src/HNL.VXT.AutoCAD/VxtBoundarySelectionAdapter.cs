@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -47,6 +48,8 @@ namespace HNL.VXT.AutoCAD
             var skippedOpen = 0;
             var skippedZ = 0;
             var skippedUnsupported = 0;
+            var acceptedRegionCount = 0;
+            var acceptedHoleCount = 0;
 
             using (var tr = doc.TransactionManager.StartTransaction())
             {
@@ -88,6 +91,8 @@ namespace HNL.VXT.AutoCAD
 
                 VxtSelectedBoundaryTopology.Arrange(accepted, acceptedIds, acceptedLayers,
                     out var outerBoundaries, out var outerIds, out var holeGroups);
+                acceptedRegionCount = outerBoundaries.Count;
+                acceptedHoleCount = holeGroups.Sum(g => g.Count);
                 var session = VxtSession.Current;
                 session.Boundaries.Clear();
                 session.Boundaries.AddRange(outerBoundaries);
@@ -104,7 +109,7 @@ namespace HNL.VXT.AutoCAD
 
                 var skipped = skippedOpen + skippedZ + skippedUnsupported;
                 session.ViewModel?.SetBoundaryStatus(
-                    "✓ Đã nhận " + outerBoundaries.Count + " mảng, " + holeGroups.Sum(g => g.Count) + " lỗ từ tập chọn sẵn" +
+                    "✓ Đã nhận " + acceptedRegionCount + " mảng, " + acceptedHoleCount + " lỗ từ tập chọn sẵn" +
                     (autoClosed > 0 ? " • Tự khép " + autoClosed : string.Empty) +
                     (tinyZNormalized > 0 ? " • Chuẩn Z≈0 " + tinyZNormalized : string.Empty) +
                     (skipped > 0 ? " • Bỏ qua " + skipped : string.Empty),
@@ -121,8 +126,8 @@ namespace HNL.VXT.AutoCAD
             if (writeMessage)
             {
                 ed.WriteMessage(
-                    "\nHNL Tool - HCF: Đã dùng " + outerBoundaries.Count + " mảng trần và " +
-                    holeGroups.Sum(g => g.Count) + " lỗ từ tập chọn sẵn");
+                    "\nHNL Tool - HCF: Đã dùng " + acceptedRegionCount + " mảng trần và " +
+                    acceptedHoleCount + " lỗ từ tập chọn sẵn");
                 if (autoClosed > 0)
                     ed.WriteMessage("; tự khép " + autoClosed + " biên, khe lớn nhất " +
                         maxAutoCloseGap.ToString("0.###") + " mm");
