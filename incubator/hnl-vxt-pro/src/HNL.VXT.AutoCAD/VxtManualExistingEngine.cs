@@ -322,6 +322,17 @@ namespace HNL.VXT.AutoCAD
                 if (entity is BlockReference block && settings != null &&
                     settings.OptimizationMode != VxtOptimizationMode.Legacy)
                 {
+                    // The supplied CAD dynamic XP blocks contain AP_TC_TRUC
+                    // geometry. A single anonymous *U block may hold 20 or 101
+                    // independent XP centerlines; using one overall block bbox
+                    // silently loses those dimensions. Read each real centerline
+                    // once, transformed by this instance's BlockTransform.
+                    var explicitCenters = ReadBlockCenterlines(block, tr);
+                    if (explicitCenters.Count > 0)
+                    {
+                        result.AddRange(explicitCenters);
+                        continue;
+                    }
                     var axis = VxtExistingMemberAxisResolver.ResolveBlock(block, tr);
                     if (axis == null || axis.Length <= 1e-8)
                         throw new InvalidOperationException(
@@ -341,6 +352,55 @@ namespace HNL.VXT.AutoCAD
                         (ext.MinPoint.Y + ext.MaxPoint.Y) * 0.5));
                 }
                 catch { }
+            }
+            return result;
+        }
+
+
+        private static List<Point2> ReadBlockCenterlines(BlockReference block, Transaction tr)
+        {
+            var result = new List<Point2>();
+            try
+            {
+                var definition = tr.GetObject(block.BlockTableRecord, OpenMode.ForRead, false)
+                    as BlockTableRecord;
+                if (definition == null) return result;
+
+                var transform = block.BlockTransform;
+                foreach (ObjectId memberId in definition)
+                {
+                    var member = tr.GetObject(memberId, OpenMode.ForRead, false) as Entity;
+                    if (member == null ||
+                        !string.Equals(member.Layer, "AP_TC_TRUC", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var curve = member as Curve;
+                    if (curve == null) continue;
+
+                    // A curved decoration on the axis layer must not become a
+                    // fake structural tim; only accept straight source curves.
+                    var start = curve.StartPoint;
+                    var end = curve.EndPoint;
+                    var chord = start.DistanceTo(end);
+                    if (chord <= 1e-8) continue;
+                    var curveLength = Math.Abs(curve.GetDistanceAtParameter(curve.EndParam) -
+                        curve.GetDistanceAtParameter(curve.StartParam));
+                    if (Math.Abs(curveLength - chord) > Math.Max(0.1, curveLength * 1e-4))
+                        continue;
+
+                    var a = start.TransformBy(transform);
+                    var b = end.TransformBy(transform);
+                    var center = new Point2((a.X + b.X) * 0.5, (a.Y + b.Y) * 0.5);
+                    // HCF example blocks repeat identical LWPOLYLINE axis
+                    // entities 5+ times. Never DIM the same physical axis twice.
+                    if (!result.Any(p => p.DistanceTo(center) <= 0.25))
+                        result.Add(center);
+                }
+            }
+            catch
+            {
+                // Fall back to the existing certified single-axis resolver if
+                // the anonymous block definition is inaccessible or unsupported.
+                result.Clear();
             }
             return result;
         }

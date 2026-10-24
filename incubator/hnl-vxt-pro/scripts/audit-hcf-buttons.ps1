@@ -122,6 +122,18 @@ if (-not $boundarySampler.Contains('vertexCount == 2') -or
     throw 'HCF audit: closed bulge Polyline or PickPoint fallback/selected boundary types regressed.'
 }
 
+# Pro XC/XP DIM must expand multi-member dynamic blocks by the real
+# AP_TC_TRUC centerlines, avoiding repeated cloned axis entities.
+$manualDimSource = Source 'src/HNL.VXT.AutoCAD/VxtManualExistingEngine.cs'
+if (-not $manualDimSource.Contains('ReadBlockCenterlines(block, tr)') -or
+    -not $manualDimSource.Contains('string.Equals(member.Layer, "AP_TC_TRUC"') -or
+    -not $manualDimSource.Contains('start.TransformBy(transform)') -or
+    -not $manualDimSource.Contains('p.DistanceTo(center) <= 0.25') -or
+    -not $manualDimSource.Contains('result.AddRange(explicitCenters)') -or
+    -not $manualDimSource.Contains('ReadCenters(session.ManualHangerIds, tr)')) {
+    throw 'HCF audit: multi-axis Pro XP Block DIM or existing Ty/Legacy path regressed.'
+}
+
 # Nested closed source selection must map SPLINE outer/inner to one
 # drawable region plus holes, in both direct Select and PickFirst paths.
 $topology = Source 'src/HNL.VXT.AutoCAD/VxtSelectedBoundaryTopology.cs'
