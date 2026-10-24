@@ -33,6 +33,35 @@ namespace HNL.VXT.Core.Tests
         }
 
         [TestMethod]
+        public void PlDxf_TwoSemicircleBulgesFormClosedRoundHole()
+        {
+            // PL.dxf E1/E2/E3 use CLOSED LWPOLYLINE with only two vertices,
+            // each having bulge=1. Rejecting vertexCount<3 loses all three holes.
+            foreach (var radius in new[] { 560.0, 485.0, 784.846922835 })
+            {
+                var right = new Point2(radius, 0.0);
+                var left = new Point2(-radius, 0.0);
+                var points = VxtBulgeSampler.SampleSegment(right, left, 1.0)
+                    .Concat(VxtBulgeSampler.SampleSegment(left, right, 1.0))
+                    .ToArray();
+                Assert.IsTrue(points.Length > 40,
+                    "Two real curved segments must be sampled, not treated as a 2-point straight PL.");
+
+                var signedTwiceArea = 0.0;
+                for (var i = 0; i < points.Length; i++)
+                {
+                    var u = points[i];
+                    var v = points[(i + 1) % points.Length];
+                    signedTwiceArea += u.X * v.Y - v.X * u.Y;
+                }
+                var area = Math.Abs(signedTwiceArea) * 0.5;
+                var trueArea = Math.PI * radius * radius;
+                Assert.IsTrue(Math.Abs(area - trueArea) / trueArea < 0.001,
+                    "Round PL void must remain a nonzero closed polygon with sub-0.1% area error.");
+            }
+        }
+
+        [TestMethod]
         public void StraightBulgeSamplingRemainsOneSegment()
         {
             var start = new Point2(0.0, 0.0);
