@@ -474,8 +474,9 @@ namespace HNL.VXT.AutoCAD
 
         private static bool BoundaryInside(Boundary2 candidate, Boundary2 container)
         {
-            if (candidate == null || container == null || candidate.Vertices.Count == 0) return false;
-            return BoundaryContainsPoint(container, candidate.Vertices[0]);
+            // Mirror explicit selection topology: a partial overlap is not an
+            // enclosed ceiling void, even if the first point is inside.
+            return VxtSelectedBoundaryTopology.ContainsWholeLoop(candidate, container);
         }
 
         private static bool BoundaryContainsPoint(Boundary2 boundary, Point2 point)

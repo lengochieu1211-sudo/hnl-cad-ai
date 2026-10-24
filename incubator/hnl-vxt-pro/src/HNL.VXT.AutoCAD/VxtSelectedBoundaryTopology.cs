@@ -40,7 +40,7 @@ namespace HNL.VXT.AutoCAD
                         areas[j] >= bestArea ||
                         !string.Equals(layers[i], layers[j], StringComparison.OrdinalIgnoreCase) ||
                         source[i].Vertices.Count == 0) continue;
-                    if (!Contains(source[j], source[i].Vertices[0])) continue;
+                    if (!ContainsWholeLoop(source[i], source[j])) continue;
                     parents[i] = j;
                     bestArea = areas[j];
                 }
@@ -76,6 +76,35 @@ namespace HNL.VXT.AutoCAD
                 if (parent >= 0 && selectedToOuter.TryGetValue(parent, out var groupIndex))
                     holeGroups[groupIndex].Add(source[i]);
             }
+        }
+
+        // The first vertex alone is insufficient: intersecting ceiling loops
+        // may start inside one another but do NOT define inner voids.
+        // Check bounds, every sampled vertex and every edge midpoint before
+        // converting a smaller selected loop into a non-drawable hole.
+        internal static bool ContainsWholeLoop(Boundary2 inner, Boundary2 outer)
+        {
+            if (inner == null || outer == null ||
+                inner.Vertices.Count < 3 || outer.Vertices.Count < 3)
+                return false;
+            var innerBox = inner.GetBounds();
+            var outerBox = outer.GetBounds();
+            const double eps = 1e-6;
+            if (innerBox.Min.X < outerBox.Min.X - eps ||
+                innerBox.Min.Y < outerBox.Min.Y - eps ||
+                innerBox.Max.X > outerBox.Max.X + eps ||
+                innerBox.Max.Y > outerBox.Max.Y + eps)
+                return false;
+
+            for (var i = 0; i < inner.Vertices.Count; i++)
+            {
+                var a = inner.Vertices[i];
+                var b = inner.Vertices[(i + 1) % inner.Vertices.Count];
+                var middle = new Point2((a.X + b.X) * 0.5, (a.Y + b.Y) * 0.5);
+                if (!Contains(outer, a) || !Contains(outer, middle))
+                    return false;
+            }
+            return true;
         }
 
         private static double Area(Boundary2 boundary)

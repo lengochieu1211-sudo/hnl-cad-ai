@@ -139,6 +139,9 @@ if (-not $manualDimSource.Contains('ReadBlockCenterlines(block, tr)') -or
 $topology = Source 'src/HNL.VXT.AutoCAD/VxtSelectedBoundaryTopology.cs'
 if (-not $topology.Contains('internal static void Arrange(') -or
     -not $topology.Contains('depths[i] % 2') -or
+    -not $topology.Contains('ContainsWholeLoop(source[i], source[j])') -or
+    -not $topology.Contains('if (!Contains(outer, a) || !Contains(outer, middle))') -or
+    -not $boundaryCommands.Contains('VxtSelectedBoundaryTopology.ContainsWholeLoop(candidate, container)') -or
     -not $topology.Contains('string.Equals(layers[i], layers[j]') -or
     -not $boundaryCommands.Contains('VxtSelectedBoundaryTopology.Arrange(accepted, acceptedIds, acceptedLayers,') -or
     -not $boundaryImplied.Contains('VxtSelectedBoundaryTopology.Arrange(accepted, acceptedIds, acceptedLayers,') -or
