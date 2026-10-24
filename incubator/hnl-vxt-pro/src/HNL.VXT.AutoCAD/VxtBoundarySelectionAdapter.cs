@@ -57,17 +57,7 @@ namespace HNL.VXT.AutoCAD
 
                     Boundary2 boundary;
                     BoundarySampleInfo info;
-                    var acceptedBoundary = false;
-
-                    if (entity is Polyline pl)
-                        acceptedBoundary = BoundarySampler.TryFromPolyline(pl, out boundary, out info);
-                    else if (entity is Polyline2d pl2)
-                        acceptedBoundary = BoundarySampler.TryFromPolyline2d(pl2, tr, out boundary, out info);
-                    else
-                    {
-                        skippedUnsupported++;
-                        continue;
-                    }
+                    var acceptedBoundary = BoundarySampler.TryFromEntity(entity, tr, out boundary, out info);
 
                     if (!acceptedBoundary)
                     {

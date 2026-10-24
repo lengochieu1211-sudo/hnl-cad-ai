@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.Geometry;
 using HNL.VXT.Core.Geometry;
 
 namespace HNL.VXT.AutoCAD
@@ -16,6 +17,132 @@ namespace HNL.VXT.AutoCAD
 
     internal static class BoundarySampler
     {
+        // A closed two-vertex lightweight Polyline may be a circle (two bulge
+        // semicircles); do not reject it merely because it has two DXF vertices.
+        public static bool TryFromEntity(Entity entity, Transaction tr, out Boundary2 boundary, out BoundarySampleInfo info)
+        {
+            if (entity is Polyline pl)
+                return TryFromPolyline(pl, out boundary, out info);
+            if (entity is Polyline2d pl2)
+                return TryFromPolyline2d(pl2, tr, out boundary, out info);
+            if (entity is Circle circle)
+                return TryFromCircle(circle, out boundary, out info);
+            if (entity is Spline spline)
+                return TryFromClosedSpline(spline, out boundary, out info);
+            if (entity is Mline mline)
+                return TryFromClosedMline(mline, out boundary, out info);
+
+            boundary = null;
+            info = new BoundarySampleInfo { RejectionReason = "Unsupported" };
+            return false;
+        }
+
+        private static bool TryFromCircle(Circle circle, out Boundary2 boundary, out BoundarySampleInfo info)
+        {
+            boundary = null;
+            info = new BoundarySampleInfo();
+            if (circle == null || circle.Radius <= 1e-8 || Math.Abs(circle.Normal.Z) < 0.999999)
+            {
+                info.RejectionReason = "Unsupported";
+                return false;
+            }
+
+            info.MaxAbsZ = Math.Abs(circle.Center.Z);
+            if (!BoundaryInputTolerancePolicy.AcceptZ(info.MaxAbsZ))
+            {
+                info.RejectionReason = "Z";
+                return false;
+            }
+            info.TinyZNormalized = BoundaryInputTolerancePolicy.IsTinyNonZeroZ(info.MaxAbsZ);
+            var segments = Math.Min(512, Math.Max(64, (int)Math.Ceiling(2.0 * Math.PI * circle.Radius / 25.0)));
+            var points = new List<Point2>(segments);
+            for (var i = 0; i < segments; i++)
+            {
+                var angle = 2.0 * Math.PI * i / segments;
+                points.Add(new Point2(circle.Center.X + circle.Radius * Math.Cos(angle),
+                    circle.Center.Y + circle.Radius * Math.Sin(angle)));
+            }
+            boundary = new Boundary2(points);
+            return true;
+        }
+
+        private static bool TryFromClosedSpline(Spline spline, out Boundary2 boundary, out BoundarySampleInfo info)
+        {
+            boundary = null;
+            info = new BoundarySampleInfo();
+            if (spline == null || !spline.Closed)
+            {
+                info.RejectionReason = "OpenGap";
+                return false;
+            }
+
+            try
+            {
+                var length = Math.Abs(spline.GetDistanceAtParameter(spline.EndParam) -
+                    spline.GetDistanceAtParameter(spline.StartParam));
+                if (length <= 1e-8)
+                {
+                    info.RejectionReason = "Unsupported";
+                    return false;
+                }
+                var samples = Math.Min(512, Math.Max(64, (int)Math.Ceiling(length / 20.0)));
+                var vertices = new List<Point2>(samples);
+                var maxZ = 0.0;
+                for (var i = 0; i < samples; i++)
+                {
+                    var position = spline.GetPointAtDist(length * i / samples);
+                    maxZ = Math.Max(maxZ, Math.Abs(position.Z));
+                    vertices.Add(new Point2(position.X, position.Y));
+                }
+                info.MaxAbsZ = maxZ;
+                if (!BoundaryInputTolerancePolicy.AcceptZ(maxZ))
+                {
+                    info.RejectionReason = "Z";
+                    return false;
+                }
+                info.TinyZNormalized = BoundaryInputTolerancePolicy.IsTinyNonZeroZ(maxZ);
+                boundary = new Boundary2(vertices);
+                return true;
+            }
+            catch
+            {
+                info.RejectionReason = "Unsupported";
+                return false;
+            }
+        }
+
+        private static bool TryFromClosedMline(Mline mline, out Boundary2 boundary, out BoundarySampleInfo info)
+        {
+            boundary = null;
+            info = new BoundarySampleInfo();
+            // Only a closed MLINE path defines an independent area. Its vertices
+            // represent the path, not the two visible rails. Open MLINE segments
+            // can still bound a room via TraceBoundary, but are not auto-closed here.
+            if (mline == null || !mline.IsClosed || mline.NumberOfVertices < 3)
+            {
+                info.RejectionReason = "OpenGap";
+                return false;
+            }
+
+            var vertices = new List<Point2>();
+            var maxZ = 0.0;
+            for (var i = 0; i < mline.NumberOfVertices; i++)
+            {
+                var position = mline.VertexAt(i);
+                maxZ = Math.Max(maxZ, Math.Abs(position.Z));
+                vertices.Add(new Point2(position.X, position.Y));
+            }
+            info.MaxAbsZ = maxZ;
+            if (!BoundaryInputTolerancePolicy.AcceptZ(maxZ))
+            {
+                info.RejectionReason = "Z";
+                return false;
+            }
+            info.TinyZNormalized = BoundaryInputTolerancePolicy.IsTinyNonZeroZ(maxZ);
+            boundary = new Boundary2(vertices);
+            return true;
+        }
+
         public static Boundary2 FromPolyline(Polyline polyline)
         {
             if (!TryFromPolyline(polyline, out var boundary, out var info))
@@ -42,7 +169,11 @@ namespace HNL.VXT.AutoCAD
             }
 
             var vertexCount = polyline.NumberOfVertices;
-            if (vertexCount < 3)
+            if (vertexCount < 2 ||
+                (vertexCount == 2 &&
+                 (!polyline.Closed ||
+                  (Math.Abs(polyline.GetBulgeAt(0)) <= 1e-12 &&
+                   Math.Abs(polyline.GetBulgeAt(1)) <= 1e-12))))
             {
                 info.RejectionReason = "Unsupported";
                 return false;
@@ -139,7 +270,10 @@ namespace HNL.VXT.AutoCAD
                 bulges.Add(vertex.Bulge);
             }
 
-            if (positions.Count < 3)
+            if (positions.Count < 2 ||
+                (positions.Count == 2 &&
+                 (!polyline.Closed ||
+                  (Math.Abs(bulges[0]) <= 1e-12 && Math.Abs(bulges[1]) <= 1e-12))))
             {
                 info.RejectionReason = "Unsupported";
                 return false;

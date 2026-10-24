@@ -103,12 +103,12 @@ namespace HNL.VXT.AutoCAD
             var ed = doc.Editor;
             var options = new PromptSelectionOptions
             {
-                MessageForAdding = "\nHNL Tool - Ceiling Framing Pro: Quét chọn Polyline biên trần (kín hoặc hở ≤ 1 mm): ",
-                MessageForRemoval = "\nHNL Tool - Ceiling Framing Pro: Bỏ Polyline khỏi tập chọn: "
+                MessageForAdding = "\nHNL Tool - HCF: Quét chọn Polyline/Circle/Spline kín/MLINE kín làm biên trần: ",
+                MessageForRemoval = "\nHNL Tool - HCF: Bỏ đối tượng khỏi tập chọn: "
             };
             var filter = new SelectionFilter(new[]
             {
-                new TypedValue((int)DxfCode.Start, "LWPOLYLINE,POLYLINE")
+                new TypedValue((int)DxfCode.Start, "LWPOLYLINE,POLYLINE,CIRCLE,SPLINE,MLINE")
             });
             var result = ed.GetSelection(options, filter);
             if (result.Status != PromptStatus.OK) return;
@@ -129,12 +129,7 @@ namespace HNL.VXT.AutoCAD
                     var entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
                     Boundary2 boundary;
                     BoundarySampleInfo info;
-                    var acceptedBoundary = false;
-
-                    if (entity is Polyline pl)
-                        acceptedBoundary = BoundarySampler.TryFromPolyline(pl, out boundary, out info);
-                    else if (entity is Polyline2d pl2)
-                        acceptedBoundary = BoundarySampler.TryFromPolyline2d(pl2, tr, out boundary, out info);
+                    var acceptedBoundary = BoundarySampler.TryFromEntity(entity, tr, out boundary, out info);
                     else
                     {
                         skippedUnsupported++;
@@ -241,6 +236,8 @@ namespace HNL.VXT.AutoCAD
                     return;
                 }
 
+                var seedWorld3d = result.Value.TransformBy(ed.CurrentUserCoordinateSystem);
+                var seedWorld = new Point2(seedWorld3d.X, seedWorld3d.Y);
                 DBObjectCollection traced = null;
                 try
                 {
@@ -251,44 +248,51 @@ namespace HNL.VXT.AutoCAD
                 }
                 catch (System.Exception ex)
                 {
-                    ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Không tạo được biên tại điểm này: " + ex.Message);
-                    continue;
-                }
-
-                if (traced == null || traced.Count == 0)
-                {
-                    ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Điểm này không nằm trong vùng kín hợp lệ.");
-                    continue;
+                    ed.WriteMessage("\nHNL Tool - HCF: TraceBoundary không hoàn tất (" + ex.Message +
+                                    "); thử nhận đường bao kín trực tiếp.");
                 }
 
                 var loops = new List<Boundary2>();
                 try
                 {
-                    foreach (DBObject item in traced)
+                    if (traced != null)
                     {
-                        var polyline = item as Polyline;
-                        if (polyline == null) continue;
+                        foreach (DBObject item in traced)
+                        {
+                            var polyline = item as Polyline;
+                            if (polyline == null) continue;
 
-                        BoundarySampleInfo info;
-                        Boundary2 sampled;
-                        if (BoundarySampler.TryFromPolyline(polyline, out sampled, out info))
-                            loops.Add(sampled);
+                            BoundarySampleInfo info;
+                            Boundary2 sampled;
+                            if (BoundarySampler.TryFromPolyline(polyline, out sampled, out info))
+                                loops.Add(sampled);
+                        }
                     }
                 }
                 finally
                 {
-                    foreach (DBObject item in traced)
-                        item?.Dispose();
+                    if (traced != null)
+                    {
+                        foreach (DBObject item in traced)
+                            item?.Dispose();
+                    }
                 }
 
                 if (loops.Count == 0)
                 {
-                    ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: TraceBoundary không trả về Polyline biên hợp lệ.");
+                    // TraceBoundary needs the source geometry fully visible in the
+                    // editor. In a zoomed/large-coordinate DWG this can legitimately
+                    // return no loops. Recover only from *already closed* CAD source
+                    // objects; never invent a closing path between open objects.
+                    loops = ReadClosedSourceLoopsAtPoint(doc, seedWorld);
+                    if (loops.Count > 0)
+                        ed.WriteMessage("\nHNL Tool - HCF: Đã nhận biên kín trực tiếp (không phụ thuộc Zoom).");
+                }
+                if (loops.Count == 0)
+                {
+                    ed.WriteMessage("\nHNL Tool - HCF: Không tìm thấy đường bao kín chứa điểm. Kiểm tra khe hở, Z và Zoom.");
                     continue;
                 }
-
-                var seedWorld3d = result.Value.TransformBy(ed.CurrentUserCoordinateSystem);
-                var seedWorld = new Point2(seedWorld3d.X, seedWorld3d.Y);
 
                 // The selected region is bounded by the smallest traced loop containing the seed.
                 // Larger containing loops are ancestors; loops immediately inside the selected outer
@@ -406,6 +410,64 @@ namespace HNL.VXT.AutoCAD
                     doc.SendStringToExecute("HNLVXTREGION ", true, false, false);
                     break;
             }
+        }
+
+        private sealed class SourceClosedLoop
+        {
+            public Boundary2 Boundary;
+            public string Layer;
+        }
+
+        // Fallback for a closed source loop when Editor.TraceBoundary cannot see
+        // all geometry (e.g. a zoomed drawing). Restrict inferred holes to the
+        // same layer as the enclosing source boundary to avoid turning unrelated
+        // details and symbols into ceiling openings.
+        private static List<Boundary2> ReadClosedSourceLoopsAtPoint(Document doc, Point2 seedWorld)
+        {
+            var loops = new List<SourceClosedLoop>();
+            try
+            {
+                using (var tr = doc.Database.TransactionManager.StartTransaction())
+                {
+                    var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                    foreach (ObjectId id in ms)
+                    {
+                        var entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity;
+                        if (entity == null || !entity.Visible) continue;
+                        if (!(entity is Polyline || entity is Polyline2d ||
+                              entity is Circle || entity is Spline || entity is Mline)) continue;
+
+                        var layer = tr.GetObject(entity.LayerId, OpenMode.ForRead, false) as LayerTableRecord;
+                        if (layer == null || layer.IsOff || layer.IsFrozen) continue;
+
+                        Boundary2 boundary;
+                        BoundarySampleInfo info;
+                        if (!BoundarySampler.TryFromEntity(entity, tr, out boundary, out info)) continue;
+                        loops.Add(new SourceClosedLoop { Boundary = boundary, Layer = entity.Layer });
+                    }
+                }
+            }
+            catch
+            {
+                // Do not mutate session or incorrectly fabricate a boundary.
+                return new List<Boundary2>();
+            }
+
+            var outer = loops
+                .Where(x => BoundaryContainsPoint(x.Boundary, seedWorld))
+                .OrderBy(x => Math.Abs(PolygonArea(x.Boundary.Vertices)))
+                .FirstOrDefault();
+            if (outer == null) return new List<Boundary2>();
+
+            var selected = new List<Boundary2> { outer.Boundary };
+            selected.AddRange(loops
+                .Where(x => !ReferenceEquals(x, outer) &&
+                    string.Equals(x.Layer, outer.Layer, StringComparison.OrdinalIgnoreCase) &&
+                    BoundaryInside(x.Boundary, outer.Boundary) &&
+                    !BoundaryContainsPoint(x.Boundary, seedWorld))
+                .Select(x => x.Boundary));
+            return selected;
         }
 
         private static bool BoundaryInside(Boundary2 candidate, Boundary2 container)

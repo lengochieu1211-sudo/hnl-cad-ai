@@ -104,6 +104,24 @@ if ([regex]::Matches($manualExisting, 'TrySelectExisting\(ed, "LINE,LWPOLYLINE,P
     throw 'HCF audit: existing XC/XP/Ty DIM selection or button explanation regressed.'
 }
 
+# Selected-boundary geometry / PickPoint fallback gate. A closed two-vertex
+# Polyline with bulges can be an exact circle and must not be skipped.
+$boundarySampler = Source 'src/HNL.VXT.AutoCAD/BoundarySampler.cs'
+$boundaryCommands = Source 'src/HNL.VXT.AutoCAD/VxtCommands.cs'
+$boundaryImplied = Source 'src/HNL.VXT.AutoCAD/VxtBoundarySelectionAdapter.cs'
+if (-not $boundarySampler.Contains('vertexCount == 2') -or
+    -not $boundarySampler.Contains('positions.Count == 2') -or
+    -not $boundarySampler.Contains('TryFromCircle(Circle circle') -or
+    -not $boundarySampler.Contains('TryFromClosedSpline(Spline spline') -or
+    -not $boundarySampler.Contains('TryFromClosedMline(Mline mline') -or
+    -not $boundaryCommands.Contains('LWPOLYLINE,POLYLINE,CIRCLE,SPLINE,MLINE') -or
+    -not $boundaryCommands.Contains('ReadClosedSourceLoopsAtPoint(doc, seedWorld)') -or
+    -not $boundaryCommands.Contains('BoundaryInside(x.Boundary, outer.Boundary)') -or
+    -not $boundaryCommands.Contains('string.Equals(x.Layer, outer.Layer') -or
+    -not $boundaryImplied.Contains('BoundarySampler.TryFromEntity(entity, tr, out boundary, out info)')) {
+    throw 'HCF audit: closed bulge Polyline or PickPoint fallback/selected boundary types regressed.'
+}
+
 # Manual existing XC/XP Block DIM in Pro must take the midpoint of the transformed
 # resolved member axis, never silently substitute a WCS bounding-box center.
 # Legacy, non-Block XC/XP and hanger (Ty) DIM must preserve their old center path.
