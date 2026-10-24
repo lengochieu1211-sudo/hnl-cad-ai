@@ -279,22 +279,17 @@ namespace HNL.VXT.AutoCAD
                     }
                 }
 
-                if (loops.Count == 0)
-                {
-                    // TraceBoundary needs the source geometry fully visible in the
-                    // editor. In a zoomed/large-coordinate DWG this can legitimately
-                    // return no loops. Recover only from *already closed* CAD source
-                    // objects; never invent a closing path between open objects.
-                    loops = ReadClosedSourceLoopsAtPoint(doc, seedWorld);
-                    if (loops.Count > 0)
-                        ed.WriteMessage("\nHNL Tool - HCF: Đã nhận biên kín trực tiếp (không phụ thuộc Zoom).");
-                }
-                // Even when TraceBoundary returned an outer loop, it can omit a
-                // closed SPLINE island. Prefer explicit closed source loops when
-                // they recover more loops (same-layer protection is in the reader).
+                // TraceBoundary requires source geometry visible in the editor.
+                // It may also miss a closed SPLINE island while returning the
+                // outer loop. Scan closed source loops once per Pick point and
+                // prefer them only if they recover more loops; never auto-close
+                // multiple unconnected entities.
                 var sourceLoops = ReadClosedSourceLoopsAtPoint(doc, seedWorld);
                 if (sourceLoops.Count > loops.Count)
+                {
                     loops = sourceLoops;
+                    ed.WriteMessage("\nHNL Tool - HCF: Đã nhận đường bao kín và lỗ trực tiếp từ bản vẽ.");
+                }
                 if (loops.Count == 0)
                 {
                     ed.WriteMessage("\nHNL Tool - HCF: Không tìm thấy đường bao kín chứa điểm. Kiểm tra khe hở, Z và Zoom.");
