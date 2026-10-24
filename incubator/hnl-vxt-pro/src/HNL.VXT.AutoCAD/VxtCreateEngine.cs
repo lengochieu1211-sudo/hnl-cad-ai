@@ -6,6 +6,7 @@ using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using HNL.VXT.Core.Geometry;
+using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
 using HNL.VXT.Core.Preview;
 
