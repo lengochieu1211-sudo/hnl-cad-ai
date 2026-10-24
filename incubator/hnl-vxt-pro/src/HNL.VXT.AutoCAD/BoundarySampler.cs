@@ -78,19 +78,25 @@ namespace HNL.VXT.AutoCAD
 
             try
             {
-                var length = Math.Abs(spline.GetDistanceAtParameter(spline.EndParam) -
-                    spline.GetDistanceAtParameter(spline.StartParam));
-                if (length <= 1e-8)
+                // Closed NURBS with repeated knots (including the user's
+                // DD/DE SPLINE loops) can fail Curve distance methods on
+                // some AutoCAD builds. Parameter evaluation works with
+                // control-point splines directly and does not depend on
+                // rebuilding an arc-length lookup from the active drawing.
+                var start = spline.StartParam;
+                var end = spline.EndParam;
+                if (end - start <= 1e-8)
                 {
-                    info.RejectionReason = "Unsupported";
+                    info.RejectionReason = "SplineSample";
                     return false;
                 }
-                var samples = Math.Min(512, Math.Max(64, (int)Math.Ceiling(length / 20.0)));
+                const int samples = 512;
                 var vertices = new List<Point2>(samples);
                 var maxZ = 0.0;
                 for (var i = 0; i < samples; i++)
                 {
-                    var position = spline.GetPointAtDist(length * i / samples);
+                    var parameter = start + (end - start) * i / samples;
+                    var position = spline.GetPointAtParameter(parameter);
                     maxZ = Math.Max(maxZ, Math.Abs(position.Z));
                     vertices.Add(new Point2(position.X, position.Y));
                 }
