@@ -130,11 +130,6 @@ namespace HNL.VXT.AutoCAD
                     Boundary2 boundary;
                     BoundarySampleInfo info;
                     var acceptedBoundary = BoundarySampler.TryFromEntity(entity, tr, out boundary, out info);
-                    else
-                    {
-                        skippedUnsupported++;
-                        continue;
-                    }
 
                     if (!acceptedBoundary)
                     {
