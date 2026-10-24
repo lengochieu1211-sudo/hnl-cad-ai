@@ -122,6 +122,18 @@ if (-not $boundarySampler.Contains('vertexCount == 2') -or
     throw 'HCF audit: closed bulge Polyline or PickPoint fallback/selected boundary types regressed.'
 }
 
+# Nested closed source selection must map SPLINE outer/inner to one
+# drawable region plus holes, in both direct Select and PickFirst paths.
+$topology = Source 'src/HNL.VXT.AutoCAD/VxtSelectedBoundaryTopology.cs'
+if (-not $topology.Contains('internal static void Arrange(') -or
+    -not $topology.Contains('depths[i] % 2') -or
+    -not $topology.Contains('string.Equals(layers[i], layers[j]') -or
+    -not $boundaryCommands.Contains('VxtSelectedBoundaryTopology.Arrange(accepted, acceptedIds, acceptedLayers,') -or
+    -not $boundaryImplied.Contains('VxtSelectedBoundaryTopology.Arrange(accepted, acceptedIds, acceptedLayers,') -or
+    -not $boundaryCommands.Contains('if (sourceLoops.Count > loops.Count)')) {
+    throw 'HCF audit: closed SPLINE nested holes lost from Select/PickFirst/PickPoint.'
+}
+
 # Manual existing XC/XP Block DIM in Pro must take the midpoint of the transformed
 # resolved member axis, never silently substitute a WCS bounding-box center.
 # Legacy, non-Block XC/XP and hanger (Ty) DIM must preserve their old center path.

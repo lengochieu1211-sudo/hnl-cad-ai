@@ -117,6 +117,7 @@ namespace HNL.VXT.AutoCAD
             {
                 var accepted = new List<Boundary2>();
                 var acceptedIds = new List<ObjectId>();
+                var acceptedLayers = new List<string>();
                 var autoClosed = 0;
                 var maxAutoCloseGap = 0.0;
                 var tinyZNormalized = 0;
@@ -144,6 +145,7 @@ namespace HNL.VXT.AutoCAD
 
                     accepted.Add(boundary);
                     acceptedIds.Add(id);
+                    acceptedLayers.Add(entity.Layer);
                     if (info.AutoClosed)
                     {
                         autoClosed++;
@@ -161,27 +163,31 @@ namespace HNL.VXT.AutoCAD
                     return;
                 }
 
+                VxtSelectedBoundaryTopology.Arrange(accepted, acceptedIds, acceptedLayers,
+                    out var outerBoundaries, out var outerIds, out var holeGroups);
                 var session = VxtSession.Current;
                 session.Boundaries.Clear();
-                session.Boundaries.AddRange(accepted);
+                session.Boundaries.AddRange(outerBoundaries);
                 session.BoundaryIds.Clear();
-                session.BoundaryIds.AddRange(acceptedIds);
+                session.BoundaryIds.AddRange(outerIds);
                 session.LayInExistingHatches.Clear();
                 session.ViewModel?.LayIn?.SetPolylineSourceSelected();
                 session.Regions.Clear();
                 session.BoundaryRegionGroups.Clear();
                 session.BoundaryHoleGroups.Clear();
+                session.BoundaryHoleGroups.AddRange(holeGroups);
                 session.BoundaryFurringFromFarEdges.Clear();
                 session.GlobalFurringFromFarEdge = false;
                 var skipped = skippedOpen + skippedZ + skippedUnsupported;
                 session.ViewModel?.SetBoundaryStatus(
-                    "✓ Đã chọn " + accepted.Count + " biên trần" +
+                    "✓ Đã chọn " + outerBoundaries.Count + " mảng trần" +
                     (autoClosed > 0 ? " • Tự khép " + autoClosed : string.Empty) +
                     (tinyZNormalized > 0 ? " • Chuẩn Z≈0 " + tinyZNormalized : string.Empty) +
                     (skipped > 0 ? " • Bỏ qua " + skipped : string.Empty), true);
                 tr.Commit();
 
-                ed.WriteMessage("\nHNL Tool - Ceiling Framing Pro: Đã nhận " + accepted.Count + " mảng trần độc lập");
+                ed.WriteMessage("\nHNL Tool - HCF: Đã nhận " + outerBoundaries.Count + " mảng trần và " +
+                    holeGroups.Sum(g => g.Count) + " lỗ từ biên đã chọn");
                 if (autoClosed > 0)
                     ed.WriteMessage("; tự khép " + autoClosed + " biên, khe lớn nhất " +
                         maxAutoCloseGap.ToString("0.###") + " mm");
@@ -283,6 +289,12 @@ namespace HNL.VXT.AutoCAD
                     if (loops.Count > 0)
                         ed.WriteMessage("\nHNL Tool - HCF: Đã nhận biên kín trực tiếp (không phụ thuộc Zoom).");
                 }
+                // Even when TraceBoundary returned an outer loop, it can omit a
+                // closed SPLINE island. Prefer explicit closed source loops when
+                // they recover more loops (same-layer protection is in the reader).
+                var sourceLoops = ReadClosedSourceLoopsAtPoint(doc, seedWorld);
+                if (sourceLoops.Count > loops.Count)
+                    loops = sourceLoops;
                 if (loops.Count == 0)
                 {
                     ed.WriteMessage("\nHNL Tool - HCF: Không tìm thấy đường bao kín chứa điểm. Kiểm tra khe hở, Z và Zoom.");

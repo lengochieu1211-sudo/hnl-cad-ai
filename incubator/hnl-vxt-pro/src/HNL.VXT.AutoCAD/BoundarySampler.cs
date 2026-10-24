@@ -106,7 +106,7 @@ namespace HNL.VXT.AutoCAD
             }
             catch
             {
-                info.RejectionReason = "Unsupported";
+                info.RejectionReason = "SplineSample";
                 return false;
             }
         }

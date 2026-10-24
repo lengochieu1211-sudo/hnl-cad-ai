@@ -40,6 +40,7 @@ namespace HNL.VXT.AutoCAD
 
             var accepted = new List<Boundary2>();
             var acceptedIds = new List<ObjectId>();
+            var acceptedLayers = new List<string>();
             var autoClosed = 0;
             var maxAutoCloseGap = 0.0;
             var tinyZNormalized = 0;
@@ -72,6 +73,7 @@ namespace HNL.VXT.AutoCAD
 
                     accepted.Add(boundary);
                     acceptedIds.Add(id);
+                    acceptedLayers.Add(entity.Layer);
                     if (info.AutoClosed)
                     {
                         autoClosed++;
@@ -84,22 +86,25 @@ namespace HNL.VXT.AutoCAD
                 if (accepted.Count == 0)
                     return false;
 
+                VxtSelectedBoundaryTopology.Arrange(accepted, acceptedIds, acceptedLayers,
+                    out var outerBoundaries, out var outerIds, out var holeGroups);
                 var session = VxtSession.Current;
                 session.Boundaries.Clear();
-                session.Boundaries.AddRange(accepted);
+                session.Boundaries.AddRange(outerBoundaries);
                 session.BoundaryIds.Clear();
-                session.BoundaryIds.AddRange(acceptedIds);
+                session.BoundaryIds.AddRange(outerIds);
                 session.LayInExistingHatches.Clear();
                 session.ViewModel?.LayIn?.SetPolylineSourceSelected();
                 session.Regions.Clear();
                 session.BoundaryRegionGroups.Clear();
                 session.BoundaryHoleGroups.Clear();
+                session.BoundaryHoleGroups.AddRange(holeGroups);
                 session.BoundaryFurringFromFarEdges.Clear();
                 session.GlobalFurringFromFarEdge = false;
 
                 var skipped = skippedOpen + skippedZ + skippedUnsupported;
                 session.ViewModel?.SetBoundaryStatus(
-                    "✓ Đã nhận " + accepted.Count + " biên từ tập chọn sẵn" +
+                    "✓ Đã nhận " + outerBoundaries.Count + " mảng, " + holeGroups.Sum(g => g.Count) + " lỗ từ tập chọn sẵn" +
                     (autoClosed > 0 ? " • Tự khép " + autoClosed : string.Empty) +
                     (tinyZNormalized > 0 ? " • Chuẩn Z≈0 " + tinyZNormalized : string.Empty) +
                     (skipped > 0 ? " • Bỏ qua " + skipped : string.Empty),
@@ -116,7 +121,8 @@ namespace HNL.VXT.AutoCAD
             if (writeMessage)
             {
                 ed.WriteMessage(
-                    "\nHNL Tool - HCF: Đã dùng " + accepted.Count + " biên trần từ tập chọn sẵn");
+                    "\nHNL Tool - HCF: Đã dùng " + outerBoundaries.Count + " mảng trần và " +
+                    holeGroups.Sum(g => g.Count) + " lỗ từ tập chọn sẵn");
                 if (autoClosed > 0)
                     ed.WriteMessage("; tự khép " + autoClosed + " biên, khe lớn nhất " +
                         maxAutoCloseGap.ToString("0.###") + " mm");
