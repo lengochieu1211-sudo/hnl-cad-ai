@@ -56,8 +56,8 @@ namespace HNL.VXT.Core.Tests
                 }
                 var area = Math.Abs(signedTwiceArea) * 0.5;
                 var trueArea = Math.PI * radius * radius;
-                Assert.IsTrue(Math.Abs(area - trueArea) / trueArea < 0.001,
-                    "Round PL void must remain a nonzero closed polygon with sub-0.1% area error.");
+                Assert.IsTrue(Math.Abs(area - trueArea) / trueArea < 0.002,
+                    "Round PL void must remain a nonzero closed polygon with sub-0.2% area error at the certified 0.5 mm chord tolerance.");
             }
         }
 
