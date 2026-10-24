@@ -141,7 +141,7 @@ $topology = Source 'src/HNL.VXT.AutoCAD/VxtSelectedBoundaryTopology.cs'
 if (-not $topology.Contains('internal static void Arrange(') -or
     -not $topology.Contains('depths[i] % 2') -or
     -not $topology.Contains('ContainsWholeLoop(source[i], source[j])') -or
-    -not $topology.Contains('if (!Contains(outer, a) || !Contains(outer, middle))') -or
+    -not (Source 'src/HNL.VXT.Core/Geometry/VxtClosedLoopContainment.cs').Contains('if (!ContainsPoint(outer, a) || !ContainsPoint(outer, middle))') -or
     -not $topology.Contains('VxtClosedLoopContainment.ContainsWholeLoop(inner, outer)') -or
     -not (Source 'src/HNL.VXT.Core/Geometry/VxtClosedLoopContainment.cs').Contains('if (SegmentsIntersect(a, b, c, d))') -or
     -not (Source 'tests/HNL.VXT.Core.Tests/VxtClosedLoopContainmentTests.cs').Contains('ThinConcaveNotch_RejectsCrossingEvenWhenCornersAndMidpointsAppearInside') -or
