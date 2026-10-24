@@ -272,7 +272,7 @@ namespace HNL.VXT.AutoCAD
                 }
             }
             var radians = NormalizeAngle(angle) * Math.PI / 180.0;
-            var extents = new List<Point2>(all);
+            var localExtents = all.Select(p => Transform2.ToLocal(p, radians)).ToList();
             foreach (var id in session.ManualMainIds.Concat(session.ManualFurringIds)
                          .Concat(session.ManualHangerIds))
             {
@@ -281,12 +281,18 @@ namespace HNL.VXT.AutoCAD
                 try
                 {
                     var ex = entity.GeometricExtents;
-                    extents.Add(new Point2(ex.MinPoint.X, ex.MinPoint.Y));
-                    extents.Add(new Point2(ex.MaxPoint.X, ex.MaxPoint.Y));
+                    // Cover all four world AABB corners when the DIM axis is rotated.
+                    // Keeping a conservative outer domain prevents labels from landing
+                    // inside a rotated/stretched existing XC/XP block.
+                    var localBox = Transform2.ToLocalBounds(
+                        new Box2(ex.MinPoint.X, ex.MinPoint.Y, ex.MaxPoint.X, ex.MaxPoint.Y),
+                        radians);
+                    localExtents.Add(new Point2(localBox.MinX, localBox.MinY));
+                    localExtents.Add(new Point2(localBox.MaxX, localBox.MaxY));
                 }
                 catch { }
             }
-            var domain = Box2.FromPoints(extents.Select(p => Transform2.ToLocal(p, radians)));
+            var domain = Box2.FromPoints(localExtents);
             var stack = new Dictionary<string, int>(StringComparer.Ordinal);
             if (settings.DimMain)
                 AddVerticalChain(dimensions,
