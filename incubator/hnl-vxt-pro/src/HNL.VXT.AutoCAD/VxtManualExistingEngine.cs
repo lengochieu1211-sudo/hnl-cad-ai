@@ -370,7 +370,12 @@ namespace HNL.VXT.AutoCAD
                 foreach (ObjectId memberId in definition)
                 {
                     var member = tr.GetObject(memberId, OpenMode.ForRead, false) as Entity;
-                    if (member == null ||
+                    // Anonymous dynamic BlockRecords retain many alternative
+                    // visibility states as DXF 60 (invisible) entities. Only
+                    // the actually visible AP_TC_TRUC centerlines represent
+                    // installed members; hidden variants caused 101 phantom
+                    // DIM axes in block(2).dxf (*U148 and *U156).
+                    if (member == null || !member.Visible ||
                         !string.Equals(member.Layer, "AP_TC_TRUC", StringComparison.OrdinalIgnoreCase))
                         continue;
                     var curve = member as Curve;

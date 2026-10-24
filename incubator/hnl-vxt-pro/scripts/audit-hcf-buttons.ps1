@@ -126,6 +126,7 @@ if (-not $boundarySampler.Contains('vertexCount == 2') -or
 # AP_TC_TRUC centerlines, avoiding repeated cloned axis entities.
 $manualDimSource = Source 'src/HNL.VXT.AutoCAD/VxtManualExistingEngine.cs'
 if (-not $manualDimSource.Contains('ReadBlockCenterlines(block, tr)') -or
+    -not $manualDimSource.Contains('!member.Visible ||') -or
     -not $manualDimSource.Contains('string.Equals(member.Layer, "AP_TC_TRUC"') -or
     -not $manualDimSource.Contains('start.TransformBy(transform)') -or
     -not $manualDimSource.Contains('p.DistanceTo(center) <= 0.25') -or
