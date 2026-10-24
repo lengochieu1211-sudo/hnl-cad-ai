@@ -461,7 +461,7 @@ namespace HNL.VXT.UI.ViewModels
 
         private void RequestPreview()
         {
-            if (!HasBoundary) return;
+            if (!HasBoundary && !VxtWorkflowEligibility.IsManualDimensionOnlyStart(_settings)) return;
             if (SelectedCeilingTabIndex == 0 && LayIn.HasExistingHatchSource)
             {
                 SetPreviewError("Hatch nguồn chỉ dùng Trần nổi. Chọn Polyline trước khi xem trước Trần chìm.");

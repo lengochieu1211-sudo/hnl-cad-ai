@@ -26,7 +26,22 @@ namespace HNL.VXT.Core.Tests
 
             Assert.IsTrue(VxtWorkflowEligibility.HasAnyTask(settings));
             Assert.IsTrue(VxtWorkflowEligibility.CanStartCreate(true, settings));
-            Assert.IsFalse(VxtWorkflowEligibility.CanStartCreate(false, settings));
+            Assert.IsTrue(VxtWorkflowEligibility.IsManualDimensionOnlyStart(settings));
+            Assert.IsTrue(VxtWorkflowEligibility.CanStartCreate(false, settings));
+        }
+
+        [TestMethod]
+        public void NoBoundaryDimensionOnlyRequiresTargetsAndNoNewMemberTasks()
+        {
+            var s = EmptySettings();
+            s.AutoDimension = true;
+            Assert.IsFalse(VxtWorkflowEligibility.CanStartCreate(false, s));
+            s.DimFurring = true;
+            Assert.IsTrue(VxtWorkflowEligibility.IsManualDimensionOnlyStart(s));
+            Assert.IsTrue(VxtWorkflowEligibility.CanStartCreate(false, s));
+            s.DrawMain = true;
+            Assert.IsFalse(VxtWorkflowEligibility.IsManualDimensionOnlyStart(s));
+            Assert.IsFalse(VxtWorkflowEligibility.CanStartCreate(false, s));
         }
 
         [TestMethod]

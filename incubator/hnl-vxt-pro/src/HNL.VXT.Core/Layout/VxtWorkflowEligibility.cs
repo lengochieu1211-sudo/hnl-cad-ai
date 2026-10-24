@@ -26,12 +26,19 @@ namespace HNL.VXT.Core.Layout
                    !settings.AutoDimension;
         }
 
+        public static bool IsManualDimensionOnlyStart(VxtSettings settings)
+        {
+            return settings != null && !settings.DrawMain && !settings.DrawFurring &&
+                   !settings.DrawHangers && settings.AutoDimension &&
+                   (settings.DimMain || settings.DimFurring || settings.DimHanger);
+        }
+
         public static bool CanStartCreate(bool hasBoundary, VxtSettings settings)
         {
             if (settings == null || !HasAnyTask(settings)) return false;
             string error;
             if (!settings.IsValid(out error)) return false;
-            return hasBoundary || IsManualHangerOnlyStart(settings);
+            return hasBoundary || IsManualHangerOnlyStart(settings) || IsManualDimensionOnlyStart(settings);
         }
     }
 }

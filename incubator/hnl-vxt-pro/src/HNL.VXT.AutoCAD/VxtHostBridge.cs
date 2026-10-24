@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows.Threading;
 using Autodesk.AutoCAD.ApplicationServices.Core;
 using Autodesk.AutoCAD.DatabaseServices;
+using HNL.VXT.Core.Layout;
 using HNL.VXT.Core.Models;
 using HNL.VXT.Core.Preview;
 using HNL.VXT.UI.Hosting;
@@ -141,6 +142,13 @@ namespace HNL.VXT.AutoCAD
                 case DimensionTarget.Furring: Send("HNLVXTDIMFURRING "); break;
                 case DimensionTarget.Hanger: Send("HNLVXTDIMHANGER "); break;
             }
+        }
+
+        private static bool HasManualDimensionSources(VxtSession session)
+        {
+            return VxtWorkflowEligibility.IsManualDimensionOnlyStart(session.Settings) &&
+                   session.ManualMainIds.Length + session.ManualFurringIds.Length +
+                   session.ManualHangerIds.Length > 0;
         }
 
         public void RequestPreview(VxtSettings settings)
@@ -347,7 +355,7 @@ namespace HNL.VXT.AutoCAD
                 var pending = _pendingPreviewSettings.Clone();
                 CancelPendingPreview();
                 session.Settings = pending;
-                Send(session.HasBoundary ? "HNLVXTPREVIEW " : "HNLVXTCLEARPREVIEW ");
+                Send(session.HasBoundary || HasManualDimensionSources(session) ? "HNLVXTPREVIEW " : "HNLVXTCLEARPREVIEW ");
                 Write("\nHNL Tool - HCF: Preview vừa có thay đổi chưa kịp vẽ. HNL Tool đã cập nhật Preview trước; hãy kiểm tra rồi bấm Tạo lại để bảo đảm WYSIWYG.");
                 return;
             }
@@ -398,7 +406,7 @@ namespace HNL.VXT.AutoCAD
             CancelPendingPreview();
             var session = VxtSession.Current;
             session.Settings = settings.Clone();
-            Send(session.HasBoundary ? "HNLVXTPREVIEW " : "HNLVXTCLEARPREVIEW ");
+            Send(session.HasBoundary || HasManualDimensionSources(session) ? "HNLVXTPREVIEW " : "HNLVXTCLEARPREVIEW ");
         }
 
         private void LayInPreviewTimer_Tick(object sender, EventArgs e)

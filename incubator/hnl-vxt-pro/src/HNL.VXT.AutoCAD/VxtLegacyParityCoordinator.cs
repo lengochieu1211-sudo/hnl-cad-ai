@@ -33,9 +33,21 @@ namespace HNL.VXT.AutoCAD
                 return;
             }
 
+            var noBoundaryDimOnly = !session.HasBoundary &&
+                VxtWorkflowEligibility.IsManualDimensionOnlyStart(settings);
+            if (noBoundaryDimOnly &&
+                session.ManualMainIds.Length + session.ManualFurringIds.Length +
+                session.ManualHangerIds.Length > 0 &&
+                !string.IsNullOrEmpty(VxtTransientPreview.Instance.LastManualDimensionFingerprint))
+            {
+                // Second click creates only after the same no-boundary DIM geometry was Previewed.
+                VxtCreateEngine.Execute(allowConstraintOverride);
+                return;
+            }
+
             if (settings.MainDirection == MainDirectionMode.Auto &&
                 (settings.DrawMain || settings.DrawFurring || settings.AutoDimension) &&
-                !settings.AutoShadowlineConfigured)
+                !noBoundaryDimOnly && !settings.AutoShadowlineConfigured)
             {
                 // Normally Shadowline is configured beforehand with the single "Thiết lập"
                 // button beside Hướng bố trí. Ask only when the user forgot to configure it.
@@ -101,6 +113,21 @@ namespace HNL.VXT.AutoCAD
                 session.ManualFurringIds.Length == 0 && session.ManualHangerIds.Length == 0)
             {
                 ed.WriteMessage("\nHNL Tool - HCF: Chưa chọn XC, XP hoặc Ty có sẵn để ghi DIM. Không tạo đối tượng nào.");
+                return;
+            }
+
+            if (noBoundaryDimOnly)
+            {
+                // First click selects real members and previews. The second click commits.
+                VxtTransientPreview.Instance.Refresh();
+                if (VxtTransientPreview.Instance.LastRenderedDimensionCount == 0)
+                {
+                    ed.WriteMessage("\nHNL Tool - HCF: Không đủ ít nhất hai tim hợp lệ để DIM. Không tạo.");
+                    return;
+                }
+                ed.WriteMessage("\nHNL Tool - HCF: Đã xem trước " +
+                    VxtTransientPreview.Instance.LastRenderedDimensionCount +
+                    " DIM từ XC/XP/Ty có sẵn. Kiểm tra rồi bấm Tạo lần nữa.");
                 return;
             }
 

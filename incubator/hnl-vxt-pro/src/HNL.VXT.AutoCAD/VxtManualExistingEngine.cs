@@ -40,7 +40,8 @@ namespace HNL.VXT.AutoCAD
             if (!settings.DrawMain && settings.DrawHangers && session.ManualMainIds.Length > 0)
                 counts.Hangers += AppendManualHangers(db, tr, modelSpace, blockTable, layerTable, session, settings);
 
-            if (settings.AutoDimension && session.HasBoundary)
+            if (settings.AutoDimension && (session.HasBoundary ||
+                VxtWorkflowEligibility.IsManualDimensionOnlyStart(settings)))
                 counts.Dimensions += AppendManualDimensions(
                     db, tr, modelSpace, layerTable, dimStyleTable, session, settings);
 
@@ -152,6 +153,24 @@ namespace HNL.VXT.AutoCAD
             var dimLayerId = layerTable[settings.DimensionLayer];
             var count = 0;
 
+            if (!session.HasBoundary)
+            {
+                // Boundary-free tim-to-tim plan: no fabricated outer/inner ceiling edge DIM.
+                foreach (var item in BuildBoundaryFreeDimensions(session, settings, tr))
+                {
+                    var dim = new RotatedDimension(
+                        item.RotationRadians, ToPoint3d(item.ExtensionPoint1),
+                        ToPoint3d(item.ExtensionPoint2), ToPoint3d(item.DimensionLinePoint),
+                        string.Empty, dimStyleId);
+                    dim.SetDatabaseDefaults(db);
+                    VxtCadResources.ApplyByLayer(dim, dimLayerId);
+                    modelSpace.AppendEntity(dim);
+                    tr.AddNewlyCreatedDBObject(dim, true);
+                    count++;
+                }
+                return count;
+            }
+
             for (var boundaryIndex = 0; boundaryIndex < session.Boundaries.Count; boundaryIndex++)
             {
                 var boundary = session.Boundaries[boundaryIndex];
@@ -215,6 +234,107 @@ namespace HNL.VXT.AutoCAD
                 }
             }
             return count;
+        }
+
+        // Only the boundary-free workflow uses this planner. Existing bounded DIM is unchanged.
+        // Both transient Preview and committed Create consume this same set of dimensions.
+        internal static List<PreviewDimension> BuildBoundaryFreeDimensions(
+            VxtSession session, VxtSettings settings, Transaction tr)
+        {
+            var dimensions = new List<PreviewDimension>();
+            if (session.HasBoundary || !VxtWorkflowEligibility.IsManualDimensionOnlyStart(settings))
+                return dimensions;
+
+            var main = settings.DimMain ? ReadCenters(session.ManualMainIds, tr, settings) : new List<Point2>();
+            var xp = settings.DimFurring ? ReadCenters(session.ManualFurringIds, tr, settings) : new List<Point2>();
+            var ty = settings.DimHanger ? ReadCenters(session.ManualHangerIds, tr) : new List<Point2>();
+            var all = main.Concat(xp).Concat(ty).ToList();
+            if (all.Count < 2) return dimensions;
+
+            var angle = settings.MainDirection == MainDirectionMode.Vertical ? 90.0 : 0.0;
+            if (settings.MainDirection == MainDirectionMode.TwoPoints ||
+                settings.MainDirection == MainDirectionMode.PolylinePath ||
+                settings.MainDirection == MainDirectionMode.RectangleRegions)
+                angle = settings.DirectionDegrees;
+            else if (settings.MainDirection == MainDirectionMode.Auto)
+            {
+                // Prefer the transformed center axis of a real XC/XP source for rotated drawings.
+                var ids = session.ManualMainIds.Length > 0
+                    ? session.ManualMainIds : session.ManualFurringIds;
+                if (ids.Length > 0)
+                {
+                    var entity = TryGetEntity(ids[0], tr);
+                    var axis = entity == null ? null :
+                        VxtExistingMemberAxisResolver.Resolve(entity, tr, settings);
+                    if (axis != null)
+                        angle = axis.AngleRadians * 180.0 / Math.PI +
+                                (session.ManualMainIds.Length > 0 ? 0.0 : -90.0);
+                }
+            }
+            var radians = NormalizeAngle(angle) * Math.PI / 180.0;
+            var extents = new List<Point2>(all);
+            foreach (var id in session.ManualMainIds.Concat(session.ManualFurringIds)
+                         .Concat(session.ManualHangerIds))
+            {
+                var entity = TryGetEntity(id, tr);
+                if (entity == null) continue;
+                try
+                {
+                    var ex = entity.GeometricExtents;
+                    extents.Add(new Point2(ex.MinPoint.X, ex.MinPoint.Y));
+                    extents.Add(new Point2(ex.MaxPoint.X, ex.MaxPoint.Y));
+                }
+                catch { }
+            }
+            var domain = Box2.FromPoints(extents.Select(p => Transform2.ToLocal(p, radians)));
+            var stack = new Dictionary<string, int>(StringComparer.Ordinal);
+            if (settings.DimMain)
+                AddVerticalChain(dimensions,
+                    main.Select(p => Transform2.ToLocal(p, radians).Y),
+                    settings.MainDimPosition, DimensionTarget.Main, radians, domain,
+                    settings.DimensionDistance, settings.DimensionSpacing, stack);
+            if (settings.DimFurring)
+                AddHorizontalChain(dimensions,
+                    xp.Select(p => Transform2.ToLocal(p, radians).X),
+                    settings.FurringDimPosition, DimensionTarget.Furring, radians, domain,
+                    settings.DimensionDistance, settings.DimensionSpacing, stack);
+            if (settings.DimHanger)
+            {
+                var patterns = new HashSet<string>(StringComparer.Ordinal);
+                var localTy = ty.Select(p => Transform2.ToLocal(p, radians)).ToList();
+                foreach (var row in GroupHangerRows(localTy))
+                {
+                    var xs = row.Value.Select(p => p.X).Distinct(new DoubleToleranceComparer())
+                        .OrderBy(x => x).ToList();
+                    var key = string.Join("|", xs.Select(x =>
+                        Math.Round(x, 2).ToString("0.00", CultureInfo.InvariantCulture)));
+                    if (!patterns.Add(key)) continue;
+                    AddHorizontalChain(dimensions, xs, settings.HangerDimPosition,
+                        DimensionTarget.Hanger, radians, domain,
+                        settings.DimensionDistance, settings.DimensionSpacing, stack, row.Key);
+                }
+            }
+            return dimensions;
+        }
+
+        internal static string DimensionFingerprint(IEnumerable<PreviewDimension> dimensions)
+        {
+            var values = new List<string>();
+            foreach (var d in dimensions)
+            {
+                values.Add(string.Join(",", new[]
+                {
+                    d.ExtensionPoint1.X, d.ExtensionPoint1.Y,
+                    d.ExtensionPoint2.X, d.ExtensionPoint2.Y,
+                    d.DimensionLinePoint.X, d.DimensionLinePoint.Y,
+                    d.RotationRadians, (double)d.Target
+                }.Select(v => v.ToString("R", CultureInfo.InvariantCulture))));
+            }
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                var bytes = System.Text.Encoding.UTF8.GetBytes(string.Join("|", values));
+                return Convert.ToBase64String(sha.ComputeHash(bytes));
+            }
         }
 
         private sealed class ManualDomain

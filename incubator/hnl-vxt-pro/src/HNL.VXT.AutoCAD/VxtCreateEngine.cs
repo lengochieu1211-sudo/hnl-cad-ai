@@ -22,7 +22,12 @@ namespace HNL.VXT.AutoCAD
             var settings = session.ViewModel?.Snapshot() ?? session.Settings.Clone();
             var manualHangerOnly = !settings.DrawMain && !settings.DrawFurring && settings.DrawHangers &&
                                    !settings.AutoDimension && session.ManualMainIds.Length > 0;
-            if (!session.HasBoundary && !manualHangerOnly)
+            var manualDimOnly = !session.HasBoundary &&
+                VxtWorkflowEligibility.IsManualDimensionOnlyStart(settings) &&
+                session.ManualMainIds.Length + session.ManualFurringIds.Length +
+                session.ManualHangerIds.Length > 0;
+            var dimPreviewFingerprint = VxtTransientPreview.Instance.LastManualDimensionFingerprint;
+            if (!session.HasBoundary && !manualHangerOnly && !manualDimOnly)
             {
                 doc.Editor.WriteMessage("\nHNL Tool - HCF: Chưa chọn biên trần. Nếu chỉ rải Ty trên Xương chính có sẵn, hãy tắt XC/XP, bật Ty rồi Tạo.");
                 return;
@@ -31,6 +36,12 @@ namespace HNL.VXT.AutoCAD
             if (!settings.IsValid(out var error))
             {
                 doc.Editor.WriteMessage("\nHNL Tool - HCF: " + error);
+                return;
+            }
+
+            if (manualDimOnly && string.IsNullOrEmpty(dimPreviewFingerprint))
+            {
+                doc.Editor.WriteMessage("\nHNL Tool - HCF: DIM-only chưa có Preview hợp lệ. Bấm Tạo để Preview trước.");
                 return;
             }
 
@@ -54,6 +65,16 @@ namespace HNL.VXT.AutoCAD
                     else
                     {
                         plan = new VxtPreviewPlan();
+                    }
+
+                    if (manualDimOnly)
+                    {
+                        var sourceDims = VxtManualExistingEngine.BuildBoundaryFreeDimensions(session, settings, tr);
+                        if (sourceDims.Count == 0 ||
+                            !string.Equals(VxtManualExistingEngine.DimensionFingerprint(sourceDims),
+                                dimPreviewFingerprint, StringComparison.Ordinal))
+                            throw new InvalidOperationException(
+                                "DIM-only đã đổi hình học từ lúc Preview. Đã rollback; hãy xem trước lại.");
                     }
 
                     diagnosticPlan = plan;
@@ -302,7 +323,8 @@ namespace HNL.VXT.AutoCAD
                 throw new InvalidOperationException("Không tìm thấy Block Ty treo '" + settings.HangerBlockName + "'. Hãy chọn Block Ty trước khi tạo.");
 
             var needsPlanDimensions = settings.AutoDimension && plan.Dimensions.Count > 0;
-            var needsManualDimensions = settings.AutoDimension && session.HasBoundary &&
+            var needsManualDimensions = settings.AutoDimension && (session.HasBoundary ||
+                VxtWorkflowEligibility.IsManualDimensionOnlyStart(settings)) &&
                                         ((settings.DimMain && !settings.DrawMain && session.ManualMainIds.Length > 0) ||
                                          (settings.DimFurring && !settings.DrawFurring && session.ManualFurringIds.Length > 0) ||
                                          (settings.DimHanger && !settings.DrawHangers && session.ManualHangerIds.Length > 0));

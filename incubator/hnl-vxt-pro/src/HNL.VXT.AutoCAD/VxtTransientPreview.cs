@@ -56,6 +56,7 @@ namespace HNL.VXT.AutoCAD
         internal int LastExpectedDrawableCount { get; private set; }
         internal int LastActualDrawableCount { get; private set; }
         internal int LastRenderedDimensionCount { get; private set; }
+        internal string LastManualDimensionFingerprint { get; private set; }
 
         public void Refresh()
             => Refresh(writeConstraintSummary: true);
@@ -77,6 +78,7 @@ namespace HNL.VXT.AutoCAD
                 LastExpectedDrawableCount = 0;
                 LastActualDrawableCount = 0;
                 LastRenderedDimensionCount = 0;
+                LastManualDimensionFingerprint = null;
 
                 // AutoCAD may release erased transient graphics asynchronously. Do not destroy the
                 // managed/native wrapper immediately after EraseTransient reports success. A short
@@ -96,7 +98,11 @@ namespace HNL.VXT.AutoCAD
                 }
 
                 var session = VxtSession.Current;
-                if (!session.HasBoundary) return;
+                var manualDimOnly = !session.HasBoundary &&
+                    HNL.VXT.Core.Layout.VxtWorkflowEligibility.IsManualDimensionOnlyStart(session.Settings);
+                if (!session.HasBoundary && !manualDimOnly) return;
+                if (manualDimOnly && session.ManualMainIds.Length +
+                    session.ManualFurringIds.Length + session.ManualHangerIds.Length == 0) return;
 
                 var doc = Application.DocumentManager.MdiActiveDocument;
                 if (doc == null) return;
@@ -111,8 +117,22 @@ namespace HNL.VXT.AutoCAD
 
                     using (var tr = db.TransactionManager.StartTransaction())
                     {
-                        var context = VxtLayoutContextFactory.Build(session, tr);
-                        plan = VxtMultiBoundaryPlanBuilder.Build(session.Boundaries, settings, context);
+                        if (manualDimOnly)
+                        {
+                            plan = new VxtPreviewPlan();
+                            plan.Dimensions.AddRange(
+                                VxtManualExistingEngine.BuildBoundaryFreeDimensions(session, settings, tr));
+                            if (plan.Dimensions.Count == 0)
+                            {
+                                session.ViewModel?.SetPreviewError("Không đủ tim XC/XP/Ty hợp lệ để DIM.");
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            var context = VxtLayoutContextFactory.Build(session, tr);
+                            plan = VxtMultiBoundaryPlanBuilder.Build(session.Boundaries, settings, context);
+                        }
 
                         var layerTable = tr.GetObject(db.LayerTableId, OpenMode.ForRead) as LayerTable;
                         var linetypeTable = tr.GetObject(db.LinetypeTableId, OpenMode.ForRead) as LinetypeTable;
@@ -206,6 +226,9 @@ namespace HNL.VXT.AutoCAD
                           (renderDecision.RenderGuides ? renderDecision.GuideDrawableCount : 0);
                     LastActualDrawableCount = _drawables.Count;
                     LastRenderedDimensionCount = _drawables.Count(x => x is RotatedDimension);
+                    if (manualDimOnly && LastRenderedDimensionCount == plan.Dimensions.Count)
+                        LastManualDimensionFingerprint =
+                            VxtManualExistingEngine.DimensionFingerprint(plan.Dimensions);
 
                     session.ViewModel?.SetPreviewActualStats(metrics);
                     session.ViewModel?.SetConstraintDiagnostics(plan.Diagnostics);
@@ -264,6 +287,7 @@ namespace HNL.VXT.AutoCAD
                 LastExpectedDrawableCount = 0;
                 LastActualDrawableCount = 0;
                 LastRenderedDimensionCount = 0;
+                LastManualDimensionFingerprint = null;
             }
             finally
             {
