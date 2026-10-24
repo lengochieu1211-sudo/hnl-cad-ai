@@ -1,0 +1,689 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.Geometry;
+using HNL.VXT.Core.Geometry;
+using HNL.VXT.Core.Layout;
+using HNL.VXT.Core.Models;
+using HNL.VXT.Core.Preview;
+
+namespace HNL.VXT.AutoCAD
+{
+    /// <summary>
+    /// AutoCAD bridge for the V6.7.2 manual-source branch: existing XC can receive new Ty,
+    /// and existing XC/XP/Ty can feed automatic DIM when that system is not redrawn.
+    /// Geometry math remains deterministic and follows the same local-axis convention as
+    /// VxtPreviewPlanBuilder (main member is horizontal in local coordinates).
+    /// </summary>
+    internal static class VxtManualExistingEngine
+    {
+        internal sealed class Counts
+        {
+            public int Hangers;
+            public int Dimensions;
+        }
+
+        public static Counts Append(
+            Database db,
+            Transaction tr,
+            BlockTableRecord modelSpace,
+            BlockTable blockTable,
+            LayerTable layerTable,
+            DimStyleTable dimStyleTable,
+            VxtSession session,
+            VxtSettings settings)
+        {
+            var counts = new Counts();
+
+            if (!settings.DrawMain && settings.DrawHangers && session.ManualMainIds.Length > 0)
+                counts.Hangers += AppendManualHangers(db, tr, modelSpace, blockTable, layerTable, session, settings);
+
+            if (settings.AutoDimension && (session.HasBoundary ||
+                VxtWorkflowEligibility.IsManualDimensionOnlyStart(settings)))
+                counts.Dimensions += AppendManualDimensions(
+                    db, tr, modelSpace, layerTable, dimStyleTable, session, settings);
+
+            return counts;
+        }
+
+        private static int AppendManualHangers(
+            Database db,
+            Transaction tr,
+            BlockTableRecord modelSpace,
+            BlockTable blockTable,
+            LayerTable layerTable,
+            VxtSession session,
+            VxtSettings settings)
+        {
+            if (string.IsNullOrWhiteSpace(settings.HangerBlockName) || !blockTable.Has(settings.HangerBlockName))
+                throw new InvalidOperationException("Không tìm thấy Block Ty treo '" + settings.HangerBlockName + "'. Hãy chọn Block Ty trước khi tạo.");
+
+            var hangerBlockId = blockTable[settings.HangerBlockName];
+            var hangerLayerId = layerTable[settings.HangerLayer];
+            var obstacles = ReadBoxes(
+                session.GeneralEquipmentIds.Concat(session.MainEquipmentIds).Distinct(), tr);
+            var count = 0;
+
+            foreach (var id in session.ManualMainIds)
+            {
+                var entity = TryGetEntity(id, tr);
+                if (entity == null) continue;
+
+                var resolved = VxtExistingMemberAxisResolver.Resolve(entity, tr, settings);
+                if (resolved == null || resolved.Length <= 1e-8) continue;
+
+                var reverse = resolved.IsHorizontalLike
+                    ? session.ManualHangerReverseHorizontal
+                    : session.ManualHangerReverseVertical;
+                IReadOnlyList<Point2> points;
+                if (settings.OptimizationMode == VxtOptimizationMode.Legacy)
+                {
+                    // Exact V6.7.x behavior: bbox axis + world AABB avoidance.
+                    var legacyAxis = new ExistingMemberLayout.Axis(
+                        resolved.IsHorizontalLike, resolved.Start, resolved.End);
+                    points = ExistingMemberLayout.HangerPoints(legacyAxis, settings, reverse, obstacles);
+                }
+                else
+                {
+                    points = HangerPointsOnResolvedAxis(resolved, settings, reverse, obstacles);
+                }
+
+                foreach (var point in points)
+                {
+                    var br = new BlockReference(new Point3d(point.X, point.Y, 0.0), hangerBlockId)
+                    {
+                        Rotation = settings.OptimizationMode == VxtOptimizationMode.Legacy
+                            ? (resolved.IsHorizontalLike ? 0.0 : Math.PI * 0.5)
+                            : resolved.AngleRadians
+                    };
+                    br.SetDatabaseDefaults(db);
+                    VxtCadResources.ApplyByLayer(br, hangerLayerId);
+                    modelSpace.AppendEntity(br);
+                    tr.AddNewlyCreatedDBObject(br, true);
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        private static IReadOnlyList<Point2> HangerPointsOnResolvedAxis(
+            VxtExistingMemberAxisResolver.ResolvedAxis axis,
+            VxtSettings settings,
+            bool reverse,
+            IEnumerable<Box2> worldObstacles)
+        {
+            var radians = axis.AngleRadians;
+            var localStart = Transform2.ToLocal(axis.Start, radians);
+            var localEnd = Transform2.ToLocal(axis.End, radians);
+            var fixedY = (localStart.Y + localEnd.Y) * 0.5;
+            var minX = Math.Min(localStart.X, localEnd.X);
+            var maxX = Math.Max(localStart.X, localEnd.X);
+            var localAxis = new ExistingMemberLayout.Axis(
+                true,
+                new Point2(minX, fixedY),
+                new Point2(maxX, fixedY));
+            var localObstacles = (worldObstacles ?? Enumerable.Empty<Box2>())
+                .Select(box => ToLocalBox(box, radians))
+                .ToList();
+            var localPoints = ExistingMemberLayout.HangerPoints(
+                localAxis, settings, reverse, localObstacles);
+            return localPoints.Select(point => Transform2.ToWorld(point, radians)).ToArray();
+        }
+
+        private static int AppendManualDimensions(
+            Database db,
+            Transaction tr,
+            BlockTableRecord modelSpace,
+            LayerTable layerTable,
+            DimStyleTable dimStyleTable,
+            VxtSession session,
+            VxtSettings settings)
+        {
+            var needMain = settings.DimMain && !settings.DrawMain && session.ManualMainIds.Length > 0;
+            var needFurring = settings.DimFurring && !settings.DrawFurring && session.ManualFurringIds.Length > 0;
+            var needHanger = settings.DimHanger && !settings.DrawHangers && session.ManualHangerIds.Length > 0;
+            if (!needMain && !needFurring && !needHanger) return 0;
+
+            var mainCenters = needMain ? ReadCenters(session.ManualMainIds, tr, settings) : new List<Point2>();
+            var furringCenters = needFurring ? ReadCenters(session.ManualFurringIds, tr, settings) : new List<Point2>();
+            var hangerCenters = needHanger ? ReadCenters(session.ManualHangerIds, tr) : new List<Point2>();
+            var dimStyleId = VxtTransientPreview.ResolveDimStyle(settings.DimensionStyle, db, dimStyleTable);
+            var dimLayerId = layerTable[settings.DimensionLayer];
+            var count = 0;
+
+            if (!session.HasBoundary)
+            {
+                // Boundary-free tim-to-tim plan: no fabricated outer/inner ceiling edge DIM.
+                foreach (var item in BuildBoundaryFreeDimensions(session, settings, tr))
+                {
+                    var dim = new RotatedDimension(
+                        item.RotationRadians, ToPoint3d(item.ExtensionPoint1),
+                        ToPoint3d(item.ExtensionPoint2), ToPoint3d(item.DimensionLinePoint),
+                        string.Empty, dimStyleId);
+                    dim.SetDatabaseDefaults(db);
+                    VxtCadResources.ApplyByLayer(dim, dimLayerId);
+                    modelSpace.AppendEntity(dim);
+                    tr.AddNewlyCreatedDBObject(dim, true);
+                    count++;
+                }
+                return count;
+            }
+
+            for (var boundaryIndex = 0; boundaryIndex < session.Boundaries.Count; boundaryIndex++)
+            {
+                var boundary = session.Boundaries[boundaryIndex];
+                foreach (var domain in ResolveDomains(session, settings, boundary, boundaryIndex))
+                {
+                    var radians = domain.AngleDegrees * Math.PI / 180.0;
+                    var localBox = domain.LocalBounds;
+                    var localMain = FilterLocal(mainCenters, localBox, radians);
+                    var localFurring = FilterLocal(furringCenters, localBox, radians);
+                    var localHangers = FilterLocal(hangerCenters, localBox, radians);
+                    var dimensions = new List<PreviewDimension>();
+                    var stack = new Dictionary<string, int>(StringComparer.Ordinal);
+
+                    if (needMain)
+                    {
+                        var ys = localMain.Select(p => p.Y).ToList();
+                        AddVerticalChain(dimensions, WithBounds(ys, localBox.MinY, localBox.MaxY),
+                            settings.MainDimPosition, DimensionTarget.Main, radians, localBox,
+                            settings.DimensionDistance, settings.DimensionSpacing, stack);
+                    }
+
+                    if (needFurring)
+                    {
+                        var xs = localFurring.Select(p => p.X).ToList();
+                        AddHorizontalChain(dimensions, WithBounds(xs, localBox.MinX, localBox.MaxX),
+                            settings.FurringDimPosition, DimensionTarget.Furring, radians, localBox,
+                            settings.DimensionDistance, settings.DimensionSpacing, stack);
+                    }
+
+                    if (needHanger)
+                    {
+                        var rows = GroupHangerRows(localHangers);
+                        var uniquePatterns = new HashSet<string>(StringComparer.Ordinal);
+                        foreach (var row in rows)
+                        {
+                            var xs = row.Value.Select(p => p.X).Distinct(new DoubleToleranceComparer()).OrderBy(x => x).ToList();
+                            if (xs.Count == 0) continue;
+                            var key = string.Join("|", xs.Select(v => Math.Round(v, 2).ToString("0.00", CultureInfo.InvariantCulture)));
+                            if (!uniquePatterns.Add(key)) continue;
+                            AddHorizontalChain(dimensions, WithBounds(xs, localBox.MinX, localBox.MaxX),
+                                settings.HangerDimPosition, DimensionTarget.Hanger, radians, localBox,
+                                settings.DimensionDistance, settings.DimensionSpacing, stack, row.Key);
+                        }
+                    }
+
+                    foreach (var item in dimensions)
+                    {
+                        var dim = new RotatedDimension(
+                            item.RotationRadians,
+                            ToPoint3d(item.ExtensionPoint1),
+                            ToPoint3d(item.ExtensionPoint2),
+                            ToPoint3d(item.DimensionLinePoint),
+                            string.Empty,
+                            dimStyleId);
+                        dim.SetDatabaseDefaults(db);
+                        VxtCadResources.ApplyByLayer(dim, dimLayerId);
+                        modelSpace.AppendEntity(dim);
+                        tr.AddNewlyCreatedDBObject(dim, true);
+                        count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        // Only the boundary-free workflow uses this planner. Existing bounded DIM is unchanged.
+        // Both transient Preview and committed Create consume this same set of dimensions.
+        internal static List<PreviewDimension> BuildBoundaryFreeDimensions(
+            VxtSession session, VxtSettings settings, Transaction tr)
+        {
+            var dimensions = new List<PreviewDimension>();
+            if (session.HasBoundary || !VxtWorkflowEligibility.IsManualDimensionOnlyStart(settings))
+                return dimensions;
+
+            var main = settings.DimMain ? ReadCenters(session.ManualMainIds, tr, settings) : new List<Point2>();
+            var xp = settings.DimFurring ? ReadCenters(session.ManualFurringIds, tr, settings) : new List<Point2>();
+            var ty = settings.DimHanger ? ReadCenters(session.ManualHangerIds, tr) : new List<Point2>();
+            var all = main.Concat(xp).Concat(ty).ToList();
+            if (all.Count < 2) return dimensions;
+
+            var angle = settings.MainDirection == MainDirectionMode.Vertical ? 90.0 : 0.0;
+            if (settings.MainDirection == MainDirectionMode.TwoPoints ||
+                settings.MainDirection == MainDirectionMode.PolylinePath ||
+                settings.MainDirection == MainDirectionMode.RectangleRegions)
+                angle = settings.DirectionDegrees;
+            else if (settings.MainDirection == MainDirectionMode.Auto)
+            {
+                // Prefer the transformed center axis of a real XC/XP source for rotated drawings.
+                var ids = session.ManualMainIds.Length > 0
+                    ? session.ManualMainIds : session.ManualFurringIds;
+                if (ids.Length > 0)
+                {
+                    var entity = TryGetEntity(ids[0], tr);
+                    var axis = entity == null ? null :
+                        VxtExistingMemberAxisResolver.Resolve(entity, tr, settings);
+                    if (axis != null)
+                        angle = axis.AngleRadians * 180.0 / Math.PI +
+                                (session.ManualMainIds.Length > 0 ? 0.0 : -90.0);
+                }
+            }
+            var radians = NormalizeAngle(angle) * Math.PI / 180.0;
+            var localExtents = all.Select(p => Transform2.ToLocal(p, radians)).ToList();
+            foreach (var id in session.ManualMainIds.Concat(session.ManualFurringIds)
+                         .Concat(session.ManualHangerIds))
+            {
+                var entity = TryGetEntity(id, tr);
+                if (entity == null) continue;
+                try
+                {
+                    var ex = entity.GeometricExtents;
+                    // Cover all four world AABB corners when the DIM axis is rotated.
+                    // Keeping a conservative outer domain prevents labels from landing
+                    // inside a rotated/stretched existing XC/XP block.
+                    var localBox = Transform2.ToLocalBounds(
+                        new Box2(ex.MinPoint.X, ex.MinPoint.Y, ex.MaxPoint.X, ex.MaxPoint.Y),
+                        radians);
+                    localExtents.Add(new Point2(localBox.MinX, localBox.MinY));
+                    localExtents.Add(new Point2(localBox.MaxX, localBox.MaxY));
+                }
+                catch { }
+            }
+            var domain = Box2.FromPoints(localExtents);
+            var stack = new Dictionary<string, int>(StringComparer.Ordinal);
+            if (settings.DimMain)
+                AddVerticalChain(dimensions,
+                    main.Select(p => Transform2.ToLocal(p, radians).Y),
+                    settings.MainDimPosition, DimensionTarget.Main, radians, domain,
+                    settings.DimensionDistance, settings.DimensionSpacing, stack);
+            if (settings.DimFurring)
+                AddHorizontalChain(dimensions,
+                    xp.Select(p => Transform2.ToLocal(p, radians).X),
+                    settings.FurringDimPosition, DimensionTarget.Furring, radians, domain,
+                    settings.DimensionDistance, settings.DimensionSpacing, stack);
+            if (settings.DimHanger)
+            {
+                var patterns = new HashSet<string>(StringComparer.Ordinal);
+                var localTy = ty.Select(p => Transform2.ToLocal(p, radians)).ToList();
+                foreach (var row in GroupHangerRows(localTy))
+                {
+                    var xs = row.Value.Select(p => p.X).Distinct(new DoubleToleranceComparer())
+                        .OrderBy(x => x).ToList();
+                    var key = string.Join("|", xs.Select(x =>
+                        Math.Round(x, 2).ToString("0.00", CultureInfo.InvariantCulture)));
+                    if (!patterns.Add(key)) continue;
+                    AddHorizontalChain(dimensions, xs, settings.HangerDimPosition,
+                        DimensionTarget.Hanger, radians, domain,
+                        settings.DimensionDistance, settings.DimensionSpacing, stack, row.Key);
+                }
+            }
+            return dimensions;
+        }
+
+        internal static string DimensionFingerprint(IEnumerable<PreviewDimension> dimensions)
+        {
+            var values = new List<string>();
+            foreach (var d in dimensions)
+            {
+                values.Add(string.Join(",", new[]
+                {
+                    d.ExtensionPoint1.X, d.ExtensionPoint1.Y,
+                    d.ExtensionPoint2.X, d.ExtensionPoint2.Y,
+                    d.DimensionLinePoint.X, d.DimensionLinePoint.Y,
+                    d.RotationRadians, (double)d.Target
+                }.Select(v => v.ToString("R", CultureInfo.InvariantCulture))));
+            }
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                var bytes = System.Text.Encoding.UTF8.GetBytes(string.Join("|", values));
+                return Convert.ToBase64String(sha.ComputeHash(bytes));
+            }
+        }
+
+        private sealed class ManualDomain
+        {
+            public ManualDomain(Box2 localBounds, double angleDegrees)
+            {
+                LocalBounds = localBounds;
+                AngleDegrees = angleDegrees;
+            }
+            public Box2 LocalBounds { get; }
+            public double AngleDegrees { get; }
+        }
+
+        private static IEnumerable<ManualDomain> ResolveDomains(
+            VxtSession session,
+            VxtSettings settings,
+            Boundary2 boundary,
+            int boundaryIndex)
+        {
+            if (settings.MainDirection == MainDirectionMode.RectangleRegions &&
+                boundaryIndex < session.BoundaryRegionGroups.Count &&
+                session.BoundaryRegionGroups[boundaryIndex].Count > 0)
+            {
+                foreach (var region in session.BoundaryRegionGroups[boundaryIndex])
+                {
+                    var radians = region.MainAngleDegrees * Math.PI / 180.0;
+                    yield return new ManualDomain(ToLocalBox(region.WorldBounds, radians), region.MainAngleDegrees);
+                }
+                yield break;
+            }
+
+            var points = boundary.Vertices;
+            var worldBox = Box2.FromPoints(points);
+            var angle = ResolveMainAngle(settings, worldBox, boundary);
+            var angleRadians = angle * Math.PI / 180.0;
+            var localBounds = Box2.FromPoints(points.Select(point => Transform2.ToLocal(point, angleRadians)));
+            yield return new ManualDomain(localBounds, angle);
+        }
+
+        private static double ResolveMainAngle(VxtSettings settings, Box2 worldBox, Boundary2 boundary)
+        {
+            switch (settings.MainDirection)
+            {
+                case MainDirectionMode.Vertical: return 90.0;
+                case MainDirectionMode.TwoPoints: return NormalizeAngle(settings.DirectionDegrees);
+                case MainDirectionMode.Auto:
+                    var longHorizontal = worldBox.Width >= worldBox.Height;
+                    if (!settings.AutoShadowline) longHorizontal = !longHorizontal;
+                    var legacyAngle = longHorizontal ? 0.0 : 90.0;
+                    if (settings.OptimizationMode != VxtOptimizationMode.Legacy && boundary != null)
+                        return NormalizeAngle(VxtProAutoDirectionPlanBuilder.ResolvePreferredAutoAngle(
+                            boundary, settings.AutoShadowline, legacyAngle));
+                    return legacyAngle;
+                default: return 0.0;
+            }
+        }
+
+        private static Box2 ToLocalBox(Box2 box, double radians)
+        {
+            var corners = new[]
+            {
+                new Point2(box.MinX, box.MinY), new Point2(box.MinX, box.MaxY),
+                new Point2(box.MaxX, box.MinY), new Point2(box.MaxX, box.MaxY)
+            };
+            return Box2.FromPoints(corners.Select(p => Transform2.ToLocal(p, radians)));
+        }
+
+        private static List<Point2> FilterLocal(IEnumerable<Point2> worldPoints, Box2 localBox, double radians)
+        {
+            return worldPoints
+                .Select(p => Transform2.ToLocal(p, radians))
+                .Where(p => p.X >= localBox.MinX - 5.0 && p.X <= localBox.MaxX + 5.0 &&
+                            p.Y >= localBox.MinY - 5.0 && p.Y <= localBox.MaxY + 5.0)
+                .ToList();
+        }
+
+        private static List<KeyValuePair<double, List<Point2>>> GroupHangerRows(IEnumerable<Point2> points)
+        {
+            var rows = new List<KeyValuePair<double, List<Point2>>>();
+            foreach (var point in points)
+            {
+                var index = rows.FindIndex(x => Math.Abs(x.Key - point.Y) <= 0.001);
+                if (index < 0)
+                {
+                    rows.Add(new KeyValuePair<double, List<Point2>>(point.Y, new List<Point2> { point }));
+                }
+                else
+                {
+                    rows[index].Value.Add(point);
+                }
+            }
+            return rows;
+        }
+
+        private static List<Point2> ReadCenters(IEnumerable<ObjectId> ids, Transaction tr, VxtSettings settings = null)
+        {
+            var result = new List<Point2>();
+            foreach (var id in ids)
+            {
+                var entity = TryGetEntity(id, tr);
+                if (entity == null) continue;
+
+                // Only Pro XC/XP DIM BlockReferences use the transformed member axis.
+                // Legacy XC/XP, non-block source geometry and Ty keep their prior behavior.
+                if (entity is BlockReference block && settings != null &&
+                    settings.OptimizationMode != VxtOptimizationMode.Legacy)
+                {
+                    // The supplied CAD dynamic XP blocks contain AP_TC_TRUC
+                    // geometry. A single anonymous *U block may hold 20 or 101
+                    // independent XP centerlines; using one overall block bbox
+                    // silently loses those dimensions. Read each real centerline
+                    // once, transformed by this instance's BlockTransform.
+                    var explicitCenters = ReadBlockCenterlines(block, tr);
+                    if (explicitCenters.Count > 0)
+                    {
+                        result.AddRange(explicitCenters);
+                        continue;
+                    }
+                    var axis = VxtExistingMemberAxisResolver.ResolveBlock(block, tr);
+                    if (axis == null || axis.Length <= 1e-8)
+                        throw new InvalidOperationException(
+                            "Không xác định được trục Block XC/XP có sẵn (" + entity.Handle +
+                            "). Hãy kiểm tra Block hoặc chọn đường tim LINE/POLYLINE.");
+                    result.Add(new Point2(
+                        (axis.Start.X + axis.End.X) * 0.5,
+                        (axis.Start.Y + axis.End.Y) * 0.5));
+                    continue;
+                }
+
+                try
+                {
+                    var ext = entity.GeometricExtents;
+                    result.Add(new Point2(
+                        (ext.MinPoint.X + ext.MaxPoint.X) * 0.5,
+                        (ext.MinPoint.Y + ext.MaxPoint.Y) * 0.5));
+                }
+                catch { }
+            }
+            return result;
+        }
+
+
+        private static List<Point2> ReadBlockCenterlines(BlockReference block, Transaction tr)
+        {
+            var result = new List<Point2>();
+            try
+            {
+                var definition = tr.GetObject(block.BlockTableRecord, OpenMode.ForRead, false)
+                    as BlockTableRecord;
+                if (definition == null) return result;
+
+                var transform = block.BlockTransform;
+                foreach (ObjectId memberId in definition)
+                {
+                    var member = tr.GetObject(memberId, OpenMode.ForRead, false) as Entity;
+                    // Anonymous dynamic BlockRecords retain many alternative
+                    // visibility states as DXF 60 (invisible) entities. Only
+                    // the actually visible AP_TC_TRUC centerlines represent
+                    // installed members; hidden variants caused 101 phantom
+                    // DIM axes in block(2).dxf (*U148 and *U156).
+                    if (member == null || !member.Visible ||
+                        !string.Equals(member.Layer, "AP_TC_TRUC", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var curve = member as Curve;
+                    if (curve == null) continue;
+
+                    // A curved decoration on the axis layer must not become a
+                    // fake structural tim; only accept straight source curves.
+                    var start = curve.StartPoint;
+                    var end = curve.EndPoint;
+                    var chord = start.DistanceTo(end);
+                    if (chord <= 1e-8) continue;
+                    var curveLength = Math.Abs(curve.GetDistanceAtParameter(curve.EndParam) -
+                        curve.GetDistanceAtParameter(curve.StartParam));
+                    if (Math.Abs(curveLength - chord) > Math.Max(0.1, curveLength * 1e-4))
+                        continue;
+
+                    var a = start.TransformBy(transform);
+                    var b = end.TransformBy(transform);
+                    var center = new Point2((a.X + b.X) * 0.5, (a.Y + b.Y) * 0.5);
+                    // HCF example blocks repeat identical LWPOLYLINE axis
+                    // entities 5+ times. Never DIM the same physical axis twice.
+                    if (!result.Any(p => p.DistanceTo(center) <= 0.25))
+                        result.Add(center);
+                }
+            }
+            catch
+            {
+                // Fall back to the existing certified single-axis resolver if
+                // the anonymous block definition is inaccessible or unsupported.
+                result.Clear();
+            }
+            return result;
+        }
+
+        private static List<Box2> ReadBoxes(IEnumerable<ObjectId> ids, Transaction tr)
+        {
+            var result = new List<Box2>();
+            foreach (var id in ids)
+            {
+                var entity = TryGetEntity(id, tr);
+                if (entity == null) continue;
+                try { result.Add(ToBox(entity.GeometricExtents)); }
+                catch { }
+            }
+            return result;
+        }
+
+        private static Entity TryGetEntity(ObjectId id, Transaction tr)
+        {
+            if (id.IsNull) return null;
+            try { return tr.GetObject(id, OpenMode.ForRead, false) as Entity; }
+            catch { return null; }
+        }
+
+        private static Box2 ToBox(Extents3d ext)
+            => new Box2(ext.MinPoint.X, ext.MinPoint.Y, ext.MaxPoint.X, ext.MaxPoint.Y);
+
+        private static Point3d ToPoint3d(Point2 p) => new Point3d(p.X, p.Y, 0.0);
+
+        private static IEnumerable<double> WithBounds(IEnumerable<double> values, double min, double max)
+        {
+            yield return min;
+            foreach (var value in values) yield return value;
+            yield return max;
+        }
+
+        private static void AddVerticalChain(
+            ICollection<PreviewDimension> output,
+            IEnumerable<double> values,
+            DimensionPosition position,
+            DimensionTarget target,
+            double radians,
+            Box2 domain,
+            double distance,
+            double spacing,
+            IDictionary<string, int> stack,
+            double? sourceBaseCoordinate = null)
+        {
+            var ys = values.Distinct(new DoubleToleranceComparer()).OrderBy(x => x).ToList();
+            if (ys.Count < 2) return;
+
+            double baseX;
+            double textX;
+            if (position == DimensionPosition.Auto)
+            {
+                var index = GetAndIncrement(stack, "C-V");
+                baseX = (domain.MinX + domain.MaxX) * 0.5;
+                textX = baseX + index * spacing;
+            }
+            else if (position == DimensionPosition.Left || position == DimensionPosition.Bottom)
+            {
+                var index = GetAndIncrement(stack, "L");
+                baseX = domain.MinX;
+                textX = domain.MinX - distance - index * spacing;
+            }
+            else
+            {
+                var index = GetAndIncrement(stack, "R");
+                baseX = domain.MaxX;
+                textX = domain.MaxX + distance + index * spacing;
+            }
+            if (sourceBaseCoordinate.HasValue) baseX = sourceBaseCoordinate.Value;
+
+            for (var i = 0; i + 1 < ys.Count; i++)
+            {
+                if (Math.Abs(ys[i + 1] - ys[i]) <= 1.0) continue;
+                output.Add(new PreviewDimension(
+                    Transform2.ToWorld(new Point2(baseX, ys[i]), radians),
+                    Transform2.ToWorld(new Point2(baseX, ys[i + 1]), radians),
+                    Transform2.ToWorld(new Point2(textX, (ys[i] + ys[i + 1]) * 0.5), radians),
+                    radians + Math.PI * 0.5,
+                    target));
+            }
+        }
+
+        private static void AddHorizontalChain(
+            ICollection<PreviewDimension> output,
+            IEnumerable<double> values,
+            DimensionPosition position,
+            DimensionTarget target,
+            double radians,
+            Box2 domain,
+            double distance,
+            double spacing,
+            IDictionary<string, int> stack,
+            double? sourceBaseCoordinate = null)
+        {
+            var xs = values.Distinct(new DoubleToleranceComparer()).OrderBy(x => x).ToList();
+            if (xs.Count < 2) return;
+
+            double baseY;
+            double textY;
+            if (position == DimensionPosition.Auto)
+            {
+                var index = GetAndIncrement(stack, "C-H");
+                baseY = (domain.MinY + domain.MaxY) * 0.5;
+                textY = baseY + index * spacing;
+            }
+            else if (position == DimensionPosition.Top || position == DimensionPosition.Left)
+            {
+                var index = GetAndIncrement(stack, "T");
+                baseY = domain.MaxY;
+                textY = domain.MaxY + distance + index * spacing;
+            }
+            else
+            {
+                var index = GetAndIncrement(stack, "B");
+                baseY = domain.MinY;
+                textY = domain.MinY - distance - index * spacing;
+            }
+            if (sourceBaseCoordinate.HasValue) baseY = sourceBaseCoordinate.Value;
+
+            for (var i = 0; i + 1 < xs.Count; i++)
+            {
+                if (Math.Abs(xs[i + 1] - xs[i]) <= 1.0) continue;
+                output.Add(new PreviewDimension(
+                    Transform2.ToWorld(new Point2(xs[i], baseY), radians),
+                    Transform2.ToWorld(new Point2(xs[i + 1], baseY), radians),
+                    Transform2.ToWorld(new Point2((xs[i] + xs[i + 1]) * 0.5, textY), radians),
+                    radians,
+                    target));
+            }
+        }
+
+        private static int GetAndIncrement(IDictionary<string, int> stack, string key)
+        {
+            int value;
+            if (!stack.TryGetValue(key, out value)) value = 0;
+            stack[key] = value + 1;
+            return value;
+        }
+
+        private static double NormalizeAngle(double angle)
+        {
+            angle %= 180.0;
+            return angle < 0.0 ? angle + 180.0 : angle;
+        }
+
+        private sealed class DoubleToleranceComparer : IEqualityComparer<double>
+        {
+            public bool Equals(double x, double y) => Math.Abs(x - y) <= 0.001;
+            public int GetHashCode(double obj) => Math.Round(obj, 3).GetHashCode();
+        }
+    }
+}

@@ -1,0 +1,405 @@
+using System;
+using System.Linq;
+using HNL.VXT.Core.Geometry;
+using HNL.VXT.Core.Layout;
+using HNL.VXT.Core.Models;
+using HNL.VXT.Core.Preview;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace HNL.VXT.Core.Tests
+{
+    [TestClass]
+    public sealed class ProductionLayoutTests
+    {
+        [TestMethod]
+        public void GoldenHorizontal_MainsAreHorizontalAndXpPerpendicular()
+        {
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), new VxtSettings());
+            var main = plan.Lines.First(x => x.Kind == PreviewLineKind.Main);
+            var xp = plan.Lines.First(x => x.Kind == PreviewLineKind.Furring);
+            Assert.IsTrue(Math.Abs(main.A.Y - main.B.Y) < 1e-6, "V6.7.6.15 Ngang must create horizontal main members.");
+            Assert.IsTrue(Math.Abs(xp.A.X - xp.B.X) < 1e-6, "Furring must be perpendicular to main members.");
+        }
+
+        [TestMethod]
+        public void GoldenVertical_MainsAreVertical()
+        {
+            var settings = new VxtSettings { MainDirection = MainDirectionMode.Vertical, DirectionDegrees = 90.0 };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings);
+            var main = plan.Lines.First(x => x.Kind == PreviewLineKind.Main);
+            Assert.IsTrue(Math.Abs(main.A.X - main.B.X) < 1e-6);
+        }
+
+        [TestMethod]
+        public void SmartLayout_RespectsGoldenSpacingAndEdgeLimits()
+        {
+            var result = SmartLayout1D.Calculate(4000, 1000, 700, 400, 300, 50, MainLayoutMode.BalancedTwoEnds);
+            Assert.IsNotNull(result);
+            Assert.IsTrue(result.StartOffset >= 300 - 1e-8 && result.StartOffset <= 400 + 1e-8);
+            Assert.IsTrue(result.EndOffset >= 300 - 1e-8 && result.EndOffset <= 400 + 1e-8);
+            Assert.IsTrue(result.Steps.All(s => s >= 700 - 1e-8 && s <= 1000 + 1e-8));
+            Assert.IsTrue(result.Steps.All(s => Math.Abs(s / 50.0 - Math.Round(s / 50.0)) < 1e-8));
+            Assert.AreEqual(4000.0, result.StartOffset + result.Steps.Sum() + result.EndOffset, 1e-6);
+        }
+
+        [TestMethod]
+        public void SmartLayout_ExactV67615ResultFor4000Run_Is300_850x4_300()
+        {
+            // V6.7.6.15 strict-multiple policy: use the minimum K first; within that K,
+            // prefer one repeated exact multiple nearest Max, and absorb only the remainder
+            // into the two edge offsets. 4000 therefore resolves to 300 + 850x4 + 300.
+            var result = SmartLayout1D.Calculate(4000, 1000, 700, 400, 300, 50, MainLayoutMode.BalancedTwoEnds);
+            Assert.IsNotNull(result);
+            Assert.AreEqual(300.0, result.StartOffset, 1e-8);
+            CollectionAssert.AreEqual(new[] { 850.0, 850.0, 850.0, 850.0 }, result.Steps.ToArray());
+            Assert.AreEqual(300.0, result.EndOffset, 1e-8);
+            CollectionAssert.AreEqual(new[] { 300.0, 1150.0, 2000.0, 2850.0, 3700.0 }, result.Positions(0).ToArray());
+        }
+
+        [TestMethod]
+        public void SmartLayout_OneSide3442_Max1000_PrefersStrict900WithSameMemberCount()
+        {
+            var result = SmartLayout1D.Calculate(
+                3442.0, 1000.0, 700.0, 400.0, 300.0, 50.0,
+                MainLayoutMode.OneSide,
+                minEdgeTolerance: 25.0);
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(4, result.PointCount, "900 mm must keep the same minimum XC count as the invalid 1000-mm attempt.");
+            Assert.AreEqual(350.0, result.StartOffset, 1e-8);
+            CollectionAssert.AreEqual(
+                new[] { 900.0, 900.0, 900.0 },
+                result.Steps.ToArray(),
+                "With the same XC count, the largest strict lattice spacing must win before SOFT edge.");
+            Assert.AreEqual(392.0, result.EndOffset, 1e-8);
+            Assert.IsFalse(result.IsDense);
+            Assert.IsFalse(result.UsedSoftEdge);
+        }
+
+        [TestMethod]
+        public void SmartLayout_OneSide3442_Max1000_ReverseMirrors350_900x3_392()
+        {
+            var result = SmartLayout1D.Calculate(
+                3442.0, 1000.0, 700.0, 400.0, 300.0, 50.0,
+                MainLayoutMode.OneSide,
+                reverse: true,
+                minEdgeTolerance: 25.0);
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(4, result.PointCount);
+            Assert.AreEqual(392.0, result.StartOffset, 1e-8);
+            CollectionAssert.AreEqual(new[] { 900.0, 900.0, 900.0 }, result.Steps.ToArray());
+            Assert.AreEqual(350.0, result.EndOffset, 1e-8);
+        }
+
+        [TestMethod]
+        public void MainOneSide3442_Max1000_RuntimePlan_Uses350_900x3_392()
+        {
+            var settings = new VxtSettings
+            {
+                MainLayout = MainLayoutMode.OneSide,
+                MainMaxSpacing = 1000.0,
+                MainMinSpacing = 700.0,
+                MainMaxEdgeOffset = 400.0,
+                MainMinEdgeOffset = 300.0,
+                MainBalanceStep = 50.0,
+                DrawFurring = false,
+                DrawHangers = false
+            };
+
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000.0, 3442.0), settings);
+            var ys = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Select(x => Math.Round(x.A.Y, 3))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+
+            CollectionAssert.AreEqual(
+                new[] { 350.0, 1250.0, 2150.0, 3050.0 },
+                ys);
+        }
+
+        [TestMethod]
+        public void SmartLayout_OneSide5590_ChasesFiveMaxGaps_AndUsesSoftFarEdge()
+        {
+            var result = SmartLayout1D.Calculate(
+                5590.0, 1000.0, 700.0, 400.0, 300.0, 50.0,
+                MainLayoutMode.OneSide,
+                minEdgeTolerance: 25.0);
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(300.0, result.StartOffset, 1e-8);
+            CollectionAssert.AreEqual(
+                new[] { 1000.0, 1000.0, 1000.0, 1000.0, 1000.0 },
+                result.Steps.ToArray(),
+                "OneSide must chase Max continuously; dimensional remainder must not be inserted into the middle.");
+            Assert.AreEqual(290.0, result.EndOffset, 1e-8);
+            Assert.IsTrue(result.UsedSoftEdge, "290 mm is a 10-mm SOFT Min-edge reduction from 300 mm.");
+        }
+
+        [TestMethod]
+        public void SmartLayout_OneSide5590_ReverseMirrorsTheSameChase()
+        {
+            var result = SmartLayout1D.Calculate(
+                5590.0, 1000.0, 700.0, 400.0, 300.0, 50.0,
+                MainLayoutMode.OneSide,
+                reverse: true,
+                minEdgeTolerance: 25.0);
+
+            Assert.IsNotNull(result);
+            Assert.AreEqual(290.0, result.StartOffset, 1e-8);
+            CollectionAssert.AreEqual(
+                new[] { 1000.0, 1000.0, 1000.0, 1000.0, 1000.0 },
+                result.Steps.ToArray());
+            Assert.AreEqual(300.0, result.EndOffset, 1e-8);
+        }
+
+        [TestMethod]
+        public void MainOneSide5590_RuntimePlan_Chases300_ThenFive1000_Then290()
+        {
+            var settings = new VxtSettings
+            {
+                MainLayout = MainLayoutMode.OneSide,
+                DrawFurring = false,
+                DrawHangers = false
+            };
+
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000.0, 5590.0), settings);
+            var ys = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Select(x => Math.Round(x.A.Y, 3))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+
+            CollectionAssert.AreEqual(
+                new[] { 300.0, 1300.0, 2300.0, 3300.0, 4300.0, 5300.0 },
+                ys);
+        }
+
+        [TestMethod]
+        public void OneSideHangers5590_RuntimePlan_UsesTheSameChaseContract()
+        {
+            var settings = new VxtSettings
+            {
+                DrawFurring = false,
+                HangerLayout = HangerLayoutMode.OneSideFollowFurring
+            };
+
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(5590.0, 4000.0), settings);
+            var firstRow = plan.HangerPoints
+                .GroupBy(p => Math.Round(p.Y, 3))
+                .OrderBy(g => g.Key)
+                .First()
+                .Select(p => Math.Round(p.X, 3))
+                .OrderBy(x => x)
+                .ToArray();
+
+            CollectionAssert.AreEqual(
+                new[] { 300.0, 1300.0, 2300.0, 3300.0, 4300.0, 5300.0 },
+                firstRow);
+        }
+
+        [TestMethod]
+        public void AutoDirection_FollowsLegacyShadowlineRule()
+        {
+            var withShadowline = new VxtSettings
+            {
+                MainDirection = MainDirectionMode.Auto,
+                AutoShadowline = true,
+                DrawFurring = false,
+                DrawHangers = false
+            };
+            var withoutShadowline = withShadowline.Clone();
+            withoutShadowline.AutoShadowline = false;
+
+            var longSide = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), withShadowline);
+            var shortSide = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), withoutShadowline);
+
+            Assert.IsTrue(longSide.Lines.Where(x => x.Kind == PreviewLineKind.Main)
+                .All(x => Math.Abs(x.A.Y - x.B.Y) < 1e-6), "Shadowline=Yes must follow the long side on a 6000x4000 region.");
+            Assert.IsTrue(shortSide.Lines.Where(x => x.Kind == PreviewLineKind.Main)
+                .All(x => Math.Abs(x.A.X - x.B.X) < 1e-6), "Current no-Shadowline fixed-direction mode must follow the short side until ToiUu UI mode is selected.");
+        }
+
+        [TestMethod]
+        public void MainSkipLimit_SkipsWholeShortRegionLikeV674()
+        {
+            var settings = new VxtSettings { MainSkipLimit = 500.0 };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 450), settings);
+            Assert.AreEqual(0, plan.MainSegmentCount);
+            Assert.AreEqual(0, plan.HangerCount, "Ty depends on generated main members.");
+            Assert.IsTrue(plan.FurringSegmentCount > 0, "XP remains independently available.");
+        }
+
+        [TestMethod]
+        public void Avoidance_ShiftAllKeepsMainAxisOutsideObstacleBand_WhenWholeGridShiftIsFeasible()
+        {
+            // 4100 resolves to 350 + 850x4 + 350, leaving exactly one 50 mm balance step
+            // of legal edge slack in either direction. A narrow obstacle around the first XC
+            // therefore exercises the real Lisp Shift-All path rather than the impossible-
+            // shift best-effort fallback.
+            var context = new VxtLayoutContext();
+            context.GeneralObstacles.Add(new Box2(1000, 330, 5000, 370));
+            var settings = new VxtSettings
+            {
+                UseAvoidance = true,
+                ShiftAllForAvoidance = true,
+                ClearanceDistance = 0
+            };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4100), settings, context);
+            var mainY = plan.Lines
+                .Where(x => x.Kind == PreviewLineKind.Main)
+                .Select(x => Math.Round(x.A.Y, 3))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+
+            Assert.IsTrue(mainY.Length > 0);
+            Assert.IsFalse(mainY.Any(y => y > 330 && y < 370));
+            CollectionAssert.AreEqual(new[] { 400.0, 1250.0, 2100.0, 2950.0, 3800.0 }, mainY);
+        }
+
+        [TestMethod]
+        public void FurringDefault_StartsOneStepFromNearEdge()
+        {
+            var settings = new VxtSettings { DrawMain = false, DrawHangers = false, FurringSpacing = 400.0 };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(2100, 1200), settings, new VxtLayoutContext());
+            var xs = plan.Lines.Where(x => x.Kind == PreviewLineKind.Furring).Select(x => x.A.X).Distinct().OrderBy(x => x).ToList();
+            Assert.IsTrue(xs.Count > 0);
+            Assert.AreEqual(400.0, xs.First(), 1e-6);
+        }
+
+        [TestMethod]
+        public void FurringFarEdge_UsesGoldenRemainderOffset()
+        {
+            var settings = new VxtSettings { DrawMain = false, DrawHangers = false, FurringSpacing = 400.0 };
+            var context = new VxtLayoutContext { GlobalFurringFromFarEdge = true };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(2100, 1200), settings, context);
+            var xs = plan.Lines.Where(x => x.Kind == PreviewLineKind.Furring).Select(x => x.A.X).Distinct().OrderBy(x => x).ToList();
+            Assert.IsTrue(xs.Count > 0);
+            Assert.AreEqual(100.0, xs.First(), 1e-6);
+            Assert.AreEqual(2000.0 - 300.0, 1700.0, 1e-6);
+            Assert.AreEqual(1700.0, xs.Last(), 1e-6);
+        }
+
+        [TestMethod]
+        public void Hangers_RespectEdgeLimitsAlongMainMembers()
+        {
+            var settings = new VxtSettings { DrawFurring = false };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings);
+            Assert.IsTrue(plan.HangerPoints.Count > 0);
+            foreach (var row in plan.HangerPoints.GroupBy(p => Math.Round(p.Y, 3)))
+            {
+                var xs = row.Select(p => p.X).OrderBy(x => x).ToList();
+                if (xs.Count == 0) continue;
+                Assert.IsTrue(xs.First() >= 300 - 1e-6);
+                Assert.IsTrue(6000 - xs.Last() >= 300 - 1e-6);
+            }
+        }
+
+        [TestMethod]
+        public void OneSideHangers_ReverseWithFurringStartSide()
+        {
+            const double width = 6075.0;
+            var settings = new VxtSettings
+            {
+                DrawFurring = false,
+                HangerLayout = HangerLayoutMode.OneSideFollowFurring,
+                HangerMinEdgeOffset = 300,
+                HangerMaxEdgeOffset = 400
+            };
+            var near = new VxtPreviewPlanBuilder().Build(Rectangle(width, 4000), settings, new VxtLayoutContext());
+            var farContext = new VxtLayoutContext { GlobalFurringFromFarEdge = true };
+            var far = new VxtPreviewPlanBuilder().Build(Rectangle(width, 4000), settings, farContext);
+            var nearX = near.HangerPoints.OrderBy(p => p.Y).ThenBy(p => p.X).First().X;
+            var farX = far.HangerPoints.OrderBy(p => p.Y).ThenBy(p => p.X).First().X;
+            Assert.AreNotEqual(nearX, farX, 1e-6, "Strict-multiple reverse must swap asymmetric edge offsets.");
+        }
+
+        [TestMethod]
+        public void RealDimensionPlan_IsProducedWithoutFakeDimensionLines()
+        {
+            var settings = new VxtSettings
+            {
+                AutoDimension = true,
+                DimMain = true,
+                DimFurring = true,
+                DimHanger = true
+            };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings);
+            Assert.IsTrue(plan.Dimensions.Count > 0);
+            Assert.AreEqual(plan.Dimensions.Count, plan.DimensionSegmentCount);
+            Assert.IsFalse(plan.Lines.Any(x => x.Kind == PreviewLineKind.Dimension || x.Kind == PreviewLineKind.DimensionExtension));
+        }
+
+        [TestMethod]
+        public void Dimensions_IncludeBothBoundarySegmentsLikeLegacyProcessDims()
+        {
+            var settings = new VxtSettings
+            {
+                DrawFurring = false,
+                DrawHangers = false,
+                AutoDimension = true,
+                DimMain = true,
+                MainDimPosition = DimensionPosition.Left
+            };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings);
+            var dims = plan.Dimensions.Where(d => d.Target == DimensionTarget.Main).ToList();
+            Assert.AreEqual(6, dims.Count, "process-dims must dimension boundary→first XC, every XC gap, and last XC→boundary.");
+            Assert.AreEqual(300.0, dims.First().ExtensionPoint1.DistanceTo(dims.First().ExtensionPoint2), 1e-6);
+            Assert.AreEqual(300.0, dims.Last().ExtensionPoint1.DistanceTo(dims.Last().ExtensionPoint2), 1e-6);
+        }
+
+        [TestMethod]
+        public void DimensionExtensionPoints_StayOnLegacyBaseLine_NotOnDimTextLine()
+        {
+            var settings = new VxtSettings
+            {
+                DrawFurring = false,
+                DrawHangers = false,
+                AutoDimension = true,
+                DimMain = true,
+                MainDimPosition = DimensionPosition.Left,
+                DimensionDistance = 500.0
+            };
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings);
+            var dim = plan.Dimensions.First(d => d.Target == DimensionTarget.Main);
+
+            Assert.AreEqual(0.0, dim.ExtensionPoint1.X, 1e-6);
+            Assert.AreEqual(0.0, dim.ExtensionPoint2.X, 1e-6);
+            Assert.AreEqual(-500.0, dim.DimensionLinePoint.X, 1e-6);
+        }
+
+        [TestMethod]
+        public void ManualRegions_UseDifferentMainDirections()
+        {
+            var settings = new VxtSettings { MainDirection = MainDirectionMode.RectangleRegions };
+            var context = new VxtLayoutContext();
+            context.Regions.Add(new VxtLayoutRegion(new Box2(0, 0, 3000, 4000), 0.0));
+            context.Regions.Add(new VxtLayoutRegion(new Box2(3000, 0, 6000, 4000), 90.0));
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings, context);
+            Assert.IsTrue(plan.Lines.Any(x => x.Kind == PreviewLineKind.Main && Math.Abs(x.A.Y - x.B.Y) < 1e-6));
+            Assert.IsTrue(plan.Lines.Any(x => x.Kind == PreviewLineKind.Main && Math.Abs(x.A.X - x.B.X) < 1e-6));
+        }
+
+        [TestMethod]
+        public void ManualRegionOutsideBoundary_ProducesNoGeometry()
+        {
+            var settings = new VxtSettings { MainDirection = MainDirectionMode.RectangleRegions };
+            var context = new VxtLayoutContext();
+            context.Regions.Add(new VxtLayoutRegion(new Box2(10000, 10000, 12000, 12000), 0.0));
+            var plan = new VxtPreviewPlanBuilder().Build(Rectangle(6000, 4000), settings, context);
+            Assert.AreEqual(0, plan.MainSegmentCount);
+            Assert.AreEqual(0, plan.FurringSegmentCount);
+            Assert.AreEqual(0, plan.HangerCount);
+        }
+
+        private static Boundary2 Rectangle(double width, double height)
+            => new Boundary2(new[]
+            {
+                new Point2(0,0), new Point2(width,0), new Point2(width,height), new Point2(0,height)
+            });
+    }
+}
