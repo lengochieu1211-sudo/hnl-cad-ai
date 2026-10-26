@@ -930,6 +930,37 @@ jobs:
           if ($null -eq $setup) { throw 'HCE setup missing' }
           ./incubator/hnl-vxt-pro/scripts/verify-installer-icon.ps1 -ExePath $setup.FullName -IcoPath ./incubator/hnl-ceiling-estimator-pro/installer/assets/HNL-HCE.ico
 
+      - name: Verify HCE-HCF typography and compact visual layout
+        shell: pwsh
+        run: |
+          $ui = Get-Content 'incubator/hnl-ceiling-estimator-pro/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs' -Raw -Encoding utf8
+          foreach ($required in @(
+            'private const double BodyTextSize = 12.0;',
+            'private const double HintTextSize = 11.0;',
+            'private const double ControlMinHeight = 27.0;',
+            'private const double RowSpacing = 6.0;',
+            'private const double CardSpacing = 7.0;',
+            'FontFamily = new FontFamily("Segoe UI")',
+            'Math.Max(HintTextSize, size)',
+            'LineStackingStrategy = LineStackingStrategy.BlockLineHeight',
+            'LineHeight = Math.Max(13.0, Math.Max(HintTextSize, size) + 2.0)',
+            'CornerRadius = new CornerRadius(6), Padding = new Thickness(10)',
+            'Margin = new Thickness(2, 0, 2, CardSpacing)',
+            'Brush(dark ? "#323941" : "#EEF4F8")',
+            "Property='MinHeight' Value='27'",
+            'Width = 34, Height = 34',
+            '_stopHceButton.IsEnabled = !HcePaletteService.IsCalculating',
+            'Grid.SetRow(_stopHceButton, 0);'
+          )) {
+            if (-not $ui.Contains($required)) { throw "HCE/HCF visual style regression: $required" }
+          }
+          if ($ui.Contains('MinHeight = 30') -or
+              $ui.Contains('Text(title, 12.5,') -or
+              $ui.Contains('Margin = new Thickness(2, 0, 2, 10)')) {
+            throw 'Old HCE visual metrics remain'
+          }
+          Write-Host 'HCE/HCF TYPOGRAPHY SPACING COLOR GATE PASS - visual only'
+
       - name: Upload Universal Setup
         uses: actions/upload-artifact@v4
         with:
@@ -937,4 +968,46 @@ jobs:
           path: |
             incubator/hnl-ceiling-estimator-pro/artifacts/universal-installer/*
             incubator/hnl-ceiling-estimator-pro/HNL-HCE-v0.3.0-STATIC-REGRESSION.txt
+          if-no-files-found: error
+      - name: Stage HCE full source at exact CI HEAD
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sha = $env:GITHUB_SHA
+          $actual = (& git rev-parse HEAD).Trim()
+          if ($actual -ne $sha) { throw "Unexpected checkout SHA: $actual" }
+          $stage = Join-Path $env:RUNNER_TEMP 'HCE-EXACT-FULL-SOURCE'
+          $zip = Join-Path $env:RUNNER_TEMP 'HCE-EXACT-FULL-SOURCE.zip'
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          & git archive --format=zip "--output=$zip" $sha
+          if ($LASTEXITCODE -ne 0) { throw 'Git source archive failed' }
+          Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force
+          if (-not (Test-Path (Join-Path $stage 'HCE-OVERLAY/src/HNL.CeilingEstimator.AutoCAD/HcePaletteUi.cs'))) {
+            throw 'Missing HCE UI in archived exact HEAD'
+          }
+          @(
+            'Repository: lengochieu1211-sudo/hnl-cad-ai',
+            'Branch: research/hce-pro-bootstrap',
+            "Exact HEAD: $sha",
+            'Version: v0.3.0',
+            "Build VN: $env:HCE_BUILD_TIME_VN",
+            'Full tracked source tree, from git archive, not from working copy',
+            'Status: Runtime Candidate; AutoCAD runtime proof required'
+          ) | Set-Content -LiteralPath (Join-Path $stage 'HCE-FULL-SOURCE-CHECKPOINT.txt') -Encoding utf8
+          $files = @(Get-ChildItem -LiteralPath $stage -Recurse -File | Sort-Object FullName)
+          if ($files.Count -lt 200) { throw "Incomplete source archive: $($files.Count)" }
+          $checksums = @($files | ForEach-Object {
+            $path = $_.FullName.Substring($stage.Length + 1).Replace([char]92, '/')
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $path"
+          })
+          [IO.File]::WriteAllLines((Join-Path $stage 'HCE-FULL-SOURCE-SHA256SUMS.txt'), $checksums, [Text.UTF8Encoding]::new($false))
+          Write-Host "HCE FULL SOURCE ARCHIVED: SHA=$sha files=$($files.Count)"
+
+      - name: Upload HCE full-source artifact for existing 01_FULL_SOURCE
+        uses: actions/upload-artifact@v4
+        with:
+          name: HNL-HCE-v0.3.0-FULL-SOURCE-${{ github.sha }}
+          path: ${{ runner.temp }}/HCE-EXACT-FULL-SOURCE/
+          include-hidden-files: true
           if-no-files-found: error

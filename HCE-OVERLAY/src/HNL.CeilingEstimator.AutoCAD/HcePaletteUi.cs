@@ -156,6 +156,12 @@ namespace HNL.CeilingEstimator.AutoCAD
 
     internal sealed class HcePaletteView : UserControl
     {
+        // Match HCF Segoe UI typography and standard spacing without touching CAD units.
+        private const double BodyTextSize = 12.0;
+        private const double HintTextSize = 11.0;
+        private const double ControlMinHeight = 27.0;
+        private const double RowSpacing = 6.0;
+        private const double CardSpacing = 7.0;
         private readonly SolidColorBrush _background;
         private readonly SolidColorBrush _surface;
         private readonly SolidColorBrush _border;
@@ -210,7 +216,7 @@ namespace HNL.CeilingEstimator.AutoCAD
 
             Background = _background;
             FontFamily = new FontFamily("Segoe UI");
-            FontSize = 12;
+            FontSize = BodyTextSize;
             MinWidth = 360;
             Content = BuildLayout();
             RefreshLegacyControls();
@@ -234,7 +240,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             Resources["InputBackground"] = inputBackground;
             Resources["InputBorder"] = inputBorder;
             Resources["ComboArrowBackground"] = Brush(dark ? "#303840" : "#E7EEF5");
-            Resources["HoverBackground"] = _accentSoft;
+            Resources["HoverBackground"] = Brush(dark ? "#323941" : "#EEF4F8");
             Resources[SystemColors.WindowBrushKey] = inputBackground;
             Resources[SystemColors.WindowTextBrushKey] = _primary;
             Resources[SystemColors.ControlBrushKey] = inputBackground;
@@ -251,7 +257,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             popupStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(8, 5, 8, 5)));
             var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
             hover.Setters.Add(new Setter(Control.ForegroundProperty, _primary));
-            hover.Setters.Add(new Setter(Control.BackgroundProperty, _accentSoft));
+            hover.Setters.Add(new Setter(Control.BackgroundProperty, (Brush)Resources["HoverBackground"]));
             popupStyle.Triggers.Add(hover);
             var selected = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
             selected.Setters.Add(new Setter(Control.ForegroundProperty, _primary));
@@ -267,7 +273,9 @@ namespace HNL.CeilingEstimator.AutoCAD
                 <Setter Property='Foreground' Value='{DynamicResource PrimaryText}'/>
                 <Setter Property='Background' Value='{DynamicResource InputBackground}'/>
                 <Setter Property='BorderBrush' Value='{DynamicResource InputBorder}'/>
-                <Setter Property='MinHeight' Value='30'/>
+                <Setter Property='FontFamily' Value='Segoe UI'/>
+                <Setter Property='FontSize' Value='12'/>
+                <Setter Property='MinHeight' Value='27'/>
                 <Setter Property='HorizontalAlignment' Value='Stretch'/>
                 <Setter Property='MaxDropDownHeight' Value='320'/>
                 <Setter Property='Template'>
@@ -665,7 +673,7 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         private UIElement BuildCalculationTab()
         {
-            var content = new StackPanel { Margin = new Thickness(0, 9, 0, 10) };
+            var content = new StackPanel { Margin = new Thickness(0, 6, 0, 8) };
 
             var selection = Section("01  Chọn Hatch", "#2497FF");
             selection.Children.Add(CommandButton("Chọn Hatch và tạo bảng", "HCECALC", true));
@@ -714,21 +722,21 @@ namespace HNL.CeilingEstimator.AutoCAD
             gridSection.Children.Add(Choice("Grid", "Chế độ lưới", new[] {
                 "Theo Hatch (gốc/hướng)", "Chọn gốc + hướng", "WCS (0,0)"
             }, new[] { "3", "2", "1" }));
-            var snapRow = new Grid { Margin = new Thickness(0, 3, 0, 8) };
+            var snapRow = new Grid { Margin = new Thickness(0, 0, 0, RowSpacing) };
             snapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             snapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            _legacySnap = new CheckBox { Content = "Bật", Foreground = _primary, MinHeight = 30, VerticalContentAlignment = VerticalAlignment.Center };
+            _legacySnap = new CheckBox { Content = "Bật", Foreground = _primary, MinHeight = ControlMinHeight, VerticalContentAlignment = VerticalAlignment.Center };
             Grid.SetColumn(_legacySnap, 1);
             _legacySnap.Checked += (sender, args) => SaveLegacySnap(true);
             _legacySnap.Unchecked += (sender, args) => SaveLegacySnap(false);
-            snapRow.Children.Add(Text("Sai số lưới", 11, _muted, FontWeights.Normal));
+            snapRow.Children.Add(Text("Sai số lưới", BodyTextSize, _muted, FontWeights.Normal));
             snapRow.Children.Add(_legacySnap);
             gridSection.Children.Add(snapRow);
-            var tol = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            var tol = new Grid { Margin = new Thickness(0, 0, 0, RowSpacing) };
             tol.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             tol.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            tol.Children.Add(Text("Dung sai (0-10 mm)", 11, _muted, FontWeights.Normal));
-            _legacyTolerance = new TextBox { MinHeight = 30,
+            tol.Children.Add(Text("Dung sai (0-10 mm)", BodyTextSize, _muted, FontWeights.Normal));
+            _legacyTolerance = new TextBox { MinHeight = ControlMinHeight,
                 HorizontalAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center,
                 Foreground = _primary, Background = (Brush)Resources["InputBackground"],
                 BorderBrush = (Brush)Resources["InputBorder"],
@@ -743,11 +751,11 @@ namespace HNL.CeilingEstimator.AutoCAD
             wrapped.Children.Add(Card(config));
             wrapped.Children.Add(Card(gridSection));
             var table = Section("Bảng CAD", "#A78BFA");
-            var cadStyleRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            var cadStyleRow = new Grid { Margin = new Thickness(0, 0, 0, RowSpacing) };
             cadStyleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             cadStyleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            cadStyleRow.Children.Add(Text("Kiểu bảng CAD", 11, _muted, FontWeights.Normal));
-            _legacyCadTableStyle = new ComboBox { MinHeight = 30, Foreground = _primary };
+            cadStyleRow.Children.Add(Text("Kiểu bảng CAD", BodyTextSize, _muted, FontWeights.Normal));
+            _legacyCadTableStyle = new ComboBox { MinHeight = ControlMinHeight, Foreground = _primary };
             _legacyCadTableStyle.SelectionChanged += (sender, args) =>
             {
                 if (_loadingLegacyControls || _legacyCadTableStyle.SelectedIndex < 0) return;
@@ -760,13 +768,13 @@ namespace HNL.CeilingEstimator.AutoCAD
             Grid.SetColumn(_legacyCadTableStyle, 1);
             cadStyleRow.Children.Add(_legacyCadTableStyle);
             table.Children.Add(cadStyleRow);
-            var styleRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            var styleRow = new Grid { Margin = new Thickness(0, 0, 0, RowSpacing) };
             styleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             styleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            styleRow.Children.Add(Text("Kiểu chữ CAD", 11, _muted, FontWeights.Normal));
+            styleRow.Children.Add(Text("Kiểu chữ CAD", BodyTextSize, _muted, FontWeights.Normal));
             _legacyTableStyle = new ComboBox
             {
-                MinHeight = 30, Foreground = _primary
+                MinHeight = ControlMinHeight, Foreground = _primary
             };
             _legacyTableStyle.SelectionChanged += (sender, args) =>
             {
@@ -780,13 +788,13 @@ namespace HNL.CeilingEstimator.AutoCAD
             styleRow.Children.Add(_legacyTableStyle);
             table.Children.Add(styleRow);
 
-            var heightRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            var heightRow = new Grid { Margin = new Thickness(0, 0, 0, RowSpacing) };
             heightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             heightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            heightRow.Children.Add(Text("Cao chữ bảng (mm)", 11, _muted, FontWeights.Normal));
+            heightRow.Children.Add(Text("Cao chữ bảng (mm)", BodyTextSize, _muted, FontWeights.Normal));
             _legacyTableHeight = new TextBox
             {
-                MinHeight = 30, HorizontalAlignment = HorizontalAlignment.Stretch,
+                MinHeight = ControlMinHeight, HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 Foreground = _primary, Background = (Brush)Resources["InputBackground"],
                 BorderBrush = (Brush)Resources["InputBorder"],
@@ -800,13 +808,13 @@ namespace HNL.CeilingEstimator.AutoCAD
             table.Children.Add(Text(
                 "Cao chữ bảng: 0 = theo TableStyle. Nhập số dương cho bảng CAD mới; bảng cũ giữ nguyên.",
                 10, _muted, FontWeights.Normal));
-            var labelHeightRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            var labelHeightRow = new Grid { Margin = new Thickness(0, 0, 0, RowSpacing) };
             labelHeightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             labelHeightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            labelHeightRow.Children.Add(Text("Cao mã ô (mm)", 11, _muted, FontWeights.Normal));
+            labelHeightRow.Children.Add(Text("Cao mã ô (mm)", BodyTextSize, _muted, FontWeights.Normal));
             _legacyLabelHeight = new TextBox
             {
-                MinHeight = 30, HorizontalAlignment = HorizontalAlignment.Stretch,
+                MinHeight = ControlMinHeight, HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 Foreground = _primary, Background = (Brush)Resources["InputBackground"],
                 BorderBrush = (Brush)Resources["InputBorder"],
@@ -816,10 +824,10 @@ namespace HNL.CeilingEstimator.AutoCAD
             Grid.SetColumn(_legacyLabelHeight, 1);
             labelHeightRow.Children.Add(_legacyLabelHeight);
             table.Children.Add(labelHeightRow);
-            var cutListRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            var cutListRow = new Grid { Margin = new Thickness(0, 0, 0, RowSpacing) };
             cutListRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             cutListRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var cutListLabel = Text("Liệt kê mảnh biên", 11, _muted, FontWeights.Normal);
+            var cutListLabel = Text("Liệt kê mảnh biên", BodyTextSize, _muted, FontWeights.Normal);
             cutListLabel.Cursor = System.Windows.Input.Cursors.Hand;
             cutListLabel.MouseLeftButtonUp += (sender, args) =>
             {
@@ -829,7 +837,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             cutListRow.Children.Add(cutListLabel);
             _legacyCutList = new CheckBox
             {
-                Content = "Hiển thị", Foreground = _primary, MinHeight = 30,
+                Content = "Hiển thị", Foreground = _primary, MinHeight = ControlMinHeight,
                 VerticalContentAlignment = VerticalAlignment.Center
             };
             _legacyCutList.Checked += (sender, args) => SaveLegacyCutList(true);
@@ -837,10 +845,10 @@ namespace HNL.CeilingEstimator.AutoCAD
             Grid.SetColumn(_legacyCutList, 1);
             cutListRow.Children.Add(_legacyCutList);
             table.Children.Add(cutListRow);
-            var cutModeRow = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            var cutModeRow = new Grid { Margin = new Thickness(0, 0, 0, RowSpacing) };
             cutModeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             cutModeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var cutModeLabel = Text("Chế độ liệt kê", 11, _muted, FontWeights.Normal);
+            var cutModeLabel = Text("Chế độ liệt kê", BodyTextSize, _muted, FontWeights.Normal);
             cutModeLabel.Cursor = System.Windows.Input.Cursors.Hand;
             cutModeLabel.MouseLeftButtonUp += (sender, args) =>
             {
@@ -851,7 +859,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 }
             };
             cutModeRow.Children.Add(cutModeLabel);
-            _legacyCutMode = new ComboBox { MinHeight = 30, Foreground = _primary };
+            _legacyCutMode = new ComboBox { MinHeight = ControlMinHeight, Foreground = _primary };
             _legacyCutMode.Items.Add("Tổng hợp");
             _legacyCutMode.Items.Add("Chi tiết (chậm)");
             _legacyCutMode.SelectionChanged += (sender, args) =>
@@ -888,13 +896,13 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         private UIElement Choice(string key, string label, string[] names, string[] values)
         {
-            var row = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+            var row = new Grid { Margin = new Thickness(0, 0, 0, RowSpacing) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.Children.Add(Text(label, 11, _muted, FontWeights.Normal));
+            row.Children.Add(Text(label, BodyTextSize, _muted, FontWeights.Normal));
             var selector = new ComboBox
             {
-                MinHeight = 30, Foreground = _primary, Tag = values
+                MinHeight = ControlMinHeight, Foreground = _primary, Tag = values
             };
             foreach (var name in names) selector.Items.Add(name);
             selector.SelectionChanged += (sender, args) =>
@@ -1421,7 +1429,7 @@ namespace HNL.CeilingEstimator.AutoCAD
 
         private UIElement BuildAuditTab()
         {
-            var content = new StackPanel { Margin = new Thickness(0, 9, 0, 10) };
+            var content = new StackPanel { Margin = new Thickness(0, 6, 0, 8) };
             var audit = Section("Ki\u1ec3m tra Hatch", "#2497FF");
             audit.Children.Add(Text("Xem pattern, scale, v\u00f2ng bi\u00ean v\u00e0 l\u00fd do t\u1eeb ch\u1ed1i. " +
                 "Kh\u00f4ng ghi th\u00eam \u0111\u1ed1i t\u01b0\u1ee3ng.",
@@ -1456,13 +1464,13 @@ namespace HNL.CeilingEstimator.AutoCAD
         private StackPanel Section(string title, string accent)
         {
             var panel = new StackPanel();
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, RowSpacing) };
             row.Children.Add(new WpfBorder
             {
-                Background = Brush(accent), Width = 4, Height = 19,
-                CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 0, 9, 0)
+                Background = Brush(accent), Width = 4, Height = 18,
+                CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 0, 8, 0)
             });
-            row.Children.Add(Text(title, 12.5, _primary, FontWeights.SemiBold));
+            row.Children.Add(Text(title, BodyTextSize, _primary, FontWeights.SemiBold));
             panel.Children.Add(row);
             return panel;
         }
@@ -1472,17 +1480,17 @@ namespace HNL.CeilingEstimator.AutoCAD
             return new WpfBorder
             {
                 Background = _surface, BorderBrush = _border, BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(8), Padding = new Thickness(12),
-                Margin = new Thickness(2, 0, 2, 10), Child = content
+                CornerRadius = new CornerRadius(6), Padding = new Thickness(10),
+                Margin = new Thickness(2, 0, 2, CardSpacing), Child = content
             };
         }
 
         private UIElement Field(string label, string value)
         {
-            var row = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+            var row = new Grid { Margin = new Thickness(0, 0, 0, RowSpacing) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.Children.Add(Text(label, 11, _muted, FontWeights.Normal));
+            row.Children.Add(Text(label, BodyTextSize, _muted, FontWeights.Normal));
             var valueText = Text(value, 11, _primary, FontWeights.SemiBold);
             valueText.TextWrapping = TextWrapping.Wrap;
             Grid.SetColumn(valueText, 1);
@@ -1494,14 +1502,16 @@ namespace HNL.CeilingEstimator.AutoCAD
         {
             var button = new WpfButton
             {
-                Content = title, MinHeight = emphasized ? 38 : 31,
+                Content = title, MinHeight = emphasized ? 34 : ControlMinHeight,
+                FontFamily = new FontFamily("Segoe UI"), FontSize = BodyTextSize,
+                FontWeight = emphasized ? FontWeights.SemiBold : FontWeights.Normal,
                 HorizontalContentAlignment = HorizontalAlignment.Center,
                 Background = emphasized ? _accent : _accentSoft,
                 Foreground = emphasized ? Brushes.White : _primary,
                 BorderBrush = emphasized ? _accent : _border,
                 BorderThickness = new Thickness(1),
-                Padding = new Thickness(10, 6, 10, 6),
-                Margin = new Thickness(0, 8, 0, 5),
+                Padding = new Thickness(10, 4, 10, 4),
+                Margin = new Thickness(0, RowSpacing, 0, 4),
                 Cursor = System.Windows.Input.Cursors.Hand
             };
             button.Click += (sender, args) =>
@@ -1565,8 +1575,12 @@ namespace HNL.CeilingEstimator.AutoCAD
         {
             return new WpfText
             {
-                Text = value, FontSize = size, FontWeight = weight, Foreground = color,
-                TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center
+                Text = value, FontSize = Math.Max(HintTextSize, size), FontWeight = weight,
+                FontFamily = new FontFamily("Segoe UI"), Foreground = color,
+                TextWrapping = TextWrapping.Wrap,
+                LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+                LineHeight = Math.Max(13.0, Math.Max(HintTextSize, size) + 2.0),
+                VerticalAlignment = VerticalAlignment.Center
             };
         }
 
