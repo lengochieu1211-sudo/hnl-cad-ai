@@ -384,8 +384,8 @@ if (-not $xaml.Contains('<Grid Grid.Row="2" ClipToBounds="True">') -or
     throw 'HCF UI: fixed footer STOP/Create cells can overlap or become obscured.'
 }
 
-# Both 116-DIP TabItems must contain a strictly shorter 108-DIP selected
-# segment plus 8-DIP bottom gap (rather than a 116+7 overrun that clips the glow).
+# Both 116-DIP TabItems must fill their highlight to the item height with no
+# bottom gap. A larger segment or extra margin can clip the active background.
 # STOP must follow the items host inside the same right-hand navigation rail,
 # never inside the Create footer or inside an individual TabItem.
 $modeTabStyleStart = $xaml.IndexOf('<Style x:Key="CeilingModeTabItem"')
@@ -399,9 +399,9 @@ if ($modeTabStyleStart -lt 0 -or $modeTabStyleEnd -le $modeTabStyleStart -or
     $modeRailStyleStart -lt 0 -or $modeRailStyleEnd -le $modeRailStyleStart -or
     $footerIndex -lt 0 -or
     -not $modeTabStyle.Contains('<Setter Property="Height" Value="116"/>') -or
-    -not $modeTabStyle.Contains('Height="108"') -or
-    -not $modeTabStyle.Contains('Margin="0,0,0,8"') -or
-    $modeTabStyle.Contains('Height="{TemplateBinding Height}"') -or
+    -not $modeTabStyle.Contains('Height="{TemplateBinding Height}"') -or
+    -not $modeTabStyle.Contains('Margin="0"') -or
+    $modeTabStyle.Contains('Margin="0,0,0,8"') -or
     -not $modeRailStyle.Contains('Orientation="Vertical" IsItemsHost="True"') -or
     -not $modeRailStyle.Contains('<Button Grid.Row="1" x:Name="StopHcfButton"') -or
     $modeRailStyle.IndexOf('x:Name="StopHcfButton"') -lt $modeRailStyle.IndexOf('IsItemsHost="True"') -or
