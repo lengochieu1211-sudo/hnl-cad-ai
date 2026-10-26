@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>HNL.VXT.AutoCAD</RootNamespace>
+    <AssemblyName>HNL.VXT.AutoCAD</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\HNL.VXT.AutoCAD\*.cs" Link="%(Filename)%(Extension)" />
+    <PackageReference Include="AutoCAD.NET" Version="25.1.1" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\HNL.VXT.Core\HNL.VXT.Core.csproj" />
+    <ProjectReference Include="..\..\HNL.VXT.UI\HNL.VXT.UI.csproj" />
+  </ItemGroup>
+</Project>
