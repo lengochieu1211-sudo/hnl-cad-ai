@@ -676,21 +676,22 @@ namespace HNL.CeilingEstimator.AutoCAD
             var content = new StackPanel { Margin = new Thickness(0, 6, 0, 8) };
 
             var selection = Section("01  Chọn Hatch", "#2497FF");
-            selection.Children.Add(CommandButton("Chọn Hatch và tạo bảng", "HCECALC", true));
+            var calculateButton = CommandButton("Chọn Hatch và tạo bảng", "HCECALC", true);
+            calculateButton.ToolTip =
+                "Chọn Hatch, tính lại và đặt bảng CAD mới. Nhấn Esc để hủy đặt bảng. " +
+                "Đổi loại tấm không tự cập nhật bảng CAD cũ.";
+            selection.Children.Add(calculateButton);
             _nextCalculationHint = Text("", 11, _primary, FontWeights.SemiBold);
             selection.Children.Add(_nextCalculationHint);
-            selection.Children.Add(Text("Đổi loại tấm không tự cập nhật bảng CAD cũ. Bấm nút để chọn Hatch, tính lại và đặt bảng mới.",
-                10, _muted, FontWeights.Normal));
             content.Children.Add(Card(selection));
 
             content.Children.Add(Card(BuildLegacySettingsPanel()));
 
             var result = Section("03  Kết quả", "#F59E0B");
-            result.Children.Add(Text("Kết quả hiển thị trên dòng lệnh. Hatch chưa rõ lưới hoặc đơn vị cần xác nhận.",
-                11, _muted, FontWeights.Normal));
-            result.Children.Add(Text("Chọn Hatch và tạo bảng ở phía trên; nhấn Esc để hủy đặt bảng.",
-                11, _muted, FontWeights.Normal));
-            result.Children.Add(Text("Chưa hỗ trợ xem trước hình học từng tấm.",
+            result.ToolTip =
+                "Kết quả tính hiển thị trên dòng lệnh AutoCAD. " +
+                "Hatch chưa rõ lưới hoặc đơn vị sẽ được yêu cầu xác nhận.";
+            result.Children.Add(Text("Chưa hỗ trợ xem trước hình học bố trí tấm.",
                 10, Brush("#E5A84E"), FontWeights.SemiBold));
             content.Children.Add(Card(result));
             var check = Section("04  Kiểm tra", "#A78BFA");
@@ -800,14 +801,13 @@ namespace HNL.CeilingEstimator.AutoCAD
                 BorderBrush = (Brush)Resources["InputBorder"],
                 Padding = new Thickness(6, 3, 6, 3)
             };
-            _legacyTableHeight.ToolTip = "Cao chữ bảng CAD mới (mm). 0 = theo TableStyle của DWG; bảng cũ không tự cập nhật.";
+            _legacyTableHeight.ToolTip =
+                "Cao chữ bảng CAD mới (mm): 0 = theo TableStyle của DWG; số dương = chiều cao tùy chọn. " +
+                "Chiều rộng cột và chiều cao hàng tự khớp MTEXT; bảng CAD cũ không tự cập nhật.";
             _legacyTableHeight.LostFocus += (sender, args) => SaveLegacyTableHeight();
             Grid.SetColumn(_legacyTableHeight, 1);
             heightRow.Children.Add(_legacyTableHeight);
             table.Children.Add(heightRow);
-            table.Children.Add(Text(
-                "Cao chữ bảng: 0 = theo TableStyle. Nhập số dương cho bảng CAD mới; bảng cũ giữ nguyên.",
-                10, _muted, FontWeights.Normal));
             var labelHeightRow = new Grid { Margin = new Thickness(0, 0, 0, RowSpacing) };
             labelHeightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) });
             labelHeightRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -820,6 +820,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 BorderBrush = (Brush)Resources["InputBorder"],
                 Padding = new Thickness(6, 3, 6, 3)
             };
+            _legacyLabelHeight.ToolTip = "Chiều cao mã ô N/G/L trong bản vẽ (mm), áp dụng khi tạo mới.";
             _legacyLabelHeight.LostFocus += (sender, args) => SaveLegacyLabelHeight();
             Grid.SetColumn(_legacyLabelHeight, 1);
             labelHeightRow.Children.Add(_legacyLabelHeight);
@@ -876,18 +877,15 @@ namespace HNL.CeilingEstimator.AutoCAD
             Grid.SetColumn(_legacyCutMode, 1);
             cutModeRow.Children.Add(_legacyCutMode);
             table.Children.Add(cutModeRow);
-            table.Children.Add(Text(
-                "Cỡ chữ 0 = theo Table Style. Chiều rộng cột và chiều cao hàng tự khớp MTEXT; chỉ áp dụng cho bảng mới.",
-                10, _muted, FontWeights.Normal));
             wrapped.Children.Add(Card(table));
             var current = Section("Cấu hình hiện tại", "#F59E0B");
             _legacyStatus = Text("", 11, _primary, FontWeights.SemiBold);
             _legacyValidation = Text("", 10, Brush("#F87171"), FontWeights.SemiBold);
             current.Children.Add(_legacyStatus);
             current.Children.Add(_legacyValidation);
-            current.Children.Add(Text(
-                "Mỗi DWG lưu cấu hình riêng. Một số chế độ chưa xác nhận Golden trên AutoCAD.",
-                10, _muted, FontWeights.Normal));
+            current.ToolTip =
+                "Mỗi DWG giữ cấu hình riêng trong phiên làm việc. " +
+                "Runtime Golden trên AutoCAD chưa được xác nhận đầy đủ cho mọi chế độ.";
             wrapped.Children.Add(Card(current));
             var root = Section("02  Cài đặt tính tấm", "#22C55E");
             root.Children.Add(wrapped);
