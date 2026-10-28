@@ -861,6 +861,7 @@ namespace HNL.CeilingEstimator.AutoCAD
             };
             cutModeRow.Children.Add(cutModeLabel);
             _legacyCutMode = new ComboBox { MinHeight = ControlMinHeight, Foreground = _primary };
+            _legacyCutMode.ToolTip = "Chế độ liệt kê mảnh cắt chỉ áp dụng cho bảng mới. Bảng CAD đã tạo không tự cập nhật.";
             _legacyCutMode.Items.Add("Tổng hợp");
             _legacyCutMode.Items.Add("Chi tiết (chậm)");
             _legacyCutMode.SelectionChanged += (sender, args) =>
