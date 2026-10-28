@@ -802,7 +802,7 @@ namespace HNL.CeilingEstimator.AutoCAD
                 Padding = new Thickness(6, 3, 6, 3)
             };
             _legacyTableHeight.ToolTip =
-                "Cao chữ bảng CAD mới (mm): 0 = theo TableStyle của DWG; số dương = chiều cao tùy chọn. " +
+                "Cao chữ bảng: 0 = theo TableStyle. Dùng số dương để đặt chiều cao chữ (mm) cho bảng CAD mới. " +
                 "Chiều rộng cột và chiều cao hàng tự khớp MTEXT; bảng CAD cũ không tự cập nhật.";
             _legacyTableHeight.LostFocus += (sender, args) => SaveLegacyTableHeight();
             Grid.SetColumn(_legacyTableHeight, 1);
