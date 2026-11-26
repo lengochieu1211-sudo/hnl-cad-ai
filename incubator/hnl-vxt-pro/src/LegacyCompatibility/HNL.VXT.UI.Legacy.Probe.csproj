@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Compile-only UI API audit. Not part of any production HCF installer. -->
+  <PropertyGroup>
+    <TargetFrameworks>net45;net46;net47</TargetFrameworks>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>HNL.VXT.UI</RootNamespace>
+    <AssemblyName>HNL.VXT.UI.LegacyProbe</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultPageItems>false</EnableDefaultPageItems>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\HNL.VXT.UI\**\*.cs"
+             Exclude="..\HNL.VXT.UI\bin\**;..\HNL.VXT.UI\obj\**"
+             Link="%(RecursiveDir)%(Filename)%(Extension)" />
+    <Page Include="..\HNL.VXT.UI\**\*.xaml"
+          Exclude="..\HNL.VXT.UI\bin\**;..\HNL.VXT.UI\obj\**"
+          Link="%(RecursiveDir)%(Filename)%(Extension)" />
+    <ProjectReference Include="HNL.VXT.Core.Legacy.Probe.csproj" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Resource Include="..\..\installer\assets\HNL-VXT-EXE-Logo.png" Link="Assets\HNL-Logo-Official.png" />
+  </ItemGroup>
+</Project>
