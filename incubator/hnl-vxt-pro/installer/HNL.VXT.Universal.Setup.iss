@@ -12,7 +12,7 @@ AppVerName={#MyAppName} v{#MyAppVersion}
 AppPublisher={#MyPublisher}
 VersionInfoVersion={#MyNumericVersion}
 VersionInfoCompany={#MyPublisher}
-VersionInfoDescription=HNL Ceiling Framing Pro Universal AutoCAD 2023-2027 Installer
+VersionInfoDescription=HNL Ceiling Framing Pro Universal AutoCAD 2021-2027 Installer
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyNumericVersion}
 DefaultDirName={commonpf}\Autodesk\ApplicationPlugins\HNL.CeilingFramingPro.bundle
@@ -43,6 +43,8 @@ Type: filesandordirs; Name: "{app}\Assets"
 Type: files; Name: "{app}\PackageContents.xml"
 
 [Dirs]
+Name: "{app}\Contents\Windows\2021"
+Name: "{app}\Contents\Windows\2022"
 Name: "{app}\Contents\Windows\2023"
 Name: "{app}\Contents\Windows\2024"
 Name: "{app}\Contents\Windows\2025"
@@ -53,6 +55,8 @@ Name: "{app}\Assets"
 [Files]
 Source: "..\build\universal\PackageContents.2026-net8.xml"; DestDir: "{app}"; DestName: "PackageContents.xml"; Flags: ignoreversion; Check: not UseCad2026Net10
 Source: "..\build\universal\PackageContents.2026-net10.xml"; DestDir: "{app}"; DestName: "PackageContents.xml"; Flags: ignoreversion; Check: UseCad2026Net10
+Source: "..\artifacts\universal\2021\*"; DestDir: "{app}\Contents\Windows\2021"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\artifacts\universal\2022\*"; DestDir: "{app}\Contents\Windows\2022"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\artifacts\universal\2023\*"; DestDir: "{app}\Contents\Windows\2023"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\artifacts\universal\2024\*"; DestDir: "{app}\Contents\Windows\2024"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\artifacts\universal\2025\*"; DestDir: "{app}\Contents\Windows\2025"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -223,6 +227,8 @@ end;
 function BuildDetectedSummary: String;
 begin
   Result := '';
+  if AutoCADReleaseDetected('R24.0') then Result := Result + 'AutoCAD 2021' + #13#10;
+  if AutoCADReleaseDetected('R24.1') then Result := Result + 'AutoCAD 2022' + #13#10;
   if AutoCADReleaseDetected('R24.2') then Result := Result + 'AutoCAD 2023' + #13#10;
   if AutoCADReleaseDetected('R24.3') then Result := Result + 'AutoCAD 2024' + #13#10;
   if AutoCADReleaseDetected('R25.0') then Result := Result + 'AutoCAD 2025' + #13#10;
@@ -253,7 +259,7 @@ begin
   if DetectedCadSummary = '' then
   begin
     if MsgBox(
-      'HNL Tool chưa phát hiện AutoCAD 2023-2027 trên máy.' + #13#10 + #13#10 +
+      'HNL Tool chưa phát hiện AutoCAD 2021-2027 trên máy.' + #13#10 + #13#10 +
       'Bạn vẫn có thể cài trước Universal Plugin. Tiếp tục?',
       mbConfirmation, MB_YESNO) <> IDYES then
       Exit;
@@ -263,7 +269,7 @@ begin
     if MsgBox(
       'HNL Ceiling Framing Pro Universal phát hiện:' + #13#10 + #13#10 +
       DetectedCadSummary + #13#10 +
-      'Setup sẽ cài bộ plugin tương thích AutoCAD 2023-2027.' + #13#10 +
+      'Setup sẽ cài bộ plugin tương thích AutoCAD 2021-2027.' + #13#10 +
       'Tiếp tục cài đặt?',
       mbConfirmation, MB_YESNO) <> IDYES then
       Exit;
@@ -289,7 +295,7 @@ begin
     RemoveLegacyHnlBundle;
     MsgBox(
       'Cài đặt HNL Ceiling Framing Pro Universal v{#MyAppVersion} hoàn tất.' + #13#10 + #13#10 +
-      'Hỗ trợ: AutoCAD 2023, 2024, 2025, 2026 và 2027.' + #13#10 +
+      'Hỗ trợ: AutoCAD 2021, 2022, 2023, 2024, 2025, 2026 và 2027.' + #13#10 +
       'Mở AutoCAD và gõ HCF để mở giao diện HNL Ceiling Framing Pro.' + #13#10 + #13#10 +
       'Nếu AutoCAD 2026 được nâng từ trước 2026.1.2 lên 2026.1.2+, hãy chạy lại Setup để chuyển binary NET8 sang NET10.',
       mbInformation, MB_OK);
