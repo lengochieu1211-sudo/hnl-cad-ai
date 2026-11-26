@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Diagnostic-only: compile the untouched HCF solver against the frameworks
+       originally supported by AutoCAD 2013-2020. This file is NOT a release. -->
+  <PropertyGroup>
+    <TargetFrameworks>net40;net45;net46;net47</TargetFrameworks>
+    <RootNamespace>HNL.VXT.Core</RootNamespace>
+    <AssemblyName>HNL.VXT.Core.LegacyProbe</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\HNL.VXT.Core\**\*.cs"
+             Exclude="..\HNL.VXT.Core\bin\**;..\HNL.VXT.Core\obj\**" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+  <!-- C# named tuples need the ValueTuple backport for .NET 4.5/4.6. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net45' Or '$(TargetFramework)' == 'net46'">
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
+  </ItemGroup>
+</Project>

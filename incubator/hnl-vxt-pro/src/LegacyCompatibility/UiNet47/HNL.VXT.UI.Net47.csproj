@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net47</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>HNL.VXT.UI</RootNamespace>
+    <AssemblyName>HNL.VXT.UI</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultPageItems>false</EnableDefaultPageItems>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Canonical WPF source linked unchanged. -->
+    <Compile Include="..\..\HNL.VXT.UI\**\*.cs" Exclude="..\..\HNL.VXT.UI\bin\**;..\..\HNL.VXT.UI\obj\**" Link="%(RecursiveDir)%(Filename)%(Extension)" />
+    <Page Include="..\..\HNL.VXT.UI\**\*.xaml" Exclude="..\..\HNL.VXT.UI\bin\**;..\..\HNL.VXT.UI\obj\**" Link="%(RecursiveDir)%(Filename)%(Extension)" />
+    <ProjectReference Include="..\CoreNet47\HNL.VXT.Core.Net47.csproj" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Resource Include="..\..\..\installer\assets\HNL-VXT-EXE-Logo.png" Link="Assets\HNL-Logo-Official.png" />
+  </ItemGroup>
+</Project>

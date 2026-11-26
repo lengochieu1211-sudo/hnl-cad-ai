@@ -1,0 +1,1003 @@
+using System;
+using System.ComponentModel;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Windows.Input;
+using HNL.VXT.Core.Models;
+using HNL.VXT.UI.Hosting;
+using HNL.VXT.UI.Infrastructure;
+
+namespace HNL.VXT.UI.ViewModels
+{
+    public sealed class LayInCeilingViewModel : INotifyPropertyChanged
+    {
+        private readonly IVxtHostBridge _host;
+        private LayInCeilingSettings _settings = new LayInCeilingSettings();
+        private bool _hasBoundary;
+        private bool _usingExistingHatch;
+        private string _boundaryStatus = "Chưa chọn biên";
+        private string _previewStatus = "Chọn biên để xem trước.";
+        private string _summary = "T chính --  •  T phụ dài --  •  T phụ ngắn --  •  Ty --";
+
+        public LayInCeilingViewModel(IVxtHostBridge host)
+        {
+            _host = host ?? throw new ArgumentNullException(nameof(host));
+
+            SelectBoundaryCommand = new RelayCommand(() => _host.SelectBoundary());
+            SelectExistingHatchesCommand = new RelayCommand(
+                () => _host.PickLayInExistingHatches(Snapshot()),
+                () => !DrawHatch);
+            PickBoundaryPointCommand = new RelayCommand(() => _host.PickBoundaryPoint());
+            PickManualStartCommand = new RelayCommand(
+                () => _host.PickLayInManualStart(Snapshot()),
+                () => HasBoundary);
+            PickDoorCommand = new RelayCommand(
+                () => _host.PickLayInDoor(Snapshot()),
+                () => HasBoundary);
+            PickHangerBlockCommand = new RelayCommand(
+                () => _host.PickLayInHangerBlock(Snapshot()));
+            PickStartMarkerBlockCommand = new RelayCommand(
+                () => _host.PickLayInStartMarkerBlock(Snapshot()));
+
+            RefreshPreviewCommand = new RelayCommand(
+                () => _host.RequestLayInPreview(Snapshot()),
+                () => HasBoundary);
+            ClearPreviewCommand = new RelayCommand(() => _host.ClearLayInPreview());
+            CreateCommand = new RelayCommand(
+                () => _host.RequestLayInCreate(Snapshot()),
+                () => HasBoundary);
+            ResetCommand = new RelayCommand(ResetDefaults);
+            PickHorizontalDimensionCommand = new RelayCommand(
+                () => _host.PickLayInDimensionPosition(true, Snapshot()), () => HasBoundary);
+            PickVerticalDimensionCommand = new RelayCommand(
+                () => _host.PickLayInDimensionPosition(false, Snapshot()), () => HasBoundary);
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        public string[] GridOptions { get; } =
+        {
+            "600 × 600",
+            "610 × 610",
+            "600 × 1200",
+            "610 × 1220"
+        };
+
+        public string[] DirectionOptions { get; } =
+        {
+            "Ngang",
+            "Dọc",
+            "Theo cạnh ngắn",
+            "Theo cạnh dài",
+            "Tối ưu"
+        };
+
+        public string[] StartOptions { get; } =
+        {
+            "Cân biên",
+            "Điểm chọn",
+            "Theo cửa"
+        };
+
+        public string[] DimensionOptions { get; } =
+        {
+            "Tắt",
+            "Một ô",
+            "Gộp ô",
+            "Tổng",
+            "Lưới + mép cắt"
+        };
+
+        public string[] DimStyleOptions
+        {
+            get
+            {
+                var list = new List<string> { "Hiện hành" };
+                var names = _host.GetDimStyleNames() ?? Array.Empty<string>();
+                list.AddRange(names.Where(n => !string.IsNullOrWhiteSpace(n))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(n => n));
+                return list.ToArray();
+            }
+        }
+
+        public string SelectedDimensionStyle
+        {
+            get => string.IsNullOrWhiteSpace(_settings.DimensionStyle)
+                ? "Hiện hành" : _settings.DimensionStyle;
+            set
+            {
+                var chosen = string.Equals(value, "Hiện hành", StringComparison.Ordinal)
+                    ? string.Empty : (value ?? string.Empty);
+                if (string.Equals(_settings.DimensionStyle, chosen, StringComparison.Ordinal)) return;
+                _settings.DimensionStyle = chosen;
+                Changed();
+            }
+        }
+
+        public string[] HorizontalPositionOptions { get; } = { "Tự động", "Phía trên", "Phía dưới" };
+        public string[] VerticalPositionOptions { get; } = { "Tự động", "Bên trái", "Bên phải" };
+
+        public ICommand SelectBoundaryCommand { get; }
+        public ICommand SelectExistingHatchesCommand { get; }
+        public ICommand PickBoundaryPointCommand { get; }
+        public ICommand PickManualStartCommand { get; }
+        public ICommand PickDoorCommand { get; }
+        public ICommand PickHangerBlockCommand { get; }
+        public ICommand PickStartMarkerBlockCommand { get; }
+        public ICommand RefreshPreviewCommand { get; }
+        public ICommand ClearPreviewCommand { get; }
+        public ICommand CreateCommand { get; }
+        public ICommand ResetCommand { get; }
+        public ICommand PickHorizontalDimensionCommand { get; }
+        public ICommand PickVerticalDimensionCommand { get; }
+
+        public bool HasBoundary
+        {
+            get => _hasBoundary;
+            private set
+            {
+                if (!Set(ref _hasBoundary, value)) return;
+                RaiseCommandStates();
+            }
+        }
+
+        public string BoundaryStatus
+        {
+            get => _boundaryStatus;
+            private set => Set(ref _boundaryStatus, value);
+        }
+
+        public string PreviewStatus
+        {
+            get => _previewStatus;
+            private set => Set(ref _previewStatus, value);
+        }
+
+        public string Summary
+        {
+            get => _summary;
+            private set => Set(ref _summary, value);
+        }
+
+        public string SelectedGrid
+        {
+            get => GridToText(_settings.GridSystem);
+            set
+            {
+                var next = TextToGrid(value);
+                if (_settings.GridSystem == next) return;
+                _settings.GridSystem = next;
+                OnPropertyChanged(nameof(HangerMaxSpacing));
+                OnPropertyChanged(nameof(HangerMinEdgeOffset));
+                OnPropertyChanged(nameof(HangerMaxEdgeOffset));
+                Changed();
+            }
+        }
+
+        public string SelectedDirection
+        {
+            get => DirectionToText(_settings.MainDirection);
+            set
+            {
+                var next = TextToDirection(value);
+                if (_settings.MainDirection == next) return;
+                _settings.MainDirection = next;
+                Changed();
+            }
+        }
+
+        public string SelectedStart
+        {
+            get => StartToText(_settings.StartMode);
+            set
+            {
+                var next = TextToStart(value);
+                if (_settings.StartMode == next) return;
+                _settings.StartMode = next;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsManualStart));
+                OnPropertyChanged(nameof(IsDoorStart));
+                RequestPreview();
+            }
+        }
+
+        public bool IsManualStart => _settings.DrawHatch &&
+            _settings.StartMode == LayInStartMode.ManualStart;
+        public bool IsDoorStart => _settings.DrawHatch &&
+            _settings.StartMode == LayInStartMode.FromDoor;
+
+        public bool DrawHatch
+        {
+            get => _settings.DrawHatch;
+            set
+            {
+                if (_settings.DrawHatch == value) return;
+                _settings.DrawHatch = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsUsingExistingHatch));
+                OnPropertyChanged(nameof(IsManualStart));
+                OnPropertyChanged(nameof(IsDoorStart));
+                (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                RequestPreview();
+            }
+        }
+
+        public bool IsUsingExistingHatch => !_settings.DrawHatch;
+        // Hatch OFF by itself does not mean a valid Hatch source was picked.
+        public bool HasExistingHatchSource => _usingExistingHatch;
+
+        public bool DrawHangers
+        {
+            get => _settings.DrawHangers;
+            set
+            {
+                if (_settings.DrawHangers == value) return;
+                _settings.DrawHangers = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CanDimensionHangers));
+                OnPropertyChanged(nameof(IsHangerDimensionOptionsEnabled));
+                RequestPreview();
+            }
+        }
+
+        private double SystemHangerMax => _settings.GridSystem == LayInGridSystem.Module610x610 ||
+            _settings.GridSystem == LayInGridSystem.Module610x1220 ? 1220.0 : 1200.0;
+        private double SystemHangerEdge => SystemHangerMax == 1220.0 ? 305.0 : 300.0;
+
+        public double HangerMinSpacing
+        {
+            get => _settings.HangerMinSpacing;
+            set
+            {
+                var next = Math.Max(1.0, value);
+                if (Near(_settings.HangerMinSpacing, next)) return;
+                _settings.HangerMinSpacing = next;
+                Changed();
+            }
+        }
+
+        public double HangerMaxSpacing
+        {
+            get => _settings.HangerMaxSpacing > 0 ? _settings.HangerMaxSpacing : SystemHangerMax;
+            set
+            {
+                var next = Math.Max(1.0, value);
+                if (Near(HangerMaxSpacing, next)) return;
+                _settings.HangerMaxSpacing = next;
+                Changed();
+            }
+        }
+
+        public double HangerMinEdgeOffset
+        {
+            get => _settings.HangerMinEdgeOffset > 0 ? _settings.HangerMinEdgeOffset :
+                _settings.HangerEdgeTarget > 0 ? _settings.HangerEdgeTarget : SystemHangerEdge;
+            set
+            {
+                var next = Math.Max(0.0, value);
+                if (Near(HangerMinEdgeOffset, next)) return;
+                _settings.HangerMinEdgeOffset = next;
+                Changed();
+            }
+        }
+
+        public double HangerMaxEdgeOffset
+        {
+            get => _settings.HangerMaxEdgeOffset > 0 ? _settings.HangerMaxEdgeOffset :
+                Math.Max(HangerMinEdgeOffset, SystemHangerEdge + 100.0);
+            set
+            {
+                var next = Math.Max(0.0, value);
+                if (Near(HangerMaxEdgeOffset, next)) return;
+                _settings.HangerMaxEdgeOffset = next;
+                Changed();
+            }
+        }
+
+        public double HangerBalanceStep
+        {
+            get => _settings.HangerBalanceStep;
+            set
+            {
+                var next = Math.Max(1.0, value);
+                if (Near(_settings.HangerBalanceStep, next)) return;
+                _settings.HangerBalanceStep = next;
+                Changed();
+            }
+        }
+
+        public double HangerEdgeTarget
+        {
+            get => _settings.HangerEdgeTarget;
+            set
+            {
+                if (Near(_settings.HangerEdgeTarget, value)) return;
+                _settings.HangerEdgeTarget = Math.Max(0.0, value);
+                Changed();
+            }
+        }
+
+        public string HangerBlockName
+        {
+            get => _settings.HangerBlockName;
+            set
+            {
+                value = value ?? string.Empty;
+                if (string.Equals(_settings.HangerBlockName, value, StringComparison.Ordinal)) return;
+                _settings.HangerBlockName = value;
+                OnPropertyChanged();
+                RequestPreview();
+            }
+        }
+
+        public bool DrawStartTileBlock
+        {
+            get => _settings.DrawStartTileBlock;
+            set
+            {
+                if (_settings.DrawStartTileBlock == value) return;
+                _settings.DrawStartTileBlock = value;
+                Changed();
+            }
+        }
+
+        public string StartMarkerBlockName
+        {
+            get => _settings.StartMarkerBlockName;
+            set
+            {
+                value = value ?? string.Empty;
+                if (string.Equals(_settings.StartMarkerBlockName, value, StringComparison.Ordinal)) return;
+                _settings.StartMarkerBlockName = value;
+                OnPropertyChanged();
+                RequestPreview();
+            }
+        }
+
+        public string SelectedDimensionMode
+        {
+            get => DimensionToText(_settings.DimensionMode);
+            set
+            {
+                var next = TextToDimension(value);
+                if (_settings.DimensionMode == next &&
+                    _settings.DrawDimensions == (next != LayInDimensionMode.Off))
+                    return;
+                _settings.DimensionMode = next;
+                _settings.DrawDimensions = next != LayInDimensionMode.Off;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DrawDimensions));
+                OnPropertyChanged(nameof(IsGroupedDimension));
+                OnPropertyChanged(nameof(IsDimensionEnabled));
+                OnPropertyChanged(nameof(CanAddOverallDimension));
+                OnPropertyChanged(nameof(IsAdditionalOverallDimensionEnabled));
+                OnPropertyChanged(nameof(CanDimensionHangers));
+                OnPropertyChanged(nameof(IsHangerDimensionOptionsEnabled));
+                RequestPreview();
+            }
+        }
+
+        public bool DrawDimensions
+        {
+            get => _settings.DrawDimensions;
+            set
+            {
+                if (_settings.DrawDimensions == value &&
+                    !(value && _settings.DimensionMode == LayInDimensionMode.Off))
+                    return;
+                _settings.DrawDimensions = value;
+                if (value && _settings.DimensionMode == LayInDimensionMode.Off)
+                {
+                    _settings.DimensionMode = LayInDimensionMode.GridAndEdges;
+                    OnPropertyChanged(nameof(SelectedDimensionMode));
+                }
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsGroupedDimension));
+                OnPropertyChanged(nameof(IsDimensionEnabled));
+                OnPropertyChanged(nameof(CanAddOverallDimension));
+                OnPropertyChanged(nameof(IsAdditionalOverallDimensionEnabled));
+                OnPropertyChanged(nameof(CanDimensionHangers));
+                OnPropertyChanged(nameof(IsHangerDimensionOptionsEnabled));
+                RequestPreview();
+            }
+        }
+
+        public bool IsGroupedDimension => IsDimensionEnabled &&
+            _settings.DimensionMode == LayInDimensionMode.Grouped;
+        public bool IsDimensionEnabled => _settings.DrawDimensions &&
+            _settings.DimensionMode != LayInDimensionMode.Off;
+        public bool CanAddOverallDimension => IsDimensionEnabled && _settings.DimensionMode != LayInDimensionMode.Overall;
+        public bool IsAdditionalOverallDimensionEnabled => CanAddOverallDimension && AddOverallDimension;
+        public bool CanDimensionHangers => IsDimensionEnabled && DrawHangers;
+        public bool IsHangerDimensionOptionsEnabled => CanDimensionHangers && DimensionHangers;
+
+        public bool DimensionHangers
+        {
+            get => _settings.DimensionHangers;
+            set
+            {
+                if (_settings.DimensionHangers == value) return;
+                _settings.DimensionHangers = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsHangerDimensionOptionsEnabled));
+                RequestPreview();
+            }
+        }
+
+        public string SelectedHangerDimPosition
+        {
+            get => _settings.HangerDimSide == LayInHorizontalDimSide.Top ? "Phía trên" :
+                _settings.HangerDimSide == LayInHorizontalDimSide.Bottom ? "Phía dưới" : "Tự động";
+            set
+            {
+                var side = (value == "Phía trên" || value == "Trên") ? LayInHorizontalDimSide.Top :
+                    (value == "Phía dưới" || value == "Dưới") ? LayInHorizontalDimSide.Bottom : LayInHorizontalDimSide.Auto;
+                if (_settings.HangerDimSide == side) return;
+                _settings.HangerDimSide = side;
+                Changed();
+            }
+        }
+
+        public double HangerDimDistance
+        {
+            get => _settings.HangerDimDistance;
+            set
+            {
+                var distance = Math.Max(1.0, value);
+                if (Near(_settings.HangerDimDistance, distance)) return;
+                _settings.HangerDimDistance = distance;
+                Changed();
+            }
+        }
+
+        public bool AddOverallDimension
+        {
+            get => _settings.AddOverallDimension;
+            set
+            {
+                if (_settings.AddOverallDimension == value) return;
+                _settings.AddOverallDimension = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsAdditionalOverallDimensionEnabled));
+                RequestPreview();
+            }
+        }
+
+        public double DimensionRowSpacing
+        {
+            get => _settings.DimensionRowSpacing;
+            set
+            {
+                var spacing = Math.Max(1.0, value);
+                if (Near(_settings.DimensionRowSpacing, spacing)) return;
+                _settings.DimensionRowSpacing = spacing;
+                Changed();
+            }
+        }
+
+        public string SelectedHorizontalDimPosition
+        {
+            get => _settings.HorizontalDimSide == LayInHorizontalDimSide.Top ? "Phía trên" :
+                _settings.HorizontalDimSide == LayInHorizontalDimSide.Bottom ? "Phía dưới" : "Tự động";
+            set
+            {
+                var side = (value == "Phía trên" || value == "Trên") ? LayInHorizontalDimSide.Top :
+                    (value == "Phía dưới" || value == "Dưới") ? LayInHorizontalDimSide.Bottom : LayInHorizontalDimSide.Auto;
+                if (_settings.HorizontalDimSide == side) return;
+                _settings.HorizontalDimSide = side;
+                Changed();
+            }
+        }
+
+        public string SelectedVerticalDimPosition
+        {
+            get => _settings.VerticalDimSide == LayInVerticalDimSide.Right ? "Bên phải" :
+                _settings.VerticalDimSide == LayInVerticalDimSide.Left ? "Bên trái" : "Tự động";
+            set
+            {
+                var side = (value == "Bên phải" || value == "Phải") ? LayInVerticalDimSide.Right :
+                    (value == "Bên trái" || value == "Trái") ? LayInVerticalDimSide.Left : LayInVerticalDimSide.Auto;
+                if (_settings.VerticalDimSide == side) return;
+                _settings.VerticalDimSide = side;
+                Changed();
+            }
+        }
+
+        public double HorizontalDimDistance
+        {
+            get => _settings.HorizontalDimDistance;
+            set
+            {
+                var distance = Math.Max(1.0, value);
+                if (Near(_settings.HorizontalDimDistance, distance)) return;
+                _settings.HorizontalDimDistance = distance;
+                Changed();
+            }
+        }
+
+        public double VerticalDimDistance
+        {
+            get => _settings.VerticalDimDistance;
+            set
+            {
+                var distance = Math.Max(1.0, value);
+                if (Near(_settings.VerticalDimDistance, distance)) return;
+                _settings.VerticalDimDistance = distance;
+                Changed();
+            }
+        }
+
+        public void SetPickedDimensionPosition(bool horizontal, bool farSide, double distance)
+        {
+            if (horizontal)
+            {
+                _settings.HorizontalDimSide = farSide ? LayInHorizontalDimSide.Top : LayInHorizontalDimSide.Bottom;
+                _settings.HorizontalDimDistance = Math.Max(1.0, distance);
+                OnPropertyChanged(nameof(SelectedHorizontalDimPosition));
+                OnPropertyChanged(nameof(HorizontalDimDistance));
+            }
+            else
+            {
+                _settings.VerticalDimSide = farSide ? LayInVerticalDimSide.Right : LayInVerticalDimSide.Left;
+                _settings.VerticalDimDistance = Math.Max(1.0, distance);
+                OnPropertyChanged(nameof(SelectedVerticalDimPosition));
+                OnPropertyChanged(nameof(VerticalDimDistance));
+            }
+            RequestPreview();
+        }
+
+        public int GroupedDimensionCount
+        {
+            get => _settings.GroupedDimensionCount;
+            set
+            {
+                var next = Math.Max(1, Math.Min(100, value));
+                if (_settings.GroupedDimensionCount == next) return;
+                _settings.GroupedDimensionCount = next;
+                Changed();
+            }
+        }
+
+        // CAD resource lists are read from the active DWG; custom values stay selectable.
+        public string[] LayerOptions => ((_host as IVxtLayerCatalog)?.GetLayerNames()
+            ?? Array.Empty<string>()).Concat(new[] {
+                _settings.HatchLayer, _settings.HangerLayer,
+                _settings.DimensionLayer, _settings.StartMarkerLayer
+            }).Where(x => !string.IsNullOrWhiteSpace(x))
+              .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToArray();
+
+        public string[] LinetypeOptions => (_host.GetLinetypeNames()
+            ?? Array.Empty<string>()).Concat(new[] {
+                "Continuous", _settings.HatchLinetype, _settings.HangerLinetype,
+                _settings.DimensionLinetype, _settings.StartMarkerLinetype
+            }).Where(x => !string.IsNullOrWhiteSpace(x))
+              .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToArray();
+
+        public string[] QuickColorOptions { get; } = {
+            "Đỏ", "Vàng", "Xanh lá", "Cyan", "Xanh dương",
+            "Magenta", "Trắng / Đen", "Xám", "Xám nhạt"
+        };
+        public string[] LineweightOptions { get; } = {
+            "Mặc định", "ByBlock", "ByLayer", "0.00 mm", "0.05 mm",
+            "0.09 mm", "0.13 mm", "0.15 mm", "0.18 mm", "0.20 mm",
+            "0.25 mm", "0.30 mm", "0.35 mm", "0.40 mm", "0.50 mm",
+            "0.53 mm", "0.60 mm", "0.70 mm", "0.80 mm", "0.90 mm",
+            "1.00 mm", "1.06 mm", "1.20 mm", "1.40 mm", "1.58 mm",
+            "2.00 mm", "2.11 mm"
+        };
+
+        private void ChangeColor(Func<short> get, Action<short> set, string text, string property)
+        {
+            var next = VxtPaletteViewModel.TextToColorIndex(text, get());
+            if (next == get()) return;
+            set(next);
+            OnPropertyChanged(property);
+            RequestPreview();
+        }
+        private void ChangeLineweight(Func<string> get, Action<string> set, string text, string property)
+        {
+            SetText(set, get(), VxtPaletteViewModel.TextToLineweight(text, get()), property);
+        }
+
+        public string SelectedHatchColor
+        {
+            get => VxtPaletteViewModel.ColorIndexToText(_settings.HatchColorIndex);
+            set => ChangeColor(() => _settings.HatchColorIndex,
+                v => _settings.HatchColorIndex = v, value, nameof(SelectedHatchColor));
+        }
+        public string SelectedHatchLineweight
+        {
+            get => VxtPaletteViewModel.LineweightToText(_settings.HatchLineweight);
+            set => ChangeLineweight(() => _settings.HatchLineweight,
+                v => _settings.HatchLineweight = v, value, nameof(SelectedHatchLineweight));
+        }
+        public string HatchLinetype
+        {
+            get => _settings.HatchLinetype;
+            set => SetText(v => _settings.HatchLinetype = v,
+                _settings.HatchLinetype, value, nameof(HatchLinetype));
+        }
+
+        public string SelectedHangerColor
+        {
+            get => VxtPaletteViewModel.ColorIndexToText(_settings.HangerColorIndex);
+            set => ChangeColor(() => _settings.HangerColorIndex,
+                v => _settings.HangerColorIndex = v, value, nameof(SelectedHangerColor));
+        }
+        public string SelectedHangerLineweight
+        {
+            get => VxtPaletteViewModel.LineweightToText(_settings.HangerLineweight);
+            set => ChangeLineweight(() => _settings.HangerLineweight,
+                v => _settings.HangerLineweight = v, value, nameof(SelectedHangerLineweight));
+        }
+        public string HangerLinetype
+        {
+            get => _settings.HangerLinetype;
+            set => SetText(v => _settings.HangerLinetype = v,
+                _settings.HangerLinetype, value, nameof(HangerLinetype));
+        }
+
+        public string SelectedDimensionColor
+        {
+            get => VxtPaletteViewModel.ColorIndexToText(_settings.DimensionColorIndex);
+            set => ChangeColor(() => _settings.DimensionColorIndex,
+                v => _settings.DimensionColorIndex = v, value, nameof(SelectedDimensionColor));
+        }
+        public string SelectedDimensionLineweight
+        {
+            get => VxtPaletteViewModel.LineweightToText(_settings.DimensionLineweight);
+            set => ChangeLineweight(() => _settings.DimensionLineweight,
+                v => _settings.DimensionLineweight = v, value, nameof(SelectedDimensionLineweight));
+        }
+        public string DimensionLinetype
+        {
+            get => _settings.DimensionLinetype;
+            set => SetText(v => _settings.DimensionLinetype = v,
+                _settings.DimensionLinetype, value, nameof(DimensionLinetype));
+        }
+
+        public string SelectedStartMarkerColor
+        {
+            get => VxtPaletteViewModel.ColorIndexToText(_settings.StartMarkerColorIndex);
+            set => ChangeColor(() => _settings.StartMarkerColorIndex,
+                v => _settings.StartMarkerColorIndex = v, value, nameof(SelectedStartMarkerColor));
+        }
+        public string SelectedStartMarkerLineweight
+        {
+            get => VxtPaletteViewModel.LineweightToText(_settings.StartMarkerLineweight);
+            set => ChangeLineweight(() => _settings.StartMarkerLineweight,
+                v => _settings.StartMarkerLineweight = v, value, nameof(SelectedStartMarkerLineweight));
+        }
+        public string StartMarkerLinetype
+        {
+            get => _settings.StartMarkerLinetype;
+            set => SetText(v => _settings.StartMarkerLinetype = v,
+                _settings.StartMarkerLinetype, value, nameof(StartMarkerLinetype));
+        }
+
+        public string StartMarkerLayer
+        {
+            get => _settings.StartMarkerLayer;
+            set => SetText(v => _settings.StartMarkerLayer = v,
+                _settings.StartMarkerLayer, value, nameof(StartMarkerLayer));
+        }
+
+        public string HatchLayer
+        {
+            get => _settings.HatchLayer;
+            set => SetText(v => _settings.HatchLayer = v, _settings.HatchLayer, value, nameof(HatchLayer));
+        }
+
+        public string HangerLayer
+        {
+            get => _settings.HangerLayer;
+            set => SetText(v => _settings.HangerLayer = v, _settings.HangerLayer, value, nameof(HangerLayer));
+        }
+
+        public string DimensionLayer
+        {
+            get => _settings.DimensionLayer;
+            set => SetText(v => _settings.DimensionLayer = v, _settings.DimensionLayer, value, nameof(DimensionLayer));
+        }
+
+        public LayInCeilingSettings Snapshot() => _settings.Clone();
+
+        // AutoCAD command handlers call these only after selection succeeded.
+        public void SetExistingHatchesSelected(int count, LayInGridSystem firstSystem)
+        {
+            if (count <= 0) return;
+            _usingExistingHatch = true;
+            _settings.DrawHatch = false;
+            _settings.GridSystem = firstSystem;
+            _settings.ExistingHatchOrigin = null;
+            _settings.ExistingHatchAngleRadians = null;
+            OnPropertyChanged(nameof(DrawHatch));
+            OnPropertyChanged(nameof(IsUsingExistingHatch));
+            OnPropertyChanged(nameof(HasExistingHatchSource));
+            OnPropertyChanged(nameof(SelectedGrid));
+            OnPropertyChanged(nameof(IsManualStart));
+            OnPropertyChanged(nameof(IsDoorStart));
+            (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            SetBoundaryStatus("✓ " + count + " Hatch có sẵn (giữ nguyên Hatch)", true);
+            RequestPreview();
+        }
+
+        public void SetPolylineSourceSelected()
+        {
+            _usingExistingHatch = false;
+            _settings.DrawHatch = true;
+            _settings.ExistingHatchOrigin = null;
+            _settings.ExistingHatchAngleRadians = null;
+            OnPropertyChanged(nameof(DrawHatch));
+            OnPropertyChanged(nameof(IsUsingExistingHatch));
+            OnPropertyChanged(nameof(HasExistingHatchSource));
+            OnPropertyChanged(nameof(IsManualStart));
+            OnPropertyChanged(nameof(IsDoorStart));
+            (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            // Boundary selector schedules the authoritative Preview after state commit.
+        }
+
+        public void SetBoundaryStatus(string display, bool hasBoundary)
+        {
+            BoundaryStatus = display ?? string.Empty;
+            HasBoundary = hasBoundary;
+            // DimStyle table belongs to the active DWG, not to the palette.
+            OnPropertyChanged(nameof(DimStyleOptions));
+            OnPropertyChanged(nameof(LayerOptions));
+            OnPropertyChanged(nameof(LinetypeOptions));
+            if (!hasBoundary)
+                PreviewStatus = "Chọn biên để xem trước.";
+        }
+
+        // Manual and door anchors are DWG coordinates, not application-wide presets.
+        // Clear them on document transition without injecting a Preview command.
+        public void ClearDrawingPoints()
+        {
+            _settings.ManualStartPoint = null;
+            _settings.DoorPoint = null;
+            _usingExistingHatch = false;
+            _settings.DrawHatch = true;
+            _settings.ExistingHatchOrigin = null;
+            _settings.ExistingHatchAngleRadians = null;
+            OnPropertyChanged(nameof(DrawHatch));
+            OnPropertyChanged(nameof(IsUsingExistingHatch));
+            OnPropertyChanged(nameof(HasExistingHatchSource));
+            OnPropertyChanged(nameof(IsManualStart));
+            OnPropertyChanged(nameof(IsDoorStart));
+            (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            _settings.DoorCandidates = Array.Empty<HNL.VXT.Core.Geometry.Point2>();
+            _settings.DoorBlockName = string.Empty;
+            _settings.DimensionStyle = string.Empty;
+            OnPropertyChanged(nameof(DoorBlockSummary));
+            OnPropertyChanged(nameof(SelectedDimensionStyle));
+            OnPropertyChanged(nameof(DimStyleOptions));
+            OnPropertyChanged(nameof(LayerOptions));
+            OnPropertyChanged(nameof(LinetypeOptions));
+            if (_settings.StartMode != LayInStartMode.Balanced)
+            {
+                _settings.StartMode = LayInStartMode.Balanced;
+                OnPropertyChanged(nameof(SelectedStart));
+                OnPropertyChanged(nameof(IsManualStart));
+                OnPropertyChanged(nameof(IsDoorStart));
+            }
+        }
+
+        public void SetManualStart(HNL.VXT.Core.Geometry.Point2 point)
+        {
+            _settings.ManualStartPoint = point;
+            _settings.StartMode = LayInStartMode.ManualStart;
+            OnPropertyChanged(nameof(SelectedStart));
+            OnPropertyChanged(nameof(IsManualStart));
+            OnPropertyChanged(nameof(IsDoorStart));
+            RequestPreview();
+        }
+
+        public string DoorBlockSummary => _settings.DoorCandidates?.Count > 0
+            ? "Cửa mẫu: " + _settings.DoorBlockName + " (" +
+              _settings.DoorCandidates.Count + " block cùng tên)"
+            : "Chọn một block cửa mẫu để tự tìm các cửa cùng tên trong DWG.";
+
+        public void SetDoorBlocks(string blockName,
+            IReadOnlyList<HNL.VXT.Core.Geometry.Point2> points)
+        {
+            if (points == null || points.Count == 0) return;
+            _settings.DoorPoint = null;
+            _settings.DoorBlockName = blockName ?? string.Empty;
+            _settings.DoorCandidates = points.ToArray();
+            _settings.StartMode = LayInStartMode.FromDoor;
+            OnPropertyChanged(nameof(SelectedStart));
+            OnPropertyChanged(nameof(IsManualStart));
+            OnPropertyChanged(nameof(IsDoorStart));
+            OnPropertyChanged(nameof(DoorBlockSummary));
+            RequestPreview();
+        }
+
+        // Retain compatibility with the prior single-point API.
+        public void SetDoorPoint(HNL.VXT.Core.Geometry.Point2 point)
+        {
+            _settings.DoorCandidates = Array.Empty<HNL.VXT.Core.Geometry.Point2>();
+            _settings.DoorBlockName = string.Empty;
+            _settings.DoorPoint = point;
+            _settings.StartMode = LayInStartMode.FromDoor;
+            OnPropertyChanged(nameof(SelectedStart));
+            OnPropertyChanged(nameof(IsManualStart));
+            OnPropertyChanged(nameof(IsDoorStart));
+            OnPropertyChanged(nameof(DoorBlockSummary));
+            RequestPreview();
+        }
+
+        public void SetHangerBlock(string blockName)
+        {
+            _settings.HangerBlockName = blockName ?? string.Empty;
+            OnPropertyChanged(nameof(HangerBlockName));
+            RequestPreview();
+        }
+
+        public void SetStartMarkerBlock(string blockName)
+        {
+            _settings.StartMarkerBlockName = blockName ?? string.Empty;
+            OnPropertyChanged(nameof(StartMarkerBlockName));
+            RequestPreview();
+        }
+
+        public void SetPreviewStats(
+            int mainStocks,
+            int longCross,
+            int shortCross,
+            int hangers,
+            double wasteLength)
+        {
+            Summary =
+                "T chính " + mainStocks +
+                "  •  T phụ dài " + longCross +
+                "  •  T phụ ngắn " + shortCross +
+                "  •  Ty " + hangers +
+                "  •  Hao hụt " + Math.Round(wasteLength, 0) + " mm";
+            PreviewStatus = "✓ Đã cập nhật."; 
+        }
+
+        public void SetPreviewError(string message)
+        {
+            PreviewStatus = "⚠ " + (message ?? string.Empty);
+        }
+
+        private void ResetDefaults()
+        {
+            var selectedGrid = _settings.GridSystem;
+            _settings = new LayInCeilingSettings();
+            // Reset options but preserve the currently selected DWG hatch source.
+            if (_usingExistingHatch)
+            {
+                _settings.DrawHatch = false;
+                _settings.GridSystem = selectedGrid;
+            }
+            OnPropertyChanged(string.Empty);
+            (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            RequestPreview();
+        }
+
+        private void Changed([CallerMemberName] string propertyName = null)
+        {
+            OnPropertyChanged(propertyName);
+            RequestPreview();
+        }
+
+        private void RequestPreview()
+        {
+            if (HasBoundary)
+                _host.RequestLayInPreview(Snapshot());
+        }
+
+        private void RaiseCommandStates()
+        {
+            (SelectExistingHatchesCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (PickManualStartCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (PickDoorCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (RefreshPreviewCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (CreateCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (PickHorizontalDimensionCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (PickVerticalDimensionCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        }
+
+        private void SetText(Action<string> setter, string current, string value, string propertyName)
+        {
+            value = value ?? string.Empty;
+            if (string.Equals(current, value, StringComparison.Ordinal)) return;
+            setter(value);
+            OnPropertyChanged(propertyName);
+        }
+
+        private bool Set<T>(ref T field, T value, [CallerMemberName] string propertyName = null)
+        {
+            if (Equals(field, value)) return false;
+            field = value;
+            OnPropertyChanged(propertyName);
+            return true;
+        }
+
+        private void OnPropertyChanged([CallerMemberName] string propertyName = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+        private static bool Near(double a, double b) => Math.Abs(a - b) <= 1e-9;
+
+        private static string GridToText(LayInGridSystem value)
+        {
+            switch (value)
+            {
+                case LayInGridSystem.Module610x610: return "610 × 610";
+                case LayInGridSystem.Module600x1200: return "600 × 1200";
+                case LayInGridSystem.Module610x1220: return "610 × 1220";
+                default: return "600 × 600";
+            }
+        }
+
+        private static LayInGridSystem TextToGrid(string value)
+        {
+            if (value == "610 × 610") return LayInGridSystem.Module610x610;
+            if (value == "600 × 1200") return LayInGridSystem.Module600x1200;
+            if (value == "610 × 1220") return LayInGridSystem.Module610x1220;
+            return LayInGridSystem.Module600x600;
+        }
+
+        private static string DirectionToText(LayInMainDirectionMode value)
+        {
+            switch (value)
+            {
+                case LayInMainDirectionMode.Horizontal: return "Ngang";
+                case LayInMainDirectionMode.Vertical: return "Dọc";
+                case LayInMainDirectionMode.ParallelShortSide: return "Theo cạnh ngắn";
+                case LayInMainDirectionMode.ParallelLongSide: return "Theo cạnh dài";
+                default: return "Tối ưu";
+            }
+        }
+
+        private static LayInMainDirectionMode TextToDirection(string value)
+        {
+            if (value == "Ngang") return LayInMainDirectionMode.Horizontal;
+            if (value == "Dọc") return LayInMainDirectionMode.Vertical;
+            if (value == "Theo cạnh ngắn") return LayInMainDirectionMode.ParallelShortSide;
+            if (value == "Theo cạnh dài") return LayInMainDirectionMode.ParallelLongSide;
+            return LayInMainDirectionMode.AutoOptimize;
+        }
+
+        private static string StartToText(LayInStartMode value)
+        {
+            switch (value)
+            {
+                case LayInStartMode.ManualStart: return "Điểm chọn";
+                case LayInStartMode.FromDoor: return "Theo cửa";
+                default: return "Cân biên";
+            }
+        }
+
+        private static LayInStartMode TextToStart(string value)
+        {
+            if (value == "Điểm chọn") return LayInStartMode.ManualStart;
+            if (value == "Theo cửa") return LayInStartMode.FromDoor;
+            return LayInStartMode.Balanced;
+        }
+
+        private static string DimensionToText(LayInDimensionMode value)
+        {
+            switch (value)
+            {
+                case LayInDimensionMode.Off: return "Tắt";
+                case LayInDimensionMode.Module: return "Một ô";
+                case LayInDimensionMode.Overall: return "Tổng";
+                case LayInDimensionMode.GridAndEdges: return "Lưới + mép cắt";
+                default: return "Gộp ô";
+            }
+        }
+
+        private static LayInDimensionMode TextToDimension(string value)
+        {
+            if (value == "Tắt") return LayInDimensionMode.Off;
+            if (value == "Một ô") return LayInDimensionMode.Module;
+            if (value == "Tổng") return LayInDimensionMode.Overall;
+            if (value == "Lưới + mép cắt") return LayInDimensionMode.GridAndEdges;
+            return LayInDimensionMode.Grouped;
+        }
+    }
+}

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>HNL.VXT.AutoCAD</RootNamespace>
+    <AssemblyName>HNL.VXT.AutoCAD</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\HNL.VXT.AutoCAD\*.cs" Link="%(Filename)%(Extension)" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="AutoCAD.NET" Version="24.3.0" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\HNL.VXT.Core\HNL.VXT.Core.csproj" />
+    <ProjectReference Include="..\..\HNL.VXT.UI\HNL.VXT.UI.csproj" />
+  </ItemGroup>
+</Project>

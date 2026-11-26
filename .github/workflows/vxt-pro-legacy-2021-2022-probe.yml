@@ -1,0 +1,67 @@
+name: HNL HCF Legacy Compatibility Probe 2021-2022
+
+on:
+  push:
+    branches:
+      - research/vxt-pro-v7-bootstrap
+    paths:
+      - ".github/workflows/vxt-pro-legacy-2021-2022-probe.yml"
+      - "incubator/hnl-vxt-pro/src/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hcf-legacy-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bridge-probe:
+    name: AutoCAD ${{ matrix.cad }} / NET48 / API probe
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cad: "2021"
+            project: "src/Bridges/AutoCAD2021/HNL.VXT.AutoCAD.2021.csproj"
+          - cad: "2022"
+            project: "src/Bridges/AutoCAD2022/HNL.VXT.AutoCAD.2022.csproj"
+    env:
+      VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore legacy bridge against matching Autodesk API
+        shell: pwsh
+        run: dotnet restore (Join-Path $env:VXT_ROOT '${{ matrix.project }}')
+      - name: Compile isolated legacy bridge (not Runtime Golden)
+        shell: pwsh
+        run: dotnet build (Join-Path $env:VXT_ROOT '${{ matrix.project }}') -c Release --no-restore
+      - name: Verify bridge files and do not redistribute Autodesk binaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $p = Join-Path $env:VXT_ROOT '${{ matrix.project }}'
+          $output = Join-Path (Split-Path $p -Parent) 'bin\Release\net48'
+          foreach ($dll in @('HNL.VXT.AutoCAD.dll', 'HNL.VXT.Core.dll', 'HNL.VXT.UI.dll')) {
+            if (-not (Test-Path (Join-Path $output $dll))) { throw "Missing output: $dll" }
+          }
+          $stage = Join-Path $env:VXT_ROOT 'artifacts\legacy-probe\${{ matrix.cad }}'
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Get-ChildItem $output -File | Where-Object {
+            $_.Extension -in @('.dll','.config','.json') -and $_.Name -notmatch '^(Ac|AutoCAD).*\.dll$'
+          } | Copy-Item -Destination $stage -Force
+          $bad = Get-ChildItem $stage -File | Where-Object { $_.Name -match '^(Ac|AutoCAD).*\.dll$' }
+          if ($bad) { throw "Unexpected AutoCAD SDK binary in stage" }
+          Write-Host "HNL HCF AutoCAD ${{ matrix.cad }} API compile/stage PASS; this is not Runtime Golden."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HNL-HCF-Legacy-Candidate-${{ matrix.cad }}
+          path: ${{ env.VXT_ROOT }}/artifacts/legacy-probe/${{ matrix.cad }}
+          retention-days: 14
+          if-no-files-found: error

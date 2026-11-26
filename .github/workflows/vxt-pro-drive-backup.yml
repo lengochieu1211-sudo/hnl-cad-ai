@@ -1,0 +1,92 @@
+name: HNL HCF Full Source Backup
+
+on:
+  push:
+    branches:
+      - research/vxt-pro-v7-bootstrap
+    paths:
+      - ".github/workflows/vxt-pro-drive-backup.yml"
+      - "incubator/hnl-vxt-pro/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-source:
+    name: Archive exact-HEAD HCF full source
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package and verify HCF full source ZIP
+        id: package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+          $short = $env:GITHUB_SHA.Substring(0, 8)
+          $base = 'HNL-HCF-FULL-SOURCE-' + [DateTime]::UtcNow.ToString('yyyyMMdd') + '-' + $short
+          $stage = Join-Path $env:RUNNER_TEMP ('stage-' + $base)
+          $zip = Join-Path $env:GITHUB_WORKSPACE ($base + '.zip')
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          $incubator = Join-Path $stage 'incubator'
+          New-Item -ItemType Directory -Force -Path $incubator | Out-Null
+          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'incubator/hnl-vxt-pro') -Destination $incubator -Recurse -Force
+
+          $workflows = Join-Path $stage '.github/workflows'
+          New-Item -ItemType Directory -Force -Path $workflows | Out-Null
+          Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE '.github/workflows/*.yml') -Destination $workflows -Force
+
+          foreach ($name in @('VXT-PRO-BOOTSTRAP.md', 'VXT-PRO-GOLDEN-PLAN.md', 'VXT-PRO-UI-SPEC.md')) {
+            $source = Join-Path $env:GITHUB_WORKSPACE $name
+            if (Test-Path -LiteralPath $source) {
+              Copy-Item -LiteralPath $source -Destination $stage -Force
+            }
+          }
+
+          $metadata = @(
+            'HNL Tool - HCF FULL SOURCE',
+            ('Repository: ' + $env:GITHUB_REPOSITORY),
+            ('Branch: ' + $env:GITHUB_REF_NAME),
+            ('Exact HEAD: ' + $env:GITHUB_SHA),
+            ('Archive UTC: ' + [DateTime]::UtcNow.ToString('o')),
+            'Scope: incubator/hnl-vxt-pro + GitHub workflow YAML + HCF root plans',
+            'Status: SOURCE BACKUP only; CI PASS is not AutoCAD Runtime Golden'
+          ) -join [Environment]::NewLine
+          Set-Content -Path (Join-Path $stage 'BACKUP-METADATA.txt') -Value $metadata -Encoding UTF8
+          if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+          [System.IO.Compression.ZipFile]::CreateFromDirectory(
+            $stage, $zip, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+
+          $reader = [System.IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+            $entries = @($reader.Entries | ForEach-Object { $_.FullName })
+            foreach ($required in @(
+              'BACKUP-METADATA.txt',
+              'incubator/hnl-vxt-pro/src/HNL.VXT.Core/HNL.VXT.Core.csproj',
+              'incubator/hnl-vxt-pro/src/HNL.VXT.AutoCAD/HNL.VXT.AutoCAD.csproj',
+              '.github/workflows/vxt-pro-drive-backup.yml'
+            )) {
+              if ($entries -notcontains $required) { throw "Missing source entry: $required" }
+            }
+            Write-Host ("ZIP verification PASS: " + $entries.Count + " entries")
+          } finally { $reader.Dispose() }
+
+          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -Path ($zip + '.sha256.txt') -Value ($hash + '  ' + (Split-Path $zip -Leaf)) -Encoding ASCII
+          Write-Host ("ZIP SHA256: " + $hash)
+          Add-Content -Path $env:GITHUB_OUTPUT -Value ('archive_name=' + $base)
+
+      - name: Publish downloadable full source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.archive_name }}
+          path: |
+            HNL-HCF-FULL-SOURCE-*.zip
+            HNL-HCF-FULL-SOURCE-*.zip.sha256.txt
+          retention-days: 90
+          compression-level: 0
+          if-no-files-found: error

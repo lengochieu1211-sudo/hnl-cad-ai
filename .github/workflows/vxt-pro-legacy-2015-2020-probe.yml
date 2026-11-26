@@ -1,0 +1,73 @@
+name: HNL HCF Legacy API Probe 2015-2020 (NOT INSTALLER)
+
+on:
+  push:
+    branches:
+      - research/vxt-pro-v7-bootstrap
+    paths:
+      - ".github/workflows/vxt-pro-legacy-2015-2020-probe.yml"
+      - "incubator/hnl-vxt-pro/src/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hcf-legacy-2015-2020-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bridge-probe:
+    name: AutoCAD ${{ matrix.cad }} / API-only / NET48
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cad: "2015"
+            api: "20.0.1"
+          - cad: "2016"
+            api: "20.1.0"
+          - cad: "2017"
+            api: "21.0.2"
+          - cad: "2018"
+            api: "22.0.0"
+          - cad: "2019"
+            api: "23.0.0"
+          - cad: "2020"
+            api: "23.1.0"
+    env:
+      VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Validate isolated test-only API project and SDK reference
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $project = Join-Path $env:VXT_ROOT "src/Bridges/AutoCAD${{ matrix.cad }}/HNL.VXT.AutoCAD.${{ matrix.cad }}.csproj"
+          $text = Get-Content $project -Raw
+          if (-not $text.Contains('<TargetFramework>net48</TargetFramework>')) { throw 'Probe target framework unexpectedly changed' }
+          if (-not $text.Contains('Version="${{ matrix.api }}" ExcludeAssets="runtime"')) { throw 'Probe has wrong Autodesk SDK version or risks redistributing Autodesk DLLs' }
+          if (-not $text.Contains('Do not install this binary')) { throw 'Probe must remain explicitly non-installable' }
+      - name: Restore legacy Autodesk API
+        shell: pwsh
+        run: dotnet restore (Join-Path $env:VXT_ROOT "src/Bridges/AutoCAD${{ matrix.cad }}/HNL.VXT.AutoCAD.${{ matrix.cad }}.csproj")
+      - name: Compile HCF source with year-specific Autodesk API (NOT runtime test)
+        shell: pwsh
+        run: dotnet build (Join-Path $env:VXT_ROOT "src/Bridges/AutoCAD${{ matrix.cad }}/HNL.VXT.AutoCAD.${{ matrix.cad }}.csproj") -c Release --no-restore
+      - name: Prohibit unsupported deployment and third-party binaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $projectDir = Join-Path $env:VXT_ROOT "src/Bridges/AutoCAD${{ matrix.cad }}"
+          $out = Join-Path $projectDir 'bin/Release/net48'
+          foreach ($name in @('HNL.VXT.AutoCAD.dll','HNL.VXT.Core.dll','HNL.VXT.UI.dll')) {
+            if (-not (Test-Path (Join-Path $out $name))) { throw "Bridge output missing: $name" }
+          }
+          $bad = Get-ChildItem $out -File | Where-Object { $_.Name -match '^(Ac|AutoCAD).*\.dll$' }
+          if ($bad) { throw "Autodesk runtime must not ship in HCF" }
+          Write-Host "API compile candidate PASS for ${{ matrix.cad }}; no installer, no runtime compatibility certification"
