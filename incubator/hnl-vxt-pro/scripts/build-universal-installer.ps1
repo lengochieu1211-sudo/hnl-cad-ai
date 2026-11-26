@@ -11,7 +11,7 @@ $branding = Join-Path $Root 'scripts\generate-installer-branding.ps1'
 $outDir = Join-Path $Root 'artifacts\universal-installer'
 $expected = Join-Path $outDir 'HNL_Ceiling_Framing_Pro_Universal_Setup_7.0.0-beta.1.exe'
 
-$requiredStages = @('2021','2022','2023','2024','2025','2026-net8','2026-net10','2027')
+$requiredStages = @('2019','2020','2021','2022','2023','2024','2025','2026-net8','2026-net10','2027')
 foreach ($stageName in $requiredStages) {
   $stage = Join-Path $universal $stageName
   if (-not (Test-Path $stage)) { throw "Missing universal bridge stage: $stage" }

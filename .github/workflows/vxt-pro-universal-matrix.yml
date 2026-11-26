@@ -1,4 +1,4 @@
-name: HNL Ceiling Framing Pro Universal 2021-2027 Beta Matrix
+name: HNL Ceiling Framing Pro Universal 2019-2027 Beta Matrix
 
 on:
   push:
@@ -404,6 +404,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - cad: "2019"
+            runtime: "NET47"
+            project: "src/LegacyCompatibility/AutoCAD2019/HNL.VXT.AutoCAD.2019.Net47.csproj"
+            tfm: "net47"
+          - cad: "2020"
+            runtime: "NET47"
+            project: "src/LegacyCompatibility/AutoCAD2020/HNL.VXT.AutoCAD.2020.Net47.csproj"
+            tfm: "net47"
           - cad: "2021"
             runtime: "NET48"
             project: "src/Bridges/AutoCAD2021/HNL.VXT.AutoCAD.2021.csproj"
@@ -480,7 +488,7 @@ jobs:
           if-no-files-found: error
 
   universal-setup:
-    name: Universal Setup EXE / AutoCAD 2021-2027 / beta.1
+    name: Universal Setup EXE / AutoCAD 2019-2027 / beta.1
     needs:
       - core-tests
       - cad-bridge-matrix
@@ -504,6 +512,8 @@ jobs:
           if (Test-Path $universal) { Remove-Item $universal -Recurse -Force }
           New-Item -ItemType Directory -Force -Path $universal | Out-Null
           $map = @{
+            'HNL-VXT-Bridge-2019-NET47' = '2019'
+            'HNL-VXT-Bridge-2020-NET47' = '2020'
             'HNL-VXT-Bridge-2021-NET48' = '2021'
             'HNL-VXT-Bridge-2022-NET48' = '2022'
             'HNL-VXT-Bridge-2023-NET48' = '2023'
@@ -545,7 +555,7 @@ jobs:
           Get-Content $sha
       - uses: actions/upload-artifact@v4
         with:
-          name: HNL-Ceiling-Framing-Pro-v7.0.0-beta.1-Universal-Setup-AutoCAD2021-2027
+          name: HNL-Ceiling-Framing-Pro-v7.0.0-beta.1-Universal-Setup-AutoCAD2019-2027
           path: |
             ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_Ceiling_Framing_Pro_Universal_Setup_7.0.0-beta.1.exe
             ${{ env.VXT_ROOT }}/artifacts/universal-installer/HNL_Ceiling_Framing_Pro_Universal_Setup_7.0.0-beta.1.exe.sha256.txt
