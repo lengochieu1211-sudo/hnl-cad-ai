@@ -52,7 +52,7 @@ jobs:
           $text = Get-Content $project -Raw
           if (-not $text.Contains('<TargetFramework>net48</TargetFramework>')) { throw 'Probe target framework unexpectedly changed' }
           if (-not $text.Contains('Version="${{ matrix.api }}" ExcludeAssets="runtime"')) { throw 'Probe has wrong Autodesk SDK version or risks redistributing Autodesk DLLs' }
-          if (-not $text.Contains('not installer')) { throw 'Probe must remain explicitly non-installable' }
+          if (-not $text.Contains('Do not install this binary')) { throw 'Probe must remain explicitly non-installable' }
       - name: Restore legacy Autodesk API
         shell: pwsh
         run: dotnet restore (Join-Path $env:VXT_ROOT "src/Bridges/AutoCAD${{ matrix.cad }}/HNL.VXT.AutoCAD.${{ matrix.cad }}.csproj")
