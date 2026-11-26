@@ -1,0 +1,71 @@
+name: HNL HCF Complete Legacy Bridge Candidate 2019-2020
+
+on:
+  push:
+    branches:
+      - research/vxt-pro-v7-bootstrap
+    paths:
+      - ".github/workflows/vxt-pro-legacy-complete-2019-2020.yml"
+      - "incubator/hnl-vxt-pro/src/LegacyCompatibility/**"
+      - "incubator/hnl-vxt-pro/src/HNL.VXT.AutoCAD/**"
+      - "incubator/hnl-vxt-pro/src/HNL.VXT.Core/**"
+      - "incubator/hnl-vxt-pro/src/HNL.VXT.UI/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hcf-legacy-complete-2019-2020-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  net47-bridge-candidate:
+    name: AutoCAD ${{ matrix.cad }} / complete NET47 bridge (CI, not runtime)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cad: "2019"
+            api: "23.0.0"
+          - cad: "2020"
+            api: "23.1.0"
+    env:
+      VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore complete legacy NET47 HCF bridge
+        shell: pwsh
+        run: dotnet restore (Join-Path $env:VXT_ROOT "src/LegacyCompatibility/AutoCAD${{ matrix.cad }}/HNL.VXT.AutoCAD.${{ matrix.cad }}.Net47.csproj")
+      - name: Build NET47 Core / WPF UI / Autodesk year-specific bridge
+        shell: pwsh
+        run: dotnet build (Join-Path $env:VXT_ROOT "src/LegacyCompatibility/AutoCAD${{ matrix.cad }}/HNL.VXT.AutoCAD.${{ matrix.cad }}.Net47.csproj") -c Release --no-restore
+      - name: Stage candidate; reject Autodesk SDK binaries and ensure TFM
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:VXT_ROOT "src/LegacyCompatibility/AutoCAD${{ matrix.cad }}/bin/Release/net47"
+          $stage = Join-Path $env:VXT_ROOT "artifacts/legacy-net47/${{ matrix.cad }}"
+          if (-not (Test-Path $out)) { throw "Missing bridge build output: $out" }
+          New-Item -Force -ItemType Directory -Path $stage | Out-Null
+          Get-ChildItem $out -File | Where-Object {
+            $_.Extension -in @('.dll','.config','.json') -and $_.Name -notmatch '^(Ac|AutoCAD).*\.dll$'
+          } | Copy-Item -Destination $stage -Force
+          foreach ($dll in @('HNL.VXT.AutoCAD.dll','HNL.VXT.Core.dll','HNL.VXT.UI.dll')) {
+            if (-not (Test-Path (Join-Path $stage $dll))) { throw "Missing net47 output $dll" }
+          }
+          $bad = Get-ChildItem $stage -File | Where-Object { $_.Name -match '^(Ac|AutoCAD).*\.dll$' }
+          if ($bad) { throw 'Autodesk managed runtime DLL must not be redistributed' }
+          Write-Host "HCF complete net47 candidate for AutoCAD ${{ matrix.cad }} compiled and staged."
+          Write-Host "NOT installed / NOT actual AutoCAD Runtime Golden."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HNL-HCF-Net47-Bridge-Candidate-${{ matrix.cad }}
+          path: ${{ env.VXT_ROOT }}/artifacts/legacy-net47/${{ matrix.cad }}
+          retention-days: 14
+          if-no-files-found: error
