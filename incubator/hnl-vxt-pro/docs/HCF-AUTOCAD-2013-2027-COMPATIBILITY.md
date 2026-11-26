@@ -23,17 +23,20 @@ https://help.autodesk.com/cloudhelp/2024/ENU/AutoCAD-Customization/files/GUID-A6
 | 2018 | R22.0 | .NET Framework 4.6 | Not built: requires version-matched bridge + Core/UI port |
 | 2019 | R23.0 | .NET Framework 4.7 | Not built: requires 4.7-compatible Core/UI port |
 | 2020 | R23.1 | .NET Framework 4.7 | Not built: requires 4.7-compatible Core/UI port |
-| 2021 | R24.0 | .NET Framework 4.8 | Isolated API build probe added; not installed until CI passes |
-| 2022 | R24.1 | .NET Framework 4.8 | Isolated API build probe added; not installed until CI passes |
+| 2021 | R24.0 | .NET Framework 4.8 | API bridge + Universal CI PASS / Runtime Candidate |
+| 2022 | R24.1 | .NET Framework 4.8 | API bridge + Universal CI PASS / Runtime Candidate |
 | 2023 | R24.2 | .NET Framework 4.8 | Existing CI PASS / Runtime Candidate |
 | 2024 | R24.3 | .NET Framework 4.8 | Existing CI PASS / Runtime Candidate |
 | 2025 | R25.0 | .NET 8 | Existing CI PASS / Runtime Candidate |
 | 2026 | R25.1 | .NET 8 or .NET 10 depending update | Existing CI PASS / Runtime Candidate |
 | 2027 | R26.0 | .NET 10 | Existing CI PASS / Runtime Candidate |
 
-The 2021/2022 trial bridges compile the original HCF AutoCAD source via year-specific
+The 2021/2022 bridges compile the original HCF AutoCAD source via year-specific
 Autodesk API packages, with unchanged net48 HCF Core and WPF UI dependencies.
-Their build alone does **not** prove support on actual AutoCAD.
+A Universal package containing AutoCAD 2021–2027 passed the API/build/packaging
+matrix in run 45753340689. Beta CI passed in run 45753340722.
+See https://github.com/lengochieu1211-sudo/hnl-cad-ai/actions/runs/45753340689
+These builds **do not** prove Runtime Golden in AutoCAD 2021 or 2022.
 
 ## Mandatory implementation gates
 
