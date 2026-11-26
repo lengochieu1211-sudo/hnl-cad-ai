@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net47</TargetFramework>
+    <RootNamespace>HNL.VXT.Core</RootNamespace>
+    <AssemblyName>HNL.VXT.Core</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Canonical solver source linked unchanged. -->
+    <Compile Include="..\HNL.VXT.Core\**\*.cs" Exclude="..\HNL.VXT.Core\bin\**;..\HNL.VXT.Core\obj\**" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
