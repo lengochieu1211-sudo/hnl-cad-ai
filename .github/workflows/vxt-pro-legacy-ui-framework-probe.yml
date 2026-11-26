@@ -1,0 +1,54 @@
+name: HNL HCF Legacy UI Framework Probe 2015-2020
+
+on:
+  push:
+    branches:
+      - research/vxt-pro-v7-bootstrap
+    paths:
+      - ".github/workflows/vxt-pro-legacy-ui-framework-probe.yml"
+      - "incubator/hnl-vxt-pro/src/LegacyCompatibility/**"
+      - "incubator/hnl-vxt-pro/src/HNL.VXT.Core/**"
+      - "incubator/hnl-vxt-pro/src/HNL.VXT.UI/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hcf-legacy-ui-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ui-build-probe:
+    name: WPF UI / ${{ matrix.framework }}
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - framework: "net45"
+            cad: "2015-2016"
+          - framework: "net46"
+            cad: "2017-2018"
+          - framework: "net47"
+            cad: "2019-2020"
+    env:
+      VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore isolated Core + WPF UI compatibility projects
+        shell: pwsh
+        run: dotnet restore (Join-Path $env:VXT_ROOT 'src/LegacyCompatibility/HNL.VXT.UI.Legacy.Probe.csproj')
+      - name: Compile original WPF UI against old host framework (probe only)
+        shell: pwsh
+        run: dotnet build (Join-Path $env:VXT_ROOT 'src/LegacyCompatibility/HNL.VXT.UI.Legacy.Probe.csproj') -f ${{ matrix.framework }} -c Release --no-restore
+      - name: Explain test limits
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "AutoCAD ${{ matrix.cad }} UI ${{ matrix.framework }} compatibility probe, not installation proof."
+          Write-Host "No legacy DLLs are distributed, AutoCAD Runtime Golden remains unverified."
