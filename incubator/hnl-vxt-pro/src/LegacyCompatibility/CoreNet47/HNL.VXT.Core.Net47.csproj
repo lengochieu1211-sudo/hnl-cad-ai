@@ -8,7 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Canonical solver source linked unchanged. -->
-    <Compile Include="..\HNL.VXT.Core\**\*.cs" Exclude="..\HNL.VXT.Core\bin\**;..\HNL.VXT.Core\obj\**" />
+    <Compile Include="..\..\HNL.VXT.Core\**\*.cs" Exclude="..\..\HNL.VXT.Core\bin\**;..\..\HNL.VXT.Core\obj\**" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 </Project>

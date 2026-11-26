@@ -18,7 +18,7 @@
     <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\HNL.VXT.Core.Net47.csproj" />
-    <ProjectReference Include="..\HNL.VXT.UI.Net47.csproj" />
+    <ProjectReference Include="..\CoreNet47\HNL.VXT.Core.Net47.csproj" />
+    <ProjectReference Include="..\UiNet47\HNL.VXT.UI.Net47.csproj" />
   </ItemGroup>
 </Project>

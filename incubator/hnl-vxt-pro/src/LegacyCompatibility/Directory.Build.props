@@ -1,9 +1,0 @@
-<Project>
-  <!-- Preserve the canonical HCF version/build metadata; only isolate
-       intermediate files for the independent legacy compatibility projects. -->
-  <Import Project="../../Directory.Build.props" />
-  <PropertyGroup>
-    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
-    <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
-  </PropertyGroup>
-</Project>
