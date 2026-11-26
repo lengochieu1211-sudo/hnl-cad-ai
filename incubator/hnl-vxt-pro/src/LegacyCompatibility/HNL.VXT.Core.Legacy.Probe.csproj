@@ -13,4 +13,8 @@
              Exclude="..\HNL.VXT.Core\bin\**;..\HNL.VXT.Core\obj\**" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
+  <!-- C# named tuples need the ValueTuple backport for .NET 4.5/4.6. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net45' Or '$(TargetFramework)' == 'net46'">
+    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
+  </ItemGroup>
 </Project>
