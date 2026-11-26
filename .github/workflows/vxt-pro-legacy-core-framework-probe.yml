@@ -1,0 +1,55 @@
+name: HNL HCF Legacy Core Runtime Framework Audit 2013-2020
+
+on:
+  push:
+    branches:
+      - research/vxt-pro-v7-bootstrap
+    paths:
+      - ".github/workflows/vxt-pro-legacy-core-framework-probe.yml"
+      - "incubator/hnl-vxt-pro/src/LegacyCompatibility/**"
+      - "incubator/hnl-vxt-pro/src/HNL.VXT.Core/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hcf-legacy-core-tfm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tfm-audit:
+    name: Legacy Core / ${{ matrix.framework }}
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - framework: "net40"
+            cad: "2013-2014"
+          - framework: "net45"
+            cad: "2015-2016"
+          - framework: "net46"
+            cad: "2017-2018"
+          - framework: "net47"
+            cad: "2019-2020"
+    env:
+      VXT_ROOT: ${{ github.workspace }}\incubator\hnl-vxt-pro
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore legacy framework reference assemblies
+        shell: pwsh
+        run: dotnet restore (Join-Path $env:VXT_ROOT 'src/LegacyCompatibility/HNL.VXT.Core.Legacy.Probe.csproj')
+      - name: Compile original Core against AutoCAD-supported TFM (diagnostic only)
+        shell: pwsh
+        run: dotnet build (Join-Path $env:VXT_ROOT 'src/LegacyCompatibility/HNL.VXT.Core.Legacy.Probe.csproj') -f ${{ matrix.framework }} -c Release --no-restore
+      - name: Explain compatibility certification limits
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "Probe framework ${{ matrix.framework }} for AutoCAD ${{ matrix.cad }}."
+          Write-Host "Full native plugin requires compatible WPF UI and CAD bridge; no auto-deployment or Runtime Golden."
